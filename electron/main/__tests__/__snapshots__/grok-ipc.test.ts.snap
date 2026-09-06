@@ -1,0 +1,16 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`grok IPC > expoe o path persistido junto do status 1`] = `
+{
+  "authMode": "subscription",
+  "authenticated": true,
+  "binaryPath": "/opt/grok/bin/grok",
+  "installed": true,
+  "isolationVerified": true,
+  "modelAvailable": true,
+  "subscriptionRouteVerified": true,
+  "toolPolicyVerified": true,
+  "usable": true,
+  "version": "grok 0.2.103",
+}
+`;

@@ -1,0 +1,1919 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`IPC channel payload snapshots > activity:get-blocks (SPEC K2 v2) > request shape — sessionId 1`] = `
+{
+  "sessionId": "sess_abc123",
+}
+`;
+
+exports[`IPC channel payload snapshots > activity:get-blocks (SPEC K2 v2) > response shape — bloco por turno (subagent + tools, com totais) 1`] = `
+[
+  {
+    "endedAt": "2026-06-08T10:00:08.400Z",
+    "items": [
+      {
+        "agentId": "explore",
+        "costUsd": 0.0432,
+        "description": "Mapear arquivos de auth",
+        "durationMs": 8400,
+        "endedAt": "2026-06-08T10:00:08.400Z",
+        "id": "toolu_sub_01",
+        "kind": "subagent",
+        "label": "Explore",
+        "startedAt": "2026-06-08T10:00:00.000Z",
+        "status": "done",
+        "summary": "Encontrou 3 arquivos relevantes.",
+        "tokens": {
+          "cacheCreation": 200,
+          "cacheRead": 9876,
+          "input": 12345,
+          "output": 678,
+        },
+        "toolUses": 2,
+        "turnIndex": 1,
+      },
+      {
+        "changed": false,
+        "endedAt": "2026-06-08T10:00:01.500Z",
+        "file": "/Users/example/auth.ts",
+        "id": "toolu_read_02",
+        "kind": "tool",
+        "label": "Read",
+        "parentId": "toolu_sub_01",
+        "startedAt": "2026-06-08T10:00:01.000Z",
+        "status": "done",
+        "turnIndex": 1,
+      },
+      {
+        "changed": false,
+        "command": "npm test",
+        "endedAt": "2026-06-08T10:00:05.000Z",
+        "exitCode": 0,
+        "id": "toolu_bash_03",
+        "kind": "tool",
+        "label": "Bash",
+        "parentId": "toolu_sub_01",
+        "startedAt": "2026-06-08T10:00:02.000Z",
+        "status": "done",
+        "turnIndex": 1,
+      },
+    ],
+    "sessionId": "sess_abc123",
+    "startedAt": "2026-06-08T10:00:00.000Z",
+    "status": "done",
+    "totals": {
+      "costUsd": 0.0432,
+      "subagents": 1,
+      "tokens": 13023,
+      "tools": 2,
+    },
+    "turnIndex": 1,
+  },
+]
+`;
+
+exports[`IPC channel payload snapshots > activity:get-blocks (SPEC K2 v2) > response shape — sessao sem atividade (vazio) 1`] = `[]`;
+
+exports[`IPC channel payload snapshots > chat feature toggles (SPEC chat-context-reduction A.3, Canais ADITIVOS S2) > chat:get-feature-toggles request shape — sessionId 1`] = `"sess_abc123"`;
+
+exports[`IPC channel payload snapshots > chat feature toggles (SPEC chat-context-reduction A.3, Canais ADITIVOS S2) > chat:get-feature-toggles result ok — toggles persistidos (ou default OFF sem linha) 1`] = `
+{
+  "ok": true,
+  "toggles": {
+    "dynamicWorkflows": true,
+    "pipelineControl": true,
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > chat feature toggles (SPEC chat-context-reduction A.3, Canais ADITIVOS S2) > chat:send options — campo aditivo featureToggles (snapshot do turno) 1`] = `
+{
+  "featureToggles": {
+    "dynamicWorkflows": true,
+    "pipelineControl": false,
+  },
+  "sessionId": "sess_abc123",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat feature toggles (SPEC chat-context-reduction A.3, Canais ADITIVOS S2) > chat:set-feature-toggles request shape — patch parcial 1`] = `
+{
+  "pipelineControl": true,
+}
+`;
+
+exports[`IPC channel payload snapshots > chat feature toggles (SPEC chat-context-reduction A.3, Canais ADITIVOS S2) > chat:set-feature-toggles result ok — toggles resultantes do merge 1`] = `
+{
+  "ok": true,
+  "toggles": {
+    "dynamicWorkflows": false,
+    "pipelineControl": true,
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > chat feature toggles (SPEC chat-context-reduction A.3, Canais ADITIVOS S2) > erro estruturado — sessao inexistente 1`] = `
+{
+  "code": "session_not_found",
+  "error": "Sessao nao encontrada.",
+  "ok": false,
+}
+`;
+
+exports[`IPC channel payload snapshots > chat feature toggles (SPEC chat-context-reduction A.3, Canais ADITIVOS S2) > erro estruturado — status != active 1`] = `
+{
+  "code": "session_not_active",
+  "error": "A sessao nao esta ativa; toggles so podem ser alterados em sessao ativa.",
+  "ok": false,
+}
+`;
+
+exports[`IPC channel payload snapshots > chat feature toggles (SPEC chat-context-reduction A.3, Canais ADITIVOS S2) > erro estruturado — type nao-desktop (telegram/scheduled) 1`] = `
+{
+  "code": "session_not_desktop",
+  "error": "Toggles de capability so existem em sessoes de chat do desktop (chat/manual).",
+  "ok": false,
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:ensure-session (SPEC handoff-orchestrator, Canal ADITIVO 1) > erro em fluxo normal: { error } sem throw (convencao IPC secao 9) 1`] = `
+{
+  "error": "no such table: sessions",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:ensure-session (SPEC handoff-orchestrator, Canal ADITIVO 1) > request shape — { preferredSessionId } presente 1`] = `
+{
+  "preferredSessionId": "sess_abc123",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:ensure-session (SPEC handoff-orchestrator, Canal ADITIVO 1) > request shape — sem preferredSessionId (objeto vazio) 1`] = `{}`;
+
+exports[`IPC channel payload snapshots > chat:ensure-session (SPEC handoff-orchestrator, Canal ADITIVO 1) > result — preferred valido: retorna o MESMO id 1`] = `
+{
+  "sessionId": "sess_abc123",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:ensure-session (SPEC handoff-orchestrator, Canal ADITIVO 1) > result — sem ativa: cria nova e retorna novo id 1`] = `
+{
+  "sessionId": "b3b1d2c4-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:get-context-usage (SPEC robustez-chat SA-2, Canal ADITIVO UX-CTX) > request shape — sessionId 1`] = `"sess_abc123"`;
+
+exports[`IPC channel payload snapshots > chat:get-context-usage (SPEC robustez-chat SA-2, Canal ADITIVO UX-CTX) > result — contextUsage hidratado (source estimate, shape do chunk context_usage) 1`] = `
+{
+  "compactionThresholdPercent": 80,
+  "contextTokens": 123456,
+  "contextWindowTokens": 1000000,
+  "source": "estimate",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:get-context-usage (SPEC robustez-chat SA-2, Canal ADITIVO UX-CTX) > result — null (janela desconhecida / sessao sem tokens / erro): D5, sem barra 1`] = `null`;
+
+exports[`IPC channel payload snapshots > chat:stream > ask_question chunk (from ask-question.ts) 1`] = `
+{
+  "askRequest": {
+    "id": "ask_xyz789",
+    "questions": [
+      {
+        "header": "Selecione",
+        "options": [
+          {
+            "description": "Desenvolvimento",
+            "label": "dev",
+          },
+          {
+            "description": "Producao",
+            "label": "prod",
+          },
+        ],
+        "question": "Qual ambiente?",
+      },
+    ],
+  },
+  "type": "ask_question",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream > done chunk with queueRemaining 1`] = `
+{
+  "queueRemaining": 2,
+  "sessionId": "sess_abc123",
+  "type": "done",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream > error chunk 1`] = `
+{
+  "error": "API key nao configurada. Va em Settings.",
+  "type": "error",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream > error chunk tipado (code do resolver) 1`] = `
+{
+  "code": "orchestrator_unconfigured",
+  "error": "Orquestrador nao configurado: runtime ausente nos settings. Abra Configuracoes no app.",
+  "type": "error",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream > session chunk (sessionId broadcast) 1`] = `
+{
+  "content": "sess_abc123",
+  "type": "session",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream > text chunk with sessionId 1`] = `
+{
+  "content": "Olá, como posso ajudar?",
+  "sessionId": "sess_abc123",
+  "type": "text",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream > tool_call chunk 1`] = `
+{
+  "input": {
+    "file_path": "/Users/example/file.ts",
+  },
+  "sessionId": "sess_abc123",
+  "tool": "Read",
+  "type": "tool_call",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream — activity (SPEC K2) > activity chunk — subagent end (tokens + cost + duration) 1`] = `
+{
+  "activity": {
+    "agentId": "explore",
+    "costUsd": 0.0432,
+    "durationMs": 8400,
+    "endedAt": "2026-06-08T10:00:08.400Z",
+    "id": "toolu_sub_01",
+    "kind": "subagent",
+    "label": "Explore",
+    "model": "claude-sonnet-4-6",
+    "phase": "end",
+    "status": "done",
+    "summary": "Encontrou 3 arquivos relevantes.",
+    "tokens": {
+      "cacheCreation": 200,
+      "cacheRead": 9876,
+      "input": 12345,
+      "output": 678,
+    },
+  },
+  "sessionId": "sess_abc123",
+  "type": "activity",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream — activity (SPEC K2) > activity chunk — subagent start 1`] = `
+{
+  "activity": {
+    "agentId": "explore",
+    "id": "toolu_sub_01",
+    "kind": "subagent",
+    "label": "Explore",
+    "phase": "start",
+    "startedAt": "2026-06-08T10:00:00.000Z",
+    "status": "running",
+  },
+  "sessionId": "sess_abc123",
+  "type": "activity",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream — activity (SPEC K2) > activity chunk — tool end (best-effort, fim de geracao) 1`] = `
+{
+  "activity": {
+    "endedAt": "2026-06-08T10:00:01.500Z",
+    "id": "toolu_read_02",
+    "kind": "tool",
+    "label": "",
+    "phase": "end",
+    "status": "done",
+  },
+  "sessionId": "sess_abc123",
+  "type": "activity",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream — activity (SPEC K2) > activity chunk — tool start (nested via parentId) 1`] = `
+{
+  "activity": {
+    "id": "toolu_read_02",
+    "kind": "tool",
+    "label": "Read",
+    "parentId": "toolu_sub_01",
+    "phase": "start",
+    "startedAt": "2026-06-08T10:00:01.000Z",
+    "status": "running",
+    "toolName": "Read",
+  },
+  "sessionId": "sess_abc123",
+  "type": "activity",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream — activity v2 (SPEC K2 v2) > activity chunk — subagent end (toolUses + turnIndex) 1`] = `
+{
+  "activity": {
+    "agentId": "explore",
+    "costUsd": 0.0432,
+    "description": "Mapear arquivos de auth",
+    "durationMs": 8400,
+    "endedAt": "2026-06-08T10:00:08.400Z",
+    "id": "toolu_sub_01",
+    "kind": "subagent",
+    "label": "Explore",
+    "model": "claude-sonnet-4-6",
+    "phase": "end",
+    "status": "done",
+    "summary": "Encontrou 3 arquivos relevantes.",
+    "tokens": {
+      "cacheCreation": 200,
+      "cacheRead": 9876,
+      "input": 12345,
+      "output": 678,
+    },
+    "toolUses": 2,
+    "turnIndex": 1,
+  },
+  "sessionId": "sess_abc123",
+  "type": "activity",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream — activity v2 (SPEC K2 v2) > activity chunk — subagent start (description + turnIndex) 1`] = `
+{
+  "activity": {
+    "agentId": "explore",
+    "description": "Mapear arquivos de auth",
+    "id": "toolu_sub_01",
+    "kind": "subagent",
+    "label": "Explore",
+    "phase": "start",
+    "startedAt": "2026-06-08T10:00:00.000Z",
+    "status": "running",
+    "turnIndex": 1,
+  },
+  "sessionId": "sess_abc123",
+  "type": "activity",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream — activity v2 (SPEC K2 v2) > activity chunk — tool update (file detail, changed) 1`] = `
+{
+  "activity": {
+    "changed": true,
+    "file": "/Users/example/auth.ts",
+    "id": "toolu_edit_02",
+    "kind": "tool",
+    "label": "Edit",
+    "parentId": "toolu_sub_01",
+    "phase": "update",
+    "status": "done",
+    "toolName": "Edit",
+    "turnIndex": 1,
+  },
+  "sessionId": "sess_abc123",
+  "type": "activity",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream — activity v2 (SPEC K2 v2) > activity chunk — tool update Bash (command + exitCode) 1`] = `
+{
+  "activity": {
+    "changed": false,
+    "command": "npm test",
+    "exitCode": 0,
+    "id": "toolu_bash_03",
+    "kind": "tool",
+    "label": "Bash",
+    "parentId": "toolu_sub_01",
+    "phase": "update",
+    "status": "done",
+    "toolName": "Bash",
+    "turnIndex": 1,
+  },
+  "sessionId": "sess_abc123",
+  "type": "activity",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream — repo_graph (Sprint A2) > uso de tool em turno (orchestrator-mcp, used=1 com metricas) 1`] = `
+{
+  "repoGraph": {
+    "bytesReturned": 4096,
+    "durationMs": 230,
+    "repositoryId": "repo_abc123",
+    "resultCount": 12,
+    "runtime": "claude-sdk",
+    "sessionId": "sess_abc123",
+    "source": "orchestrator-mcp",
+    "status": "ready",
+    "toolName": "repo_graph_search",
+    "turnIndex": 7,
+    "used": true,
+  },
+  "sessionId": "sess_abc123",
+  "type": "repo_graph",
+}
+`;
+
+exports[`IPC channel payload snapshots > chat:stream — repo_graph (Sprint A2) > uso por subagente herdando o contexto do turno (subagent-mcp) 1`] = `
+{
+  "repoGraph": {
+    "bytesReturned": 8192,
+    "durationMs": 410,
+    "repositoryId": "repo_abc123",
+    "resultCount": 18,
+    "runtime": "codex-sdk",
+    "sessionId": "sess_abc123",
+    "source": "subagent-mcp",
+    "status": "stale",
+    "toolName": "repo_graph_minimal_context",
+    "turnIndex": 7,
+    "used": true,
+  },
+  "sessionId": "sess_abc123",
+  "type": "repo_graph",
+}
+`;
+
+exports[`IPC channel payload snapshots > compaction:active > active re-emit with the configured provider label (onModelLabel) 1`] = `
+{
+  "isActive": true,
+  "modelLabel": "GLM-4.6",
+  "source": "lionclaw",
+}
+`;
+
+exports[`IPC channel payload snapshots > compaction:active > active with optimistic label (source lionclaw) 1`] = `
+{
+  "isActive": true,
+  "modelLabel": "GLM-4.6",
+  "source": "lionclaw",
+}
+`;
+
+exports[`IPC channel payload snapshots > compaction:active > inactive (compaction ended — success or failure) 1`] = `
+{
+  "isActive": false,
+}
+`;
+
+exports[`IPC channel payload snapshots > drive:* (SPEC orchestrator-pipeline-control S8) > assumir ok response shape (handoff permanent, driver human) 1`] = `
+{
+  "drive": {
+    "driver": "human",
+    "handoff": "permanent",
+    "mode": "semi",
+    "requiresHumanPhases": [],
+    "sessionId": "sess_abc123",
+    "status": "stopped",
+  },
+  "ok": true,
+}
+`;
+
+exports[`IPC channel payload snapshots > drive:* (SPEC orchestrator-pipeline-control S8) > drive:state-changed event shape (drive encerrado, drive=null) 1`] = `
+{
+  "drive": null,
+  "projectId": "proj_456",
+}
+`;
+
+exports[`IPC channel payload snapshots > drive:* (SPEC orchestrator-pipeline-control S8) > drive:state-changed event shape (drive presente) 1`] = `
+{
+  "drive": {
+    "driver": "orchestrator",
+    "handoff": "temporary",
+    "mode": "semi",
+    "requiresHumanPhases": [
+      4,
+      5,
+    ],
+    "sessionId": "sess_abc123",
+    "status": "awaiting-human",
+  },
+  "projectId": "proj_456",
+}
+`;
+
+exports[`IPC channel payload snapshots > drive:* (SPEC orchestrator-pipeline-control S8) > error response shape (lock global ja ativo) 1`] = `
+{
+  "error": "ja existe um drive ativo no projeto "proj_999". Pare-o (ou Assumir) antes de iniciar outro.",
+}
+`;
+
+exports[`IPC channel payload snapshots > drive:* (SPEC orchestrator-pipeline-control S8) > get-state request shape — projectId 1`] = `
+{
+  "projectId": "proj_456",
+}
+`;
+
+exports[`IPC channel payload snapshots > drive:* (SPEC orchestrator-pipeline-control S8) > get-state response shape — DriveState (orchestrator driving, semi) 1`] = `
+{
+  "driver": "orchestrator",
+  "handoff": "none",
+  "mode": "semi",
+  "requiresHumanPhases": [
+    4,
+    5,
+  ],
+  "sessionId": "sess_abc123",
+  "status": "driving",
+}
+`;
+
+exports[`IPC channel payload snapshots > drive:* (SPEC orchestrator-pipeline-control S8) > get-state response shape — null (sem drive) 1`] = `null`;
+
+exports[`IPC channel payload snapshots > drive:* (SPEC orchestrator-pipeline-control S8) > start request shape — projectId + mode 1`] = `
+{
+  "mode": "full",
+  "projectId": "proj_456",
+}
+`;
+
+exports[`IPC channel payload snapshots > drive:* (SPEC orchestrator-pipeline-control S8) > start/assumir/resume/set-mode ok response shape (ok + drive) 1`] = `
+{
+  "drive": {
+    "driver": "orchestrator",
+    "handoff": "none",
+    "mode": "full",
+    "requiresHumanPhases": [],
+    "sessionId": "sess_abc123",
+    "status": "driving",
+  },
+  "ok": true,
+}
+`;
+
+exports[`IPC channel payload snapshots > drive:* (SPEC orchestrator-pipeline-control S8) > stop ok response shape (ok only) 1`] = `
+{
+  "ok": true,
+}
+`;
+
+exports[`IPC channel payload snapshots > dynamic-workflow:get-run (SPEC handoff-orchestrator, Canal ADITIVO 2 — D8) > request shape — runId 1`] = `
+{
+  "runId": "run-1",
+}
+`;
+
+exports[`IPC channel payload snapshots > dynamic-workflow:get-run (SPEC handoff-orchestrator, Canal ADITIVO 2 — D8) > response shape — definition ausente / project_path vazio (projectPath null, NUNCA "") 1`] = `
+{
+  "baseBranch": "main",
+  "baseCommitSha": "abc1234567",
+  "baseWorktreeHash": null,
+  "chatSessionId": "sess_abc123",
+  "checkpointJson": "{}",
+  "closerSessionId": null,
+  "closerStatus": null,
+  "completedAt": null,
+  "createdBy": "manual",
+  "currentNodeId": "gate-delivery-human",
+  "currentPhaseId": "Entrega",
+  "definitionId": "def-1",
+  "deliveredAt": "2026-06-18T10:05:00.000Z",
+  "error": null,
+  "finalizedAt": null,
+  "id": "run-1",
+  "inputJson": "{"name":"demo","defaultGateMode":"manual","autonomy":"semi","pendingStart":false}",
+  "outputJson": null,
+  "projectPath": null,
+  "startedAt": "2026-06-18T10:00:00.000Z",
+  "status": "delivered",
+  "totalCostUsd": 0.42,
+  "totalDurationMs": 12000,
+  "updatedAt": "2026-06-18T10:05:00.000Z",
+  "workspaceMode": "run-worktree",
+  "worktreeBranch": "dynworkflow/run-1",
+  "worktreePath": "/tmp/run-1",
+}
+`;
+
+exports[`IPC channel payload snapshots > dynamic-workflow:get-run (SPEC handoff-orchestrator, Canal ADITIVO 2 — D8) > response shape — definition com project_path (projectPath persistente, D6dec) 1`] = `
+{
+  "baseBranch": "main",
+  "baseCommitSha": "abc1234567",
+  "baseWorktreeHash": null,
+  "chatSessionId": "sess_abc123",
+  "checkpointJson": "{}",
+  "closerSessionId": null,
+  "closerStatus": null,
+  "completedAt": null,
+  "createdBy": "manual",
+  "currentNodeId": "gate-delivery-human",
+  "currentPhaseId": "Entrega",
+  "definitionId": "def-1",
+  "deliveredAt": "2026-06-18T10:05:00.000Z",
+  "error": null,
+  "finalizedAt": null,
+  "id": "run-1",
+  "inputJson": "{"name":"demo","defaultGateMode":"manual","autonomy":"semi","pendingStart":false}",
+  "outputJson": null,
+  "projectPath": "/srv/persistent",
+  "startedAt": "2026-06-18T10:00:00.000Z",
+  "status": "delivered",
+  "totalCostUsd": 0.42,
+  "totalDurationMs": 12000,
+  "updatedAt": "2026-06-18T10:05:00.000Z",
+  "workspaceMode": "run-worktree",
+  "worktreeBranch": "dynworkflow/run-1",
+  "worktreePath": "/tmp/run-1",
+}
+`;
+
+exports[`IPC channel payload snapshots > dynamic-workflow:get-run (SPEC handoff-orchestrator, Canal ADITIVO 2 — D8) > response shape — run ausente (null) 1`] = `null`;
+
+exports[`IPC channel payload snapshots > dynamic-workflow:get-run-bundle / open-run-dir (SPEC orquestrador-driver S4, D25c) > get-run-bundle request shape — runId 1`] = `
+{
+  "runId": "run-1",
+}
+`;
+
+exports[`IPC channel payload snapshots > dynamic-workflow:get-run-bundle / open-run-dir (SPEC orquestrador-driver S4, D25c) > get-run-bundle response shape — RunBundleEntry[] (lista fechada, ordem estavel) 1`] = `
+[
+  {
+    "mtime": "2026-09-02T10:00:00.000Z",
+    "name": "workflow.js",
+    "relativePath": "workflow.js",
+    "sizeBytes": 2048,
+  },
+  {
+    "mtime": "2026-09-02T10:00:00.000Z",
+    "name": "workflow.manifest.json",
+    "relativePath": "workflow.manifest.json",
+    "sizeBytes": 512,
+  },
+  {
+    "mtime": "2026-09-02T10:05:00.000Z",
+    "name": "events.jsonl",
+    "relativePath": "logs/events.jsonl",
+    "sizeBytes": 90112,
+  },
+  {
+    "mtime": "2026-09-02T10:04:00.000Z",
+    "name": "relatorio.md",
+    "relativePath": "artifacts/sub/relatorio.md",
+    "sizeBytes": 1024,
+  },
+]
+`;
+
+exports[`IPC channel payload snapshots > dynamic-workflow:get-run-bundle / open-run-dir (SPEC orquestrador-driver S4, D25c) > get-run-bundle response shape — erro (run ausente / sem projectPath / pasta inexistente) 1`] = `
+{
+  "error": "run nao encontrado: run-x",
+}
+`;
+
+exports[`IPC channel payload snapshots > dynamic-workflow:get-run-bundle / open-run-dir (SPEC orquestrador-driver S4, D25c) > open-run-dir request shape — runId 1`] = `
+{
+  "runId": "run-1",
+}
+`;
+
+exports[`IPC channel payload snapshots > dynamic-workflow:get-run-bundle / open-run-dir (SPEC orquestrador-driver S4, D25c) > open-run-dir response shape — erro (shell.openPath devolveu mensagem) 1`] = `
+{
+  "error": "Failed to open path",
+}
+`;
+
+exports[`IPC channel payload snapshots > dynamic-workflow:get-run-bundle / open-run-dir (SPEC orquestrador-driver S4, D25c) > open-run-dir response shape — ok 1`] = `
+{
+  "ok": true,
+}
+`;
+
+exports[`IPC channel payload snapshots > enrich:metrics > enricher metrics 1`] = `
+{
+  "metrics": {
+    "apiRequests": 1,
+    "cacheCreationTokens": 0,
+    "cacheReadTokens": 2000,
+    "costUsd": 0.0123,
+    "durationMs": 4100,
+    "inputTokens": 5000,
+    "messages": 1,
+    "outputTokens": 1200,
+    "toolUses": 2,
+  },
+  "phase": "enricher",
+  "sessionId": "enrich_sess_42",
+}
+`;
+
+exports[`IPC channel payload snapshots > enrich:metrics > validator metrics 1`] = `
+{
+  "metrics": {
+    "apiRequests": 1,
+    "cacheCreationTokens": 200,
+    "cacheReadTokens": 9876,
+    "costUsd": 0.0432,
+    "durationMs": 8400,
+    "inputTokens": 12345,
+    "messages": 1,
+    "outputTokens": 678,
+    "toolUses": 3,
+  },
+  "phase": "validator",
+  "sessionId": "enrich_sess_42",
+}
+`;
+
+exports[`IPC channel payload snapshots > enrich:status > enricher idle (terminal) 1`] = `
+{
+  "phase": "enricher",
+  "sessionId": "enrich_sess_42",
+  "status": "idle",
+}
+`;
+
+exports[`IPC channel payload snapshots > enrich:status > validator running 1`] = `
+{
+  "phase": "validator",
+  "sessionId": "enrich_sess_42",
+  "status": "running",
+}
+`;
+
+exports[`IPC channel payload snapshots > enrich:status > validator waiting 1`] = `
+{
+  "phase": "validator",
+  "sessionId": "enrich_sess_42",
+  "status": "waiting",
+}
+`;
+
+exports[`IPC channel payload snapshots > enrich:stream > done chunk with output content 1`] = `
+{
+  "content": "Análise concluída. 3 gaps encontrados.",
+  "phase": "enricher",
+  "sessionId": "enrich_sess_42",
+  "type": "done",
+}
+`;
+
+exports[`IPC channel payload snapshots > enrich:stream > done chunk without content 1`] = `
+{
+  "phase": "enricher",
+  "sessionId": "enrich_sess_42",
+  "type": "done",
+}
+`;
+
+exports[`IPC channel payload snapshots > enrich:stream > text chunk 1`] = `
+{
+  "content": "Validando SPEC...",
+  "phase": "validator",
+  "sessionId": "enrich_sess_42",
+  "type": "text",
+}
+`;
+
+exports[`IPC channel payload snapshots > enrich:stream > tool_call chunk 1`] = `
+{
+  "phase": "validator",
+  "sessionId": "enrich_sess_42",
+  "tool": "Read",
+  "type": "tool_call",
+}
+`;
+
+exports[`IPC channel payload snapshots > harness:agent-stream > FLAT shape — planner local runtime (no event wrapper) 1`] = `
+{
+  "agent": "planner",
+  "content": "Planner local rodando...",
+  "projectId": "proj_123",
+  "type": "text",
+}
+`;
+
+exports[`IPC channel payload snapshots > harness:agent-stream > NESTED shape — coder text event with sprintId/round 1`] = `
+{
+  "agent": "coder",
+  "event": {
+    "content": "Implementando feature...",
+    "type": "text",
+  },
+  "projectId": "proj_123",
+  "round": 2,
+  "sprintId": "sprint_1",
+}
+`;
+
+exports[`IPC channel payload snapshots > harness:agent-stream > NESTED shape — coder text_delta (external API streaming) 1`] = `
+{
+  "agent": "coder",
+  "event": {
+    "content": "partial chunk",
+    "type": "text_delta",
+  },
+  "projectId": "proj_123",
+  "round": 2,
+  "sprintId": "sprint_1",
+}
+`;
+
+exports[`IPC channel payload snapshots > harness:agent-stream > NESTED shape — coder tool_call event 1`] = `
+{
+  "agent": "coder",
+  "event": {
+    "tool": "Edit",
+    "type": "tool_call",
+  },
+  "projectId": "proj_123",
+  "round": 2,
+  "sprintId": "sprint_1",
+}
+`;
+
+exports[`IPC channel payload snapshots > harness:agent-stream > NESTED shape — evaluator text event 1`] = `
+{
+  "agent": "evaluator",
+  "event": {
+    "content": "Avaliando criterios...",
+    "type": "text",
+  },
+  "projectId": "proj_123",
+  "round": 2,
+  "sprintId": "sprint_1",
+}
+`;
+
+exports[`IPC channel payload snapshots > harness:agent-stream > NESTED shape — planner text event 1`] = `
+{
+  "agent": "planner",
+  "event": {
+    "content": "Vou começar planejando...",
+    "type": "text",
+  },
+  "projectId": "proj_123",
+}
+`;
+
+exports[`IPC channel payload snapshots > harness:agent-stream > NESTED shape — planner thinking event 1`] = `
+{
+  "agent": "planner",
+  "event": {
+    "content": "Considerando arquitetura...",
+    "type": "thinking",
+  },
+  "projectId": "proj_123",
+}
+`;
+
+exports[`IPC channel payload snapshots > harness:agent-stream > NESTED shape — planner tool_use event 1`] = `
+{
+  "agent": "planner",
+  "event": {
+    "tool": "Glob",
+    "type": "tool_use",
+  },
+  "projectId": "proj_123",
+}
+`;
+
+exports[`IPC channel payload snapshots > kanban:changed (SPEC kanban-nativo F3) > event shape — { boardId } 1`] = `
+{
+  "boardId": "b3b1d2c4-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+}
+`;
+
+exports[`IPC channel payload snapshots > kimi:* (SPEC-011 S4/S10) > kimi:open-login result - ok (sem url capturada) 1`] = `
+{
+  "ok": true,
+}
+`;
+
+exports[`IPC channel payload snapshots > kimi:* (SPEC-011 S4/S10) > kimi:open-login result - ok com url de device-auth 1`] = `
+{
+  "ok": true,
+  "url": "https://kimi.moonshot.cn/device",
+}
+`;
+
+exports[`IPC channel payload snapshots > kimi:* (SPEC-011 S4/S10) > kimi:set-binary-path request - { path } 1`] = `
+{
+  "path": "/usr/local/bin/kimi",
+}
+`;
+
+exports[`IPC channel payload snapshots > kimi:* (SPEC-011 S4/S10) > kimi:set-binary-path result - { ok } 1`] = `
+{
+  "ok": true,
+}
+`;
+
+exports[`IPC channel payload snapshots > kimi:* (SPEC-011 S4/S10) > kimi:status result - instalado + autenticado por assinatura 1`] = `
+{
+  "authMode": "subscription",
+  "authenticated": true,
+  "installed": true,
+  "version": "0.1.8",
+}
+`;
+
+exports[`IPC channel payload snapshots > kimi:* (SPEC-011 S4/S10) > kimi:status result - instalado mas sem login de assinatura (sem fallback api-key) 1`] = `
+{
+  "authMode": "none",
+  "authenticated": false,
+  "installed": true,
+  "version": "0.1.8",
+}
+`;
+
+exports[`IPC channel payload snapshots > kimi:* (SPEC-011 S4/S10) > kimi:status result - nao instalado 1`] = `
+{
+  "authMode": "none",
+  "authenticated": false,
+  "installed": false,
+  "version": null,
+}
+`;
+
+exports[`IPC channel payload snapshots > kimi:* (SPEC-011 S4/S10) > kimi:test result - falha 1`] = `
+{
+  "message": "Timeout: kimi nao respondeu",
+  "ok": false,
+}
+`;
+
+exports[`IPC channel payload snapshots > kimi:* (SPEC-011 S4/S10) > kimi:test result - ok 1`] = `
+{
+  "message": "kimi CLI disponivel",
+  "ok": true,
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > boot install status shape (failed) 1`] = `
+{
+  "error": "pnpm install exited with code 1",
+  "failedAt": "2026-05-11T10:05:00.000Z",
+  "kind": "failed",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > boot install status shape (installing) 1`] = `
+{
+  "kind": "installing",
+  "runner": "corepack",
+  "startedAt": "2026-05-11T10:00:00.000Z",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > boot install status shape (ready) 1`] = `
+{
+  "finishedAt": "2026-05-11T10:05:00.000Z",
+  "kind": "ready",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > boot install stream event shapes 1`] = `
+[
+  {
+    "kind": "start",
+    "runner": "corepack",
+  },
+  {
+    "chunk": "Progress: resolved 1234/2000
+",
+    "kind": "stdout",
+  },
+  {
+    "chunk": " WARN deprecated
+",
+    "kind": "stderr",
+  },
+  {
+    "code": 0,
+    "kind": "exit",
+    "signal": null,
+  },
+  {
+    "kind": "error",
+    "message": "spawn ENOENT",
+  },
+]
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > build-initial-prompt error response shape 1`] = `
+{
+  "error": "Discovery file not found: /path/discovery.md",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > build-initial-prompt ok response shape 1`] = `
+{
+  "ok": true,
+  "prompt": "## Prompt
+...",
+  "promptPath": "/projects/demo/.lionclaw/runs/run-abc/open-design/input/open-design-initial-prompt.md",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > destructive-unlock invalid confirmation error shape (Sprint 5) 1`] = `
+{
+  "error": "invalid-confirmation",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > destructive-unlock ok response shape (Sprint 5 — 16th channel) 1`] = `
+{
+  "archivePath": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/revisions/rev-1715000000000-abc123",
+  "designRevisionId": "rev-1715000000000-abc123",
+  "ok": true,
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > ensure-session error response shape (Sprint 2) 1`] = `
+{
+  "error": "boot install not ready (kind=installing); aguarde o motor de design concluir a preparacao",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > ensure-session ok response shape (Sprint 2 — BootstrapResult) 1`] = `
+{
+  "bootstrappedAt": "2026-05-11T10:00:00.000Z",
+  "conversationId": "conv_xyz",
+  "initialPromptHash": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+  "initialPromptSentAt": "2026-05-11T10:00:00.000Z",
+  "openDesignProjectId": "lionclaw-runabc",
+  "webUrl": "http://127.0.0.1:5175/projects/lionclaw-runabc?host=lionclaw&locale=pt-BR",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > get-locked-snapshot not-locked error shape (Sprint 5) 1`] = `
+{
+  "error": "not-locked",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > get-locked-snapshot ok response shape (Sprint 5) 1`] = `
+{
+  "lockedAt": "2026-05-10T00:00:00.000Z",
+  "ok": true,
+  "paths": {
+    "artifactHtmlPath": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/artifact/index.html",
+    "contractPath": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-contract.json",
+    "manifestPath": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/manifest.json",
+    "snapshotDir": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest",
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > get-start-status response shape (A2 - drive engajado, GO pendente) 1`] = `
+{
+  "driveEngaged": true,
+  "startPending": true,
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > get-start-status response shape (A2 - fora de drive) 1`] = `
+{
+  "driveEngaged": false,
+  "startPending": false,
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > inject-initial-prompt clipboard mode response shape 1`] = `
+{
+  "mode": "clipboard",
+  "ok": true,
+  "prompt": "## Prompt
+...",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > lock error response shape (Sprint 5) 1`] = `
+{
+  "error": "snapshot failed: Could not obtain artifact",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > lock ok response shape (Sprint 4 — internal lock(), now with 6 paths) 1`] = `
+{
+  "artifactHtmlPath": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/artifact/index.html",
+  "briefPath": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-brief.md",
+  "contractPath": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-contract.json",
+  "lockReportPath": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-lock-report.md",
+  "lockedAt": "2026-05-10T00:00:00.000Z",
+  "manifestPath": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/manifest.json",
+  "ok": true,
+  "reportPath": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-lock-report.md",
+  "snapshotDir": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > lock rejected response shape (Sprint 4 — internal lock()) 1`] = `
+{
+  "lockReportPath": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-lock-report.md",
+  "ok": false,
+  "report": {
+    "ok": false,
+    "problems": [
+      {
+        "hint": "O design tentou criar/exigir "nova tela", que viola a regra pos-lock. Remova no Open Design ou cancele este run.",
+        "item": "Tela "Relatorios" (screen-reports)",
+        "rule": "10.2.3",
+      },
+    ],
+  },
+  "reportPath": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-lock-report.md",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > open-artifact not-locked error shape 1`] = `
+{
+  "error": "not-locked",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > open-artifact ok response shape 1`] = `
+{
+  "htmlPath": "/projects/demo/.lionclaw/runs/run-abc/open-design/snapshots/latest/artifact/index.html",
+  "ok": true,
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > open-design:lock public IPC handler returns fixed error (Sprint 4) 1`] = `
+{
+  "error": "Use pipeline:approve na fase 4; open-design:lock e interno do PipelineEngine",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > pipeline:phase-changed destructive-unlock restarted payload shape (Sprint 5) 1`] = `
+{
+  "awaitingUser": true,
+  "metadata": {
+    "archivePath": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/revisions/rev-1715000000000-abc123",
+    "designRevisionId": "rev-1715000000000-abc123",
+    "designRevisionRestarted": true,
+  },
+  "phase": 4,
+  "phaseName": "Open Design Studio",
+  "projectId": "proj_dev_v2",
+  "status": "running",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > pipeline:phase-changed lock rejected payload shape (Sprint 5) 1`] = `
+{
+  "awaitingUser": true,
+  "metadata": {
+    "openDesignLockRejected": true,
+    "rejectedLockPhase": 5,
+    "reportPath": "/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-lock-report.md",
+  },
+  "phase": 4,
+  "phaseName": "Open Design Studio",
+  "projectId": "proj_dev_v2",
+  "status": "running",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > preflight result shape (deps-missing) 1`] = `
+{
+  "ok": false,
+  "reason": "node_modules ausente no vendor. boot-installer cuida disso em background.",
+  "status": "deps-missing",
+  "vendorRoot": "/app/vendor/open-design",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > preflight result shape (ready) 1`] = `
+{
+  "ok": true,
+  "status": "ready",
+  "vendorRoot": "/app/vendor/open-design",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > preflight result shape (vendor-missing) 1`] = `
+{
+  "ok": false,
+  "reason": "vendor/open-design ausente em /app/vendor/open-design. Rode \`git status\` e recupere o vendor.",
+  "status": "vendor-missing",
+  "vendorRoot": "/app/vendor/open-design",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > session config shape (Sprint 2) 1`] = `
+{
+  "agentId": "claude",
+  "configuredAt": "2026-05-11T00:00:00.000Z",
+  "designSystemId": "lc-default",
+  "locale": "pt-BR",
+  "mcpServerIds": [],
+  "memoryEnabled": false,
+  "model": "claude-opus-4-7",
+  "reasoning": "high",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > set-session-config error response shape (Sprint 2 — secret policy) 1`] = `
+{
+  "error": "OpenDesignSessionConfig: chave proibida em "apiKey". Nomes contendo "token"/"apiKey" ou terminando em "key" sao bloqueados (use o Vault do LionClaw ou .od/media-config.json para credenciais).",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > set-session-config ok response shape (Sprint 2) 1`] = `
+{
+  "ok": true,
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > snapshot error response shape 1`] = `
+{
+  "error": "Could not obtain artifact: OD daemon unavailable and no filesystem artifact found",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > snapshot ok response shape 1`] = `
+{
+  "hashes": {
+    "contractSha256": "def456cafebabe",
+    "htmlSha256": "abc123deadbeef",
+  },
+  "ok": true,
+  "paths": {
+    "artifactHtmlPath": "/projects/demo/.lionclaw/runs/run-abc/open-design/snapshots/latest/artifact/index.html",
+    "contractPath": "/projects/demo/.lionclaw/runs/run-abc/open-design/snapshots/latest/design-contract.json",
+    "manifestPath": "/projects/demo/.lionclaw/runs/run-abc/open-design/snapshots/latest/manifest.json",
+    "snapshotDir": "/projects/demo/.lionclaw/runs/run-abc/open-design/snapshots/latest",
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > start result shape (error) 1`] = `
+{
+  "error": "Open Design daemon did not become healthy in time",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > start result shape (ok) 1`] = `
+{
+  "daemonUrl": "http://127.0.0.1:7457",
+  "ok": true,
+  "webUrl": "http://127.0.0.1:5175",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > status result shape (running) 1`] = `
+{
+  "daemonPort": 7457,
+  "daemonUrl": "http://127.0.0.1:7457",
+  "running": true,
+  "webPort": 5175,
+  "webUrl": "http://127.0.0.1:5175",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design channels (registry) > status result shape (stopped) 1`] = `
+{
+  "daemonPort": null,
+  "daemonUrl": null,
+  "running": false,
+  "webPort": null,
+  "webUrl": null,
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design view bridge > hide-view error response 1`] = `
+{
+  "error": "Error: webview module not loaded",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design view bridge > hide-view ok response 1`] = `
+{
+  "ok": true,
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design view bridge > set-view-bounds error response 1`] = `
+{
+  "error": "Error: webview module not loaded",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design view bridge > set-view-bounds ok response 1`] = `
+{
+  "ok": true,
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design view bridge > set-view-bounds request shape (bounds only) 1`] = `
+{
+  "height": 800,
+  "width": 1200,
+  "x": 240,
+  "y": 48,
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design view bridge > show-view error response (module error) 1`] = `
+{
+  "error": "Error: webview module not loaded",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design view bridge > show-view error response (no-main-window) 1`] = `
+{
+  "error": "no-main-window",
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design view bridge > show-view ok response 1`] = `
+{
+  "ok": true,
+}
+`;
+
+exports[`IPC channel payload snapshots > open-design view bridge > show-view request shape (url + bounds) 1`] = `
+{
+  "bounds": {
+    "height": 800,
+    "width": 1200,
+    "x": 240,
+    "y": 48,
+  },
+  "url": "http://127.0.0.1:5175",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:audit-agent-progress > bug pipe: completed progress do context historian 1`] = `
+{
+  "additionalFilesAfterStart": 12,
+  "agentId": "bug-context-historian",
+  "agentName": "Bug Context Historian",
+  "costUsd": 0.1832,
+  "durationMs": 96100,
+  "filesAnalyzed": 0,
+  "findingsCount": undefined,
+  "model": "claude-opus-5",
+  "projectId": "proj_bug_1",
+  "runtime": "cloud",
+  "slug": "historian",
+  "status": "completed",
+  "toolCallsCount": 21,
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:audit-agent-progress > bug pipe: failed progress do hypothesis refuter 1`] = `
+{
+  "additionalFilesAfterStart": 1,
+  "agentId": "bug-hypothesis-refuter",
+  "agentName": "Bug Hypothesis Refuter",
+  "costUsd": 0,
+  "durationMs": 3050,
+  "filesAnalyzed": 0,
+  "findingsCount": undefined,
+  "model": "claude-opus-5",
+  "projectId": "proj_bug_1",
+  "runtime": "cloud",
+  "slug": "refuter",
+  "status": "failed",
+  "toolCallsCount": 2,
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:audit-agent-progress > bug pipe: running progress do root-cause analyst 1`] = `
+{
+  "additionalFilesAfterStart": 7,
+  "agentId": "bug-root-cause-analyst",
+  "agentName": "Bug Root Cause Analyst",
+  "costUsd": 0,
+  "durationMs": 18400,
+  "filesAnalyzed": 0,
+  "findingsCount": undefined,
+  "model": "claude-opus-5",
+  "projectId": "proj_bug_1",
+  "runtime": "cloud",
+  "slug": "root-cause",
+  "status": "running",
+  "toolCallsCount": 9,
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:audit-agent-progress > completed progress (with findings) 1`] = `
+{
+  "additionalFilesAfterStart": 5,
+  "agentId": "audit-secrets",
+  "agentName": "Secrets Hunter",
+  "costUsd": 0.0245,
+  "durationMs": 47300,
+  "filesAnalyzed": 42,
+  "findingsCount": 3,
+  "model": "claude-sonnet-4-5",
+  "projectId": "proj_456",
+  "runtime": "cloud",
+  "slug": "secrets",
+  "status": "completed",
+  "toolCallsCount": 18,
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:audit-agent-progress > failed progress 1`] = `
+{
+  "additionalFilesAfterStart": 0,
+  "agentId": "audit-secrets",
+  "agentName": "Secrets Hunter",
+  "costUsd": 0,
+  "durationMs": 1200,
+  "filesAnalyzed": 42,
+  "findingsCount": undefined,
+  "model": "claude-sonnet-4-5",
+  "projectId": "proj_456",
+  "runtime": "cloud",
+  "slug": "secrets",
+  "status": "failed",
+  "toolCallsCount": 2,
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:audit-agent-progress > running progress 1`] = `
+{
+  "additionalFilesAfterStart": 3,
+  "agentId": "audit-secrets",
+  "agentName": "Secrets Hunter",
+  "costUsd": 0,
+  "durationMs": 12500,
+  "filesAnalyzed": 42,
+  "findingsCount": undefined,
+  "model": "claude-sonnet-4-5",
+  "projectId": "proj_456",
+  "runtime": "cloud",
+  "slug": "secrets",
+  "status": "running",
+  "toolCallsCount": 11,
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:messages-updated (SPEC drive-ux-pack I1) > event shape — projectId + phase 1`] = `
+{
+  "phase": 3,
+  "projectId": "proj_456",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:phase-changed > completed (auto phase) 1`] = `
+{
+  "awaitingUser": false,
+  "phase": 2,
+  "phaseName": "Stories Generator",
+  "projectId": "proj_456",
+  "status": "completed",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:phase-changed > completed (pipeline final, phase=null) 1`] = `
+{
+  "awaitingUser": false,
+  "phase": null,
+  "projectId": "proj_456",
+  "status": "completed",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:phase-changed > interrupted (recovery on boot) 1`] = `
+{
+  "awaitingUser": true,
+  "phase": null,
+  "projectId": "proj_456",
+  "status": "interrupted",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:phase-changed > loop-ready (loop phase) 1`] = `
+{
+  "awaitingUser": false,
+  "currentModel": "claude-sonnet-4-5",
+  "phase": 13,
+  "phaseName": "Coder",
+  "projectId": "proj_456",
+  "status": "loop-ready",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:phase-changed > running (loop phase, round > 1) 1`] = `
+{
+  "awaitingUser": false,
+  "currentModel": "claude-sonnet-4-5",
+  "phase": 13,
+  "phaseName": "Coder",
+  "projectId": "proj_456",
+  "status": "running",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:phase-changed > started (with currentModel) 1`] = `
+{
+  "awaitingUser": true,
+  "currentModel": "claude-sonnet-4-5",
+  "phase": 1,
+  "phaseName": "Discovery",
+  "projectId": "proj_456",
+  "status": "started",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:project-updated > currentPhase null (pipeline finished) 1`] = `
+{
+  "patch": {
+    "currentPhase": null,
+  },
+  "projectId": "proj_456",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:project-updated > status + currentPhase patch 1`] = `
+{
+  "patch": {
+    "currentPhase": 3,
+    "status": "running",
+  },
+  "projectId": "proj_456",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:project-updated > status only patch 1`] = `
+{
+  "patch": {
+    "status": "done",
+  },
+  "projectId": "proj_456",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:security-agent-status > completed (with findings) 1`] = `
+{
+  "agentId": "audit-secrets",
+  "agentName": "Secrets Hunter",
+  "findingsCount": 3,
+  "outputFile": "Security-scan_001-01-secrets.md",
+  "projectId": "proj_456",
+  "status": "completed",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:security-agent-status > failed (with error) 1`] = `
+{
+  "agentId": "audit-secrets",
+  "agentName": "Secrets Hunter",
+  "error": "Timeout exceeded",
+  "projectId": "proj_456",
+  "status": "failed",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:security-agent-status > running 1`] = `
+{
+  "agentId": "audit-secrets",
+  "agentName": "Secrets Hunter",
+  "projectId": "proj_456",
+  "status": "running",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:stream > done chunk 1`] = `
+{
+  "phase": 4,
+  "projectId": "proj_456",
+  "type": "done",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:stream > text chunk (regular phase) 1`] = `
+{
+  "content": "Gerando stories...",
+  "phase": 2,
+  "projectId": "proj_456",
+  "type": "text",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:stream > text chunk from security audit (with auditAgentId/auditAgentSlug) 1`] = `
+{
+  "auditAgentId": "audit-secrets",
+  "auditAgentSlug": "secrets",
+  "content": "Analisando vulnerabilidades...",
+  "phase": 11,
+  "projectId": "proj_456",
+  "type": "text",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:stream > thinking chunk (bridged from harness:agent-stream phase 11) 1`] = `
+{
+  "phase": 11,
+  "projectId": "proj_456",
+  "type": "thinking",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:stream > tool_call chunk 1`] = `
+{
+  "phase": 4,
+  "projectId": "proj_456",
+  "tool": "Write",
+  "type": "tool_call",
+}
+`;
+
+exports[`IPC channel payload snapshots > pipeline:stream > tool_call chunk from security audit 1`] = `
+{
+  "auditAgentId": "audit-secrets",
+  "auditAgentSlug": "secrets",
+  "phase": 11,
+  "projectId": "proj_456",
+  "tool": "Grep",
+  "type": "tool_call",
+}
+`;
+
+exports[`IPC channel payload snapshots > preview_open (SPEC drive-ux-pack I8) > error shape — alvo fora das raizes permitidas 1`] = `
+{
+  "error": "preview_open: caminho fora das raizes permitidas (project paths dos pipelines e a pasta de dados do LionClaw).",
+}
+`;
+
+exports[`IPC channel payload snapshots > preview_open (SPEC drive-ux-pack I8) > lista de tools do subprocess lionclaw-pipeline-control (inclui preview_open) 1`] = `
+[
+  "pipeline_list",
+  "pipeline_inspect",
+  "pipeline_create",
+  "pipeline_drive",
+  "pipeline_reply",
+  "pipeline_approve",
+  "pipeline_escalate",
+  "pipeline_abort",
+  "pipeline_pause",
+  "preview_open",
+  "design_session_config",
+  "telegram_notify",
+]
+`;
+
+exports[`IPC channel payload snapshots > preview_open (SPEC drive-ux-pack I8) > ok result shape — arquivo aberto 1`] = `
+{
+  "kind": "file",
+  "opened": true,
+  "target": "/Users/user/proj/dist/index.html",
+}
+`;
+
+exports[`IPC channel payload snapshots > preview_open (SPEC drive-ux-pack I8) > ok result shape — url local aberta 1`] = `
+{
+  "kind": "url",
+  "opened": true,
+  "target": "http://localhost:5173/",
+}
+`;
+
+exports[`IPC channel payload snapshots > preview_open (SPEC drive-ux-pack I8) > request shape — target arquivo .html 1`] = `
+{
+  "target": "/Users/user/proj/.lionclaw/pipelines/development-v2/20260609_120000-abc123/open-design/snapshots/latest/artifact/index.html",
+}
+`;
+
+exports[`IPC channel payload snapshots > preview_open (SPEC drive-ux-pack I8) > request shape — target url local 1`] = `
+{
+  "target": "http://localhost:5173/",
+}
+`;
+
+exports[`IPC channel payload snapshots > pricing:calculate > request shape — claude sonnet 1`] = `
+{
+  "cacheCreationTokens": 0,
+  "cacheReadTokens": 800,
+  "inputTokens": 12500,
+  "model": "claude-sonnet-4-6",
+  "outputTokens": 3200,
+  "provider": "anthropic",
+  "runtime": "claude-sdk",
+}
+`;
+
+exports[`IPC channel payload snapshots > pricing:calculate > request shape — local ollama 1`] = `
+{
+  "inputTokens": 5000,
+  "model": "llama3:8b",
+  "outputTokens": 800,
+  "provider": "ollama",
+  "runtime": "lion-sdk",
+}
+`;
+
+exports[`IPC channel payload snapshots > pricing:calculate > request shape — openai-compat custom (sem pricing) 1`] = `
+{
+  "inputTokens": 8000,
+  "model": "my-private-model",
+  "outputTokens": 1500,
+  "presetId": "custom",
+  "provider": "openai-compatible",
+  "runtime": "lion-sdk",
+}
+`;
+
+exports[`IPC channel payload snapshots > pricing:calculate > request shape — openai-compat preset kimi 1`] = `
+{
+  "inputTokens": 8000,
+  "model": "moonshot-v1-32k",
+  "outputTokens": 1500,
+  "presetId": "kimi",
+  "provider": "openai-compatible",
+  "runtime": "lion-sdk",
+}
+`;
+
+exports[`IPC channel payload snapshots > pricing:calculate > response shape — custo positivo 1`] = `
+{
+  "costUsd": 0.01234,
+}
+`;
+
+exports[`IPC channel payload snapshots > pricing:calculate > response shape — custom sem pricing (costUsd null) 1`] = `
+{
+  "costUsd": null,
+}
+`;
+
+exports[`IPC channel payload snapshots > pricing:calculate > response shape — local provider (costUsd 0) 1`] = `
+{
+  "costUsd": 0,
+}
+`;
+
+exports[`IPC channel payload snapshots > repo-graph:build / repo-graph:update > aceito: retorna runId na hora (progresso vem pelo on-status) 1`] = `
+{
+  "runId": "run_xyz789",
+}
+`;
+
+exports[`IPC channel payload snapshots > repo-graph:build / repo-graph:update > erro em fluxo normal: { error } sem throw (convencao IPC secao 9) 1`] = `
+{
+  "error": "ja existe um build/update em andamento para este repositorio",
+}
+`;
+
+exports[`IPC channel payload snapshots > repo-graph:get-session-state > sessao com repo ativo e graph pronto 1`] = `
+{
+  "activeRun": null,
+  "attach": {
+    "attachedAt": "2026-06-10 09:30:00",
+    "graphPromptSuppressed": false,
+    "repositoryId": "repo_abc123",
+    "sessionId": "sess_abc123",
+    "updatedAt": "2026-06-10 09:30:00",
+  },
+  "repository": {
+    "canonicalRootPath": "/Users/example/Desktop/LionClaw",
+    "createdAt": "2026-06-10 09:00:00",
+    "gitRoot": "/Users/example/Desktop/LionClaw",
+    "graphPath": "/Users/example/Desktop/LionClaw/.codegraph/codegraph.db",
+    "graphPromptSuppressedGlobal": false,
+    "id": "repo_abc123",
+    "indexedCommit": "96ea78f0aa11bb22cc33dd44ee55ff6677889900",
+    "indexedWorktreeHash": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+    "lastIndexedAt": "2026-06-10T10:00:00.000Z",
+    "name": "LionClaw",
+    "provider": "codegraph",
+    "rootPath": "/Users/example/Desktop/LionClaw",
+    "settingsJson": "{}",
+    "statsJson": "{"files":1200,"nodes":54000,"edges":98000}",
+    "status": "ready",
+    "updatedAt": "2026-06-10 10:00:00",
+  },
+  "sessionId": "sess_abc123",
+  "staleness": {
+    "stale": false,
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > repo-graph:get-session-state > sessao sem repo ativo 1`] = `
+{
+  "activeRun": null,
+  "attach": null,
+  "repository": null,
+  "sessionId": "sess_abc123",
+  "staleness": null,
+}
+`;
+
+exports[`IPC channel payload snapshots > repo-graph:metrics (Sprint A4, D-5) > erro em fluxo normal: { error } sem throw (convencao IPC secao 9) 1`] = `
+{
+  "error": "no such table: activity_log",
+}
+`;
+
+exports[`IPC channel payload snapshots > repo-graph:metrics (Sprint A4, D-5) > janela NAO atingida: medias parciais, percentuais null 1`] = `
+{
+  "minTurnsWindow": 50,
+  "tokensSavingsPct": null,
+  "toolCallsSavingsPct": null,
+  "windowMet": false,
+  "withRepo": {
+    "avgTokens": 15200.3,
+    "avgToolCalls": 2.8,
+    "turns": 12,
+  },
+  "withoutRepo": {
+    "avgTokens": 34210.9,
+    "avgToolCalls": 7.6,
+    "turns": 112,
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > repo-graph:metrics (Sprint A4, D-5) > janela atingida: medias por grupo + percentuais de economia 1`] = `
+{
+  "minTurnsWindow": 50,
+  "tokensSavingsPct": 46.1,
+  "toolCallsSavingsPct": 57.9,
+  "windowMet": true,
+  "withRepo": {
+    "avgTokens": 18450.5,
+    "avgToolCalls": 3.2,
+    "turns": 64,
+  },
+  "withoutRepo": {
+    "avgTokens": 34210.9,
+    "avgToolCalls": 7.6,
+    "turns": 112,
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > repo-graph:on-status (broadcast) > build com erro (CTA de retry) 1`] = `
+{
+  "error": "codegraph init --index: timeout apos 600000ms",
+  "kind": "build",
+  "repositoryId": "repo_abc123",
+  "runId": "run_xyz789",
+  "runStatus": "error",
+  "sessionId": "sess_abc123",
+  "status": "error",
+}
+`;
+
+exports[`IPC channel payload snapshots > repo-graph:on-status (broadcast) > build concluido (ready) 1`] = `
+{
+  "kind": "build",
+  "repositoryId": "repo_abc123",
+  "runId": "run_xyz789",
+  "runStatus": "done",
+  "sessionId": null,
+  "status": "ready",
+}
+`;
+
+exports[`IPC channel payload snapshots > repo-graph:on-status (broadcast) > building com progresso (chunk UI-only, Z3) 1`] = `
+{
+  "buildProgress": "● 1.234 nodes, 5.678 edges in 42s",
+  "kind": "build",
+  "repositoryId": "repo_abc123",
+  "runId": "run_xyz789",
+  "runStatus": "running",
+  "sessionId": "sess_abc123",
+  "status": "building",
+}
+`;
+
+exports[`IPC channel payload snapshots > terminal:* (terminal integrado no chat) > terminal:data event - { sessionId, chunk } 1`] = `
+{
+  "chunk": "saida ansi [32mok[0m",
+  "sessionId": "tab-uuid-1",
+}
+`;
+
+exports[`IPC channel payload snapshots > terminal:* (terminal integrado no chat) > terminal:exit event - { sessionId, exitCode } 1`] = `
+{
+  "exitCode": 0,
+  "sessionId": "tab-uuid-1",
+}
+`;
+
+exports[`IPC channel payload snapshots > terminal:* (terminal integrado no chat) > terminal:open result - erro (ABI/teto/colisao) 1`] = `
+{
+  "error": "limite de 8 terminais simultaneos atingido",
+  "ok": false,
+}
+`;
+
+exports[`IPC channel payload snapshots > terminal:* (terminal integrado no chat) > terminal:open result - ok 1`] = `
+{
+  "ok": true,
+}
+`;

@@ -1,0 +1,4 @@
+{"method":"thread/started","params":{"threadId":"thread-usage-1"}}
+{"method":"item/agentMessage/delta","params":{"delta":"ok"}}
+{"method":"thread/tokenUsage/updated","params":{"usage":{"inputTokens":1200,"cachedInputTokens":300,"outputTokens":450,"reasoningOutputTokens":120,"totalTokens":1650}}}
+{"method":"turn/completed","params":{"status":"completed"}}

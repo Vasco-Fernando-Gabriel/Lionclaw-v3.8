@@ -1,0 +1,6 @@
+{
+  "upstream": "https://github.com/nexu-io/open-design.git",
+  "commit": "5bd9763181f2c868e1439bfc4842859ec69df102",
+  "importedAt": "2026-05-12T00:08:31+08:00",
+  "note": "Flattened subtree. To update: rm -rf vendor/open-design && reclone @ desired ref, then re-flatten."
+}

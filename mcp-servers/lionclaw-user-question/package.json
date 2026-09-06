@@ -1,0 +1,26 @@
+{
+  "name": "@lionclaw/mcp-lionclaw-user-question",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/lionclaw-user-question/src/index.js",
+  "bin": {
+    "lionclaw-user-question": "dist/lionclaw-user-question/src/index.js"
+  },
+  "lionclaw": {
+    "embeddedDependencies": [
+      "@modelcontextprotocol/sdk",
+      "zod"
+    ]
+  },
+  "scripts": {
+    "build": "node ../_shared/bundle-mcp-server.mjs",
+    "start": "node dist/lionclaw-user-question/src/index.js"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.3",
+    "zod": "^3.23.0"
+  }
+}

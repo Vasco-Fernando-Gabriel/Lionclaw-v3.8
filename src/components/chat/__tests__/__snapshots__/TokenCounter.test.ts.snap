@@ -1,0 +1,31 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`TokenCounter costUsd display logic > costUsd === 0 -> "Local · $0" 1`] = `"Local · $0"`;
+
+exports[`TokenCounter costUsd display logic > costUsd === null -> omite custo (null) 1`] = `null`;
+
+exports[`TokenCounter costUsd display logic > costUsd === undefined -> omite custo (null) 1`] = `null`;
+
+exports[`TokenCounter costUsd display logic > costUsd grande -> "~$X.XXX" 1`] = `"~$1.250"`;
+
+exports[`TokenCounter costUsd display logic > costUsd muito pequeno (< 0.001) -> "<$0.001" 1`] = `"<$0.001"`;
+
+exports[`TokenCounter costUsd display logic > costUsd normal (>= 0.01) -> "~$X.XXX" 1`] = `"~$0.052"`;
+
+exports[`TokenCounter costUsd display logic > costUsd pequeno (0.001 <= x < 0.01) -> "~$0.XXXX" 1`] = `"~$0.0045"`;
+
+exports[`TokenCounter props contract > props basicas do componente sao verificadas por shape 1`] = `
+{
+  "cacheCreationTokens": "number | undefined",
+  "cacheReadTokens": "number | undefined",
+  "compactionThresholdPercent": "number | undefined",
+  "contextSource": "'estimate' | 'provider' | undefined",
+  "contextTokens": "number | undefined",
+  "contextWindowTokens": "number | undefined",
+  "costUsd": "number | null | undefined",
+  "inputTokens": "number",
+  "isCompacting": "boolean | undefined",
+  "isStreaming": "boolean",
+  "outputTokens": "number",
+}
+`;

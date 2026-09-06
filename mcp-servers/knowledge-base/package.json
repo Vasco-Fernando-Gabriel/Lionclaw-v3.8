@@ -1,0 +1,24 @@
+{
+  "name": "knowledge-base-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "lionclaw": {
+    "embeddedDependencies": [
+      "@modelcontextprotocol/sdk",
+      "zod"
+    ]
+  },
+  "scripts": {
+    "build": "node ../_shared/bundle-mcp-server.mjs",
+    "dev": "tsx src/index.ts"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.9.3",
+    "zod": "^3.24.4"
+  }
+}

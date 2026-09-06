@@ -1,0 +1,7 @@
+{
+  "id": "build-plan",
+  "name": "BuildPlan",
+  "description": "Workflow de planejamento de produto completo",
+  "stages": 7,
+  "version": "1.0.0"
+}

@@ -1,0 +1,28 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AC-59 — snapshot byte-identico do buildAgentDefinitions (claude-compat) > provider minimax: snapshot estavel (override de model intacto) 1`] = `
+"{
+  "researcher": {
+    "description": "Especialista em pesquisa profunda. Cobre coleta de fontes, verificacao adversarial e sintese final com citacoes completas para relatorios extensos.",
+    "mcpServers": []
+  },
+  "coder": {
+    "description": "Implementa codigo de producao. Segue SPEC e roda os gates.",
+    "mcpServers": []
+  }
+}"
+`;
+
+exports[`AC-59 — snapshot byte-identico do buildAgentDefinitions (claude-compat) > provider zai: snapshot estavel 1`] = `
+"{
+  "researcher": {
+    "description": "Especialista em pesquisa profunda. Cobre coleta de fontes, verificacao adversarial e sintese final com citacoes completas para relatorios extensos.",
+    "model": "claude-opus-4-7",
+    "mcpServers": []
+  },
+  "coder": {
+    "description": "Implementa codigo de producao. Segue SPEC e roda os gates.",
+    "mcpServers": []
+  }
+}"
+`;

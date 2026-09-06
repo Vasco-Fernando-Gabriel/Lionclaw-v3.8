@@ -1,0 +1,23 @@
+{
+  "name": "@lionclaw/mcp-elevenlabs",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "lionclaw": {
+    "embeddedDependencies": [
+      "@elevenlabs/elevenlabs-js",
+      "@modelcontextprotocol/sdk"
+    ]
+  },
+  "scripts": {
+    "build": "node ../_shared/bundle-mcp-server.mjs",
+    "start": "node dist/index.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "@types/node": "^22.0.0",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@elevenlabs/elevenlabs-js": "^2.39.0",
+    "esbuild": "^0.25.0"
+  }
+}

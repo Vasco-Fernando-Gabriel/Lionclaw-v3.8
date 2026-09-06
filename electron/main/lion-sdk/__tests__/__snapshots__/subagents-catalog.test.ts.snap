@@ -1,0 +1,14 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildLionSubagentCatalogPrompt enriched format > snapshot - enriched catalog with runtime, model, tools, skills 1`] = `
+"## Available Active Subagents
+
+- **Backend Developer** (id: \`backend-developer\`) - Especialista em backend
+  Runtime: cloud | Model: claude-sonnet-4-5 | Tools: Read, Write, Edit, Bash, Glob
+  Skills: skill-git, skill-tests
+- **Electron Pro** (id: \`electron-pro\`) - Especialista Electron
+  Runtime: cloud | Model: claude-opus-4-7 | Tools: Read, Write, Edit
+- **Local Agent** (id: \`local-agent\`) - Agente local
+  Runtime: local | Model: qwen2.5:72b | Tools: Read, Bash
+  Skills: skill-local"
+`;

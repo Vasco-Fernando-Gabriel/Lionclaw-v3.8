@@ -1,0 +1,136 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-07-17",
+  "source": "Grok Build CLI real; valores identificadores e de conta redigidos",
+  "cli": {
+    "version": "0.2.103",
+    "commit": "89c3d36fb6",
+    "channel": "stable",
+    "platform": "linux",
+    "defaultModel": "grok-4.5",
+    "models": ["grok-4.5"],
+    "acpProtocolVersion": 1
+  },
+  "redactions": [
+    "account",
+    "organization",
+    "subscription",
+    "access_token",
+    "requestId",
+    "sessionId",
+    "absolute_paths",
+    "prompt_and_response_text"
+  ],
+  "cases": {
+    "F1": { "status": "partially-observed", "evidence": ["version", "models"], "pending": ["redacted-help-payload", "redacted-login-route-payload"] },
+    "F2": { "status": "partially-observed", "evidence": ["initialize", "authenticate-cached_token"], "pending": ["redacted-child-env-canaries-payload"] },
+    "F3": { "status": "observed", "evidence": ["session-new-http-mcp-entry", "headers-array"] },
+    "F4": { "status": "partially-observed", "evidence": [], "pending": ["redacted-inspect-managed-sources", "redacted-project-source-attestation", "redacted-extension-rejection"] },
+    "F5": { "status": "observed", "evidence": ["text", "reasoning", "tool-lifecycle", "usage", "stopReason"] },
+    "F6": { "status": "partially-observed", "evidence": ["permission-allow-deny"], "pending": ["redacted-session-cancel", "redacted-cancelled-terminal"] },
+    "F7": { "status": "partially-observed", "evidence": ["model", "effort", "write-tool-variant"], "pending": ["redacted-full-native-tool-catalog", "redacted-one-shot-empty-catalog"] },
+    "F8": { "status": "partially-observed", "evidence": ["auth-expiry", "custom-backend-rejection", "network-failure", "process-kill"], "pending": ["real-quota-exhaustion"] },
+    "F9": { "status": "partially-observed", "evidence": ["linux-landlock"], "pending": ["macos", "windows"] },
+    "F10": { "status": "partially-observed", "evidence": [], "pending": ["redacted-isolated-grok-home", "redacted-session-artifacts", "redacted-log-redaction"] }
+  },
+  "wire": {
+    "initializeResult": {
+      "protocolVersion": 1,
+      "authMethods": [
+        { "id": "cached_token" },
+        { "id": "grok.com" }
+      ],
+      "agentCapabilities": {
+        "contextWindow": 500000,
+        "supportsReasoningEffort": true,
+        "reasoningEfforts": ["high", "medium", "low"]
+      }
+    },
+    "authenticateRequest": {
+      "methodId": "cached_token",
+      "_meta": { "headless": true }
+    },
+    "authenticateResult": {
+      "authenticated": true,
+      "subscription": { "active": true, "identity": "<redacted>" }
+    },
+    "sessionNewRequest": {
+      "cwd": "<workspace>",
+      "mcpServers": [
+        {
+          "id": "lion-tools",
+          "name": "lion-tools",
+          "type": "http",
+          "url": "http://127.0.0.1:<redacted>/mcp",
+          "headers": [{ "name": "Authorization", "value": "<redacted>" }],
+          "env": []
+        }
+      ]
+    },
+    "sessionNewResult": {
+      "sessionId": "<redacted>",
+      "models": { "currentModelId": "grok-4.5" },
+      "modes": { "currentModeId": "default" }
+    },
+    "updates": [
+      { "sessionUpdate": "user_message_chunk", "content": { "text": "<redacted>" } },
+      { "sessionUpdate": "agent_thought_chunk", "content": { "text": "<redacted-reasoning>" } },
+      { "sessionUpdate": "agent_message_chunk", "content": { "text": "<redacted-response>" } },
+      {
+        "sessionUpdate": "tool_call",
+        "toolCallId": "<redacted-tool-id>",
+        "title": "Write",
+        "kind": "edit",
+        "rawInput": { "variant": "Write", "file_path": "<workspace>/fixture.txt", "content": "<redacted>" }
+      },
+      {
+        "sessionUpdate": "tool_call_update",
+        "toolCallId": "<redacted-tool-id>",
+        "status": "completed",
+        "rawOutput": "<redacted-output>"
+      }
+    ],
+    "permissionRequest": {
+      "method": "session/request_permission",
+      "params": {
+        "sessionId": "<redacted>",
+        "toolCall": {
+          "toolCallId": "<redacted-tool-id>",
+          "rawInput": { "variant": "Write", "file_path": "<workspace>/fixture.txt", "content": "<redacted>" }
+        },
+        "options": [
+          { "kind": "allow_session", "optionId": "allow-edits-session" },
+          { "kind": "allow_once", "optionId": "allow-once" },
+          { "kind": "reject_once", "optionId": "reject-once" }
+        ]
+      }
+    },
+    "terminalResult": {
+      "stopReason": "end_turn",
+      "_meta": {
+        "modelId": "grok-4.5",
+        "requestId": "<redacted>",
+        "usage": {
+          "inputTokens": 100,
+          "outputTokens": 20,
+          "cachedReadTokens": 30,
+          "reasoningTokens": 7,
+          "modelCalls": 2,
+          "apiDurationMs": 42,
+          "costUsdTicks": 270800000,
+          "numTurns": 3,
+          "modelUsage": {
+            "grok-4.5": {
+              "inputTokens": 100,
+              "outputTokens": 20,
+              "cachedReadTokens": 30,
+              "reasoningTokens": 7,
+              "modelCalls": 2,
+              "costUsdTicks": 270800000
+            }
+          }
+        }
+      }
+    }
+  }
+}

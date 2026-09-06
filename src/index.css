@@ -1,0 +1,247 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+:root {
+  --color-brand: #f59e0b;
+  --color-brand-hover: #d97706;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+/* macOS window dragging */
+.app-drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Allow text selection in chat and code blocks */
+.selectable {
+  user-select: text;
+}
+
+/* Markdown code blocks */
+pre code {
+  user-select: text;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 13px;
+}
+
+/* Chat markdown prose overrides */
+.chat-markdown {
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+
+.chat-markdown h1,
+.chat-markdown h2,
+.chat-markdown h3,
+.chat-markdown h4 {
+  color: #e4e4e7;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  line-height: 1.3;
+}
+
+.chat-markdown h1:first-child,
+.chat-markdown h2:first-child,
+.chat-markdown h3:first-child {
+  margin-top: 0;
+}
+
+.chat-markdown h1 { font-size: 1.25em; }
+.chat-markdown h2 { font-size: 1.1em; }
+.chat-markdown h3 { font-size: 1em; }
+
+.chat-markdown p {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  line-height: 1.6;
+}
+
+.chat-markdown p:first-child {
+  margin-top: 0;
+}
+
+.chat-markdown ul,
+.chat-markdown ol {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+  padding-left: 1.5em;
+}
+
+.chat-markdown ul {
+  list-style-type: disc;
+}
+
+.chat-markdown ol {
+  list-style-type: decimal;
+}
+
+.chat-markdown li {
+  margin-top: 0.2em;
+  margin-bottom: 0.2em;
+  line-height: 1.5;
+}
+
+.chat-markdown li::marker {
+  color: #a1a1aa;
+}
+
+.chat-markdown strong {
+  color: #fafafa;
+  font-weight: 600;
+}
+
+.chat-markdown em {
+  color: #d4d4d8;
+}
+
+.chat-markdown a {
+  color: #fbbf24;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.chat-markdown a:hover {
+  color: #f59e0b;
+}
+
+.chat-markdown blockquote {
+  border-left: 3px solid #3f3f46;
+  padding-left: 1em;
+  margin: 0.75em 0;
+  color: #a1a1aa;
+  font-style: italic;
+}
+
+.chat-markdown hr {
+  border: none;
+  border-top: 1px solid #27272a;
+  margin: 1em 0;
+}
+
+.chat-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  font-size: 0.875em;
+}
+
+.chat-markdown th {
+  background: #18181b;
+  color: #e4e4e7;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.5em 0.75em;
+  border: 1px solid #27272a;
+}
+
+.chat-markdown td {
+  padding: 0.4em 0.75em;
+  border: 1px solid #27272a;
+}
+
+.chat-markdown code:not(pre code) {
+  background: #27272a;
+  color: #fbbf24;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.chat-markdown pre {
+  background: #0c0c0e;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 0.75em 1em;
+  margin: 0.75em 0;
+  overflow-x: auto;
+}
+
+.chat-markdown pre code {
+  background: none;
+  color: #d4d4d8;
+  padding: 0;
+  border-radius: 0;
+  font-size: 13px;
+}
+
+/* Excalidraw viewer overrides - hide all UI chrome in view mode */
+.excalidraw-viewer-container .excalidraw .App-menu,
+.excalidraw-viewer-container .excalidraw .App-menu__left,
+.excalidraw-viewer-container .excalidraw .App-menu__right,
+.excalidraw-viewer-container .excalidraw .layer-ui__wrapper__top-right,
+.excalidraw-viewer-container .excalidraw .layer-ui__wrapper__footer,
+.excalidraw-viewer-container .excalidraw .Island,
+.excalidraw-viewer-container .excalidraw .HintViewer,
+.excalidraw-viewer-container .excalidraw .ScrolledOutsideViewport,
+.excalidraw-viewer-container .excalidraw .ToolIcon,
+.excalidraw-viewer-container .excalidraw .shapes-section,
+.excalidraw-viewer-container .excalidraw .App-toolbar,
+.excalidraw-viewer-container .excalidraw .App-bottom-bar,
+.excalidraw-viewer-container .excalidraw .footer-center,
+.excalidraw-viewer-container .excalidraw .MainMenu,
+.excalidraw-viewer-container .excalidraw .main-menu-trigger,
+.excalidraw-viewer-container .excalidraw [class*="menu"],
+.excalidraw-viewer-container .excalidraw [class*="Menu"],
+.excalidraw-viewer-container .excalidraw .undo-redo-buttons,
+.excalidraw-viewer-container .excalidraw .finalize-button,
+.excalidraw-viewer-container .excalidraw .help-icon,
+.excalidraw-viewer-container .excalidraw .zoom-actions,
+.excalidraw-viewer-container .excalidraw button {
+  display: none !important;
+}
+
+.excalidraw-viewer-container .excalidraw {
+  border-radius: 0 0 8px 8px;
+}
+
+.excalidraw-viewer-container .excalidraw .layer-ui__wrapper {
+  pointer-events: none;
+}
+
+/* Streaming cursor animation */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: #f59e0b;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  animation: blink 0.8s step-end infinite;
+}

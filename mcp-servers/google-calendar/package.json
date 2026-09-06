@@ -1,0 +1,23 @@
+{
+  "name": "@lionclaw/mcp-google-calendar",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "lionclaw": {
+    "embeddedDependencies": [
+      "@modelcontextprotocol/sdk",
+      "googleapis"
+    ]
+  },
+  "scripts": {
+    "build": "node ../_shared/bundle-mcp-server.mjs",
+    "start": "node dist/index.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "@types/node": "^22.0.0",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "googleapis": "^144.0.0",
+    "esbuild": "^0.25.0"
+  }
+}

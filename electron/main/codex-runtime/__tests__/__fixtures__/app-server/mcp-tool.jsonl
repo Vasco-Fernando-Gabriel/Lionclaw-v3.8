@@ -1,0 +1,4 @@
+{"method":"thread/started","params":{"threadId":"thread-mcp-1"}}
+{"method":"mcpToolCall/started","params":{"callId":"m1","name":"knowledge-base.search"}}
+{"method":"mcpToolCall/completed","params":{"callId":"m1","name":"knowledge-base.search","result":{"hits":3}}}
+{"method":"turn/completed","params":{"status":"completed"}}

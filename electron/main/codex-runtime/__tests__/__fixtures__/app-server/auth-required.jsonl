@@ -1,0 +1,3 @@
+{"method":"thread/started","params":{"threadId":"thread-auth-1"}}
+{"method":"auth/required","params":{"reason":"unauthorized"}}
+{"method":"turn/completed","params":{"status":"auth_required"}}

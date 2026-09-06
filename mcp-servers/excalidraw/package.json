@@ -1,0 +1,22 @@
+{
+  "name": "@lionclaw/mcp-excalidraw",
+  "version": "1.0.0",
+  "description": "MCP server for creating and rendering Excalidraw diagrams",
+  "type": "module",
+  "main": "dist/index.js",
+  "lionclaw": {
+    "embeddedDependencies": [
+      "@modelcontextprotocol/sdk"
+    ]
+  },
+  "scripts": {
+    "build": "node ../_shared/bundle-mcp-server.mjs",
+    "start": "node dist/index.js"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@types/node": "^25.5.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,30 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildLionMcpCatalogPrompt > snapshot - 3 servers with real tool names and args 1`] = `
+"## Available MCP Tools
+
+Use the \`mcp_call({ server_id, tool, args })\` tool with the EXACT server_id + tool names listed below.
+
+### server: \`google-gmail\`
+- \`send_message\` - Send an email via Gmail.
+  args:
+  - \`to\`: string (required) - Recipient email
+  - \`subject\`: string (required) - Email subject
+  - \`body\`: string (required) - Email body
+- \`list_messages\` - List recent Gmail messages.
+  args:
+  - \`maxResults\`: number (optional) - Max messages to return
+
+### server: \`knowledge-base\`
+- \`search\` - Search the knowledge base for relevant documents.
+  args:
+  - \`query\`: string (required) - Search query
+  - \`limit\`: number (optional) - Max results
+
+### server: \`lionclaw-agents\`
+- \`call_agent\` - Dispatch a LionClaw subagent by id.
+  args:
+  - \`agent_id\`: string (required) - Agent identifier
+  - \`task\`: string (required) - Task description
+"
+`;

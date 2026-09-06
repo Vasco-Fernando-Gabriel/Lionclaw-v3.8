@@ -1,0 +1,7 @@
+{
+  "name": "skill-creator",
+  "description": "Cria, edita e otimiza skills para o LionClaw. Use quando o usuario quiser criar uma skill nova, melhorar uma existente, ou testar skills.",
+  "model": "sonnet",
+  "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebSearch", "WebFetch"],
+  "mcpServers": []
+}

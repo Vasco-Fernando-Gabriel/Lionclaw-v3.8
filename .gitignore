@@ -1,0 +1,88 @@
+.DS_Store
+Thumbs.db
+
+node_modules/
+# Worktrees compartilham o node_modules do repo principal via symlink; o padrao
+# com barra acima nao casa symlink, entao ignoramos a entrada exata tambem.
+/node_modules
+dist/
+out/
+release/
+# Evidencia dos spikes do runtime Cursor e versionada (a regra out/ acima a ignoraria)
+!docs/spike-f05/out/
+
+.env
+.env.local
+
+.claude/worktrees/
+.claude/settings.json
+.claude/settings.local.json
+.claude/agents/
+.claude/*.lock
+.codex/
+
+# Spikes e material de trabalho local (nao versionar)
+scratch/
+.lioncode/
+
+electron.vite.config.*.mjs
+
+# Bundle fisico do sidecar Cursor (gerado no postinstall via build:cursor-sidecar)
+resources/cursor-sidecar/
+
+AUDIT-*.md
+BUGS_PENDENTES.md
+PIPELINE_REFACTOR_SPEC.md
+# SPEC-010 Workflows Dinamicos: doc de trabalho local (ainda em discussao, nao versionar)
+spec-010-dynamic-workflow-pipe.md
+# Specs de trabalho local (nao versionar)
+spec-handoff-orchestrator.md
+spec-codex-official-only.md
+lionclaw-workflow-architecture.html
+graphify-out/
+
+.lionclaw/data/
+.lionclaw/conversations/
+.lionclaw/pipelines/
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Open Design vendor runtime artifacts (managed by pnpm + OD daemon)
+vendor/open-design/node_modules/
+vendor/open-design/**/node_modules/
+vendor/open-design/.od/
+vendor/open-design/.tmp/
+vendor/open-design/**/dist/
+vendor/open-design/**/.next/
+# Logs do sidecar durante dev (caso resolveRunDir aponte pra ca)
+vendor/open-design/**/logs/
+
+# Native runtimes baixados/compilados localmente (whisper, ffmpeg)
+# Gerados por scripts/ensure-dev-runtimes.js e scripts/prepare-native-runtimes.js
+.cache/native-runtimes/
+# Cache de download do Node do sidecar Cursor (prepare-cursor-node-runtime.js)
+.cache/node-runtime/
+# Cache de download do Electron (electron-builder.yml electronDownload.cache)
+.cache/electron/
+resources/whisper.cpp/
+resources/ffmpeg/
+
+# Indice local do CodeGraph (repo-mode do chat; regeneravel, por-maquina)
+.codegraph/
+
+# Backups de estudos recuperados de workflows (material de trabalho, nao versionar)
+readme-v35-estudo-recuperado.md
+repo-cleanup-audit-recuperado.md
+
+# Playwright E2E artifacts (screenshots, traces)
+e2e/.artifacts/
+test-results/
+playwright-report/
+
+# Contrato de agente: local, fora do repositorio
+AGENTS.md
+CLAUDE.md

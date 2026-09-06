@@ -1,0 +1,98 @@
+appId: com.lionlabs.lionclaw
+productName: LionClaw
+copyright: Copyright (c) 2026 LionLabs
+
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - dist/**/*
+  - "!dist/renderer/src/**"
+  - node_modules/**/*
+  - package.json
+
+extraResources:
+  - from: .lionclaw
+    to: .lionclaw
+    filter:
+      - "**/*"
+      - "!data/**"
+  # Payload do sidecar do runtime Cursor (SPEC cursor-runtime, E7): bundle
+  # FISICO do entrypoint (sidecar.cjs) + closure fisica do @cursor/sdk
+  # (node_modules, copiada por build-cursor-sidecar.js --with-deps) + runtime
+  # Node >=22.13 (node/<target>, prepare-cursor-node-runtime.js). Fica FORA do
+  # asar por necessidade: o sidecar roda num Node externo, que nao le asar.
+  - from: resources/cursor-sidecar
+    to: cursor-sidecar
+    filter:
+      - "**/*"
+  # Entrada SEPARADA para a closure: o copier do electron-builder descarta
+  # `node_modules` na RAIZ de qualquer `from` (util/filter.js createFilter),
+  # entao a entrada acima NAO leva resources/cursor-sidecar/node_modules.
+  # Com o proprio node_modules como `from`, os paths relativos internos sao os
+  # nomes dos pacotes e passam pelo filtro.
+  - from: resources/cursor-sidecar/node_modules
+    to: cursor-sidecar/node_modules
+    filter:
+      - "**/*"
+
+mac:
+  icon: resources/icon.icns
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  category: public.app-category.productivity
+  darkModeSupport: true
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # electron-builder 26 moveu publisherName para signtoolOptions (a chave
+  # win.publisherName virou erro de schema e quebrava o dist inteiro).
+  signtoolOptions:
+    publisherName: LionLabs
+
+nsis:
+  oneClick: true
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+  deleteAppDataOnUninstall: false
+
+asar: true
+
+asarUnpack:
+  # Engine nativo do Claude Code (SDK 0.3.x): binario claude/claude.exe (~218 MB) do
+  # pacote de plataforma. Binario nao executa de dentro do asar (spawn); o bootstrap
+  # resolve o path em app.asar.unpacked (SPEC agent-sdk-0-3 D5). Mesmo mecanismo do
+  # @cursor/sdk-* abaixo.
+  - "**/@anthropic-ai/claude-agent-sdk-*/**"
+  - "**/*.node"
+  - "**/better-sqlite3/**"
+  - "**/keytar/**"
+  - "**/sqlite-vec/**"
+  # Pacotes de plataforma do @cursor/sdk (cursorsandbox.exe, rg.exe,
+  # vendor/tree-sitter binding.node): binarios nao executam de dentro do asar
+  # (SPEC cursor-runtime, E7). O sidecar usa a closure fisica de
+  # resources/cursor-sidecar; isto cobre o espelho dentro de node_modules.
+  - "**/@cursor/sdk-*/**"
+
+electronDownload:
+  cache: .cache/electron

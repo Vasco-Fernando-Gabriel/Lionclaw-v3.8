@@ -1,0 +1,2 @@
+{"method":"thread/started","params":{"threadId":"thread-timeout-1"}}
+{"method":"item/agentMessage/delta","params":{"delta":"working"}}

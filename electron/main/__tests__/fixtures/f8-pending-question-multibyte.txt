@@ -1,0 +1,13 @@
+Fase 3 concluída — validação do PRD do Multichat (fixture SINTÉTICA anonimizada, F8/SPEC estrada-fixes).
+
+Decisões registradas até aqui:
+1. Autenticação via sessão única por usuário (sem múltiplos dispositivos na v1) ✅
+2. Mensagens persistidas com acentuação completa: ação, configuração, armazém, coração, paralelepípedo, hífen, gênero, âmbito, pinguim, saúde, memória, histórico, transmissão.
+3. Emojis no corpo das mensagens são suportados: 🚀 🧭 ✅ ❤️ 🇧🇷 👍🏽 🤖 — inclusive pares com modificador de tom de pele e sequências ZWJ como 👨‍👩‍👧‍👦.
+4. Cirílico e CJK em campos livres: Привет мир — こんにちは世界 — 你好世界.
+
+Caminhos canônicos dos artefatos (>200 chars, padrão do run real com docs em Docs20260610_104808):
+- /Users/maquina-de-teste/projetos/multichat-anonimizado/.lionclaw/pipelines/development-v2/20260610_104808-abc123/docs/Docs20260610_104808/subpasta-com-nome-propositalmente-bem-longo-para-forcar-mais-de-duzentos-caracteres-no-caminho-completo/registro-de-decisões-técnicas-e-padrões-de-implementação-do-módulo-de-conversação.md
+- /Users/maquina-de-teste/projetos/multichat-anonimizado/.lionclaw/pipelines/development-v2/20260610_104808-abc123/docs/Docs20260610_104808/especificação-funcional-revisada-com-acentuação-no-nome-do-arquivo-e-comprimento-acima-do-limite-tipico-de-buffer-de-transporte-em-chunks-tcp-pequenos.md
+
+Pergunta pendente para o motorista: posso consolidar estas decisões no PRD completo e seguir para a próxima fase? Responda com ajustes ou aprovação.

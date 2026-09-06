@@ -1,0 +1,4 @@
+{"method":"thread/started","params":{"threadId":"thread-cmd-1"}}
+{"method":"commandExecution/started","params":{"callId":"c1","command":"npm test","startedAt":1000}}
+{"method":"commandExecution/completed","params":{"callId":"c1","command":"npm test","exitCode":0,"durationMs":4200}}
+{"method":"turn/completed","params":{"status":"completed"}}

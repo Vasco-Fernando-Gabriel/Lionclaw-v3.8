@@ -1,0 +1,21 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildCodexMcpCatalogPrompt > snapshot: 0 servers 1`] = `
+"## Available MCP Servers
+
+(no active MCPs)"
+`;
+
+exports[`buildCodexMcpCatalogPrompt > snapshot: 1 server 1`] = `
+"## Available MCP Servers
+
+- \`excalidraw\` - Diagram tool"
+`;
+
+exports[`buildCodexMcpCatalogPrompt > snapshot: 3 servers 1`] = `
+"## Available MCP Servers
+
+- \`google-calendar\` - Google Calendar
+- \`memory-search\` - Semantic memory search
+- \`custom-mcp\`"
+`;

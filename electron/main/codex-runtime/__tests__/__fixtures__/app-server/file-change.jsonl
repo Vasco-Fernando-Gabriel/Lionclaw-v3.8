@@ -1,0 +1,4 @@
+{"method":"thread/started","params":{"threadId":"thread-file-1"}}
+{"method":"fileChange","params":{"path":"src/index.ts"}}
+{"method":"fileChange","params":{"path":"src/util.ts","applyPatchFailed":true,"failureText":"Failed to find expected lines"}}
+{"method":"turn/completed","params":{"status":"completed"}}

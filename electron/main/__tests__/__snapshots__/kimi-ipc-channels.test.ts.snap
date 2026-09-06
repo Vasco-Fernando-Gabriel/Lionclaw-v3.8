@@ -1,0 +1,28 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`kimi:status golden shape (canal aditivo, R2) > nao instalado: binario kimi nao resolvel 1`] = `
+{
+  "authMode": "none",
+  "authenticated": false,
+  "installed": false,
+  "version": null,
+}
+`;
+
+exports[`kimi:status golden shape (canal aditivo, R2) > none: instalado mas sem login (sem fallback api-key) 1`] = `
+{
+  "authMode": "none",
+  "authenticated": false,
+  "installed": true,
+  "version": "kimi 0.1.8",
+}
+`;
+
+exports[`kimi:status golden shape (canal aditivo, R2) > subscription: logado via /login 1`] = `
+{
+  "authMode": "subscription",
+  "authenticated": true,
+  "installed": true,
+  "version": "kimi 0.1.8",
+}
+`;

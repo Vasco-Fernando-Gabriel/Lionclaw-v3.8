@@ -1,0 +1,67 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AC-59 — snapshot byte-identico do buildAgentDefinitions (orchestrator) > repoChatContext DEFINIDO: snapshot estavel 1`] = `
+"{
+  "researcher": {
+    "description": "Especialista em pesquisa profunda. Cobre coleta de fontes, verificacao adversarial e sintese final com citacoes completas para relatorios extensos.",
+    "tools": [
+      "Read",
+      "WebSearch",
+      "mcp__repo-graph__repo_graph_status",
+      "mcp__repo-graph__repo_graph_search",
+      "mcp__repo-graph__repo_graph_minimal_context",
+      "mcp__repo-graph__repo_graph_impact",
+      "mcp__repo-graph__repo_graph_node",
+      "mcp__repo-graph__repo_graph_callers",
+      "mcp__repo-graph__repo_graph_callees"
+    ],
+    "prompt": "Prompt integral do researcher\\n\\n## Repositorio ativo (CodeGraph)\\nRepo da conversa: /abs/fake-repo (graph pronto).\\nVoce tem as tools READ-ONLY do MCP repo-graph: repo_graph_status, repo_graph_search, repo_graph_minimal_context, repo_graph_impact, repo_graph_node, repo_graph_callers, repo_graph_callees.\\nUse repo_graph_search/repo_graph_minimal_context ANTES de Glob/Grep/Read em massa neste repositorio. Nao existe tool de build/update do graph.",
+    "model": "claude-opus-4-7",
+    "maxTurns": 12,
+    "mcpServers": [
+      {
+        "repo-graph": {
+          "command": "node",
+          "args": [
+            "/dist/repo-graph/src/index.js"
+          ]
+        }
+      }
+    ]
+  },
+  "coder": {
+    "description": "Implementa codigo de producao. Segue SPEC, roda testes e nunca entrega sem validar os gates da sprint.",
+    "prompt": "## Repositorio ativo (CodeGraph)\\nRepo da conversa: /abs/fake-repo (graph pronto).\\nVoce tem as tools READ-ONLY do MCP repo-graph: repo_graph_status, repo_graph_search, repo_graph_minimal_context, repo_graph_impact, repo_graph_node, repo_graph_callers, repo_graph_callees.\\nUse repo_graph_search/repo_graph_minimal_context ANTES de Glob/Grep/Read em massa neste repositorio. Nao existe tool de build/update do graph.",
+    "mcpServers": [
+      {
+        "repo-graph": {
+          "command": "node",
+          "args": [
+            "/dist/repo-graph/src/index.js"
+          ]
+        }
+      }
+    ]
+  }
+}"
+`;
+
+exports[`AC-59 — snapshot byte-identico do buildAgentDefinitions (orchestrator) > repoChatContext UNDEFINED: snapshot estavel 1`] = `
+"{
+  "researcher": {
+    "description": "Especialista em pesquisa profunda. Cobre coleta de fontes, verificacao adversarial e sintese final com citacoes completas para relatorios extensos.",
+    "tools": [
+      "Read",
+      "WebSearch"
+    ],
+    "prompt": "Prompt integral do researcher",
+    "model": "claude-opus-4-7",
+    "maxTurns": 12,
+    "mcpServers": []
+  },
+  "coder": {
+    "description": "Implementa codigo de producao. Segue SPEC, roda testes e nunca entrega sem validar os gates da sprint.",
+    "mcpServers": []
+  }
+}"
+`;

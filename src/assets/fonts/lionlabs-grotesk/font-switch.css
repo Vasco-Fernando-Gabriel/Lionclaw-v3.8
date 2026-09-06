@@ -1,0 +1,22 @@
+/* LionLabs Grotesk — fonte da interface do LionClaw.
+ * Default: LionLabs Grotesk. Alternável em Settings > Geral via [data-uifont] no <html>:
+ *   'lionlabs' (padrão) | 'dmsans' | 'system'. Não afeta o monospace (código).
+ * Derivada da Hanken Grotesk (SIL OFL 1.1) — ver OFL.txt nesta pasta. */
+
+@font-face { font-family:"LionLabs Grotesk"; font-weight:400; font-display:swap; src:url("./LionLabsGrotesk-Regular.woff2") format("woff2"); }
+@font-face { font-family:"LionLabs Grotesk"; font-weight:500; font-display:swap; src:url("./LionLabsGrotesk-Medium.woff2")  format("woff2"); }
+@font-face { font-family:"LionLabs Grotesk"; font-weight:700; font-display:swap; src:url("./LionLabsGrotesk-Bold.woff2")    format("woff2"); }
+@font-face { font-family:"DM Sans LC";       font-weight:100 1000; font-display:swap; src:url("./DMSans-Variable.woff2")    format("woff2"); }
+
+html[data-uifont="lionlabs"] body {
+  font-family: "LionLabs Grotesk", -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+}
+html[data-uifont="dmsans"] body {
+  font-family: "DM Sans LC", -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+}
+
+/* Respiro do sidebar p/ "Workflows Dinâmicos" caber em 1 linha com a fonte (um pouco maior).
+ * Só no modo LionLabs e só quando o sidebar está EXPANDIDO (classe w-56). +16px (14rem -> 15rem).
+ * Sem encolher a fonte; sem tocar no componente Sidebar.tsx. */
+html[data-uifont="lionlabs"] aside.w-56 { width: 15rem !important; }
+html[data-uifont="lionlabs"] aside.w-56 nav button { white-space: nowrap; }

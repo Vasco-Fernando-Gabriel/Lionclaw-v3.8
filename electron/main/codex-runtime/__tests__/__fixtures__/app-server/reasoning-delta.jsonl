@@ -1,0 +1,4 @@
+{"method":"thread/started","params":{"threadId":"thread-reason-1"}}
+{"method":"item/reasoning/delta","params":{"delta":"thinking about the plan"}}
+{"method":"item/agentMessage/delta","params":{"delta":"done"}}
+{"method":"turn/completed","params":{"status":"completed"}}

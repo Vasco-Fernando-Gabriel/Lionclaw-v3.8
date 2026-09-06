@@ -1,0 +1,4 @@
+{"method":"thread/started","params":{"threadId":"thread-text-1"}}
+{"method":"item/agentMessage/delta","params":{"delta":"Hello "}}
+{"method":"item/agentMessage/delta","params":{"delta":"world"}}
+{"method":"turn/completed","params":{"status":"completed"}}

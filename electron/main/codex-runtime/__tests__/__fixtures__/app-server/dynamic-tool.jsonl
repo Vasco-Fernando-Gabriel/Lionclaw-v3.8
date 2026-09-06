@@ -1,0 +1,4 @@
+{"method":"thread/started","params":{"threadId":"thread-dyn-1"}}
+{"method":"dynamicToolCall/started","params":{"callId":"d1","name":"search_web"}}
+{"method":"dynamicToolCall/completed","params":{"callId":"d1","name":"search_web","result":{"ok":true}}}
+{"method":"turn/completed","params":{"status":"completed"}}

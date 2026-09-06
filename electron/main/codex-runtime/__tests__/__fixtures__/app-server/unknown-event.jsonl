@@ -1,0 +1,4 @@
+{"method":"thread/started","params":{"threadId":"thread-unknown-1"}}
+{"method":"plan_update","params":{"steps":["a","b"]}}
+{"method":"item/agentMessage/delta","params":{"delta":"after unknown"}}
+{"method":"turn/completed","params":{"status":"completed"}}

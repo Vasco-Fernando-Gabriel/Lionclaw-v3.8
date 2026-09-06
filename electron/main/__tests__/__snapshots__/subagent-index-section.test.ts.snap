@@ -1,0 +1,24 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AC-66 — toggle subagents_prompt_mode > secao full preserva detalhes e usa a rota canônica (snapshot de bytes) 1`] = `
+"# Subagentes Cloud
+
+Voce pode delegar tarefas para subagentes especializados usando a ferramenta Task/Agent.
+
+- **Cloud A** (id: \`cloud-a\`): Agente cloud A.
+  Modelo: claude-sonnet-4-6 | Tools: Read, Write, Edit, Bash | Skills: skill-x
+
+# Subagentes não-Cloud (via lionclaw-agents.call_agent)
+Use \`call_agent({ agent_id, task, context?, expected_output? })\`. O dispatcher lê o runtime atual no banco no momento da chamada.
+
+- **Local A** (id: \`local-a\`, local/claude-sonnet-4-6): Agente local A.
+
+## Quando delegar
+- Tarefa trivial (saudacao, pergunta rapida) -> responda voce mesmo
+- Tarefa que precisa de especialista -> delegue para o subagente adequado
+- Agentes nao-Cloud usam lionclaw-agents.call_agent; nao escolha uma tool diferente por provider
+- Use agentes cloud (Task) para tarefas complexas que exigem tool use pesado
+- Nenhum subagente adequado -> execute voce mesmo
+- Sempre revise o resultado do subagente antes de enviar ao usuario
+"
+`;

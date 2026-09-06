@@ -1,0 +1,24 @@
+{
+  "name": "@lionclaw/mcp-lionclaw-preview",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/lionclaw-preview/src/index.js",
+  "lionclaw": {
+    "embeddedDependencies": [
+      "@modelcontextprotocol/sdk",
+      "zod"
+    ]
+  },
+  "scripts": {
+    "build": "node ../_shared/bundle-mcp-server.mjs",
+    "start": "node dist/lionclaw-preview/src/index.js"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.12.1",
+    "@types/node": "22.15.3",
+    "esbuild": "^0.25.0",
+    "typescript": "5.7.3",
+    "zod": "3.25.76"
+  }
+}
