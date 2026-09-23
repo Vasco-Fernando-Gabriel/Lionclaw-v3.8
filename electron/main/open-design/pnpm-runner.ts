@@ -5,7 +5,6 @@ import os from 'os';
 import { app } from 'electron';
 import { createLogger } from '../logger';
 
-
 const logger = createLogger('open-design-pnpm-runner');
 
 const PNPM_VERSION = '10.33.2';
@@ -38,11 +37,10 @@ function resolveBinForPlatform(bin: string): { bin: string; useShell: boolean } 
           const useShell = lower.endsWith('.cmd') || lower.endsWith('.bat');
           return { bin: candidate, useShell };
         }
-      } catch {
-      }
+      } catch {}
     }
   }
-  return { bin, useShell: false }; // fallback; vai falhar com ENOENT e a cascade segue
+  return { bin, useShell: false };
 }
 
 function probe(candidate: PnpmInvocation): Promise<boolean> {
@@ -109,7 +107,6 @@ export function resetPnpmCache(): void {
   cachedShimDir = null;
 }
 
-
 let cachedShimDir: string | null = null;
 
 function safeUserDataPath(): string | null {
@@ -124,9 +121,7 @@ function findBinInPath(bin: string, excludeDir: string): string | null {
   const pathStr = process.env.PATH ?? process.env.Path ?? '';
   const isWindows = process.platform === 'win32';
   const sep = isWindows ? ';' : ':';
-  const exts = isWindows
-    ? (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').map((e) => e.toLowerCase())
-    : [''];
+  const exts = isWindows ? (process.env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').map((e) => e.toLowerCase()) : [''];
   const normalizedExclude = path.resolve(excludeDir);
   for (const dir of pathStr.split(sep)) {
     if (!dir) continue;
@@ -150,8 +145,7 @@ function findBinInPath(bin: string, excludeDir: string): string | null {
           }
         }
         return candidate;
-      } catch {
-      }
+      } catch {}
     }
   }
   return null;
@@ -163,8 +157,7 @@ export function ensurePnpmShimDir(): string {
     throw new Error('pnpm-runner: ensurePnpmShimDir called before ensurePnpm()');
   }
 
-  const baseDir =
-    safeUserDataPath() ?? path.join(os.tmpdir(), 'lionclaw-open-design-runtime');
+  const baseDir = safeUserDataPath() ?? path.join(os.tmpdir(), 'lionclaw-open-design-runtime');
   const binDir = path.join(baseDir, 'open-design', 'runtime', 'bin');
   fs.mkdirSync(binDir, { recursive: true });
 
@@ -190,13 +183,15 @@ export function ensurePnpmShimDir(): string {
     cmdParts = [cached.bin, ...cached.prefixArgs].map(quoted).join(' ');
   }
 
-  const body = isWindows
-    ? `@echo off\r\n${cmdParts} %*\r\n`
-    : `#!/usr/bin/env sh\nexec ${cmdParts} "$@"\n`;
+  const body = isWindows ? `@echo off\r\n${cmdParts} %*\r\n` : `#!/usr/bin/env sh\nexec ${cmdParts} "$@"\n`;
 
   fs.writeFileSync(shimPath, body, { mode: 0o755 });
   if (!isWindows) {
-    try { fs.chmodSync(shimPath, 0o755); } catch { /* ignore */ }
+    try {
+      fs.chmodSync(shimPath, 0o755);
+    } catch {
+      /* ignore */
+    }
   }
 
   cachedShimDir = binDir;

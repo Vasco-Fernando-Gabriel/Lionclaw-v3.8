@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   spawn: vi.fn(),
   getSetting: vi.fn(() => '/configured/codex'),
-  existsSync: vi.fn((candidate: string) => candidate === '/configured/codex' || candidate.endsWith('/.codex/auth.json')),
+  existsSync: vi.fn(
+    (candidate: string) => candidate === '/configured/codex' || candidate.endsWith('/.codex/auth.json'),
+  ),
   realpathSync: vi.fn((candidate: string) => candidate),
   statSync: vi.fn(() => ({ mtimeMs: 123 })),
   which: vi.fn(),
@@ -69,10 +71,7 @@ describe('Codex binary capability probe', () => {
   });
 
   it('faz single-flight e cacheia apenas capacidade estavel por realpath+mtime', async () => {
-    const [first, concurrent] = await Promise.all([
-      getCodexBinaryStatus(),
-      getCodexBinaryStatus(),
-    ]);
+    const [first, concurrent] = await Promise.all([getCodexBinaryStatus(), getCodexBinaryStatus()]);
     expect(first).toMatchObject({
       installed: true,
       version: 'codex-cli 0.144.1',

@@ -24,16 +24,13 @@ export function AbortRunConfirm({ runId, onCancel, onConfirm }: AbortRunConfirmP
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-zinc-100">Abortar execucao?</h2>
             <p className="mt-1 text-xs text-zinc-400">
-              Abortar PARA a execucao do run{' '}
-              <span className="font-mono text-zinc-300">{runId.slice(0, 8)}</span>, mas{' '}
-              <span className="text-zinc-200 font-medium">PRESERVA tudo</span>{' '}
-              (plano, sprints, codigo) e o run continua{' '}
-              <span className="text-amber-300 font-medium">RECUPERAVEL</span>{' '}
-              (da pra Reabrir/Retomar a qualquer momento).
+              Abortar PARA a execucao do run <span className="font-mono text-zinc-300">{runId.slice(0, 8)}</span>, mas{' '}
+              <span className="text-zinc-200 font-medium">PRESERVA tudo</span> (plano, sprints, codigo) e o run continua{' '}
+              <span className="text-amber-300 font-medium">RECUPERAVEL</span> (da pra Reabrir/Retomar a qualquer
+              momento).
             </p>
             <p className="mt-2 text-xs text-zinc-500">
-              Para apagar de vez o run e todo o conteudo, use{' '}
-              <span className="text-zinc-400">Deletar workflow</span>.
+              Para apagar de vez o run e todo o conteudo, use <span className="text-zinc-400">Deletar workflow</span>.
             </p>
           </div>
         </div>

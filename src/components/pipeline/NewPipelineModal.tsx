@@ -1,8 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Folder, Loader2, ChevronRight, ChevronLeft, FileText, GitBranch, Shield, Code, Network, Bug } from 'lucide-react';
+import {
+  X,
+  Folder,
+  Loader2,
+  ChevronRight,
+  ChevronLeft,
+  FileText,
+  GitBranch,
+  Shield,
+  Code,
+  Network,
+  Bug,
+} from 'lucide-react';
 import { usePipelineStore } from '@/stores/pipeline-store';
 import type { PipelineType } from '@/types';
-
 
 interface EntryPoint {
   phase: number;
@@ -28,7 +39,6 @@ const DEV_ENTRY_POINTS: EntryPoint[] = [
   },
 ];
 
-
 const SECURITY_ENTRY_POINTS: EntryPoint[] = [
   {
     phase: 1,
@@ -42,7 +52,6 @@ const SECURITY_ENTRY_POINTS: EntryPoint[] = [
   },
 ];
 
-
 const FEATURE_ENTRY_POINTS: EntryPoint[] = [
   {
     phase: 1,
@@ -50,7 +59,6 @@ const FEATURE_ENTRY_POINTS: EntryPoint[] = [
     description: 'Explorar o repo, discutir a feature, gerar PRD, SPEC e implementacao',
   },
 ];
-
 
 const ARCHITECTURE_ENTRY_POINTS: EntryPoint[] = [
   {
@@ -60,7 +68,6 @@ const ARCHITECTURE_ENTRY_POINTS: EntryPoint[] = [
   },
 ];
 
-
 const BUG_ENTRY_POINTS: EntryPoint[] = [
   {
     phase: 1,
@@ -69,7 +76,6 @@ const BUG_ENTRY_POINTS: EntryPoint[] = [
   },
 ];
 
-
 const DEV_V2_ENTRY_POINTS: EntryPoint[] = [
   {
     phase: 1,
@@ -77,7 +83,6 @@ const DEV_V2_ENTRY_POINTS: EntryPoint[] = [
     description: 'Comecar do zero com LionDesign — discovery, design, PRD, SPEC e implementacao',
   },
 ];
-
 
 interface PipelineTypeOption {
   type: PipelineType;
@@ -127,19 +132,13 @@ const PIPELINE_TYPES: PipelineTypeOption[] = [
   },
 ];
 
-const TYPES_WITH_SUGGESTED_PATHS = new Set<PipelineType>([
-  'development',
-  'development-v2',
-  'feature',
-]);
-
+const TYPES_WITH_SUGGESTED_PATHS = new Set<PipelineType>(['development', 'development-v2', 'feature']);
 
 interface FieldErrors {
   name?: string;
   description?: string;
   projectPath?: string;
 }
-
 
 interface NewPipelineModalProps {
   onClose: () => void;
@@ -208,7 +207,6 @@ export function NewPipelineModal({ onClose, onCreated }: NewPipelineModalProps) 
     if (dir) setProjectPath(dir);
   };
 
-
   const validateStep1 = (): FieldErrors => {
     const errors: FieldErrors = {};
 
@@ -220,9 +218,7 @@ export function NewPipelineModal({ onClose, onCreated }: NewPipelineModalProps) 
     } else if (trimmedName.length > 100) {
       errors.name = 'Nome deve ter no maximo 100 caracteres.';
     } else {
-      const duplicate = projects.some(
-        (p) => p.name.toLowerCase() === trimmedName.toLowerCase(),
-      );
+      const duplicate = projects.some((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
       if (duplicate) {
         errors.name = 'Ja existe um pipeline com esse nome.';
       }
@@ -306,17 +302,16 @@ export function NewPipelineModal({ onClose, onCreated }: NewPipelineModalProps) 
               ? BUG_ENTRY_POINTS
               : DEV_ENTRY_POINTS;
 
-  const stepLabel = step === 0
-    ? 'Tipo de pipeline (1/3)'
-    : step === 1
-      ? 'Dados do projeto (2/3)'
-      : 'Ponto de entrada (3/3)';
+  const stepLabel =
+    step === 0 ? 'Tipo de pipeline (1/3)' : step === 1 ? 'Dados do projeto (2/3)' : 'Ponto de entrada (3/3)';
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onKeyDown={handleKeyDown}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md mx-4 shadow-2xl">
         {/* Header */}
@@ -335,8 +330,12 @@ export function NewPipelineModal({ onClose, onCreated }: NewPipelineModalProps) 
 
         {/* Step indicator dots */}
         <div className="flex items-center justify-center gap-2 pt-4 pb-1">
-          <div className={`w-2 h-2 rounded-full transition-colors ${step === 0 ? 'bg-amber-500' : step > 0 ? 'bg-green-500' : 'bg-zinc-700'}`} />
-          <div className={`w-2 h-2 rounded-full transition-colors ${step === 1 ? 'bg-amber-500' : step > 1 ? 'bg-green-500' : 'bg-zinc-700'}`} />
+          <div
+            className={`w-2 h-2 rounded-full transition-colors ${step === 0 ? 'bg-amber-500' : step > 0 ? 'bg-green-500' : 'bg-zinc-700'}`}
+          />
+          <div
+            className={`w-2 h-2 rounded-full transition-colors ${step === 1 ? 'bg-amber-500' : step > 1 ? 'bg-green-500' : 'bg-zinc-700'}`}
+          />
           <div className={`w-2 h-2 rounded-full transition-colors ${step === 2 ? 'bg-amber-500' : 'bg-zinc-700'}`} />
         </div>
 
@@ -355,7 +354,9 @@ export function NewPipelineModal({ onClose, onCreated }: NewPipelineModalProps) 
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className={`shrink-0 ${pipelineType === opt.type ? 'text-amber-400' : (opt.idleIconClass ?? 'text-zinc-500')}`}>
+                    <span
+                      className={`shrink-0 ${pipelineType === opt.type ? 'text-amber-400' : (opt.idleIconClass ?? 'text-zinc-500')}`}
+                    >
                       {opt.icon}
                     </span>
                     <div className="flex-1 min-w-0">
@@ -365,14 +366,10 @@ export function NewPipelineModal({ onClose, onCreated }: NewPipelineModalProps) 
                         </div>
                         <div
                           className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${
-                            pipelineType === opt.type
-                              ? 'border-amber-500 bg-amber-500'
-                              : 'border-zinc-600'
+                            pipelineType === opt.type ? 'border-amber-500 bg-amber-500' : 'border-zinc-600'
                           }`}
                         >
-                          {pipelineType === opt.type && (
-                            <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                          )}
+                          {pipelineType === opt.type && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                         </div>
                       </div>
                       <p className="text-[11px] text-zinc-500 mt-0.5">{opt.description}</p>
@@ -426,9 +423,7 @@ export function NewPipelineModal({ onClose, onCreated }: NewPipelineModalProps) 
                     {visibleErrors.description}
                   </p>
                 )}
-                <p className="text-[11px] text-zinc-600 mt-1 text-right">
-                  {description.length}/500
-                </p>
+                <p className="text-[11px] text-zinc-600 mt-1 text-right">{description.length}/500</p>
               </div>
 
               {/* Project path */}
@@ -448,7 +443,9 @@ export function NewPipelineModal({ onClose, onCreated }: NewPipelineModalProps) 
                     }`}
                   />
                   <button
-                    onClick={() => { void handlePickDirectory(); }}
+                    onClick={() => {
+                      void handlePickDirectory();
+                    }}
                     className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700 transition-colors"
                     title="Selecionar pasta"
                   >
@@ -463,22 +460,24 @@ export function NewPipelineModal({ onClose, onCreated }: NewPipelineModalProps) 
                 )}
 
                 {/* Suggested path hints — development and development-v2 pipelines */}
-                {(pipelineType === 'development' || pipelineType === 'development-v2') && projectPath.trim() && (suggestedSpecPath || suggestedPrdPath) && (
-                  <div className="mt-2 space-y-1">
-                    {suggestedSpecPath && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-                        <FileText size={11} />
-                        <span>SPEC.md — Caminho sugerido, sera verificado ao criar</span>
-                      </div>
-                    )}
-                    {suggestedPrdPath && (
-                      <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-                        <FileText size={11} />
-                        <span>PRD.md — Caminho sugerido, sera verificado ao criar</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+                {(pipelineType === 'development' || pipelineType === 'development-v2') &&
+                  projectPath.trim() &&
+                  (suggestedSpecPath || suggestedPrdPath) && (
+                    <div className="mt-2 space-y-1">
+                      {suggestedSpecPath && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+                          <FileText size={11} />
+                          <span>SPEC.md — Caminho sugerido, sera verificado ao criar</span>
+                        </div>
+                      )}
+                      {suggestedPrdPath && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+                          <FileText size={11} />
+                          <span>PRD.md — Caminho sugerido, sera verificado ao criar</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
               </div>
             </>
           ) : (
@@ -499,14 +498,10 @@ export function NewPipelineModal({ onClose, onCreated }: NewPipelineModalProps) 
                       <span className="text-xs font-semibold text-zinc-100">{ep.label}</span>
                       <div
                         className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${
-                          selectedPhase === ep.phase
-                            ? 'border-amber-500 bg-amber-500'
-                            : 'border-zinc-600'
+                          selectedPhase === ep.phase ? 'border-amber-500 bg-amber-500' : 'border-zinc-600'
                         }`}
                       >
-                        {selectedPhase === ep.phase && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                        )}
+                        {selectedPhase === ep.phase && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                       </div>
                     </div>
                     <p className="text-[11px] text-zinc-500 mt-1">{ep.description}</p>
@@ -572,7 +567,9 @@ export function NewPipelineModal({ onClose, onCreated }: NewPipelineModalProps) 
                 Voltar
               </button>
               <button
-                onClick={() => { void handleCreate(); }}
+                onClick={() => {
+                  void handleCreate();
+                }}
                 disabled={creating}
                 className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >

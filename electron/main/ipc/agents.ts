@@ -1,22 +1,9 @@
 import { ipcMain } from 'electron';
 import { createLogger } from '../logger';
 import type { IpcContext } from './context';
-import {
-  getAllAgents,
-  getAgent,
-  insertAgent,
-  updateAgent,
-  deleteAgent,
-} from '../db';
+import { getAllAgents, getAgent, insertAgent, updateAgent, deleteAgent } from '../db';
 import type { AgentUpdatePatch } from '../db';
-import {
-  listSkills,
-  getSkill,
-  createSkill,
-  updateSkill,
-  updateSkillRaw,
-  deleteSkill,
-} from '../skills';
+import { listSkills, getSkill, createSkill, updateSkill, updateSkillRaw, deleteSkill } from '../skills';
 import type { SkillCreateInput } from '../skills';
 import {
   getAllMCPServers,
@@ -27,6 +14,8 @@ import {
   restartServer,
   stopServer,
   registerMcpStatusChangedEmitter,
+  registerMcpDistStaleEmitter,
+  getMcpDistStaleState,
 } from '../mcp-manager';
 import {
   discoverSDKMcpServers,
@@ -42,9 +31,7 @@ const logger = createLogger('ipc');
 
 const KB_PROMPT_MARKER = '<!-- kb-agent-id-instruction -->';
 
-function injectKbInstruction<
-  T extends { mcpServers?: string[]; systemPrompt?: string },
->(
+function injectKbInstruction<T extends { mcpServers?: string[]; systemPrompt?: string }>(
   agentId: string,
   updates: T,
 ): T {
@@ -61,10 +48,7 @@ function injectKbInstruction<
   }
 
   if (!hasKb && alreadyInjected) {
-    const cleaned = currentPrompt.replace(
-      new RegExp(`\\n${KB_PROMPT_MARKER}\\n.*`),
-      '',
-    );
+    const cleaned = currentPrompt.replace(new RegExp(`\\n${KB_PROMPT_MARKER}\\n.*`), '');
     return { ...updates, systemPrompt: cleaned };
   }
 
@@ -80,16 +64,10 @@ export function registerAgentsHandlers(ctx: IpcContext): void {
     return getAgent(id);
   });
 
-  ipcMain.handle(
-    'agents:create',
-    (
-      _event,
-      agent: Omit<AgentConfig, 'sortOrder'> & { sortOrder?: number },
-    ) => {
+  ipcMain.handle('agents:create', (_event, agent: Omit<AgentConfig, 'sortOrder'> & { sortOrder?: number }) => {
     const withKbInstruction = injectKbInstruction(agent.id, agent);
     return insertAgent(withKbInstruction);
-    },
-  );
+  });
 
   ipcMain.handle('agents:update', (_event, id: string, updates: AgentUpdatePatch) => {
     const withKbInstruction = injectKbInstruction(id, updates);
@@ -100,22 +78,16 @@ export function registerAgentsHandlers(ctx: IpcContext): void {
     deleteAgent(id);
   });
 
-  ipcMain.handle(
-    'agents:sync-to-orchestrator',
-    async (_event, req: SyncAgentsToOrchestratorRequest = {}) => {
-      try {
-        return await syncAgentsToOrchestrator(req, {
-          getHarnessEngine: ctx.getHarnessEngine,
-        });
-      } catch (err) {
-        logger.error(
-          { err: err instanceof Error ? err.message : String(err) },
-          'agents:sync-to-orchestrator failed',
-        );
-        return { error: err instanceof Error ? err.message : String(err) };
-      }
-    },
-  );
+  ipcMain.handle('agents:sync-to-orchestrator', async (_event, req: SyncAgentsToOrchestratorRequest = {}) => {
+    try {
+      return await syncAgentsToOrchestrator(req, {
+        getHarnessEngine: ctx.getHarnessEngine,
+      });
+    } catch (err) {
+      logger.error({ err: err instanceof Error ? err.message : String(err) }, 'agents:sync-to-orchestrator failed');
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
 
   ipcMain.handle('skills:list', () => {
     return listSkills();
@@ -129,19 +101,13 @@ export function registerAgentsHandlers(ctx: IpcContext): void {
     return createSkill(skill);
   });
 
-  ipcMain.handle(
-    'skills:update',
-    (_event, name: string, skill: SkillCreateInput) => {
-      return updateSkill(name, skill);
-    },
-  );
+  ipcMain.handle('skills:update', (_event, name: string, skill: SkillCreateInput) => {
+    return updateSkill(name, skill);
+  });
 
-  ipcMain.handle(
-    'skills:update-raw',
-    (_event, name: string, content: string) => {
-      return updateSkillRaw(name, content);
-    },
-  );
+  ipcMain.handle('skills:update-raw', (_event, name: string, content: string) => {
+    return updateSkillRaw(name, content);
+  });
 
   ipcMain.handle('skills:delete', (_event, name: string) => {
     deleteSkill(name);
@@ -149,6 +115,14 @@ export function registerAgentsHandlers(ctx: IpcContext): void {
 
   registerMcpStatusChangedEmitter((payload) => {
     ctx.getMainWindow()?.webContents.send('mcp:status-changed', payload);
+  });
+
+  registerMcpDistStaleEmitter((payload) => {
+    ctx.getMainWindow()?.webContents.send('mcp:dist-stale', payload);
+  });
+
+  ipcMain.handle('mcp:get-dist-stale', () => {
+    return getMcpDistStaleState();
   });
 
   ipcMain.handle('mcp:list', () => {
@@ -201,10 +175,7 @@ export function registerAgentsHandlers(ctx: IpcContext): void {
     return refreshSDKMcpServers();
   });
 
-  ipcMain.handle(
-    'mcp:toggle-sdk',
-    (_event, serverName: string, enabled: boolean) => {
-      setSDKMcpDisabled(serverName, !enabled);
-    },
-  );
+  ipcMain.handle('mcp:toggle-sdk', (_event, serverName: string, enabled: boolean) => {
+    setSDKMcpDisabled(serverName, !enabled);
+  });
 }

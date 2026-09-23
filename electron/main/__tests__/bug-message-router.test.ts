@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,11 +17,7 @@ vi.mock('electron', () => ({
 }));
 vi.mock('../pipeline-shared/ipc-emitter', () => ({ emitIPC: vi.fn() }));
 
-import {
-  initDatabase,
-  insertHarnessProject,
-  getPipelinePhaseMessages,
-} from '../db';
+import { initDatabase, insertHarnessProject, getPipelinePhaseMessages } from '../db';
 import {
   resolveConversationDescriptor,
   dispatchConversationMessage,
@@ -30,16 +25,8 @@ import {
   type RouterDispatchCtx,
 } from '../pipeline-engine/message-router';
 import { handlePhase12Message } from '../pipeline-engine/handlers/dev-feature';
-import {
-  getConversationGreeting,
-  getBugConversationGreeting,
-} from '../pipeline-engine/greetings';
-import type {
-  PipelineEngineContext,
-  HandlerPhaseState,
-  SpawnAgentResult,
-} from '../pipeline-engine/handlers/context';
-
+import { getConversationGreeting, getBugConversationGreeting } from '../pipeline-engine/greetings';
+import type { PipelineEngineContext, HandlerPhaseState, SpawnAgentResult } from '../pipeline-engine/handlers/context';
 
 let tmpHome = '';
 let projectPath = '';
@@ -55,17 +42,17 @@ afterAll(() => {
   for (const dir of [tmpHome, projectPath]) {
     try {
       fs.rmSync(dir, { recursive: true, force: true });
-    } catch {
-    }
+    } catch {}
   }
 });
 
-
 function makeFakeEngine(): { engine: MessageRouterEngine; calls: Array<{ fn: string; args: unknown[] }> } {
   const calls: Array<{ fn: string; args: unknown[] }> = [];
-  const rec = (fn: string) => async (...args: unknown[]): Promise<void> => {
-    calls.push({ fn, args });
-  };
+  const rec =
+    (fn: string) =>
+    async (...args: unknown[]): Promise<void> => {
+      calls.push({ fn, args });
+    };
   const engine = {
     handlePhase1Message: rec('handlePhase1Message'),
     handlePhase3Message: rec('handlePhase3Message'),
@@ -104,7 +91,6 @@ function makeDispatchCtx(engine: MessageRouterEngine): RouterDispatchCtx {
     resolveTechAgentId: (phase: number) => `tech-${phase}`,
   };
 }
-
 
 describe('TB-39a: BUG_ROUTES cobre exatamente as 4 fases conversacionais', () => {
   it('descriptor DEFINIDO para {1,3,5,7}', () => {
@@ -157,7 +143,6 @@ describe('TB-39a: BUG_ROUTES cobre exatamente as 4 fases conversacionais', () =>
   });
 });
 
-
 describe('TB-39b: mensagem da fase 7 do bug persiste com phase_number 7, nunca 12', () => {
   it('handlePhase12Message(phaseNumber=7) grava em pipeline_messages na fase 7', async () => {
     const project = insertHarnessProject({
@@ -207,8 +192,7 @@ describe('TB-39b: mensagem da fase 7 do bug persiste com phase_number 7, nunca 1
       }),
       accumulateMetrics: vi.fn(),
       makeConversationOnText:
-        (_projectId: string, _phase: number, acc: { text: string; completed: boolean }) =>
-        (chunk: string) => {
+        (_projectId: string, _phase: number, acc: { text: string; completed: boolean }) => (chunk: string) => {
           acc.text += chunk;
         },
       buildPriorMessagesForPhase: () => undefined,
@@ -226,7 +210,6 @@ describe('TB-39b: mensagem da fase 7 do bug persiste com phase_number 7, nunca 1
   });
 });
 
-
 describe('TB-39c: getConversationGreeting com pipelineType bug', () => {
   const projectName = 'Meu Projeto';
   const bug = { pipelineType: 'bug' };
@@ -241,9 +224,7 @@ describe('TB-39c: getConversationGreeting com pipelineType bug', () => {
     );
     expect(g).toContain('Nao procure PRD.md nem stories-requisitos.md');
     expect(g.replace('Nao procure PRD.md nem stories-requisitos.md', '')).not.toContain('PRD.md');
-    expect(g.replace('Nao procure PRD.md nem stories-requisitos.md', '')).not.toContain(
-      'stories-requisitos.md',
-    );
+    expect(g.replace('Nao procure PRD.md nem stories-requisitos.md', '')).not.toContain('stories-requisitos.md');
   });
 
   it('fase 3: consolidacao com refutacao bloqueante e campo "## Desfecho"', () => {
@@ -283,9 +264,7 @@ describe('TB-39c: getConversationGreeting com pipelineType bug', () => {
 
   it('getBugConversationGreeting e a fonte unica dos 4 textos', () => {
     for (const phase of [1, 3, 5, 7, 2, 99]) {
-      expect(getConversationGreeting(phase, projectName, bug)).toBe(
-        getBugConversationGreeting(phase, projectName),
-      );
+      expect(getConversationGreeting(phase, projectName, bug)).toBe(getBugConversationGreeting(phase, projectName));
     }
   });
 });

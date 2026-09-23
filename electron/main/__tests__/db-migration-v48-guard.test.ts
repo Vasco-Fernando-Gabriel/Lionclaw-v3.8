@@ -1,4 +1,3 @@
-
 import Database from 'better-sqlite3';
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
@@ -8,7 +7,6 @@ import {
   getHarnessProjectsCreateSql,
   harnessProjectStatusCheckSupportsTerminalStates,
 } from '../db';
-
 
 const DB_TS_PATH = path.resolve(__dirname, '..', 'db.ts');
 const DB_TS_CONTENT = fs.readFileSync(DB_TS_PATH, 'utf-8');
@@ -34,12 +32,10 @@ const CREATE_TABLE_V48_EXPANDED_SCHEMA = `CREATE TABLE harness_projects (
     ))
 )`;
 
-
 function checkSupportsTerminalStates(sql: string | null): boolean {
   if (!sql) return false;
   return sql.includes("'aborted'") && sql.includes("'interrupted'");
 }
-
 
 describe('P1.6 helpers: existencia e assinatura em db.ts', () => {
   it('getHarnessProjectsCreateSql esta declarado em db.ts', () => {
@@ -49,9 +45,7 @@ describe('P1.6 helpers: existencia e assinatura em db.ts', () => {
   });
 
   it('getHarnessProjectsCreateSql consulta sqlite_master por harness_projects', () => {
-    expect(DB_TS_CONTENT).toContain(
-      "SELECT sql FROM sqlite_master WHERE type='table' AND name='harness_projects'",
-    );
+    expect(DB_TS_CONTENT).toContain("SELECT sql FROM sqlite_master WHERE type='table' AND name='harness_projects'");
   });
 
   it('harnessProjectStatusCheckSupportsTerminalStates esta declarado em db.ts', () => {
@@ -61,9 +55,7 @@ describe('P1.6 helpers: existencia e assinatura em db.ts', () => {
   });
 
   it('harnessProjectStatusCheckSupportsTerminalStates checa por aborted E interrupted', () => {
-    const fnMatch = DB_TS_CONTENT.match(
-      /function harnessProjectStatusCheckSupportsTerminalStates[\s\S]*?\n\}/,
-    );
+    const fnMatch = DB_TS_CONTENT.match(/function harnessProjectStatusCheckSupportsTerminalStates[\s\S]*?\n\}/);
     expect(fnMatch).not.toBeNull();
     const fnBody = fnMatch![0];
     expect(fnBody).toContain(`"'aborted'"`);
@@ -77,29 +69,21 @@ describe('P1.6 helpers: existencia e assinatura em db.ts', () => {
   });
 
   it('ensureHarnessProjectStatusCheckExpanded faz early-return se ja suporta terminal states', () => {
-    const fnMatch = DB_TS_CONTENT.match(
-      /function ensureHarnessProjectStatusCheckExpanded[\s\S]*?\n\}/,
-    );
+    const fnMatch = DB_TS_CONTENT.match(/function ensureHarnessProjectStatusCheckExpanded[\s\S]*?\n\}/);
     expect(fnMatch).not.toBeNull();
     const fnBody = fnMatch![0];
-    expect(fnBody).toMatch(
-      /if \(harnessProjectStatusCheckSupportsTerminalStates\(database\)\) return/,
-    );
+    expect(fnBody).toMatch(/if \(harnessProjectStatusCheckSupportsTerminalStates\(database\)\) return/);
   });
 
   it('ensureHarnessProjectStatusCheckExpanded faz early-return se a tabela nao existir', () => {
-    const fnMatch = DB_TS_CONTENT.match(
-      /function ensureHarnessProjectStatusCheckExpanded[\s\S]*?\n\}/,
-    );
+    const fnMatch = DB_TS_CONTENT.match(/function ensureHarnessProjectStatusCheckExpanded[\s\S]*?\n\}/);
     expect(fnMatch).not.toBeNull();
     const fnBody = fnMatch![0];
     expect(fnBody).toMatch(/if \(getHarnessProjectsCreateSql\(database\) === null\) return/);
   });
 
   it('ensureHarnessProjectStatusCheckExpanded executa MIGRATION_V48_EXPAND_PROJECT_STATUS_CHECK', () => {
-    const fnMatch = DB_TS_CONTENT.match(
-      /function ensureHarnessProjectStatusCheckExpanded[\s\S]*?\n\}/,
-    );
+    const fnMatch = DB_TS_CONTENT.match(/function ensureHarnessProjectStatusCheckExpanded[\s\S]*?\n\}/);
     expect(fnMatch).not.toBeNull();
     const fnBody = fnMatch![0];
     expect(fnBody).toContain('MIGRATION_V48_EXPAND_PROJECT_STATUS_CHECK');
@@ -107,9 +91,7 @@ describe('P1.6 helpers: existencia e assinatura em db.ts', () => {
   });
 
   it('ensureHarnessProjectStatusCheckExpanded usa FK off / on com try-finally', () => {
-    const fnMatch = DB_TS_CONTENT.match(
-      /function ensureHarnessProjectStatusCheckExpanded[\s\S]*?\n\}/,
-    );
+    const fnMatch = DB_TS_CONTENT.match(/function ensureHarnessProjectStatusCheckExpanded[\s\S]*?\n\}/);
     expect(fnMatch).not.toBeNull();
     const fnBody = fnMatch![0];
     expect(fnBody).toContain("database.pragma('foreign_keys = OFF')");
@@ -118,15 +100,12 @@ describe('P1.6 helpers: existencia e assinatura em db.ts', () => {
   });
 
   it('ensureHarnessProjectStatusCheckExpanded NAO mexe em schema_version', () => {
-    const fnMatch = DB_TS_CONTENT.match(
-      /function ensureHarnessProjectStatusCheckExpanded[\s\S]*?\n\}/,
-    );
+    const fnMatch = DB_TS_CONTENT.match(/function ensureHarnessProjectStatusCheckExpanded[\s\S]*?\n\}/);
     expect(fnMatch).not.toBeNull();
     const fnBody = fnMatch![0];
     expect(fnBody).not.toContain('schema_version');
   });
 });
-
 
 describe('P1.6: integracao no fluxo de runMigrations', () => {
   it('runMigrations chama ensureHarnessProjectStatusCheckExpanded antes do bumpa V48', () => {
@@ -142,9 +121,7 @@ describe('P1.6: integracao no fluxo de runMigrations', () => {
   });
 
   it('bloco antigo (FK off + exec MIGRATION_V48 + FK on direto no if) foi removido', () => {
-    const blockMatch = DB_TS_CONTENT.match(
-      /if \(currentVersion < 48\) \{([\s\S]*?)\n  \}/,
-    );
+    const blockMatch = DB_TS_CONTENT.match(/if \(currentVersion < 48\) \{([\s\S]*?)\n  \}/);
     expect(blockMatch).not.toBeNull();
     const blockBody = blockMatch![1];
     expect(blockBody).not.toContain('MIGRATION_V48_EXPAND_PROJECT_STATUS_CHECK');
@@ -152,7 +129,6 @@ describe('P1.6: integracao no fluxo de runMigrations', () => {
     expect(blockBody).not.toContain('foreign_keys = ON');
   });
 });
-
 
 describe('harnessProjectStatusCheckSupportsTerminalStates: logica via mirror', () => {
   it('retorna false quando tabela nao existe (sql == null)', () => {
@@ -192,7 +168,6 @@ describe('harnessProjectStatusCheckSupportsTerminalStates: logica via mirror', (
   });
 });
 
-
 describe('P1.6 cenarios (a, b, c, d): contrato de transicoes', () => {
   it('cenario a: schema V47 (CHECK sem aborted/interrupted) -> aplicar migration', () => {
     const sqlPre = CREATE_TABLE_V47_SCHEMA;
@@ -217,9 +192,7 @@ describe('P1.6 cenarios (a, b, c, d): contrato de transicoes', () => {
 
     const sqlPos = CREATE_TABLE_V48_EXPANDED_SCHEMA;
     expect(checkSupportsTerminalStates(sqlPos)).toBe(true);
-    const fnMatch = DB_TS_CONTENT.match(
-      /function ensureHarnessProjectStatusCheckExpanded[\s\S]*?\n\}/,
-    );
+    const fnMatch = DB_TS_CONTENT.match(/function ensureHarnessProjectStatusCheckExpanded[\s\S]*?\n\}/);
     expect(fnMatch![0]).not.toContain('schema_version');
   });
 
@@ -231,16 +204,13 @@ describe('P1.6 cenarios (a, b, c, d): contrato de transicoes', () => {
   });
 });
 
-
 describe('P1.6: MIGRATION_V48_EXPAND_PROJECT_STATUS_CHECK NAO foi alterada', () => {
   it('a const MIGRATION_V48_EXPAND_PROJECT_STATUS_CHECK ainda existe em db.ts', () => {
     expect(DB_TS_CONTENT).toContain('const MIGRATION_V48_EXPAND_PROJECT_STATUS_CHECK = `');
   });
 
   it('a const ainda inclui aborted e interrupted no CHECK', () => {
-    const constMatch = DB_TS_CONTENT.match(
-      /const MIGRATION_V48_EXPAND_PROJECT_STATUS_CHECK = `([\s\S]*?)`;/,
-    );
+    const constMatch = DB_TS_CONTENT.match(/const MIGRATION_V48_EXPAND_PROJECT_STATUS_CHECK = `([\s\S]*?)`;/);
     expect(constMatch).not.toBeNull();
     const sql = constMatch![1];
     expect(sql).toContain("'aborted'");
@@ -248,16 +218,13 @@ describe('P1.6: MIGRATION_V48_EXPAND_PROJECT_STATUS_CHECK NAO foi alterada', () 
   });
 
   it('a const ainda recria os indices status e pipeline_type', () => {
-    const constMatch = DB_TS_CONTENT.match(
-      /const MIGRATION_V48_EXPAND_PROJECT_STATUS_CHECK = `([\s\S]*?)`;/,
-    );
+    const constMatch = DB_TS_CONTENT.match(/const MIGRATION_V48_EXPAND_PROJECT_STATUS_CHECK = `([\s\S]*?)`;/);
     expect(constMatch).not.toBeNull();
     const sql = constMatch![1];
     expect(sql).toContain('idx_harness_projects_status');
     expect(sql).toContain('idx_harness_projects_pipeline_type');
   });
 });
-
 
 const SCHEMA_PRE_V48 = `
   CREATE TABLE harness_projects (
@@ -406,9 +373,12 @@ describe('ensureHarnessProjectStatusCheckExpanded: execucao em banco in-memory',
     expect(versionAfter).toBe(49);
 
     expect(() => {
-      db.prepare(
-        `INSERT INTO harness_projects (name, project_path, spec_path, status) VALUES (?, ?, ?, ?)`,
-      ).run('p1', '/tmp/p1', '/tmp/p1/SPEC.md', 'aborted');
+      db.prepare(`INSERT INTO harness_projects (name, project_path, spec_path, status) VALUES (?, ?, ?, ?)`).run(
+        'p1',
+        '/tmp/p1',
+        '/tmp/p1/SPEC.md',
+        'aborted',
+      );
     }).not.toThrow();
   });
 

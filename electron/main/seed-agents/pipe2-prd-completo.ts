@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const PIPE2_PRD_COMPLETO_ID = 'pipe2-prd-completo';
@@ -8,7 +7,7 @@ export const pipe2PrdCompleto: Omit<AgentConfig, 'sortOrder'> = {
   name: 'Pipe2 PRD Completo',
   description:
     'Gera o PRD Completo do pipeline development-v2 incorporando discovery, user stories aprovadas e design lock aprovado.',
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'enabled' as const,
   thinkingBudget: 10000,

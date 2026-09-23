@@ -2,12 +2,7 @@ import { useState, useEffect } from 'react';
 import { BarChart2 } from 'lucide-react';
 import { useActiveProjectState } from '@/hooks/useActiveProjectState';
 import type { PipelinePhaseMetrics } from '@/types';
-import {
-  formatCostWithMeta,
-  formatPipelineTotalCost,
-  formatTokensWithMeta,
-} from './PipelineMetricsReport';
-
+import { formatCostWithMeta, formatPipelineTotalCost, formatTokensWithMeta } from './PipelineMetricsReport';
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -26,7 +21,6 @@ function formatTimer(totalSeconds: number): string {
   const s = totalSeconds % 60;
   return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
-
 
 interface MetricPillProps {
   label: string;
@@ -48,11 +42,9 @@ function MetricPill({ label, value, dimmed = false, highlight = false }: MetricP
   );
 }
 
-
 function Dot() {
   return <span className="text-zinc-700 text-[10px] select-none">·</span>;
 }
-
 
 interface LiveMetrics {
   inputTokens: number;
@@ -91,18 +83,17 @@ function resolveLiveMetrics(
   return base;
 }
 
-
 interface PipelineMetricsFooterProps {
   onExpandMetrics?: () => void;
 }
 
 export function PipelineMetricsFooter({ onExpandMetrics }: PipelineMetricsFooterProps) {
-  const currentPhase = useActiveProjectState(s => s.currentPhase) ?? null;
-  const isStreaming = useActiveProjectState(s => s.isStreaming) ?? false;
-  const metrics = useActiveProjectState(s => s.metrics) ?? null;
-  const currentToolCalls = useActiveProjectState(s => s.currentToolCalls) ?? [];
-  const livePhaseMetrics = useActiveProjectState(s => s.phaseMetrics) ?? null;
-  const streamTurnStartedAt = useActiveProjectState(s => s.streamTurnStartedAt) ?? null;
+  const currentPhase = useActiveProjectState((s) => s.currentPhase) ?? null;
+  const isStreaming = useActiveProjectState((s) => s.isStreaming) ?? false;
+  const metrics = useActiveProjectState((s) => s.metrics) ?? null;
+  const currentToolCalls = useActiveProjectState((s) => s.currentToolCalls) ?? [];
+  const livePhaseMetrics = useActiveProjectState((s) => s.phaseMetrics) ?? null;
+  const streamTurnStartedAt = useActiveProjectState((s) => s.streamTurnStartedAt) ?? null;
 
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
 
@@ -114,10 +105,7 @@ export function PipelineMetricsFooter({ onExpandMetrics }: PipelineMetricsFooter
   }, [isStreaming]);
 
   const elapsedSeconds =
-    isStreaming && streamTurnStartedAt !== null
-      ? Math.max(0, Math.floor((nowMs - streamTurnStartedAt) / 1000))
-      : 0;
-
+    isStreaming && streamTurnStartedAt !== null ? Math.max(0, Math.floor((nowMs - streamTurnStartedAt) / 1000)) : 0;
 
   const storedPhaseMetrics = metrics?.phases;
 
@@ -151,12 +139,7 @@ export function PipelineMetricsFooter({ onExpandMetrics }: PipelineMetricsFooter
     return storedPhaseMetrics;
   })();
 
-  const liveMetrics = resolveLiveMetrics(
-    currentPhase,
-    isStreaming,
-    currentToolCalls.length,
-    mergedStoredMetrics,
-  );
+  const liveMetrics = resolveLiveMetrics(currentPhase, isStreaming, currentToolCalls.length, mergedStoredMetrics);
 
   if (liveMetrics === null && currentPhase === null) {
     return (
@@ -166,36 +149,31 @@ export function PipelineMetricsFooter({ onExpandMetrics }: PipelineMetricsFooter
     );
   }
 
-  const currentPhaseMeta = currentPhase !== null
-    ? mergedStoredMetrics?.find((m) => m.phaseNumber === currentPhase)?.metadata
-    : undefined;
+  const currentPhaseMeta =
+    currentPhase !== null ? mergedStoredMetrics?.find((m) => m.phaseNumber === currentPhase)?.metadata : undefined;
 
   const inputStr = liveMetrics ? formatTokens(liveMetrics.inputTokens) : '-';
   const outputStr = liveMetrics ? formatTokens(liveMetrics.outputTokens) : '-';
   const costStr = liveMetrics
-    ? (isStreaming ? formatCost(liveMetrics.costUsd) : formatCostWithMeta(liveMetrics.costUsd, currentPhaseMeta))
+    ? isStreaming
+      ? formatCost(liveMetrics.costUsd)
+      : formatCostWithMeta(liveMetrics.costUsd, currentPhaseMeta)
     : '-';
   const tokensStr = liveMetrics
-    ? (isStreaming
-        ? `${formatTokens(liveMetrics.inputTokens)} / ${formatTokens(liveMetrics.outputTokens)}`
-        : formatTokensWithMeta(liveMetrics.inputTokens, liveMetrics.outputTokens, currentPhaseMeta))
+    ? isStreaming
+      ? `${formatTokens(liveMetrics.inputTokens)} / ${formatTokens(liveMetrics.outputTokens)}`
+      : formatTokensWithMeta(liveMetrics.inputTokens, liveMetrics.outputTokens, currentPhaseMeta)
     : '-';
   const modelStr = liveMetrics?.model ?? '-';
   const toolStr = liveMetrics ? String(liveMetrics.toolUses) : '-';
   const timerStr = isStreaming ? formatTimer(elapsedSeconds) : '-';
-  const totalCostStr = metrics !== null
-    ? formatPipelineTotalCost(
-        metrics.totals.costUsd,
-        metrics.subscriptionEquivalentCost,
-        metrics.totals,
-      )
-    : null;
+  const totalCostStr =
+    metrics !== null
+      ? formatPipelineTotalCost(metrics.totals.costUsd, metrics.subscriptionEquivalentCost, metrics.totals)
+      : null;
 
-  const dimmed = !liveMetrics || (
-    liveMetrics.inputTokens === 0 &&
-    liveMetrics.outputTokens === 0 &&
-    liveMetrics.costUsd === 0
-  );
+  const dimmed =
+    !liveMetrics || (liveMetrics.inputTokens === 0 && liveMetrics.outputTokens === 0 && liveMetrics.costUsd === 0);
 
   const unknownCostCount = metrics?.totals.unknownCostCount ?? 0;
 
@@ -227,7 +205,12 @@ export function PipelineMetricsFooter({ onExpandMetrics }: PipelineMetricsFooter
         </>
       )}
       <Dot />
-      <MetricPill label="custo" value={costStr} dimmed={dimmed} highlight={!dimmed && costStr !== 'Custo nao estimado'} />
+      <MetricPill
+        label="custo"
+        value={costStr}
+        dimmed={dimmed}
+        highlight={!dimmed && costStr !== 'Custo nao estimado'}
+      />
       <Dot />
       <MetricPill label="tools" value={toolStr} dimmed={dimmed} />
 
@@ -248,9 +231,7 @@ export function PipelineMetricsFooter({ onExpandMetrics }: PipelineMetricsFooter
           <span className="text-zinc-700 text-[10px] font-mono">total:</span>
           <span className="text-white font-bold text-[10px] font-mono">{totalCostStr}</span>
           {unknownCostCount > 0 && (
-            <span className="text-zinc-500 text-[10px] font-mono">
-              ({unknownCostCount} com custo nao estimado)
-            </span>
+            <span className="text-zinc-500 text-[10px] font-mono">({unknownCostCount} com custo nao estimado)</span>
           )}
         </>
       )}

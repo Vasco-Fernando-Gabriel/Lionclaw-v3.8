@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
 
@@ -91,7 +90,6 @@ function getToolHandler(toolName: string) {
   return entry.handler;
 }
 
-
 function makeSyntheticResult() {
   return {
     output: 'Feature implemented successfully.',
@@ -123,7 +121,6 @@ function makeCodexAgent(id = 'coder-codex') {
   };
 }
 
-
 describe('codex-agents-mcp: run_codex_agent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -138,7 +135,7 @@ describe('codex-agents-mcp: run_codex_agent', () => {
     (executeAgent as Mock).mockResolvedValue(makeSyntheticResult());
 
     const handler = getToolHandler('run_codex_agent');
-    const result = await handler({ agentId: 'coder-codex', prompt: 'Implement feature X' }) as {
+    const result = (await handler({ agentId: 'coder-codex', prompt: 'Implement feature X' })) as {
       content: Array<{ type: string; text: string }>;
       isError?: boolean;
     };
@@ -152,18 +149,20 @@ describe('codex-agents-mcp: run_codex_agent', () => {
     expect(result.content[1].text).not.toMatch(/inputTokens|outputTokens|totalTokens|costUsd|toolUses|durationMs/);
 
     expect(executeAgent).toHaveBeenCalledOnce();
-    expect(executeAgent).toHaveBeenCalledWith(expect.objectContaining({
-      agentId: 'coder-codex',
-      prompt: 'Implement feature X',
-      cwd: '/workspace/host',
-      abortController: expect.any(AbortController),
-      inheritedEffort: hostDispatchContext.inheritedEffort,
-      executionContext: expect.objectContaining({
-        ownerId: 'session-host',
-        rootExecutionId: 'root-host',
-        depth: 1,
+    expect(executeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'coder-codex',
+        prompt: 'Implement feature X',
+        cwd: '/workspace/host',
+        abortController: expect.any(AbortController),
+        inheritedEffort: hostDispatchContext.inheritedEffort,
+        executionContext: expect.objectContaining({
+          ownerId: 'session-host',
+          rootExecutionId: 'root-host',
+          depth: 1,
+        }),
       }),
-    }));
+    );
     expect(startTaskExecution).toHaveBeenCalledTimes(2);
     expect(finalizeTaskExecutionOnce).toHaveBeenCalledWith(
       expect.any(String),
@@ -180,11 +179,13 @@ describe('codex-agents-mcp: run_codex_agent', () => {
     const handler = getToolHandler('run_codex_agent');
     await handler({ agentId: 'coder-codex', prompt: 'Do the task', context: 'File content: ...' });
 
-    expect(executeAgent).toHaveBeenCalledWith(expect.objectContaining({
-      agentId: 'coder-codex',
-      prompt: 'File content: ...\n\nDo the task',
-      cwd: '/workspace/host',
-    }));
+    expect(executeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'coder-codex',
+        prompt: 'File content: ...\n\nDo the task',
+        cwd: '/workspace/host',
+      }),
+    );
   });
 
   it('1c. MCP request id fica em metadata de transporte, sem fingir tool_use_id do modelo', async () => {
@@ -192,17 +193,17 @@ describe('codex-agents-mcp: run_codex_agent', () => {
     (executeAgent as Mock).mockResolvedValue(makeSyntheticResult());
 
     const handler = getToolHandler('run_codex_agent');
-    await handler(
-      { agentId: 'coder-codex', prompt: 'Do the task' },
-      { requestId: 73 },
-    );
+    await handler({ agentId: 'coder-codex', prompt: 'Do the task' }, { requestId: 73 });
 
-    expect(startTaskExecution).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      toolUseId: null,
-      metadata: expect.objectContaining({
-        transportCorrelation: { kind: 'mcp-request-id', value: '73' },
+    expect(startTaskExecution).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        toolUseId: null,
+        metadata: expect.objectContaining({
+          transportCorrelation: { kind: 'mcp-request-id', value: '73' },
+        }),
       }),
-    }));
+    );
     expect(finalizeTaskExecutionOnce).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
@@ -226,7 +227,7 @@ describe('codex-agents-mcp: run_codex_agent', () => {
     });
 
     const handler = getToolHandler('run_codex_agent');
-    const result = await handler({ agentId: 'coder-codex', prompt: 'Do something' }) as {
+    const result = (await handler({ agentId: 'coder-codex', prompt: 'Do something' })) as {
       content: Array<{ text: string }>;
       isError: boolean;
     };
@@ -242,7 +243,7 @@ describe('codex-agents-mcp: run_codex_agent', () => {
     (getAgent as Mock).mockReturnValue(undefined);
 
     const handler = getToolHandler('run_codex_agent');
-    const result = await handler({ agentId: 'missing-agent', prompt: 'Do something' }) as {
+    const result = (await handler({ agentId: 'missing-agent', prompt: 'Do something' })) as {
       content: Array<{ text: string }>;
       isError: boolean;
     };
@@ -260,7 +261,7 @@ describe('codex-agents-mcp: run_codex_agent', () => {
     });
 
     const handler = getToolHandler('run_codex_agent');
-    const result = await handler({ agentId: 'cloud-agent', prompt: 'Do something' }) as {
+    const result = (await handler({ agentId: 'cloud-agent', prompt: 'Do something' })) as {
       content: Array<{ text: string }>;
       isError: boolean;
     };
@@ -276,7 +277,7 @@ describe('codex-agents-mcp: run_codex_agent', () => {
     (executeAgent as Mock).mockRejectedValue(new Error('bridge timeout'));
 
     const handler = getToolHandler('run_codex_agent');
-    const result = await handler({ agentId: 'coder-codex', prompt: 'Do something' }) as {
+    const result = (await handler({ agentId: 'coder-codex', prompt: 'Do something' })) as {
       content: Array<{ text: string }>;
       isError: boolean;
     };
@@ -295,8 +296,7 @@ describe('codex-agents-mcp: run_codex_agent', () => {
     (executeAgent as Mock).mockRejectedValue(authError);
 
     const handler = getToolHandler('run_codex_agent');
-    await expect(handler({ agentId: 'coder-codex', prompt: 'Do something' }))
-      .rejects.toBe(authError);
+    await expect(handler({ agentId: 'coder-codex', prompt: 'Do something' })).rejects.toBe(authError);
 
     expect(hostDispatchContext.controlState.providerAuthError).toBe(authError);
     expect(hostDispatchContext.abortOwner).toHaveBeenCalledWith(authError);
@@ -318,7 +318,7 @@ describe('codex-agents-mcp: codex_agents_health', () => {
     });
 
     const handler = getToolHandler('codex_agents_health');
-    const result = await handler({}) as { content: Array<{ text: string }> };
+    const result = (await handler({})) as { content: Array<{ text: string }> };
 
     expect(result.content).toHaveLength(1);
     const parsed = JSON.parse(result.content[0].text);
@@ -338,7 +338,7 @@ describe('codex-agents-mcp: codex_agents_health', () => {
     });
 
     const handler = getToolHandler('codex_agents_health');
-    const result = await handler({}) as { content: Array<{ text: string }> };
+    const result = (await handler({})) as { content: Array<{ text: string }> };
 
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.installed).toBe(false);

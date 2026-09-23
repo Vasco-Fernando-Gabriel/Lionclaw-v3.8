@@ -1,27 +1,20 @@
-
 import type { BrowserWindow } from 'electron';
 import { createLogger } from './logger';
 import { getSetting } from './db';
 import { createPermissionGuard } from './permission-guard';
 import { assessMcpToolRisk } from './mcp-risk-patterns';
 import { assertChatCapability } from './chat-capability-gate';
-import type { McpInvocationContext } from './mcp-invocation-context';
+import { turnBindingFromContext, type McpInvocationContext } from './mcp-invocation-context';
 import {
   getMCPConfigForAgent,
   getMcpToolRegistryEntries,
   discoverAndSaveMCPTools,
   type MCPToolRegistryEntry,
 } from './mcp-manager';
-import {
-  setupMCPsForSession,
-  teardownMCPsForSession,
-  callMCPTool,
-  type McpSessionClient,
-} from './mcp-tool-bridge';
+import { setupMCPsForSession, teardownMCPsForSession, callMCPTool, type McpSessionClient } from './mcp-tool-bridge';
 import type { OrchestratorRuntime } from '../../src/types';
 
 const logger = createLogger('mcp-invoke');
-
 
 export interface McpInvokeRequest {
   serverId: string;
@@ -41,7 +34,6 @@ export interface McpInvokeResult {
   displayName: string;
   _meta?: { code: string; capability: string };
 }
-
 
 const DEFAULT_INVOKE_TIMEOUT_MS = 60_000;
 const DEFAULT_POOL_IDLE_TTL_MS = 300_000;
@@ -68,14 +60,19 @@ function getPoolIdleTtlMs(): number {
   return readPositiveIntSetting('mcp_pool_idle_ttl_ms', DEFAULT_POOL_IDLE_TTL_MS);
 }
 
-
-let permissionGuard: ReturnType<typeof createPermissionGuard> | null = null;
+let guardWindowSupplier: (() => BrowserWindow | null) | null = null;
 
 export function initMcpInvoke(deps: { getWindow: () => BrowserWindow | null }): void {
-  permissionGuard = createPermissionGuard(deps.getWindow);
-  logger.info('Wrapper central de invoke MCP inicializado (permission guard pronto)');
+  guardWindowSupplier = deps.getWindow;
+  logger.info('Wrapper central de invoke MCP inicializado (permission guard por sessao)');
 }
 
+function resolveInvokeGuard(
+  req: Pick<McpInvokeRequest, 'sessionId' | 'context'>,
+): ReturnType<typeof createPermissionGuard> | null {
+  if (!guardWindowSupplier) return null;
+  return createPermissionGuard(guardWindowSupplier, { sessionId: req.context?.sessionId ?? req.sessionId });
+}
 
 interface PoolEntry {
   client: McpSessionClient;
@@ -127,16 +124,12 @@ async function acquireConnection(serverId: string, surface: string): Promise<Poo
     });
     const spec = config?.[serverId];
     if (!spec) {
-      throw new Error(
-        `servidor MCP "${serverId}" nao esta disponivel para a superficie ${surface}`,
-      );
+      throw new Error(`servidor MCP "${serverId}" nao esta disponivel para a superficie ${surface}`);
     }
     const { client, failures } = await setupMCPsForSession({ [serverId]: spec });
     if (client.connections.length === 0) {
       const cause = failures.find((failure) => failure.serverId === serverId)?.error;
-      throw new Error(
-        `MCP_SERVER_UNAVAILABLE: servidor "${serverId}" não iniciou${cause ? `: ${cause}` : ''}`,
-      );
+      throw new Error(`MCP_SERVER_UNAVAILABLE: servidor "${serverId}" não iniciou${cause ? `: ${cause}` : ''}`);
     }
     const entry: PoolEntry = { client, idleTimer: null };
     pool.set(serverId, entry);
@@ -152,7 +145,6 @@ async function acquireConnection(serverId: string, surface: string): Promise<Poo
     spawnLocks.delete(serverId);
   }
 }
-
 
 interface TurnState {
   turnId: string;
@@ -183,7 +175,6 @@ async function maybeRediscover(serverId: string, turn: TurnState, trigger: strin
   }
 }
 
-
 function levenshtein(a: string, b: string): number {
   if (a === b) return 0;
   if (a.length === 0) return b.length;
@@ -207,11 +198,7 @@ interface DidYouMeanCandidate {
   distance: number;
 }
 
-function nearestTools(
-  toolName: string,
-  entries: MCPToolRegistryEntry[],
-  limit: number,
-): DidYouMeanCandidate[] {
+function nearestTools(toolName: string, entries: MCPToolRegistryEntry[], limit: number): DidYouMeanCandidate[] {
   const target = toolName.toLowerCase();
   return entries
     .map((e) => ({
@@ -234,9 +221,7 @@ function findDidYouMeanCandidates(
     return nearestTools(toolName, sameServer, DID_YOU_MEAN_CANDIDATES);
   }
   const allowed = new Set(allowedServerIds);
-  const others = getMcpToolRegistryEntries().filter(
-    (e) => e.mcpId !== serverId && allowed.has(e.mcpId),
-  );
+  const others = getMcpToolRegistryEntries().filter((e) => e.mcpId !== serverId && allowed.has(e.mcpId));
   return nearestTools(toolName, others, DID_YOU_MEAN_CANDIDATES);
 }
 
@@ -276,7 +261,6 @@ function didYouMeanResult(
   return errorResult(displayName, lines.join('\n'));
 }
 
-
 function findRegistryEntry(serverId: string, toolName: string): MCPToolRegistryEntry | undefined {
   return getMcpToolRegistryEntries(serverId).find((e) => e.toolName === toolName);
 }
@@ -295,12 +279,9 @@ function buildTruncatedSchemaHint(serverId: string, toolName: string): string {
   }
 
   const requiredRaw = parsed['required'];
-  const required = Array.isArray(requiredRaw)
-    ? requiredRaw.filter((r): r is string => typeof r === 'string')
-    : [];
+  const required = Array.isArray(requiredRaw) ? requiredRaw.filter((r): r is string => typeof r === 'string') : [];
   const propsRaw = parsed['properties'];
-  const props =
-    propsRaw && typeof propsRaw === 'object' ? (propsRaw as Record<string, unknown>) : {};
+  const props = propsRaw && typeof propsRaw === 'object' ? (propsRaw as Record<string, unknown>) : {};
   const propLines = Object.entries(props).map(([name, def]) => {
     const type =
       def && typeof def === 'object' && typeof (def as Record<string, unknown>)['type'] === 'string'
@@ -317,9 +298,7 @@ function buildTruncatedSchemaHint(serverId: string, toolName: string): string {
   ].join('\n');
 
   if (text.length > SCHEMA_HINT_MAX_CHARS) {
-    text =
-      text.slice(0, SCHEMA_HINT_MAX_CHARS - SCHEMA_HINT_TRUNCATION_SUFFIX.length) +
-      SCHEMA_HINT_TRUNCATION_SUFFIX;
+    text = text.slice(0, SCHEMA_HINT_MAX_CHARS - SCHEMA_HINT_TRUNCATION_SUFFIX.length) + SCHEMA_HINT_TRUNCATION_SUFFIX;
   }
   return text;
 }
@@ -328,28 +307,17 @@ function errorResult(displayName: string, message: string): McpInvokeResult {
   return { content: message, isError: true, displayName };
 }
 
-function schemaOnError(
-  displayName: string,
-  serverId: string,
-  toolName: string,
-  headline: string,
-): McpInvokeResult {
+function schemaOnError(displayName: string, serverId: string, toolName: string, headline: string): McpInvokeResult {
   return errorResult(displayName, `${headline}\n\n${buildTruncatedSchemaHint(serverId, toolName)}`);
 }
-
 
 function flattenMcpContent(value: unknown): string {
   if (typeof value === 'string') return value;
   if (value === null || value === undefined) return '';
   try {
-    const v = value as { content?: Array<{ type?: string; text?: string }> } & Record<
-      string,
-      unknown
-    >;
+    const v = value as { content?: Array<{ type?: string; text?: string }> } & Record<string, unknown>;
     if (Array.isArray(v.content)) {
-      const parts = v.content
-        .map((c) => (c && typeof c.text === 'string' ? c.text : ''))
-        .filter((s) => s.length > 0);
+      const parts = v.content.map((c) => (c && typeof c.text === 'string' ? c.text : '')).filter((s) => s.length > 0);
       if (parts.length > 0) return parts.join('\n');
     }
     return JSON.stringify(value);
@@ -359,11 +327,8 @@ function flattenMcpContent(value: unknown): string {
 }
 
 function toRecord(args: unknown): Record<string, unknown> {
-  return args && typeof args === 'object' && !Array.isArray(args)
-    ? (args as Record<string, unknown>)
-    : {};
+  return args && typeof args === 'object' && !Array.isArray(args) ? (args as Record<string, unknown>) : {};
 }
-
 
 export async function invokeMcpTool(req: McpInvokeRequest): Promise<McpInvokeResult> {
   const { serverId, toolName, surface, sessionId, turnId, allowedServerIds } = req;
@@ -398,14 +363,12 @@ export async function invokeMcpTool(req: McpInvokeRequest): Promise<McpInvokeRes
 
   const risk = assessMcpToolRisk(toolName);
   if (risk !== 'safe') {
-    if (!permissionGuard) {
+    const guard = resolveInvokeGuard(req);
+    if (!guard) {
       logger.error({ serverId, toolName }, 'Guard indisponivel (initMcpInvoke nao chamado no boot)');
-      return errorResult(
-        displayName,
-        `Acao MCP de risco (${toolName}) bloqueada: wrapper de invoke nao inicializado.`,
-      );
+      return errorResult(displayName, `Acao MCP de risco (${toolName}) bloqueada: wrapper de invoke nao inicializado.`);
     }
-    const decision = await permissionGuard(displayName, toRecord(req.args));
+    const decision = await guard(displayName, toRecord(req.args));
     if (decision.behavior === 'deny') {
       logger.info({ serverId, toolName, risk }, 'Invoke negado pelo permission guard');
       return errorResult(
@@ -447,9 +410,11 @@ export async function invokeMcpTool(req: McpInvokeRequest): Promise<McpInvokeRes
   const timeoutMs = getInvokeTimeoutMs();
   let raw: unknown;
   try {
+    const binding = turnBindingFromContext(req.context);
     raw = await callMCPTool(entry.client, displayName, req.args ?? {}, {
       timeoutMs,
       ...(req.signal ? { signal: req.signal } : {}),
+      ...(binding ? { binding } : {}),
     });
   } catch (err) {
     if (req.signal?.aborted) {
@@ -499,11 +464,7 @@ export async function invokeMcpTool(req: McpInvokeRequest): Promise<McpInvokeRes
   return { content: flattenMcpContent(raw), displayName };
 }
 
-
-export function getMcpToolSchema(
-  serverId: string,
-  toolName: string,
-): { content: string; isError?: boolean } {
+export function getMcpToolSchema(serverId: string, toolName: string): { content: string; isError?: boolean } {
   const entries = getMcpToolRegistryEntries(serverId);
   const entry = entries.find((e) => e.toolName === toolName);
 
@@ -538,7 +499,6 @@ export function getMcpToolSchema(
   return { content: lines.join('\n') };
 }
 
-
 export function _resetMcpInvokeForTesting(): void {
   if (process.env['NODE_ENV'] !== 'test' && !process.env['VITEST']) {
     throw new Error('_resetMcpInvokeForTesting can only be called in test environment');
@@ -549,5 +509,5 @@ export function _resetMcpInvokeForTesting(): void {
   pool.clear();
   spawnLocks.clear();
   turnStates.clear();
-  permissionGuard = null;
+  guardWindowSupplier = null;
 }

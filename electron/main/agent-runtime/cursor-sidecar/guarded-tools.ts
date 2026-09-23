@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -38,7 +37,6 @@ export interface CursorGuardedToolset {
   handlers: Record<string, CursorToolHandler>;
 }
 
-
 interface GuardedRunEnv {
   root: string;
   guard: CanUseTool;
@@ -47,20 +45,14 @@ interface GuardedRunEnv {
 }
 
 function isUnderDeniedRoot(env: GuardedRunEnv, absolute: string): boolean {
-  return env.deniedRoots.some(
-    (denied) => absolute === denied || absolute.startsWith(denied + path.sep),
-  );
+  return env.deniedRoots.some((denied) => absolute === denied || absolute.startsWith(denied + path.sep));
 }
 
 function resolveConfined(env: GuardedRunEnv, target: string, toolLabel: string): string {
   const rootResolved = path.resolve(env.root);
-  const resolved = path.isAbsolute(target)
-    ? path.resolve(target)
-    : path.resolve(rootResolved, target);
+  const resolved = path.isAbsolute(target) ? path.resolve(target) : path.resolve(rootResolved, target);
   const allowedRoots = [rootResolved, ...env.extraRoots];
-  const inside = allowedRoots.some(
-    (root) => resolved === root || resolved.startsWith(root + path.sep),
-  );
+  const inside = allowedRoots.some((root) => resolved === root || resolved.startsWith(root + path.sep));
   if (!inside) {
     throw new Error(
       `${toolLabel}: path "${target}" esta fora das raizes permitidas ` +
@@ -112,16 +104,10 @@ function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) throw new Error('session-aborted');
 }
 
-
-async function guardedRead(
-  env: GuardedRunEnv,
-  rawArgs: Record<string, unknown>,
-  signal: AbortSignal,
-): Promise<string> {
+async function guardedRead(env: GuardedRunEnv, rawArgs: Record<string, unknown>, signal: AbortSignal): Promise<string> {
   const filePath = requireString(rawArgs, 'file_path', 'lion_read');
   const effective = await consultGuard(env.guard, 'Read', { ...rawArgs, file_path: filePath }, signal);
-  const effectivePath =
-    typeof effective['file_path'] === 'string' ? (effective['file_path'] as string) : filePath;
+  const effectivePath = typeof effective['file_path'] === 'string' ? (effective['file_path'] as string) : filePath;
   const resolved = resolveConfined(env, effectivePath, 'lion_read');
   const stat = await fs.promises.stat(resolved);
   if (stat.size > READ_MAX_BYTES) {
@@ -132,27 +118,23 @@ async function guardedRead(
   }
   const raw = await fs.promises.readFile(resolved, 'utf8');
   const lines = raw.split('\n');
-  const offset = typeof rawArgs['offset'] === 'number' && rawArgs['offset'] >= 0
-    ? Math.floor(rawArgs['offset'] as number)
-    : 0;
-  const limit = typeof rawArgs['limit'] === 'number' && rawArgs['limit'] > 0
-    ? Math.floor(rawArgs['limit'] as number)
-    : READ_DEFAULT_LIMIT_LINES;
+  const offset =
+    typeof rawArgs['offset'] === 'number' && rawArgs['offset'] >= 0 ? Math.floor(rawArgs['offset'] as number) : 0;
+  const limit =
+    typeof rawArgs['limit'] === 'number' && rawArgs['limit'] > 0
+      ? Math.floor(rawArgs['limit'] as number)
+      : READ_DEFAULT_LIMIT_LINES;
   const sliced = lines.slice(offset, offset + limit);
-  const suffix = offset + limit < lines.length
-    ? `\n... (${lines.length - offset - sliced.length} linhas restantes; use offset/limit)`
-    : '';
+  const suffix =
+    offset + limit < lines.length
+      ? `\n... (${lines.length - offset - sliced.length} linhas restantes; use offset/limit)`
+      : '';
   return sliced.join('\n') + suffix;
 }
 
-async function guardedList(
-  env: GuardedRunEnv,
-  rawArgs: Record<string, unknown>,
-  signal: AbortSignal,
-): Promise<string> {
-  const target = typeof rawArgs['path'] === 'string' && rawArgs['path'].length > 0
-    ? (rawArgs['path'] as string)
-    : env.root;
+async function guardedList(env: GuardedRunEnv, rawArgs: Record<string, unknown>, signal: AbortSignal): Promise<string> {
+  const target =
+    typeof rawArgs['path'] === 'string' && rawArgs['path'].length > 0 ? (rawArgs['path'] as string) : env.root;
   await consultGuard(env.guard, 'Read', { file_path: target }, signal);
   const resolved = resolveConfined(env, target, 'lion_list');
   const entries = await fs.promises.readdir(resolved, { withFileTypes: true });
@@ -166,28 +148,21 @@ async function guardedList(
 function assertConfinedGlobPattern(pattern: string): void {
   if (path.isAbsolute(pattern) || /^[A-Za-z]:/.test(pattern) || /^[\\/]/.test(pattern)) {
     throw new Error(
-      'lion_glob: pattern absoluto nao e permitido. Use "path" (dentro do workspace) '
-        + 'mais um pattern relativo.',
+      'lion_glob: pattern absoluto nao e permitido. Use "path" (dentro do workspace) ' + 'mais um pattern relativo.',
     );
   }
   if (pattern.split(/[\\/]+/).includes('..')) {
     throw new Error(
-      'lion_glob: pattern com segmento ".." nao e permitido. '
-        + 'Toda busca e confinada a raiz do workspace do run.',
+      'lion_glob: pattern com segmento ".." nao e permitido. ' + 'Toda busca e confinada a raiz do workspace do run.',
     );
   }
 }
 
-async function guardedGlob(
-  env: GuardedRunEnv,
-  rawArgs: Record<string, unknown>,
-  signal: AbortSignal,
-): Promise<string> {
+async function guardedGlob(env: GuardedRunEnv, rawArgs: Record<string, unknown>, signal: AbortSignal): Promise<string> {
   const pattern = requireString(rawArgs, 'pattern', 'lion_glob');
   assertConfinedGlobPattern(pattern);
-  const basePath = typeof rawArgs['path'] === 'string' && rawArgs['path'].length > 0
-    ? (rawArgs['path'] as string)
-    : env.root;
+  const basePath =
+    typeof rawArgs['path'] === 'string' && rawArgs['path'].length > 0 ? (rawArgs['path'] as string) : env.root;
   await consultGuard(env.guard, 'Glob', { pattern, path: basePath }, signal);
   const resolvedBase = resolveConfined(env, basePath, 'lion_glob');
   const allowedRoots = [path.resolve(env.root), ...env.extraRoots];
@@ -201,41 +176,30 @@ async function guardedGlob(
     })
     .filter((match) => {
       const resolved = path.resolve(match);
-      const inside = allowedRoots.some(
-        (root) => resolved === root || resolved.startsWith(root + path.sep),
-      );
+      const inside = allowedRoots.some((root) => resolved === root || resolved.startsWith(root + path.sep));
       return inside && !isUnderDeniedRoot(env, resolved);
     });
   if (matches.length === 0) return 'Nenhum arquivo encontrado.';
   const trimmed = matches.slice(0, GLOB_MAX_RESULTS).join('\n');
-  const suffix = matches.length > GLOB_MAX_RESULTS
-    ? `\n... (+${matches.length - GLOB_MAX_RESULTS} arquivos truncados)`
-    : '';
+  const suffix =
+    matches.length > GLOB_MAX_RESULTS ? `\n... (+${matches.length - GLOB_MAX_RESULTS} arquivos truncados)` : '';
   return trimmed + suffix;
 }
 
-async function guardedGrep(
-  env: GuardedRunEnv,
-  rawArgs: Record<string, unknown>,
-  signal: AbortSignal,
-): Promise<string> {
+async function guardedGrep(env: GuardedRunEnv, rawArgs: Record<string, unknown>, signal: AbortSignal): Promise<string> {
   const pattern = requireString(rawArgs, 'pattern', 'lion_grep');
-  const basePath = typeof rawArgs['path'] === 'string' && rawArgs['path'].length > 0
-    ? (rawArgs['path'] as string)
-    : env.root;
+  const basePath =
+    typeof rawArgs['path'] === 'string' && rawArgs['path'].length > 0 ? (rawArgs['path'] as string) : env.root;
   await consultGuard(env.guard, 'Grep', { pattern, path: basePath }, signal);
   const resolvedBase = resolveConfined(env, basePath, 'lion_grep');
   let regex: RegExp;
   try {
     regex = new RegExp(pattern);
   } catch (err) {
-    throw new Error(
-      `lion_grep: pattern regex invalido: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    throw new Error(`lion_grep: pattern regex invalido: ${err instanceof Error ? err.message : String(err)}`);
   }
-  const includeGlob = typeof rawArgs['glob'] === 'string' && rawArgs['glob'].length > 0
-    ? (rawArgs['glob'] as string)
-    : null;
+  const includeGlob =
+    typeof rawArgs['glob'] === 'string' && rawArgs['glob'].length > 0 ? (rawArgs['glob'] as string) : null;
 
   const files: string[] = [];
   const walk = async (dir: string): Promise<void> => {
@@ -246,7 +210,7 @@ async function guardedGrep(
     try {
       entries = await fs.promises.readdir(dir, { withFileTypes: true });
     } catch {
-      return; // diretorio ilegivel: segue
+      return;
     }
     for (const entry of entries) {
       if (files.length >= GREP_MAX_FILES) return;
@@ -263,8 +227,8 @@ async function guardedGrep(
   else await walk(resolvedBase);
 
   const matchesInclude = (file: string): boolean =>
-    includeGlob === null
-    || minimatch(path.basename(file), includeGlob, {
+    includeGlob === null ||
+    minimatch(path.basename(file), includeGlob, {
       matchBase: true,
       nocase: process.platform === 'win32',
     });
@@ -286,7 +250,7 @@ async function guardedGrep(
     } catch {
       continue;
     }
-    if (content.includes('\0')) continue; // binario
+    if (content.includes('\0')) continue;
     const lines = content.split('\n');
     for (let i = 0; i < lines.length && matches.length < GREP_MAX_MATCHES; i += 1) {
       if (regex.test(lines[i]!)) {
@@ -310,10 +274,8 @@ async function guardedWrite(
     throw new Error('lion_write: argumento "content" (string) e obrigatorio');
   }
   const effective = await consultGuard(env.guard, 'Write', { file_path: filePath, content }, signal);
-  const effectivePath =
-    typeof effective['file_path'] === 'string' ? (effective['file_path'] as string) : filePath;
-  const effectiveContent =
-    typeof effective['content'] === 'string' ? (effective['content'] as string) : content;
+  const effectivePath = typeof effective['file_path'] === 'string' ? (effective['file_path'] as string) : filePath;
+  const effectiveContent = typeof effective['content'] === 'string' ? (effective['content'] as string) : content;
   const resolved = resolveConfined(env, effectivePath, 'lion_write');
   throwIfAborted(signal);
   await fs.promises.mkdir(path.dirname(resolved), { recursive: true });
@@ -321,11 +283,7 @@ async function guardedWrite(
   return `Arquivo escrito com sucesso: ${resolved}`;
 }
 
-async function guardedEdit(
-  env: GuardedRunEnv,
-  rawArgs: Record<string, unknown>,
-  signal: AbortSignal,
-): Promise<string> {
+async function guardedEdit(env: GuardedRunEnv, rawArgs: Record<string, unknown>, signal: AbortSignal): Promise<string> {
   const filePath = requireString(rawArgs, 'file_path', 'lion_edit');
   const oldString = requireString(rawArgs, 'old_string', 'lion_edit');
   const newString = typeof rawArgs['new_string'] === 'string' ? (rawArgs['new_string'] as string) : '';
@@ -335,8 +293,7 @@ async function guardedEdit(
     { file_path: filePath, old_string: oldString, new_string: newString },
     signal,
   );
-  const effectivePath =
-    typeof effective['file_path'] === 'string' ? (effective['file_path'] as string) : filePath;
+  const effectivePath = typeof effective['file_path'] === 'string' ? (effective['file_path'] as string) : filePath;
   const resolved = resolveConfined(env, effectivePath, 'lion_edit');
   throwIfAborted(signal);
   const current = await fs.promises.readFile(resolved, 'utf8');
@@ -344,9 +301,7 @@ async function guardedEdit(
     throw new Error('lion_edit: old_string nao encontrado no arquivo');
   }
   const replaceAll = rawArgs['replace_all'] === true;
-  const next = replaceAll
-    ? current.split(oldString).join(newString)
-    : current.replace(oldString, newString);
+  const next = replaceAll ? current.split(oldString).join(newString) : current.replace(oldString, newString);
   await fs.promises.writeFile(resolved, next, 'utf8');
   return `Arquivo editado com sucesso: ${resolved}`;
 }
@@ -358,11 +313,11 @@ async function guardedShell(
 ): Promise<string> {
   const command = requireString(rawArgs, 'command', 'lion_shell');
   const effective = await consultGuard(env.guard, 'Bash', { command }, signal);
-  const effectiveCommand =
-    typeof effective['command'] === 'string' ? (effective['command'] as string) : command;
-  const timeoutMs = typeof rawArgs['timeout_ms'] === 'number' && rawArgs['timeout_ms'] > 0
-    ? Math.min(Math.floor(rawArgs['timeout_ms'] as number), SHELL_MAX_TIMEOUT_MS)
-    : SHELL_DEFAULT_TIMEOUT_MS;
+  const effectiveCommand = typeof effective['command'] === 'string' ? (effective['command'] as string) : command;
+  const timeoutMs =
+    typeof rawArgs['timeout_ms'] === 'number' && rawArgs['timeout_ms'] > 0
+      ? Math.min(Math.floor(rawArgs['timeout_ms'] as number), SHELL_MAX_TIMEOUT_MS)
+      : SHELL_DEFAULT_TIMEOUT_MS;
   throwIfAborted(signal);
 
   return new Promise<string>((resolve, reject) => {
@@ -391,8 +346,7 @@ async function guardedShell(
       if (child.exitCode === null && !child.killed) {
         try {
           child.kill();
-        } catch {
-        }
+        } catch {}
       }
     };
     const onAbort = (): void => {
@@ -431,15 +385,12 @@ async function guardedShell(
         if (code === 0) {
           resolve((combined || '(sem output)') + truncated);
         } else {
-          resolve(
-            `Error (exit ${code ?? exitSignal ?? '?'}): ${combined || 'comando falhou sem output'}${truncated}`,
-          );
+          resolve(`Error (exit ${code ?? exitSignal ?? '?'}): ${combined || 'comando falhou sem output'}${truncated}`);
         }
       });
     });
   });
 }
-
 
 const STRING_PROP = { type: 'string' } as const;
 const NUMBER_PROP = { type: 'number' } as const;
@@ -448,11 +399,7 @@ interface GuardedToolSpec {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
-  run: (
-    env: GuardedRunEnv,
-    args: Record<string, unknown>,
-    signal: AbortSignal,
-  ) => Promise<string>;
+  run: (env: GuardedRunEnv, args: Record<string, unknown>, signal: AbortSignal) => Promise<string>;
 }
 
 const GUARDED_TOOL_SPECS: GuardedToolSpec[] = [
@@ -536,18 +483,15 @@ const GUARDED_TOOL_SPECS: GuardedToolSpec[] = [
   },
 ];
 
-export function buildCursorGuardedToolset(
-  opts: CursorGuardedToolsetOptions,
-): CursorGuardedToolset {
+export function buildCursorGuardedToolset(opts: CursorGuardedToolsetOptions): CursorGuardedToolset {
   const env: GuardedRunEnv = {
     root: opts.cwd,
     guard: opts.canUseTool,
     deniedRoots: (opts.deniedRoots ?? []).map((root) => path.resolve(root)),
     extraRoots: (opts.extraRoots ?? []).map((root) => path.resolve(root)),
   };
-  const specs = opts.includeShell === false
-    ? GUARDED_TOOL_SPECS.filter((spec) => spec.name !== 'lion_shell')
-    : GUARDED_TOOL_SPECS;
+  const specs =
+    opts.includeShell === false ? GUARDED_TOOL_SPECS.filter((spec) => spec.name !== 'lion_shell') : GUARDED_TOOL_SPECS;
   const declarations: CursorCustomToolDeclaration[] = specs.map((spec) => ({
     name: spec.name,
     description: spec.description,

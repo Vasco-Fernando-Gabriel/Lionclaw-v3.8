@@ -1,9 +1,5 @@
-
 import { createLogger } from '../logger';
-import {
-  hasActiveOfficialRun,
-  resetOfficialProjectRunsNow,
-} from '../agent-runtime/codex-session-factory';
+import { hasActiveOfficialRun, resetOfficialProjectRunsNow } from '../agent-runtime/codex-session-factory';
 import type { CodexSession } from '../codex-runtime/types';
 import { getAgent, getPipelinePhaseMessages } from '../db';
 import { getLoopPhases, getPhaseAgentId } from './registry';
@@ -16,9 +12,7 @@ export interface CodexSessionsPhaseState {
   codexSessions: Map<string, CodexSession>;
 }
 
-export function closeCodexSessions(
-  state: CodexSessionsPhaseState,
-): void {
+export function closeCodexSessions(state: CodexSessionsPhaseState): void {
   if (state.codexSessions.size === 0) {
     resetOfficialProjectRunsNow(state.projectId, 'phase-transition-empty');
     return;
@@ -38,10 +32,7 @@ export function closeCodexSessions(
   resetOfficialProjectRunsNow(state.projectId, 'phase-transition');
 }
 
-export function hasCodexSessionForPhase(
-  state: CodexSessionsPhaseState,
-  phase: number,
-): boolean {
+export function hasCodexSessionForPhase(state: CodexSessionsPhaseState, phase: number): boolean {
   for (const key of state.codexSessions.keys()) {
     const lastColon = key.lastIndexOf(':');
     if (lastColon === -1) continue;
@@ -81,7 +72,6 @@ export function maybeKillIdleCodexOnGate(
   );
 }
 
-
 const TRANSIENT_CODEX_SESSION_ERROR_PATTERNS: readonly string[] = [
   'codex app-server exited',
   'app-server transport closed',
@@ -91,9 +81,7 @@ const TRANSIENT_CODEX_SESSION_ERROR_PATTERNS: readonly string[] = [
 ];
 
 export function isTransientCodexSessionError(message: string): boolean {
-  return TRANSIENT_CODEX_SESSION_ERROR_PATTERNS.some((pattern) =>
-    message.includes(pattern),
-  );
+  return TRANSIENT_CODEX_SESSION_ERROR_PATTERNS.some((pattern) => message.includes(pattern));
 }
 
 const RESUME_HISTORY_CHAR_BUDGET = 60_000;
@@ -125,8 +113,7 @@ export function buildCodexResumePrompt(opts: {
     lines.unshift(line);
     used += line.length;
   }
-  const historyBlock =
-    lines.length > 0 ? lines.join('\n\n') : '(sem historico persistido nesta fase)';
+  const historyBlock = lines.length > 0 ? lines.join('\n\n') : '(sem historico persistido nesta fase)';
 
   return (
     `[RETOMADA DE SESSAO] A sessao anterior do Codex desta fase foi encerrada ` +

@@ -18,11 +18,13 @@ describe('sqlite-vec runtime físico', () => {
     fs.mkdirSync(path.dirname(dylib), { recursive: true });
     fs.writeFileSync(dylib, 'fixture');
     const database = { loadExtension: vi.fn() };
-    expect(loadSqliteVecForRuntime(database, {
-      resourcesPath: root,
-      platform: 'darwin',
-      arch: 'arm64',
-    })).toBe(fs.realpathSync(dylib));
+    expect(
+      loadSqliteVecForRuntime(database, {
+        resourcesPath: root,
+        platform: 'darwin',
+        arch: 'arm64',
+      }),
+    ).toBe(fs.realpathSync(dylib));
     expect(database.loadExtension).toHaveBeenCalledWith(fs.realpathSync(dylib));
   });
 

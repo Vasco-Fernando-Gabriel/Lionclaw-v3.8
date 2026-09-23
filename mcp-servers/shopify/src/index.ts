@@ -1,15 +1,11 @@
 #!/usr/bin/env node
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
-
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
 interface TokenCache {
   accessToken: string;
-  expiresAt: number; // timestamp ms
+  expiresAt: number;
 }
 
 let tokenCache: TokenCache | null = null;
@@ -63,7 +59,6 @@ async function getAccessToken(storeUrl: string, clientId: string, clientSecret: 
   return data.access_token;
 }
 
-
 const API_VERSION = '2024-01';
 const ANALYTICS_API_VERSION = '2025-10';
 const WRITE_API_VERSION = '2025-01';
@@ -87,17 +82,13 @@ async function shopifyFetch(
 
   if (res.status === 401) {
     tokenCache = null;
-    throw new Error(
-      'Token expirado ou invalido (401). Tente novamente (o token sera renovado automaticamente).',
-    );
+    throw new Error('Token expirado ou invalido (401). Tente novamente (o token sera renovado automaticamente).');
   }
   if (res.status === 404) {
     throw new Error(`Recurso nao encontrado (404): ${endpoint}`);
   }
   if (res.status === 429) {
-    throw new Error(
-      'Limite de requisicoes atingido (429). Aguarde alguns segundos e tente novamente.',
-    );
+    throw new Error('Limite de requisicoes atingido (429). Aguarde alguns segundos e tente novamente.');
   }
   if (!res.ok) {
     const body = await res.text();
@@ -108,7 +99,6 @@ async function shopifyFetch(
   const linkHeader = res.headers.get('link');
   return { data, linkHeader };
 }
-
 
 async function shopifyGraphQL(
   query: string,
@@ -138,7 +128,7 @@ async function shopifyGraphQL(
 
   const json = (await res.json()) as { data?: unknown; errors?: Array<{ message: string }> };
   if (json.errors?.length) {
-    throw new Error(`GraphQL errors: ${json.errors.map(e => e.message).join(', ')}`);
+    throw new Error(`GraphQL errors: ${json.errors.map((e) => e.message).join(', ')}`);
   }
   return json.data;
 }
@@ -149,7 +139,6 @@ function extractPageInfo(linkHeader: string | null, rel: string): string | null 
   const match = linkHeader.match(regex);
   return match ? match[1] : null;
 }
-
 
 interface RawProduct {
   id: number;
@@ -183,12 +172,10 @@ interface CompactProduct {
 }
 
 function compactProduct(p: RawProduct): CompactProduct {
-  const prices = (p.variants || []).map(v => parseFloat(v.price)).filter(n => !isNaN(n));
+  const prices = (p.variants || []).map((v) => parseFloat(v.price)).filter((n) => !isNaN(n));
   const minPrice = prices.length > 0 ? Math.min(...prices) : 0;
   const maxPrice = prices.length > 0 ? Math.max(...prices) : 0;
-  const priceRange = minPrice === maxPrice
-    ? minPrice.toFixed(2)
-    : `${minPrice.toFixed(2)} - ${maxPrice.toFixed(2)}`;
+  const priceRange = minPrice === maxPrice ? minPrice.toFixed(2) : `${minPrice.toFixed(2)} - ${maxPrice.toFixed(2)}`;
   const totalInventory = (p.variants || []).reduce((sum, v) => sum + (v.inventory_quantity || 0), 0);
 
   return {
@@ -236,11 +223,9 @@ interface CompactOrder {
 }
 
 function compactOrder(o: RawOrder): CompactOrder {
-  const customerName = o.customer
-    ? `${o.customer.first_name} ${o.customer.last_name}`.trim()
-    : null;
+  const customerName = o.customer ? `${o.customer.first_name} ${o.customer.last_name}`.trim() : null;
   const summary = (o.line_items || [])
-    .map(li => `${li.quantity}x ${li.title}${li.variant_title ? ` (${li.variant_title})` : ''}`)
+    .map((li) => `${li.quantity}x ${li.title}${li.variant_title ? ` (${li.variant_title})` : ''}`)
     .join(', ');
 
   return {
@@ -260,11 +245,7 @@ function compactOrder(o: RawOrder): CompactOrder {
 const COMPACT_PRODUCT_FIELDS = 'id,title,status,vendor,product_type,tags,variants,images';
 const COMPACT_ORDER_FIELDS = 'id,name,created_at,total_price,financial_status,fulfillment_status,customer,line_items';
 
-
-const server = new Server(
-  { name: 'shopify', version: '1.0.0' },
-  { capabilities: { tools: {} } },
-);
+const server = new Server({ name: 'shopify', version: '1.0.0' }, { capabilities: { tools: {} } });
 
 const fieldsSchema = {
   type: 'string' as const,
@@ -275,8 +256,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: 'list_products',
-      description:
-        'Listar produtos da loja Shopify (resumo compacto). Use get_product para detalhes completos.',
+      description: 'Listar produtos da loja Shopify (resumo compacto). Use get_product para detalhes completos.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -313,8 +293,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'search_products',
-      description:
-        'Buscar produtos por texto livre (titulo, vendor, tag, tipo, SKU). Usa GraphQL para busca parcial.',
+      description: 'Buscar produtos por texto livre (titulo, vendor, tag, tipo, SKU). Usa GraphQL para busca parcial.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -332,8 +311,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_inventory',
-      description:
-        'Obter niveis de estoque para um ou mais inventory item IDs.',
+      description: 'Obter niveis de estoque para um ou mais inventory item IDs.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -348,8 +326,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'list_collections',
-      description:
-        'Listar colecoes (custom + smart) da loja Shopify.',
+      description: 'Listar colecoes (custom + smart) da loja Shopify.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -411,8 +388,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           created_at_min: {
             type: 'string',
-            description:
-              'Data minima de criacao (ISO 8601, ex: 2024-01-01T00:00:00Z).',
+            description: 'Data minima de criacao (ISO 8601, ex: 2024-01-01T00:00:00Z).',
           },
           fields: fieldsSchema,
         },
@@ -467,7 +443,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           price: {
             type: 'string',
-            description: 'Preco da variante unica (modo simples). Use ponto como separador decimal. Ex: "99.90". Nao use junto com "variants".',
+            description:
+              'Preco da variante unica (modo simples). Use ponto como separador decimal. Ex: "99.90". Nao use junto com "variants".',
           },
           compareAtPrice: {
             type: 'string',
@@ -480,7 +457,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           options: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Nomes das opcoes do produto (modo multi-variante). Ex: ["Tamanho"] ou ["Tamanho","Cor"]. Use junto com "variants".',
+            description:
+              'Nomes das opcoes do produto (modo multi-variante). Ex: ["Tamanho"] ou ["Tamanho","Cor"]. Use junto com "variants".',
           },
           variants: {
             type: 'array',
@@ -495,31 +473,41 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                 price: { type: 'string', description: 'Preco da variante. Ex: "99.90".' },
                 compareAtPrice: { type: 'string', description: 'Preco "de" da variante.' },
                 sku: { type: 'string', description: 'SKU da variante.' },
-                weight_grams: { type: 'number', description: 'Peso da variante em gramas. Se omitido, usa default_weight_grams do produto.' },
+                weight_grams: {
+                  type: 'number',
+                  description: 'Peso da variante em gramas. Se omitido, usa default_weight_grams do produto.',
+                },
               },
               required: ['values', 'price'],
             },
-            description: 'Lista de variantes (modo multi-variante). Cada variante precisa de "values" (na ordem de "options") e "price".',
+            description:
+              'Lista de variantes (modo multi-variante). Cada variante precisa de "values" (na ordem de "options") e "price".',
           },
           default_weight_grams: {
             type: 'number',
-            description: 'Peso padrao em gramas aplicado a TODAS as variantes que nao definirem weight_grams proprio. Use 150 pra produtos The Notte por padrao.',
+            description:
+              'Peso padrao em gramas aplicado a TODAS as variantes que nao definirem weight_grams proprio. Use 150 pra produtos The Notte por padrao.',
           },
           images: {
             type: 'array',
             items: {
               type: 'object',
               properties: {
-                url: { type: 'string', description: 'URL publica da imagem (Shopify baixa e hospeda). Aceita PNG, JPG, WEBP, GIF.' },
+                url: {
+                  type: 'string',
+                  description: 'URL publica da imagem (Shopify baixa e hospeda). Aceita PNG, JPG, WEBP, GIF.',
+                },
                 alt: { type: 'string', description: 'Texto alternativo da imagem.' },
               },
               required: ['url'],
             },
-            description: 'Imagens do produto. A Shopify serve automaticamente em WebP/AVIF pros browsers compativeis, independente do formato fonte.',
+            description:
+              'Imagens do produto. A Shopify serve automaticamente em WebP/AVIF pros browsers compativeis, independente do formato fonte.',
           },
           category: {
             type: 'string',
-            description: 'ID da Shopify Taxonomy Category (formato "gid://shopify/TaxonomyCategory/aa-1-2-3") ou apenas o handle final (ex: "aa-1-2-3"). Opcional.',
+            description:
+              'ID da Shopify Taxonomy Category (formato "gid://shopify/TaxonomyCategory/aa-1-2-3") ou apenas o handle final (ex: "aa-1-2-3"). Opcional.',
           },
           metafields: {
             type: 'array',
@@ -528,8 +516,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
               properties: {
                 namespace: { type: 'string', description: 'Namespace do metafield (ex: "custom").' },
                 key: { type: 'string', description: 'Chave do metafield.' },
-                value: { type: 'string', description: 'Valor (sempre string; objetos/arrays devem vir como JSON serializado).' },
-                type: { type: 'string', description: 'Tipo do metafield. Ex: "single_line_text_field", "multi_line_text_field", "number_integer", "boolean", "json", "color", "list.single_line_text_field".' },
+                value: {
+                  type: 'string',
+                  description: 'Valor (sempre string; objetos/arrays devem vir como JSON serializado).',
+                },
+                type: {
+                  type: 'string',
+                  description:
+                    'Tipo do metafield. Ex: "single_line_text_field", "multi_line_text_field", "number_integer", "boolean", "json", "color", "list.single_line_text_field".',
+                },
               },
               required: ['namespace', 'key', 'value', 'type'],
             },
@@ -548,7 +543,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           id: {
             type: 'string',
-            description: 'ID do produto. Aceita ID numerico ("10104822202654") ou GID ("gid://shopify/Product/10104822202654").',
+            description:
+              'ID do produto. Aceita ID numerico ("10104822202654") ou GID ("gid://shopify/Product/10104822202654").',
           },
           title: { type: 'string', description: 'Novo titulo.' },
           descriptionHtml: { type: 'string', description: 'Nova descricao HTML.' },
@@ -581,7 +577,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                 price: { type: 'string' },
                 compareAtPrice: { type: 'string' },
                 sku: { type: 'string' },
-                weight_grams: { type: 'number', description: 'Peso da variante em gramas. Se omitido, usa default_weight_grams.' },
+                weight_grams: {
+                  type: 'number',
+                  description: 'Peso da variante em gramas. Se omitido, usa default_weight_grams.',
+                },
               },
               required: ['values', 'price'],
             },
@@ -601,7 +600,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
               },
               required: ['url'],
             },
-            description: 'Imagens (SUBSTITUI a galeria atual). Para apenas adicionar imagens, use as imagens existentes + as novas.',
+            description:
+              'Imagens (SUBSTITUI a galeria atual). Para apenas adicionar imagens, use as imagens existentes + as novas.',
           },
           category: {
             type: 'string',
@@ -627,7 +627,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'list_metafield_definitions',
-      description: 'Lista todas as definicoes de metafields da loja (com namespace, key, type, descricao). Use para descobrir os metafields fixos antes de gravar produtos.',
+      description:
+        'Lista todas as definicoes de metafields da loja (com namespace, key, type, descricao). Use para descobrir os metafields fixos antes de gravar produtos.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -641,7 +642,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'list_publications',
-      description: 'Lista todos os canais de venda (publications) da loja. Use para descobrir IDs antes de publicar produtos.',
+      description:
+        'Lista todos os canais de venda (publications) da loja. Use para descobrir IDs antes de publicar produtos.',
       inputSchema: {
         type: 'object' as const,
         properties: {},
@@ -649,7 +651,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'list_locations',
-      description: 'Lista todas as locations (estoques/lojas fisicas) da loja Shopify. Use para descobrir IDs antes de ativar inventory.',
+      description:
+        'Lista todas as locations (estoques/lojas fisicas) da loja Shopify. Use para descobrir IDs antes de ativar inventory.',
       inputSchema: {
         type: 'object' as const,
         properties: {},
@@ -657,7 +660,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'publish_product',
-      description: 'Vincula um produto a todos os canais de venda da loja, ativa inventory em todas as locations e opcionalmente define uma quantidade padrao de estoque em cada variante. NAO altera o status do produto (DRAFT continua DRAFT). Idempotente.',
+      description:
+        'Vincula um produto a todos os canais de venda da loja, ativa inventory em todas as locations e opcionalmente define uma quantidade padrao de estoque em cada variante. NAO altera o status do produto (DRAFT continua DRAFT). Idempotente.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -677,7 +681,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           default_quantity: {
             type: 'number',
-            description: 'Quantidade padrao de estoque a setar em cada variante em cada location apos ativar inventory. Use 1 para produtos novos. Omitir = nao mexer no estoque.',
+            description:
+              'Quantidade padrao de estoque a setar em cada variante em cada location apos ativar inventory. Use 1 para produtos novos. Omitir = nao mexer no estoque.',
           },
         },
         required: ['id'],
@@ -685,13 +690,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'analytics_query',
-      description: 'Executar consulta ShopifyQL para relatorios e analytics da loja. O unico dataset disponivel e "sales". Exemplos validos: "FROM sales SHOW total_sales GROUP BY month SINCE -1y", "FROM sales SHOW net_sales, orders GROUP BY day SINCE -30d", "FROM sales SHOW average_order_value GROUP BY month SINCE -6m", "FROM sales SHOW total_sales GROUP BY product_title SINCE -3m ORDER BY total_sales DESC LIMIT 10".',
+      description:
+        'Executar consulta ShopifyQL para relatorios e analytics da loja. O unico dataset disponivel e "sales". Exemplos validos: "FROM sales SHOW total_sales GROUP BY month SINCE -1y", "FROM sales SHOW net_sales, orders GROUP BY day SINCE -30d", "FROM sales SHOW average_order_value GROUP BY month SINCE -6m", "FROM sales SHOW total_sales GROUP BY product_title SINCE -3m ORDER BY total_sales DESC LIMIT 10".',
       inputSchema: {
         type: 'object' as const,
         properties: {
           query: {
             type: 'string',
-            description: 'Query em ShopifyQL. Sintaxe: FROM sales SHOW {metricas} [GROUP BY {dimensao}] [SINCE {periodo}] [ORDER BY {campo} ASC|DESC] [LIMIT {n}]. IMPORTANTE: o unico dataset valido e "sales". Metricas validas: total_sales, net_sales, orders, average_order_value, gross_sales, discounts, returns, shipping, tax. Dimensoes para GROUP BY: day, week, month, quarter, year, product_title, product_type, product_vendor, billing_country, billing_city, billing_region, channel. Periodos: -7d, -30d, -90d, -3m, -6m, -1y, -2y.',
+            description:
+              'Query em ShopifyQL. Sintaxe: FROM sales SHOW {metricas} [GROUP BY {dimensao}] [SINCE {periodo}] [ORDER BY {campo} ASC|DESC] [LIMIT {n}]. IMPORTANTE: o unico dataset valido e "sales". Metricas validas: total_sales, net_sales, orders, average_order_value, gross_sales, discounts, returns, shipping, tax. Dimensoes para GROUP BY: day, week, month, quarter, year, product_title, product_type, product_vendor, billing_country, billing_city, billing_region, channel. Periodos: -7d, -30d, -90d, -3m, -6m, -1y, -2y.',
           },
         },
         required: ['query'],
@@ -752,15 +759,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'get_product': {
         const productId = a.product_id as string;
-        const { data } = await shopifyFetch(
-          `/products/${encodeURIComponent(productId)}.json`,
-          storeUrl,
-          accessToken,
-        );
+        const { data } = await shopifyFetch(`/products/${encodeURIComponent(productId)}.json`, storeUrl, accessToken);
         return {
-          content: [
-            { type: 'text' as const, text: JSON.stringify((data as { product: unknown }).product, null, 2) },
-          ],
+          content: [{ type: 'text' as const, text: JSON.stringify((data as { product: unknown }).product, null, 2) }],
         };
       }
 
@@ -792,7 +793,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         `;
 
-        const data = await shopifyGraphQL(gql, { query, first: limit }, storeUrl, accessToken) as {
+        const data = (await shopifyGraphQL(gql, { query, first: limit }, storeUrl, accessToken)) as {
           products: {
             edges: Array<{
               node: {
@@ -835,10 +836,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify({ total_retornado: produtos.length, produtos }, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({ total_retornado: produtos.length, produtos }, null, 2),
+            },
+          ],
         };
       }
 
@@ -853,11 +856,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [
             {
               type: 'text' as const,
-              text: JSON.stringify(
-                (data as { inventory_levels: unknown[] }).inventory_levels,
-                null,
-                2,
-              ),
+              text: JSON.stringify((data as { inventory_levels: unknown[] }).inventory_levels, null, 2),
             },
           ],
         };
@@ -867,22 +866,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const limit = Math.min((a.limit as number) || 50, 250);
 
         const [customRes, smartRes] = await Promise.all([
-          shopifyFetch(
-            `/custom_collections.json?limit=${limit}`,
-            storeUrl,
-            accessToken,
-          ),
-          shopifyFetch(
-            `/smart_collections.json?limit=${limit}`,
-            storeUrl,
-            accessToken,
-          ),
+          shopifyFetch(`/custom_collections.json?limit=${limit}`, storeUrl, accessToken),
+          shopifyFetch(`/smart_collections.json?limit=${limit}`, storeUrl, accessToken),
         ]);
 
-        const custom = (customRes.data as { custom_collections: unknown[] })
-          .custom_collections;
-        const smart = (smartRes.data as { smart_collections: unknown[] })
-          .smart_collections;
+        const custom = (customRes.data as { custom_collections: unknown[] }).custom_collections;
+        const smart = (smartRes.data as { smart_collections: unknown[] }).smart_collections;
 
         return {
           content: [
@@ -953,11 +942,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (useCompact) params.set('fields', COMPACT_ORDER_FIELDS);
         else params.set('fields', customFields);
 
-        const { data } = await shopifyFetch(
-          `/orders.json?${params}`,
-          storeUrl,
-          accessToken,
-        );
+        const { data } = await shopifyFetch(`/orders.json?${params}`, storeUrl, accessToken);
         const orders = (data as { orders: RawOrder[] }).orders;
 
         return {
@@ -979,20 +964,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'get_order': {
         const orderId = a.order_id as string;
-        const { data } = await shopifyFetch(
-          `/orders/${encodeURIComponent(orderId)}.json`,
-          storeUrl,
-          accessToken,
-        );
+        const { data } = await shopifyFetch(`/orders/${encodeURIComponent(orderId)}.json`, storeUrl, accessToken);
         return {
           content: [
             {
               type: 'text' as const,
-              text: JSON.stringify(
-                (data as { order: unknown }).order,
-                null,
-                2,
-              ),
+              text: JSON.stringify((data as { order: unknown }).order, null, 2),
             },
           ],
         };
@@ -1006,9 +983,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (isUpdate) {
           const rawId = a.id as string | undefined;
           if (!rawId) throw new Error('O campo "id" e obrigatorio em update_product.');
-          productGid = rawId.startsWith('gid://')
-            ? rawId
-            : `gid://shopify/Product/${rawId.split('/').pop()}`;
+          productGid = rawId.startsWith('gid://') ? rawId : `gid://shopify/Product/${rawId.split('/').pop()}`;
         }
 
         const title = a.title as string | undefined;
@@ -1046,9 +1021,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         if (a.category !== undefined) {
           const rawCat = (a.category as string).trim();
-          setInput.category = rawCat.startsWith('gid://')
-            ? rawCat
-            : `gid://shopify/TaxonomyCategory/${rawCat}`;
+          setInput.category = rawCat.startsWith('gid://') ? rawCat : `gid://shopify/TaxonomyCategory/${rawCat}`;
         }
 
         if (Array.isArray(a.metafields) && (a.metafields as unknown[]).length > 0) {
@@ -1063,7 +1036,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               throw new Error('Cada metafield precisa de namespace, key, value e type.');
             }
           }
-          setInput.metafields = rawMetafields.map(mf => ({
+          setInput.metafields = rawMetafields.map((mf) => ({
             namespace: mf.namespace,
             key: mf.key,
             value: mf.value,
@@ -1080,7 +1053,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             sku?: string;
             weight_grams?: number;
           }>;
-          const defaultWeightGrams = typeof a.default_weight_grams === 'number' ? (a.default_weight_grams as number) : undefined;
+          const defaultWeightGrams =
+            typeof a.default_weight_grams === 'number' ? (a.default_weight_grams as number) : undefined;
           for (const v of rawVariants) {
             if (!Array.isArray(v.values) || v.values.length !== optionNames.length) {
               throw new Error(
@@ -1093,14 +1067,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
 
           setInput.productOptions = optionNames.map((nm, idx) => {
-            const uniqueValues = Array.from(new Set(rawVariants.map(v => v.values[idx])));
+            const uniqueValues = Array.from(new Set(rawVariants.map((v) => v.values[idx])));
             return {
               name: nm,
-              values: uniqueValues.map(v => ({ name: v })),
+              values: uniqueValues.map((v) => ({ name: v })),
             };
           });
 
-          setInput.variants = rawVariants.map(v => {
+          setInput.variants = rawVariants.map((v) => {
             const variantInput: Record<string, unknown> = {
               optionValues: v.values.map((val, idx) => ({
                 optionName: optionNames[idx],
@@ -1137,9 +1111,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           setInput.variants = [variantInput];
         }
 
-        const rawImages = Array.isArray(a.images) ? a.images as Array<{ url: string; alt?: string }> : [];
+        const rawImages = Array.isArray(a.images) ? (a.images as Array<{ url: string; alt?: string }>) : [];
         if (rawImages.length > 0) {
-          setInput.files = rawImages.map(img => {
+          setInput.files = rawImages.map((img) => {
             if (!img.url || typeof img.url !== 'string') {
               throw new Error('Cada imagem precisa de "url" valida.');
             }
@@ -1218,7 +1192,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         `;
 
-        const data = await shopifyGraphQL(gql, { input: setInput }, storeUrl, accessToken, WRITE_API_VERSION) as {
+        const data = (await shopifyGraphQL(gql, { input: setInput }, storeUrl, accessToken, WRITE_API_VERSION)) as {
           productSet: {
             product: {
               id: string;
@@ -1274,20 +1248,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         if (userErrors && userErrors.length > 0) {
           return {
-            content: [{
-              type: 'text' as const,
-              text: `Erro ao ${isUpdate ? 'atualizar' : 'criar'} produto: ${JSON.stringify(userErrors, null, 2)}`,
-            }],
+            content: [
+              {
+                type: 'text' as const,
+                text: `Erro ao ${isUpdate ? 'atualizar' : 'criar'} produto: ${JSON.stringify(userErrors, null, 2)}`,
+              },
+            ],
             isError: true,
           };
         }
 
         if (!product) {
           return {
-            content: [{
-              type: 'text' as const,
-              text: `Produto nao foi ${isUpdate ? 'atualizado' : 'criado'} (resposta vazia da Shopify).`,
-            }],
+            content: [
+              {
+                type: 'text' as const,
+                text: `Produto nao foi ${isUpdate ? 'atualizado' : 'criado'} (resposta vazia da Shopify).`,
+              },
+            ],
             isError: true,
           };
         }
@@ -1326,31 +1304,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }));
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify({
-              [isUpdate ? 'atualizado' : 'criado']: true,
-              id: numericId,
-              gid: product.id,
-              title: product.title,
-              status: product.status,
-              handle: product.handle,
-              vendor: product.vendor,
-              product_type: product.productType,
-              tags: product.tags,
-              category: product.category
-                ? { id: product.category.id, name: product.category.name, full_name: product.category.fullName }
-                : null,
-              options: product.options,
-              variants,
-              variants_count: variants.length,
-              media,
-              media_count: media.length,
-              metafields,
-              metafields_count: metafields.length,
-              admin_url: adminUrl,
-            }, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                {
+                  [isUpdate ? 'atualizado' : 'criado']: true,
+                  id: numericId,
+                  gid: product.id,
+                  title: product.title,
+                  status: product.status,
+                  handle: product.handle,
+                  vendor: product.vendor,
+                  product_type: product.productType,
+                  tags: product.tags,
+                  category: product.category
+                    ? { id: product.category.id, name: product.category.name, full_name: product.category.fullName }
+                    : null,
+                  options: product.options,
+                  variants,
+                  variants_count: variants.length,
+                  media,
+                  media_count: media.length,
+                  metafields,
+                  metafields_count: metafields.length,
+                  admin_url: adminUrl,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
         };
       }
 
@@ -1374,18 +1358,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
           }
         `;
-        const data = await shopifyGraphQL(gql, { ownerType }, storeUrl, accessToken, WRITE_API_VERSION) as {
+        const data = (await shopifyGraphQL(gql, { ownerType }, storeUrl, accessToken, WRITE_API_VERSION)) as {
           metafieldDefinitions: {
-            edges: Array<{ node: {
-              id: string;
-              name: string;
-              namespace: string;
-              key: string;
-              description: string | null;
-              type: { name: string; category: string };
-              ownerType: string;
-              pinnedPosition: number | null;
-            } }>;
+            edges: Array<{
+              node: {
+                id: string;
+                name: string;
+                namespace: string;
+                key: string;
+                description: string | null;
+                type: { name: string; category: string };
+                ownerType: string;
+                pinnedPosition: number | null;
+              };
+            }>;
           };
         };
         const items = data.metafieldDefinitions.edges.map(({ node }) => ({
@@ -1402,7 +1388,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           pinned_position: node.pinnedPosition,
         }));
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify({ total: items.length, definitions: items }, null, 2) }],
+          content: [
+            { type: 'text' as const, text: JSON.stringify({ total: items.length, definitions: items }, null, 2) },
+          ],
         };
       }
 
@@ -1420,7 +1408,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
           }
         `;
-        const data = await shopifyGraphQL(gql, {}, storeUrl, accessToken, WRITE_API_VERSION) as {
+        const data = (await shopifyGraphQL(gql, {}, storeUrl, accessToken, WRITE_API_VERSION)) as {
           publications: { edges: Array<{ node: { id: string; name: string; supportsFuturePublishing: boolean } }> };
         };
         const items = data.publications.edges.map(({ node }) => ({
@@ -1429,7 +1417,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           supports_future_publishing: node.supportsFuturePublishing,
         }));
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify({ total: items.length, publications: items }, null, 2) }],
+          content: [
+            { type: 'text' as const, text: JSON.stringify({ total: items.length, publications: items }, null, 2) },
+          ],
         };
       }
 
@@ -1449,8 +1439,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
           }
         `;
-        const data = await shopifyGraphQL(gql, {}, storeUrl, accessToken, WRITE_API_VERSION) as {
-          locations: { edges: Array<{ node: { id: string; name: string; isActive: boolean; fulfillsOnlineOrders: boolean; shipsInventory: boolean } }> };
+        const data = (await shopifyGraphQL(gql, {}, storeUrl, accessToken, WRITE_API_VERSION)) as {
+          locations: {
+            edges: Array<{
+              node: {
+                id: string;
+                name: string;
+                isActive: boolean;
+                fulfillsOnlineOrders: boolean;
+                shipsInventory: boolean;
+              };
+            }>;
+          };
         };
         const items = data.locations.edges.map(({ node }) => ({
           id: node.id,
@@ -1460,42 +1460,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ships_inventory: node.shipsInventory,
         }));
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify({ total: items.length, locations: items }, null, 2) }],
+          content: [
+            { type: 'text' as const, text: JSON.stringify({ total: items.length, locations: items }, null, 2) },
+          ],
         };
       }
 
       case 'publish_product': {
         const rawId = a.id as string;
-        const productGid = rawId.startsWith('gid://')
-          ? rawId
-          : `gid://shopify/Product/${rawId}`;
+        const productGid = rawId.startsWith('gid://') ? rawId : `gid://shopify/Product/${rawId}`;
 
         let pubIds = a.publication_ids as string[] | undefined;
         let locIds = a.location_ids as string[] | undefined;
 
         if (!pubIds || pubIds.length === 0) {
-          const pubData = await shopifyGraphQL(
+          const pubData = (await shopifyGraphQL(
             `query { publications(first: 25) { edges { node { id } } } }`,
             {},
             storeUrl,
             accessToken,
             WRITE_API_VERSION,
-          ) as { publications: { edges: Array<{ node: { id: string } }> } };
-          pubIds = pubData.publications.edges.map(e => e.node.id);
+          )) as { publications: { edges: Array<{ node: { id: string } }> } };
+          pubIds = pubData.publications.edges.map((e) => e.node.id);
         }
 
         if (!locIds || locIds.length === 0) {
-          const locData = await shopifyGraphQL(
+          const locData = (await shopifyGraphQL(
             `query { locations(first: 25, includeInactive: false) { edges { node { id isActive } } } }`,
             {},
             storeUrl,
             accessToken,
             WRITE_API_VERSION,
-          ) as { locations: { edges: Array<{ node: { id: string; isActive: boolean } }> } };
-          locIds = locData.locations.edges.filter(e => e.node.isActive).map(e => e.node.id);
+          )) as { locations: { edges: Array<{ node: { id: string; isActive: boolean } }> } };
+          locIds = locData.locations.edges.filter((e) => e.node.isActive).map((e) => e.node.id);
         }
 
-        const prodData = await shopifyGraphQL(
+        const prodData = (await shopifyGraphQL(
           `query getProductVariants($id: ID!) {
             product(id: $id) {
               id
@@ -1514,7 +1514,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           storeUrl,
           accessToken,
           WRITE_API_VERSION,
-        ) as {
+        )) as {
           product: {
             id: string;
             title: string;
@@ -1529,7 +1529,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           };
         }
 
-        const inventoryItemIds = prodData.product.variants.edges.map(e => e.node.inventoryItem.id);
+        const inventoryItemIds = prodData.product.variants.edges.map((e) => e.node.inventoryItem.id);
 
         const publishGql = `
           mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
@@ -1539,13 +1539,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
           }
         `;
-        const publishRes = await shopifyGraphQL(
+        const publishRes = (await shopifyGraphQL(
           publishGql,
-          { id: productGid, input: pubIds.map(pid => ({ publicationId: pid })) },
+          { id: productGid, input: pubIds.map((pid) => ({ publicationId: pid })) },
           storeUrl,
           accessToken,
           WRITE_API_VERSION,
-        ) as { publishablePublish: { userErrors: Array<{ field: string[]; message: string }> } };
+        )) as { publishablePublish: { userErrors: Array<{ field: string[]; message: string }> } };
 
         const publishErrors = publishRes.publishablePublish.userErrors;
 
@@ -1562,13 +1562,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         for (const invId of inventoryItemIds) {
           for (const locId of locIds) {
             try {
-              const res = await shopifyGraphQL(
+              const res = (await shopifyGraphQL(
                 activateGql,
                 { inventoryItemId: invId, locationId: locId },
                 storeUrl,
                 accessToken,
                 WRITE_API_VERSION,
-              ) as { inventoryActivate: { userErrors: Array<{ field: string[]; message: string }> } };
+              )) as { inventoryActivate: { userErrors: Array<{ field: string[]; message: string }> } };
               const errs = res.inventoryActivate.userErrors;
               if (errs.length > 0) {
                 for (const err of errs) {
@@ -1601,11 +1601,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               }
             }
           `;
-          const quantities = inventoryItemIds.flatMap(invId =>
-            locIds!.map(locId => ({ inventoryItemId: invId, locationId: locId, quantity: defaultQty }))
+          const quantities = inventoryItemIds.flatMap((invId) =>
+            locIds!.map((locId) => ({ inventoryItemId: invId, locationId: locId, quantity: defaultQty })),
           );
           try {
-            const res = await shopifyGraphQL(
+            const res = (await shopifyGraphQL(
               setQtyGql,
               {
                 input: {
@@ -1618,7 +1618,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               storeUrl,
               accessToken,
               WRITE_API_VERSION,
-            ) as { inventorySetQuantities: { userErrors: Array<{ field: string[]; message: string }> } };
+            )) as { inventorySetQuantities: { userErrors: Array<{ field: string[]; message: string }> } };
             const errs = res.inventorySetQuantities.userErrors;
             if (errs.length > 0) {
               for (const err of errs) {
@@ -1637,25 +1637,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify({
-              product_id: productGid,
-              product_title: prodData.product.title,
-              publications: { total: pubIds.length, errors: publishErrors },
-              inventory: {
-                variants: inventoryItemIds.length,
-                locations: locIds.length,
-                activated: activatedCount,
-                errors: activateErrors,
-              },
-              quantities: defaultQty !== undefined ? {
-                default_quantity: defaultQty,
-                set_count: quantitiesSet,
-                errors: quantityErrors,
-              } : null,
-            }, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                {
+                  product_id: productGid,
+                  product_title: prodData.product.title,
+                  publications: { total: pubIds.length, errors: publishErrors },
+                  inventory: {
+                    variants: inventoryItemIds.length,
+                    locations: locIds.length,
+                    activated: activatedCount,
+                    errors: activateErrors,
+                  },
+                  quantities:
+                    defaultQty !== undefined
+                      ? {
+                          default_quantity: defaultQty,
+                          set_count: quantitiesSet,
+                          errors: quantityErrors,
+                        }
+                      : null,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
         };
       }
 
@@ -1679,7 +1688,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         `;
 
-        const data = await shopifyGraphQL(gql, { query: shopifyqlQuery }, storeUrl, accessToken, ANALYTICS_API_VERSION) as {
+        const data = (await shopifyGraphQL(
+          gql,
+          { query: shopifyqlQuery },
+          storeUrl,
+          accessToken,
+          ANALYTICS_API_VERSION,
+        )) as {
           shopifyqlQuery: {
             __typename: string;
             tableData?: {
@@ -1692,50 +1707,69 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         const result = data.shopifyqlQuery;
 
-        const parsedErrors = result.parseErrors && result.parseErrors !== 'null' && result.parseErrors !== '[]'
-          ? (() => { try { return JSON.parse(result.parseErrors!); } catch { return result.parseErrors; } })()
-          : null;
+        const parsedErrors =
+          result.parseErrors && result.parseErrors !== 'null' && result.parseErrors !== '[]'
+            ? (() => {
+                try {
+                  return JSON.parse(result.parseErrors!);
+                } catch {
+                  return result.parseErrors;
+                }
+              })()
+            : null;
         if (parsedErrors && (Array.isArray(parsedErrors) ? parsedErrors.length > 0 : true)) {
           return {
-            content: [{
-              type: 'text' as const,
-              text: `Erro na query ShopifyQL: ${JSON.stringify(parsedErrors)}\n\nDica: Use "FROM sales SHOW total_sales GROUP BY month SINCE -1y" como referencia.`,
-            }],
+            content: [
+              {
+                type: 'text' as const,
+                text: `Erro na query ShopifyQL: ${JSON.stringify(parsedErrors)}\n\nDica: Use "FROM sales SHOW total_sales GROUP BY month SINCE -1y" como referencia.`,
+              },
+            ],
             isError: true,
           };
         }
 
         if (result.tableData) {
           const { columns, rows: rawRows } = result.tableData;
-          const headers = columns.map(c => c.displayName || c.name);
+          const headers = columns.map((c) => c.displayName || c.name);
 
           let rows: Record<string, string>[] = [];
           if (Array.isArray(rawRows) && rawRows.length > 0) {
-            rows = rawRows.map(row => {
+            rows = rawRows.map((row) => {
               const obj: Record<string, string> = {};
-              columns.forEach(col => { obj[col.displayName || col.name] = row[col.name]; });
+              columns.forEach((col) => {
+                obj[col.displayName || col.name] = row[col.name];
+              });
               return obj;
             });
           }
 
           return {
-            content: [{
-              type: 'text' as const,
-              text: JSON.stringify({
-                tipo: 'tabela',
-                colunas: headers,
-                total_linhas: rows.length,
-                dados: rows,
-              }, null, 2),
-            }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(
+                  {
+                    tipo: 'tabela',
+                    colunas: headers,
+                    total_linhas: rows.length,
+                    dados: rows,
+                  },
+                  null,
+                  2,
+                ),
+              },
+            ],
           };
         }
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify(result, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
         };
       }
 
@@ -1747,9 +1781,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   } catch (err) {
     return {
-      content: [
-        { type: 'text' as const, text: `Erro Shopify: ${(err as Error).message}` },
-      ],
+      content: [{ type: 'text' as const, text: `Erro Shopify: ${(err as Error).message}` }],
       isError: true,
     };
   }

@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const PRD_GENERATOR_ID = 'prd-generator';

@@ -3,7 +3,6 @@ import { Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import type { DynamicWorkflowNodeStatus, StreamTimelineBlock } from '@/types';
 import { StreamTimeline } from '@/components/common/StreamTimeline';
 
-
 export interface WorkflowNodeStreamToolCall {
   toolName: string;
   detail?: string;
@@ -19,14 +18,7 @@ export interface WorkflowNodeStreamState {
   isStreaming: boolean;
 }
 
-
-function NodeStatusBadge({
-  status,
-  isStreaming,
-}: {
-  status: DynamicWorkflowNodeStatus;
-  isStreaming: boolean;
-}) {
+function NodeStatusBadge({ status, isStreaming }: { status: DynamicWorkflowNodeStatus; isStreaming: boolean }) {
   if (isStreaming || status === 'running') {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] text-amber-400">
@@ -59,11 +51,8 @@ function NodeStatusBadge({
       </span>
     );
   }
-  return (
-    <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500">pendente</span>
-  );
+  return <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500">pendente</span>;
 }
-
 
 function StreamBody({ node }: { node: WorkflowNodeStreamState }) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -90,9 +79,12 @@ function StreamBody({ node }: { node: WorkflowNodeStreamState }) {
     });
   }, [debouncedTimeline]);
 
-  useEffect(() => () => {
-    if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current);
+    },
+    [],
+  );
 
   const hasContent = debouncedTimeline.length > 0;
 
@@ -125,7 +117,6 @@ function StreamBody({ node }: { node: WorkflowNodeStreamState }) {
   );
 }
 
-
 function NodeStreamCard({ node }: { node: WorkflowNodeStreamState }) {
   return (
     <div className="flex flex-col rounded-lg border border-zinc-800 bg-zinc-900/40 min-h-0 h-full overflow-hidden">
@@ -139,13 +130,11 @@ function NodeStreamCard({ node }: { node: WorkflowNodeStreamState }) {
   );
 }
 
-
 export interface WorkflowStreamViewProps {
   nodes: WorkflowNodeStreamState[];
   parallelGroupNodeIds?: string[];
   pendingNodeIds?: string[];
 }
-
 
 function PendingNodePlaceholder({ nodeId }: { nodeId: string | null }) {
   return (
@@ -157,16 +146,13 @@ function PendingNodePlaceholder({ nodeId }: { nodeId: string | null }) {
       <span>
         {nodeId ? (
           <>
-            aguardando o agente{' '}
-            <span className="font-mono text-zinc-300">{nodeId}</span>...
+            aguardando o agente <span className="font-mono text-zinc-300">{nodeId}</span>...
           </>
         ) : (
           'aguardando o agente...'
         )}
       </span>
-      <span className="text-[10px] text-zinc-600">
-        O output aparece aqui assim que o node comecar a emitir.
-      </span>
+      <span className="text-[10px] text-zinc-600">O output aparece aqui assim que o node comecar a emitir.</span>
     </div>
   );
 }
@@ -181,19 +167,12 @@ export function selectStreamLayout(
     return { mode: 'parallel', nodes: groupNodes };
   }
   const streaming = nodes.filter((n) => n.isStreaming);
-  const active = streaming.length > 0 ? streaming[streaming.length - 1] : nodes[nodes.length - 1] ?? null;
+  const active = streaming.length > 0 ? streaming[streaming.length - 1] : (nodes[nodes.length - 1] ?? null);
   return { mode: 'single', node: active };
 }
 
-export function WorkflowStreamView({
-  nodes,
-  parallelGroupNodeIds = [],
-  pendingNodeIds = [],
-}: WorkflowStreamViewProps) {
-  const layout = useMemo(
-    () => selectStreamLayout(nodes, parallelGroupNodeIds),
-    [nodes, parallelGroupNodeIds],
-  );
+export function WorkflowStreamView({ nodes, parallelGroupNodeIds = [], pendingNodeIds = [] }: WorkflowStreamViewProps) {
+  const layout = useMemo(() => selectStreamLayout(nodes, parallelGroupNodeIds), [nodes, parallelGroupNodeIds]);
 
   if (layout.mode === 'single' && layout.node === null) {
     if (pendingNodeIds.length > 0) {
@@ -211,17 +190,10 @@ export function WorkflowStreamView({
     return (
       <div className="flex flex-1 flex-col min-h-0 p-2">
         <div className="mb-1.5 flex items-center gap-1.5 px-1 shrink-0">
-          <span className="text-[9px] uppercase tracking-wider text-zinc-600 font-medium">
-            Grupo paralelo
-          </span>
-          <span className="text-[10px] text-zinc-500">
-            {layout.nodes.length} agentes
-          </span>
+          <span className="text-[9px] uppercase tracking-wider text-zinc-600 font-medium">Grupo paralelo</span>
+          <span className="text-[10px] text-zinc-500">{layout.nodes.length} agentes</span>
         </div>
-        <div
-          className="grid flex-1 gap-2 min-h-0"
-          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-        >
+        <div className="grid flex-1 gap-2 min-h-0" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
           {layout.nodes.map((node) => (
             <NodeStreamCard key={node.nodeId} node={node} />
           ))}

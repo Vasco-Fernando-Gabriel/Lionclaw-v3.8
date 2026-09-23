@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
 
@@ -27,18 +26,15 @@ vi.mock('../pipeline-drive-coordinator', () => ({
 }));
 
 import { getHarnessProject, getActiveChatSession } from '../db';
+
+function activeId(): string | null {
+  return (getActiveChatSession as unknown as () => { id: string } | null)()?.id ?? null;
+}
 import { releaseProjectLock, isProjectLocked } from '../pipeline-shared/lock';
 import { createPipelineProject } from '../pipeline-create';
 import { getPipelineDriveCoordinator } from '../pipeline-drive-coordinator';
-import {
-  registerPipelineEngineRef,
-  _resetPipelineEngineRefForTesting,
-} from '../pipeline-engine-ref';
-import {
-  pipelineDriveCore,
-  pipelineCreateCore,
-  isPipelineWriteAction,
-} from '../pipeline-control-core';
+import { registerPipelineEngineRef, _resetPipelineEngineRefForTesting } from '../pipeline-engine-ref';
+import { pipelineDriveCore, pipelineCreateCore, isPipelineWriteAction } from '../pipeline-control-core';
 
 function installEngine(startPipeline: Mock): void {
   registerPipelineEngineRef((() => ({ startPipeline })) as never);
@@ -71,7 +67,7 @@ describe('pipelineDriveCore (FX1 bootstrap seam)', () => {
     const startDrive = vi.fn(() => ({ ok: true, drive: { status: 'driving' } }));
     installCoordinator(startDrive);
 
-    const res = pipelineDriveCore('proj_a', 'semi');
+    const res = pipelineDriveCore('proj_a', 'semi', activeId());
 
     expect(res.ok).toBe(true);
     expect(startDrive).toHaveBeenCalledWith('proj_a', 'sess_1', 'semi');
@@ -89,11 +85,11 @@ describe('pipelineDriveCore (FX1 bootstrap seam)', () => {
     const startDrive = vi.fn();
     installCoordinator(startDrive);
 
-    const res = pipelineDriveCore('proj_a', 'full');
+    const res = pipelineDriveCore('proj_a', 'full', activeId());
 
     expect(res.ok).toBe(false);
     expect(startDrive).not.toHaveBeenCalled();
-    if (!res.ok) expect(res.error).toMatch(/sessao de chat ativa/i);
+    if (!res.ok) expect(res.error).toMatch(/turn_binding_required/i);
   });
 
   it('propaga o erro do lock global (1 drive por vez)', () => {
@@ -101,7 +97,7 @@ describe('pipelineDriveCore (FX1 bootstrap seam)', () => {
     (getActiveChatSession as Mock).mockReturnValue({ id: 'sess_1' });
     installCoordinator(vi.fn(() => ({ ok: false, error: 'ja existe um drive ativo' })));
 
-    const res = pipelineDriveCore('proj_a', 'semi');
+    const res = pipelineDriveCore('proj_a', 'semi', activeId());
 
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toMatch(/ja existe um drive ativo/);
@@ -112,10 +108,10 @@ describe('pipelineDriveCore (FX1 bootstrap seam)', () => {
     installCoordinator(vi.fn());
 
     (getHarnessProject as Mock).mockReturnValue({ ...PROJECT });
-    expect(pipelineDriveCore('proj_a', 'turbo' as never).ok).toBe(false);
+    expect(pipelineDriveCore('proj_a', 'turbo' as never, activeId()).ok).toBe(false);
 
     (getHarnessProject as Mock).mockReturnValue(undefined);
-    expect(pipelineDriveCore('ghost', 'semi').ok).toBe(false);
+    expect(pipelineDriveCore('ghost', 'semi', activeId()).ok).toBe(false);
   });
 });
 
@@ -139,6 +135,7 @@ describe('pipelineCreateCore com drive (FX1 "cria e dirige" + F1 early-ack)', ()
     installCoordinator(startDrive);
 
     const res = await pipelineCreateCore({
+      driveSessionId: activeId(),
       projectPath: '/tmp/x',
       pipelineType: 'development',
       name: 'Novo',
@@ -150,7 +147,7 @@ describe('pipelineCreateCore com drive (FX1 "cria e dirige" + F1 early-ack)', ()
     if (res.ok) {
       const v = res.value as { id: string; started: boolean; driveEngaging: boolean };
       expect(v.id).toBe('proj_new');
-      expect(v.started).toBe(false); // (F1) early-ack: start roda em background
+      expect(v.started).toBe(false);
       expect(v.driveEngaging).toBe(true);
     }
 
@@ -170,6 +167,7 @@ describe('pipelineCreateCore com drive (FX1 "cria e dirige" + F1 early-ack)', ()
 
     const t0 = Date.now();
     const res = await pipelineCreateCore({
+      driveSessionId: activeId(),
       projectPath: '/tmp/x',
       pipelineType: 'development',
       name: 'Novo',
@@ -195,11 +193,12 @@ describe('pipelineCreateCore com drive (FX1 "cria e dirige" + F1 early-ack)', ()
     });
     installEngine(vi.fn(async () => undefined));
     (getHarnessProject as Mock).mockReturnValue({ ...PROJECT, id: 'proj_new' });
-    (getActiveChatSession as Mock).mockReturnValue(null); // sem sessao ativa
+    (getActiveChatSession as Mock).mockReturnValue(null);
     const startDrive = vi.fn();
     installCoordinator(startDrive);
 
     const res = await pipelineCreateCore({
+      driveSessionId: activeId(),
       projectPath: '/tmp/x',
       pipelineType: 'development',
       name: 'Novo',
@@ -211,7 +210,7 @@ describe('pipelineCreateCore com drive (FX1 "cria e dirige" + F1 early-ack)', ()
     if (res.ok) {
       const v = res.value as { started: boolean; driveEngaging: boolean };
       expect(v.started).toBe(false);
-      expect(v.driveEngaging).toBe(true); // o engate AINDA vai tentar em background
+      expect(v.driveEngaging).toBe(true);
     }
     await flushBackground();
     expect(startDrive).not.toHaveBeenCalled();
@@ -230,6 +229,7 @@ describe('pipelineCreateCore com drive (FX1 "cria e dirige" + F1 early-ack)', ()
     installCoordinator(startDrive);
 
     const res = await pipelineCreateCore({
+      driveSessionId: activeId(),
       projectPath: '/tmp/x',
       pipelineType: 'development',
       name: 'Novo',
@@ -254,6 +254,7 @@ describe('pipelineCreateCore com drive (FX1 "cria e dirige" + F1 early-ack)', ()
     installCoordinator(startDrive);
 
     const res = await pipelineCreateCore({
+      driveSessionId: activeId(),
       projectPath: '/tmp/x',
       pipelineType: 'development',
       name: 'Novo',
@@ -269,10 +270,10 @@ describe('pipelineCreateCore com drive (FX1 "cria e dirige" + F1 early-ack)', ()
 });
 
 describe('F5 (SPEC estrada-fixes): resumePipeline no re-engage do drive', () => {
-  function installEngineWithResume(opts: {
-    liveStatus?: string;
-    resumePipeline?: Mock;
-  }): { resumePipeline: Mock; getCurrentPhase: Mock } {
+  function installEngineWithResume(opts: { liveStatus?: string; resumePipeline?: Mock }): {
+    resumePipeline: Mock;
+    getCurrentPhase: Mock;
+  } {
     const resumePipeline = opts.resumePipeline ?? vi.fn(async () => undefined);
     const getCurrentPhase = vi.fn(() => ({ phase: 3, status: opts.liveStatus ?? 'idle' }));
     registerPipelineEngineRef((() => ({ resumePipeline, getCurrentPhase })) as never);
@@ -286,14 +287,12 @@ describe('F5 (SPEC estrada-fixes): resumePipeline no re-engage do drive', () => 
     const startDrive = vi.fn(() => ({ ok: true, drive: { status: 'driving' } }));
     installCoordinator(startDrive);
 
-    const res = pipelineDriveCore('proj_a', 'semi');
+    const res = pipelineDriveCore('proj_a', 'semi', activeId());
 
     expect(res.ok).toBe(true);
     expect(resumePipeline).toHaveBeenCalledWith('proj_a');
     expect(startDrive).toHaveBeenCalled();
-    expect(resumePipeline.mock.invocationCallOrder[0]!).toBeLessThan(
-      startDrive.mock.invocationCallOrder[0]!,
-    );
+    expect(resumePipeline.mock.invocationCallOrder[0]!).toBeLessThan(startDrive.mock.invocationCallOrder[0]!);
   });
 
   it('pipeline "paused" no DB (ou live) tambem retoma no re-engage', () => {
@@ -302,13 +301,13 @@ describe('F5 (SPEC estrada-fixes): resumePipeline no re-engage do drive', () => 
     const { resumePipeline } = installEngineWithResume({});
     installCoordinator(vi.fn(() => ({ ok: true, drive: { status: 'driving' } })));
 
-    expect(pipelineDriveCore('proj_a', 'full').ok).toBe(true);
+    expect(pipelineDriveCore('proj_a', 'full', activeId()).ok).toBe(true);
     expect(resumePipeline).toHaveBeenCalledWith('proj_a');
 
     resumePipeline.mockClear();
     (getHarnessProject as Mock).mockReturnValue({ ...PROJECT, status: 'running' });
     const live = installEngineWithResume({ liveStatus: 'paused' });
-    expect(pipelineDriveCore('proj_a', 'full').ok).toBe(true);
+    expect(pipelineDriveCore('proj_a', 'full', activeId()).ok).toBe(true);
     expect(live.resumePipeline).toHaveBeenCalledWith('proj_a');
   });
 
@@ -318,7 +317,7 @@ describe('F5 (SPEC estrada-fixes): resumePipeline no re-engage do drive', () => 
     const { resumePipeline } = installEngineWithResume({ liveStatus: 'running' });
     installCoordinator(vi.fn(() => ({ ok: true, drive: { status: 'driving' } })));
 
-    expect(pipelineDriveCore('proj_a', 'semi').ok).toBe(true);
+    expect(pipelineDriveCore('proj_a', 'semi', activeId()).ok).toBe(true);
     expect(resumePipeline).not.toHaveBeenCalled();
   });
 
@@ -329,7 +328,7 @@ describe('F5 (SPEC estrada-fixes): resumePipeline no re-engage do drive', () => 
     installEngineWithResume({ resumePipeline });
     installCoordinator(vi.fn(() => ({ ok: true, drive: { status: 'driving' } })));
 
-    const res = pipelineDriveCore('proj_a', 'semi');
+    const res = pipelineDriveCore('proj_a', 'semi', activeId());
     expect(res.ok).toBe(true);
     await new Promise((r) => setTimeout(r, 0));
     expect(resumePipeline).toHaveBeenCalled();
@@ -343,7 +342,7 @@ describe('F5 (SPEC estrada-fixes): resumePipeline no re-engage do drive', () => 
 
     releaseProjectLock('proj_lock_resume');
     expect(isProjectLocked('proj_lock_resume')).toBe(false);
-    expect(pipelineDriveCore('proj_lock_resume', 'semi').ok).toBe(true);
+    expect(pipelineDriveCore('proj_lock_resume', 'semi', activeId()).ok).toBe(true);
     expect(isProjectLocked('proj_lock_resume')).toBe(true);
     expect(resumePipeline).toHaveBeenCalledWith('proj_lock_resume');
     releaseProjectLock('proj_lock_resume');

@@ -3,7 +3,6 @@ import { PT_BR_BLOCK } from '../seed-agents/_shared/language-pt-br';
 import { GIT_RESTRICTIONS_BLOCK } from '../seed-agents/_shared/git-restrictions';
 import { CRITICAL_RULES_BLOCK } from '../seed-agents/_shared/critical-rules';
 
-
 const ARCH_SPEC_VALIDATOR_SYSTEM_PROMPT = `Voce e o Architecture Spec Validator do pipeline architecture-review do LionClaw.
 
 INFORMACAO IMPORTANTE: O INPUT NAO e um PRD/discovery. Sao 4 artefatos arquiteturais
@@ -67,14 +66,16 @@ ${CRITICAL_RULES_BLOCK}
 ${GIT_RESTRICTIONS_BLOCK}`;
 
 export function applyMigrationV78(db: Database.Database): void {
-  db.prepare(`
+  db.prepare(
+    `
     INSERT OR IGNORE INTO agents (
       id, name, description, system_prompt, model, effort, thinking, thinking_budget,
       max_turns, max_tool_rounds, allowed_tools, mcp_servers,
       is_active, skills, runtime, squad, sort_order,
       local_config, external_config, codex_config, local_mode
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     'arch-spec-validator',
     'Architecture Spec Validator',
     'Fase 6 do pipeline architecture-review: valida a SPEC arquitetural contra Map/Candidates/Diagnosis/Decisions e, quando o usuario concorda com um achado, aplica a correcao direto na SPEC via Edit.',

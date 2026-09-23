@@ -1,4 +1,3 @@
-
 export const SUBPROCESS_ENV_STRIPPED_KEYS: readonly string[] = [
   'NODE_ENV',
   'ELECTRON_RENDERER_URL',
@@ -13,9 +12,7 @@ export function isStrippedSubprocessEnvKey(key: string): boolean {
   return SUBPROCESS_ENV_STRIPPED_PREFIXES.some((prefix) => key.startsWith(prefix));
 }
 
-export function sanitizeSubprocessEnv(
-  base: NodeJS.ProcessEnv = process.env,
-): NodeJS.ProcessEnv {
+export function sanitizeSubprocessEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(base)) {
     if (value === undefined) continue;

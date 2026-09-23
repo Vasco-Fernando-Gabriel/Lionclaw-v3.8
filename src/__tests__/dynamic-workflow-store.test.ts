@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 
-
 let streamCb: ((chunk: unknown) => void) | null = null;
 let onEventCleanup: ReturnType<typeof vi.fn>;
 let listRunsResult: unknown[] = [];
@@ -51,11 +50,7 @@ import {
 } from '@/stores/dynamic-workflow-store';
 import { COCKPIT_STRUCTURAL_EVENT_TYPES } from '@/types/dynamic-workflow';
 import type { DynamicWorkflowEventsQuery } from '@/types';
-import type {
-  DynamicWorkflowRun,
-  DynamicWorkflowRunStatus,
-  DynamicWorkflowEvent,
-} from '@/types';
+import type { DynamicWorkflowRun, DynamicWorkflowRunStatus, DynamicWorkflowEvent } from '@/types';
 
 function makeRun(
   id: string,
@@ -107,9 +102,7 @@ describe('deriveWorkflowUIStatus (funcao pura, 10.2/13.3.4)', () => {
   });
 
   it('awaiting-user vence streaming e status', () => {
-    expect(
-      deriveWorkflowUIStatus('running', { isStreaming: true, awaitingUser: true }),
-    ).toBe('awaiting-user');
+    expect(deriveWorkflowUIStatus('running', { isStreaming: true, awaitingUser: true })).toBe('awaiting-user');
     expect(deriveWorkflowUIStatus('blocked', { awaitingUser: true })).toBe('awaiting-user');
   });
 
@@ -119,9 +112,7 @@ describe('deriveWorkflowUIStatus (funcao pura, 10.2/13.3.4)', () => {
   });
 
   it('estado terminal ignora flags transientes (nao streama nem espera)', () => {
-    expect(
-      deriveWorkflowUIStatus('completed', { isStreaming: true, awaitingUser: true }),
-    ).toBe('completed');
+    expect(deriveWorkflowUIStatus('completed', { isStreaming: true, awaitingUser: true })).toBe('completed');
     expect(deriveWorkflowUIStatus('aborted', { isStreaming: true })).toBe('aborted');
     expect(deriveWorkflowUIStatus('failed', { awaitingUser: true })).toBe('failed');
   });
@@ -213,12 +204,7 @@ describe('init (listener + cleanup)', () => {
 });
 
 describe('deriveNodeRunsFromEvents (status do tipo do evento)', () => {
-  function ev(
-    seq: number,
-    type: string,
-    nodeId: string | null,
-    payload: object,
-  ): DynamicWorkflowEvent {
+  function ev(seq: number, type: string, nodeId: string | null, payload: object): DynamicWorkflowEvent {
     return {
       id: seq,
       runId: 'r',
@@ -365,11 +351,15 @@ describe('deriveNodeRunsFromEvents (status do tipo do evento)', () => {
   });
 
   it('P1: cache-hit sem historico do node vira entrada com custo desconhecido e attempt 1', () => {
-    const runs = deriveNodeRunsFromEvents('r', [
-      ev(1, 'node-cache-hit', 'cc:S1:u-s1-ac1:0', REAL_CACHE_HIT_PAYLOAD),
-    ]);
+    const runs = deriveNodeRunsFromEvents('r', [ev(1, 'node-cache-hit', 'cc:S1:u-s1-ac1:0', REAL_CACHE_HIT_PAYLOAD)]);
     expect(runs).toHaveLength(1);
-    expect(runs[0]).toMatchObject({ attempt: 1, status: 'completed', costStatus: 'unknown', costUsd: 0, label: 'u-s1-ac1' });
+    expect(runs[0]).toMatchObject({
+      attempt: 1,
+      status: 'completed',
+      costStatus: 'unknown',
+      costUsd: 0,
+      label: 'u-s1-ac1',
+    });
   });
 
   it('P3: attempt ausente no payload usa o ultimo attempt conhecido do node (nao cria #1 fantasma)', () => {
@@ -394,12 +384,20 @@ describe('deriveNodeRunsFromEvents (status do tipo do evento)', () => {
   });
 });
 
-
 describe('fetchAllStructuralEvents (D23, paginacao por beforeSeq)', () => {
   function mkEvents(from: number, to: number): DynamicWorkflowEvent[] {
     const out: DynamicWorkflowEvent[] = [];
     for (let seq = from; seq <= to; seq += 1) {
-      out.push({ id: seq, runId: 'r', nodeId: null, phaseId: null, seq, type: 'node-started', payloadJson: '{}', createdAt: 'now' });
+      out.push({
+        id: seq,
+        runId: 'r',
+        nodeId: null,
+        phaseId: null,
+        seq,
+        type: 'node-started',
+        payloadJson: '{}',
+        createdAt: 'now',
+      });
     }
     return out;
   }
@@ -469,7 +467,13 @@ describe('fetchAllStructuralEvents (D23, paginacao por beforeSeq)', () => {
 });
 
 describe('deriveTouchedFilesFromEvents (D25a/b)', () => {
-  function ev(seq: number, type: string, nodeId: string | null, phaseId: string | null, payload: unknown): DynamicWorkflowEvent {
+  function ev(
+    seq: number,
+    type: string,
+    nodeId: string | null,
+    phaseId: string | null,
+    payload: unknown,
+  ): DynamicWorkflowEvent {
     return { id: seq, runId: 'r', nodeId, phaseId, seq, type, payloadJson: JSON.stringify(payload), createdAt: 'now' };
   }
 
@@ -546,12 +550,11 @@ describe('start (acao de lifecycle)', () => {
   });
 });
 
-
 describe('appendNarrationLine (Inc7, funcao pura)', () => {
   it('acumula linhas, ignora vazias e respeita o limite (cauda = mais recente)', () => {
     let feed: string[] = [];
     feed = appendNarrationLine(feed, 'primeira');
-    feed = appendNarrationLine(feed, '   '); // whitespace -> ignorada
+    feed = appendNarrationLine(feed, '   ');
     feed = appendNarrationLine(feed, 'segunda');
     expect(feed).toEqual(['primeira', 'segunda']);
     for (let i = 0; i < NARRATION_FEED_LIMIT + 3; i += 1) {
@@ -579,7 +582,6 @@ describe('_handleStreamChunk: narrador (kind narrator)', () => {
   });
 });
 
-
 describe('extractStallMessage (Inc5, funcao pura)', () => {
   it('le message/reason do payload, ou cai no texto neutro', () => {
     expect(extractStallMessage({ message: 'sem progresso ha 3min' })).toBe('sem progresso ha 3min');
@@ -588,7 +590,6 @@ describe('extractStallMessage (Inc5, funcao pura)', () => {
     expect(extractStallMessage({})).toContain('watchdog');
   });
 });
-
 
 describe('SM-18: _handleStreamChunk narrator acumula numa UNICA bolha', () => {
   it('deltas do mesmo turno crescem a mesma bolha do maestroThread', () => {
@@ -604,7 +605,6 @@ describe('SM-18: _handleStreamChunk narrator acumula numa UNICA bolha', () => {
     expect(maestroThread[0].streaming).toBe(true);
   });
 });
-
 
 describe('SM-23: narracao de marco (final: true) vira UMA entrada por marco', () => {
   it('marcos consecutivos NAO concatenam: cada um vira bolha sealed propria', () => {
@@ -647,7 +647,7 @@ describe('SM-23: narracao de marco (final: true) vira UMA entrada por marco', ()
     const { maestroThread } = useDynamicWorkflowStore.getState();
     expect(maestroThread).toHaveLength(2);
     expect(maestroThread[0].content).toBe('Respondendo...');
-    expect(maestroThread[0].streaming).toBe(false); // selada pelo marco
+    expect(maestroThread[0].streaming).toBe(false);
     expect(maestroThread[1].content).toBe('A fase de implementacao terminou.');
     expect(maestroThread[1].streaming).toBe(false);
   });
@@ -704,7 +704,9 @@ describe('approveGate (SM-20: banner reflete a decisao real)', () => {
   });
 
   it('retorna a string de erro do IPC sem limpar', async () => {
-    (window.lionclaw.dynamicWorkflow.approveGate as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ error: 'gate-fechado' });
+    (window.lionclaw.dynamicWorkflow.approveGate as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      error: 'gate-fechado',
+    });
     useDynamicWorkflowStore.setState({ awaitingUserRunIds: new Set(['run-a']) });
     const err = await useDynamicWorkflowStore.getState().approveGate('run-a', 'gate-1', { decision: 'reject' });
     expect(err).toBe('gate-fechado');
@@ -735,7 +737,6 @@ describe('_handleStreamChunk: stall (node-stalled / limpeza)', () => {
     expect(useDynamicWorkflowStore.getState().stalledByRun['run-a']).toBeUndefined();
   });
 });
-
 
 describe('closer busy (Inc4)', () => {
   it('sendCloserMessage marca busy; o chunk do closer limpa', async () => {
@@ -771,7 +772,6 @@ describe('closer busy (Inc4)', () => {
   });
 });
 
-
 describe('debounce dos reloads (Inc2)', () => {
   it('coalesce uma rajada de eventos runner num unico loadRuns (trailing)', async () => {
     vi.useFakeTimers();
@@ -796,4 +796,3 @@ describe('debounce dos reloads (Inc2)', () => {
     }
   });
 });
-

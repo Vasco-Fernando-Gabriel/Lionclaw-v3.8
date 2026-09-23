@@ -55,9 +55,7 @@ function host(overrides: Partial<Parameters<typeof createSubagentDispatchContext
     cwd: '/workspace/canonical',
     readRoots: ['/workspace/canonical'],
     writeRoots: ['/workspace/canonical'],
-    allowedTools: [
-      'Read', 'Glob', 'Grep', 'Write', 'Edit', 'Bash', 'WebSearch', 'WebFetch', 'Agent',
-    ],
+    allowedTools: ['Read', 'Glob', 'Grep', 'Write', 'Edit', 'Bash', 'WebSearch', 'WebFetch', 'Agent'],
     permission,
     parentAbortSignal: new AbortController().signal,
     inheritedEffort: { claude: 'high', codex: 'high', kimi: 'high', grok: 'high' },
@@ -155,42 +153,53 @@ describe('subagent dispatch provider-neutral', () => {
       costUsd: 0.012,
       usage: { inputTokens: 120, outputTokens: 30, apiRequests: 2, toolUses: 3 },
     });
-    expect(mocks.execute).toHaveBeenCalledWith(expect.objectContaining({
-      agentId: 'codex-coder',
-      prompt: 'contexto validado\n\nimplemente',
-      cwd: '/workspace/canonical',
-      permission,
-      inheritedEffort: { claude: 'high', codex: 'high', kimi: 'high', grok: 'high' },
-      executionContext: expect.objectContaining({
-        rootExecutionId: context.rootExecutionId,
-        depth: 1,
-        remainingBudget: 15,
+    expect(mocks.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'codex-coder',
+        prompt: 'contexto validado\n\nimplemente',
+        cwd: '/workspace/canonical',
+        permission,
+        inheritedEffort: { claude: 'high', codex: 'high', kimi: 'high', grok: 'high' },
+        executionContext: expect.objectContaining({
+          rootExecutionId: context.rootExecutionId,
+          depth: 1,
+          remainingBudget: 15,
+        }),
       }),
-    }));
-    expect(mocks.start).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      executionId: context.rootExecutionId,
-      rootExecutionId: context.rootExecutionId,
-      parentExecutionId: null,
-      executionKind: 'root',
-      ownerKind: 'chat',
-      ownerId: 'session-1',
-      sessionId: 'session-1',
-      toolUseId: null,
-    }));
-    expect(mocks.start).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      executionId: dispatched.executionId,
-      rootExecutionId: context.rootExecutionId,
-      parentExecutionId: context.rootExecutionId,
-      executionKind: 'subagent',
-      toolUseId: 'tool-call-1',
-    }));
-    expect(mocks.finalize).toHaveBeenCalledWith(dispatched.executionId, expect.objectContaining({
-      status: 'completed',
-      provider: 'anthropic',
-      inputTokens: 120,
-      outputTokens: 30,
-      metadata: { providerRequestId: 'req-1' },
-    }));
+    );
+    expect(mocks.start).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        executionId: context.rootExecutionId,
+        rootExecutionId: context.rootExecutionId,
+        parentExecutionId: null,
+        executionKind: 'root',
+        ownerKind: 'chat',
+        ownerId: 'session-1',
+        sessionId: 'session-1',
+        toolUseId: null,
+      }),
+    );
+    expect(mocks.start).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        executionId: dispatched.executionId,
+        rootExecutionId: context.rootExecutionId,
+        parentExecutionId: context.rootExecutionId,
+        executionKind: 'subagent',
+        toolUseId: 'tool-call-1',
+      }),
+    );
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      dispatched.executionId,
+      expect.objectContaining({
+        status: 'completed',
+        provider: 'anthropic',
+        inputTokens: 120,
+        outputTokens: 30,
+        metadata: { providerRequestId: 'req-1' },
+      }),
+    );
   });
 
   it('persiste request id MCP somente como correlacao de transporte', async () => {
@@ -204,18 +213,24 @@ describe('subagent dispatch provider-neutral', () => {
       context,
     );
 
-    expect(mocks.start).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      executionId: dispatched.executionId,
-      toolUseId: null,
-      metadata: expect.objectContaining({
-        transportCorrelation: { kind: 'mcp-request-id', value: '73' },
+    expect(mocks.start).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        executionId: dispatched.executionId,
+        toolUseId: null,
+        metadata: expect.objectContaining({
+          transportCorrelation: { kind: 'mcp-request-id', value: '73' },
+        }),
       }),
-    }));
-    expect(mocks.finalize).toHaveBeenCalledWith(dispatched.executionId, expect.objectContaining({
-      metadata: expect.objectContaining({
-        transportCorrelation: { kind: 'mcp-request-id', value: '73' },
+    );
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      dispatched.executionId,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          transportCorrelation: { kind: 'mcp-request-id', value: '73' },
+        }),
       }),
-    }));
+    );
   });
 
   it('propaga cancelamento do pai e finaliza a filha uma unica vez', async () => {
@@ -227,18 +242,18 @@ describe('subagent dispatch provider-neutral', () => {
       throw new Error('cancelado');
     });
 
-    const dispatched = await dispatchLionSubagent(
-      { agentId: 'codex-coder', prompt: 'trabalho' },
-      context,
-    );
+    const dispatched = await dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'trabalho' }, context);
 
     expect(dispatched).toMatchObject({ ok: false, error: 'cancelado' });
     expect(mocks.finalize).toHaveBeenCalledOnce();
-    expect(mocks.finalize).toHaveBeenCalledWith(dispatched.executionId, expect.objectContaining({
-      status: 'cancelled',
-      tokenStatus: 'not_reported',
-      costStatus: 'unknown',
-    }));
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      dispatched.executionId,
+      expect.objectContaining({
+        status: 'cancelled',
+        tokenStatus: 'not_reported',
+        costStatus: 'unknown',
+      }),
+    );
   });
 
   it('falha fechado antes de executar quando depth ou budget estouram', async () => {
@@ -247,31 +262,31 @@ describe('subagent dispatch provider-neutral', () => {
     const noBudget = host();
     noBudget.remainingBudget = 0;
 
-    await expect(dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'x' }, tooDeep))
-      .resolves.toMatchObject({ ok: false, error: expect.stringContaining('Profundidade') });
-    await expect(dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'x' }, noBudget))
-      .resolves.toMatchObject({ ok: false, error: expect.stringContaining('Budget') });
+    await expect(dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'x' }, tooDeep)).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('Profundidade'),
+    });
+    await expect(dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'x' }, noBudget)).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('Budget'),
+    });
     expect(mocks.execute).not.toHaveBeenCalled();
     expect(mocks.start).not.toHaveBeenCalled();
     expect(mocks.audit).toHaveBeenCalledTimes(2);
-    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
-      eventType: 'tool_blocked',
-      toolName: 'system:subagent-dispatch',
-      approved: false,
-    }));
+    expect(mocks.audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'tool_blocked',
+        toolName: 'system:subagent-dispatch',
+        approved: false,
+      }),
+    );
   });
 
   it('permite qualquer squad configurado e continua rejeitando agente inativo', async () => {
     mocks.getAgent.mockReturnValueOnce(agent({ squad: 'pipeline' }));
-    const internal = await dispatchLionSubagent(
-      { agentId: 'codex-coder', prompt: 'x' },
-      host(),
-    );
+    const internal = await dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'x' }, host());
     mocks.getAgent.mockReturnValueOnce(agent({ isActive: false }));
-    const inactive = await dispatchLionSubagent(
-      { agentId: 'codex-coder', prompt: 'x' },
-      host(),
-    );
+    const inactive = await dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'x' }, host());
 
     expect(internal).toMatchObject({ ok: true });
     expect(inactive).toMatchObject({ ok: false, error: expect.stringContaining('desativado') });
@@ -284,14 +299,13 @@ describe('subagent dispatch provider-neutral', () => {
       ...(await mocks.resolveConfig()),
       allowedTools: ['Read', 'Write'],
     });
-    const dispatched = await dispatchLionSubagent(
-      { agentId: 'codex-coder', prompt: 'x' },
-      host({ writeRoots: [] }),
-    );
+    const dispatched = await dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'x' }, host({ writeRoots: [] }));
     expect(dispatched).toMatchObject({ ok: true });
-    expect(mocks.execute).toHaveBeenCalledWith(expect.objectContaining({
-      allowedToolsOverride: ['Read', 'Write'],
-    }));
+    expect(mocks.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowedToolsOverride: ['Read', 'Write'],
+      }),
+    );
   });
 
   it('despacha Codex com a configuracao integral do agente', async () => {
@@ -302,14 +316,15 @@ describe('subagent dispatch provider-neutral', () => {
       model: 'gpt-5.6-codex',
     });
 
-    await expect(dispatchLionSubagent(
-      { agentId: 'codex-coder', prompt: 'x' },
-      host(),
-    )).resolves.toMatchObject({ ok: true });
-    expect(mocks.execute).toHaveBeenCalledWith(expect.objectContaining({
-      allowedToolsOverride: ['Read', 'Write'],
-      resolvedConfigOverride: expect.objectContaining({ runtime: 'codex' }),
-    }));
+    await expect(dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'x' }, host())).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(mocks.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowedToolsOverride: ['Read', 'Write'],
+        resolvedConfigOverride: expect.objectContaining({ runtime: 'codex' }),
+      }),
+    );
   });
 
   it('preserva tools configuradas para Local/External', async () => {
@@ -322,9 +337,11 @@ describe('subagent dispatch provider-neutral', () => {
     });
 
     await dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'x' }, host());
-    expect(mocks.execute).toHaveBeenCalledWith(expect.objectContaining({
-      allowedToolsOverride: ['Read', 'Write', 'WebSearch'],
-    }));
+    expect(mocks.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowedToolsOverride: ['Read', 'Write', 'WebSearch'],
+      }),
+    );
   });
 
   it('preserva a allowlist configurada do filho sem herdar restricoes do pai', async () => {
@@ -335,12 +352,14 @@ describe('subagent dispatch provider-neutral', () => {
     });
     const context = host({ allowedTools: ['Read'] });
     await dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'x' }, context);
-    expect(mocks.execute).toHaveBeenCalledWith(expect.objectContaining({
-      allowedToolsOverride: ['Read', 'Bash'],
-      executionContext: expect.objectContaining({
-        capabilityCeiling: expect.objectContaining({ allowedTools: ['Read', 'Bash'] }),
+    expect(mocks.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowedToolsOverride: ['Read', 'Bash'],
+        executionContext: expect.objectContaining({
+          capabilityCeiling: expect.objectContaining({ allowedTools: ['Read', 'Bash'] }),
+        }),
       }),
-    }));
+    );
     expect(Object.isFrozen(context.capabilityCeiling)).toBe(true);
     expect(Object.isFrozen(context.capabilityCeiling.allowedTools)).toBe(true);
     expect(Object.isFrozen(context.capabilityCeiling.allowedMcpServerIds)).toBe(true);
@@ -356,23 +375,24 @@ describe('subagent dispatch provider-neutral', () => {
     await dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'primeiro' }, root);
     await dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'segundo' }, root);
     expect(firstChildContext).toBeDefined();
-    await expect(dispatchLionSubagent(
-      { agentId: 'codex-coder', prompt: 'neto' },
-      firstChildContext!,
-    )).resolves.toMatchObject({ ok: false, error: expect.stringContaining('Budget') });
+    await expect(
+      dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'neto' }, firstChildContext!),
+    ).resolves.toMatchObject({ ok: false, error: expect.stringContaining('Budget') });
     expect(mocks.execute).toHaveBeenCalledTimes(2);
   });
 
   it('exige sessionId host-side para owner de chat', () => {
-    expect(() => createSubagentDispatchContext({
-      ownerKind: 'chat',
-      ownerId: 'turno',
-      lane: 'desktop',
-      surface: 'test',
-      cwd: '/workspace',
-      permission,
-      parentAbortSignal: new AbortController().signal,
-    })).toThrow('sessionId do host');
+    expect(() =>
+      createSubagentDispatchContext({
+        ownerKind: 'chat',
+        ownerId: 'turno',
+        lane: 'desktop',
+        surface: 'test',
+        cwd: '/workspace',
+        permission,
+        parentAbortSignal: new AbortController().signal,
+      }),
+    ).toThrow('sessionId do host');
   });
 
   it('repropaga auth de provider, marca controle compartilhado e aborta o owner', async () => {
@@ -382,10 +402,7 @@ describe('subagent dispatch provider-neutral', () => {
     const authError = new CodexAuthError('login necessario');
     mocks.execute.mockRejectedValueOnce(authError);
 
-    await expect(dispatchLionSubagent(
-      { agentId: 'codex-coder', prompt: 'x' },
-      context,
-    )).rejects.toBe(authError);
+    await expect(dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'x' }, context)).rejects.toBe(authError);
 
     expect(context.controlState?.providerAuthError).toBe(authError);
     expect(abortOwner).toHaveBeenCalledWith(authError);
@@ -394,10 +411,13 @@ describe('subagent dispatch provider-neutral', () => {
       authProvider: 'codex',
       error: 'login necessario',
     });
-    expect(mocks.finalize).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
-      tokenStatus: 'not_reported',
-      costStatus: 'unknown',
-    }));
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        tokenStatus: 'not_reported',
+        costStatus: 'unknown',
+      }),
+    );
   });
 
   it('repropaga KimiAuthError pelo mesmo boundary provider-neutral', async () => {
@@ -407,10 +427,7 @@ describe('subagent dispatch provider-neutral', () => {
     const authError = new KimiAuthError('login Kimi necessario');
     mocks.execute.mockRejectedValueOnce(authError);
 
-    await expect(dispatchLionSubagent(
-      { agentId: 'codex-coder', prompt: 'x' },
-      context,
-    )).rejects.toBe(authError);
+    await expect(dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'x' }, context)).rejects.toBe(authError);
 
     expect(context.controlState?.providerAuthError).toBe(authError);
     expect(abortOwner).toHaveBeenCalledWith(authError);
@@ -435,12 +452,14 @@ describe('subagent dispatch provider-neutral', () => {
 
     await dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'x' }, context);
 
-    expect(mocks.execute).toHaveBeenCalledWith(expect.objectContaining({
-      resolvedConfigOverride: expect.objectContaining({
-        allowedTools: ['Read', 'mcp__skills__get_skill'],
-        mcpServers: [{ skills: { command: 'node', args: ['skills.js'] } }],
+    expect(mocks.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resolvedConfigOverride: expect.objectContaining({
+          allowedTools: ['Read', 'mcp__skills__get_skill'],
+          mcpServers: [{ skills: { command: 'node', args: ['skills.js'] } }],
+        }),
       }),
-    }));
+    );
   });
 
   it('preserva todos os MCPs configurados no filho', async () => {
@@ -459,15 +478,17 @@ describe('subagent dispatch provider-neutral', () => {
 
     await dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'x' }, context);
 
-    expect(mocks.execute).toHaveBeenCalledWith(expect.objectContaining({
-      resolvedConfigOverride: expect.objectContaining({
-        allowedTools: ['Read', 'mcp__skills__get_skill', 'mcp__vault__read_secret'],
-        mcpServers: [
-          { skills: { command: 'node', args: ['skills.js'] } },
-          { vault: { command: 'node', args: ['vault.js'] } },
-        ],
+    expect(mocks.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resolvedConfigOverride: expect.objectContaining({
+          allowedTools: ['Read', 'mcp__skills__get_skill', 'mcp__vault__read_secret'],
+          mcpServers: [
+            { skills: { command: 'node', args: ['skills.js'] } },
+            { vault: { command: 'node', args: ['vault.js'] } },
+          ],
+        }),
       }),
-    }));
+    );
   });
 
   it('resolve a configuracao propria em cada nivel da arvore sem teto herdado', async () => {
@@ -488,10 +509,10 @@ describe('subagent dispatch provider-neutral', () => {
       .mockResolvedValueOnce({ ...baseConfig, allowedTools: [toolA, toolB] });
     mocks.getMcpTools.mockReturnValue([toolA]);
     const materializedHostTools = await resolveSubagentHostAllowedTools(['Agent'], ['skills']);
-    const root = withResolvedRootSubagentGrants(
-      host({ allowedTools: ['Agent'], allowedMcpServerIds: [] }),
-      { ...baseConfig, allowedTools: materializedHostTools },
-    )!;
+    const root = withResolvedRootSubagentGrants(host({ allowedTools: ['Agent'], allowedMcpServerIds: [] }), {
+      ...baseConfig,
+      allowedTools: materializedHostTools,
+    })!;
 
     expect(root.capabilityCeiling).toMatchObject({
       allowedTools: ['Agent', toolA],
@@ -502,16 +523,22 @@ describe('subagent dispatch provider-neutral', () => {
     const childContext = mocks.execute.mock.calls[0]![0].executionContext;
     await dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'neto' }, childContext);
 
-    expect(mocks.execute).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      allowedToolsOverride: ['Agent', toolA],
-    }));
-    expect(mocks.execute).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      allowedToolsOverride: [toolA, toolB],
-      resolvedConfigOverride: expect.objectContaining({
-        allowedTools: [toolA, toolB],
-        mcpServers: [{ skills: { command: 'node', args: ['skills.js'] } }],
+    expect(mocks.execute).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        allowedToolsOverride: ['Agent', toolA],
       }),
-    }));
+    );
+    expect(mocks.execute).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        allowedToolsOverride: [toolA, toolB],
+        resolvedConfigOverride: expect.objectContaining({
+          allowedTools: [toolA, toolB],
+          mcpServers: [{ skills: { command: 'node', args: ['skills.js'] } }],
+        }),
+      }),
+    );
   });
 
   it('preserva tools configuradas em lane com roots vazias', async () => {
@@ -530,11 +557,13 @@ describe('subagent dispatch provider-neutral', () => {
 
     await dispatchLionSubagent({ agentId: 'codex-coder', prompt: 'x' }, context);
 
-    expect(mocks.execute).toHaveBeenCalledWith(expect.objectContaining({
-      resolvedConfigOverride: expect.objectContaining({
-        allowedTools: ['Read', 'Write'],
-        mcpServers: [],
+    expect(mocks.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resolvedConfigOverride: expect.objectContaining({
+          allowedTools: ['Read', 'Write'],
+          mcpServers: [],
+        }),
       }),
-    }));
+    );
   });
 });

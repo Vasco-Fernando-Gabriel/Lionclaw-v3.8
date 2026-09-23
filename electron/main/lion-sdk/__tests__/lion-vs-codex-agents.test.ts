@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../logger', () => ({
@@ -83,12 +82,10 @@ describe('Lion-SDK vs Codex agent list parity (AC-004-6)', () => {
     const lionIds = new Set(listChatEligibleAgents(REALISTIC_AGENTS).map((a) => a.id));
     const codexIds = new Set(handleListAgents().map((a) => a.id));
 
-    const internalIds = REALISTIC_AGENTS
-      .filter((a) => {
-        const squad = (a.squad ?? '').toLowerCase();
-        return PIPELINE_INTERNAL_SQUADS.has(squad);
-      })
-      .map((a) => a.id);
+    const internalIds = REALISTIC_AGENTS.filter((a) => {
+      const squad = (a.squad ?? '').toLowerCase();
+      return PIPELINE_INTERNAL_SQUADS.has(squad);
+    }).map((a) => a.id);
 
     for (const id of internalIds) {
       expect(lionIds.has(id)).toBe(false);

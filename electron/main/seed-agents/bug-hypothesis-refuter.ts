@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { PT_BR_BLOCK } from './_shared/language-pt-br';
 import { GIT_RESTRICTIONS_BLOCK } from './_shared/git-restrictions';
@@ -11,7 +10,7 @@ export const bugHypothesisRefuter: Omit<AgentConfig, 'sortOrder'> = {
   name: 'Bug Hypothesis Refuter',
   description:
     'Fase 2 do pipeline bug, lente adversarial: tenta derrubar as hipoteses do diagnostico com evidencia do codigo e avalia a hipotese nula (nao ha bug). Produz analise em MD; nao escreve arquivo.',
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'enabled' as const,
   thinkingBudget: 10000,

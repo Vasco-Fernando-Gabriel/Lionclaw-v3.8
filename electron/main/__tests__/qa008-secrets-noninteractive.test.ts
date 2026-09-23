@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -64,11 +63,7 @@ beforeEach(() => {
 
 describe('QA008 — getSecretNonInteractive', () => {
   it('retorna secret valido do arquivo sem consultar keytar', async () => {
-    fs.writeFileSync(
-      secretsFile,
-      JSON.stringify({ TELEGRAM_BOT_TOKEN: encryptedEntry('token-file-only') }),
-      'utf8',
-    );
+    fs.writeFileSync(secretsFile, JSON.stringify({ TELEGRAM_BOT_TOKEN: encryptedEntry('token-file-only') }), 'utf8');
 
     await expect(getSecretNonInteractive('TELEGRAM_BOT_TOKEN')).resolves.toEqual({
       status: 'found',
@@ -111,11 +106,7 @@ describe('QA008 — getSecretNonInteractive', () => {
 
 describe('QA008 — getSecret silencioso no boot', () => {
   it('prefere o arquivo cifrado e nao consulta o Keychain', async () => {
-    fs.writeFileSync(
-      secretsFile,
-      JSON.stringify({ TELEGRAM_BOT_TOKEN: encryptedEntry('token-file-only') }),
-      'utf8',
-    );
+    fs.writeFileSync(secretsFile, JSON.stringify({ TELEGRAM_BOT_TOKEN: encryptedEntry('token-file-only') }), 'utf8');
 
     await expect(getSecret('TELEGRAM_BOT_TOKEN')).resolves.toBe('token-file-only');
     expectNoKeytarCalls();

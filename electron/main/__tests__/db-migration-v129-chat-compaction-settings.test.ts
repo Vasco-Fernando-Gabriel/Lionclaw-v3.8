@@ -1,21 +1,16 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type Database from 'better-sqlite3';
 
-import {
-  applyMigrationV129,
-  __V129_INTERNAL,
-} from '../db-migrations/v129-chat-compaction-settings';
+import { applyMigrationV129, __V129_INTERNAL } from '../db-migrations/v129-chat-compaction-settings';
 import {
   DEFAULT_CHAT_COMPACTION_TARGET_TOKENS,
   CHAT_COMPACTION_TARGET_TOKENS_SETTING_KEY,
   DEFAULT_CHAT_COMPACTION_TRIGGER_PERCENT,
   CHAT_COMPACTION_TRIGGER_PERCENT_SETTING_KEY,
 } from '../chat-compaction-defaults';
-
 
 interface Harness {
   sqlite: DatabaseSync;
@@ -35,12 +30,9 @@ function makeDb(): Harness {
 }
 
 function settingValue(sqlite: DatabaseSync, key: string): string | undefined {
-  const row = sqlite
-    .prepare('SELECT value FROM settings WHERE key = ?')
-    .get(key) as { value: string } | undefined;
+  const row = sqlite.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value;
 }
-
 
 describe('AC-A12: applyMigrationV129 - seed dos settings da compactacao do chat', () => {
   it('AC-A12: cria chat_compaction_target_tokens=50000 (D2) e threshold_percent=80 (D1)', () => {
@@ -59,9 +51,7 @@ describe('AC-A12: applyMigrationV129 - seed dos settings da compactacao do chat'
 
   it('AC-A12: nao toca chaves alheias da tabela settings', () => {
     const { sqlite, db } = makeDb();
-    sqlite
-      .prepare('INSERT INTO settings (key, value) VALUES (?, ?)')
-      .run('orchestrator_model', 'claude-sonnet-4-5');
+    sqlite.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('orchestrator_model', 'claude-sonnet-4-5');
     applyMigrationV129(db);
 
     expect(settingValue(sqlite, 'orchestrator_model')).toBe('claude-sonnet-4-5');
@@ -69,7 +59,6 @@ describe('AC-A12: applyMigrationV129 - seed dos settings da compactacao do chat'
     expect(total.n).toBe(3);
   });
 });
-
 
 describe('AC-A12: applyMigrationV129 - idempotencia', () => {
   it('AC-A12: re-rodar e no-op (mesmos 2 settings, sem duplicata, sem erro)', () => {
@@ -94,30 +83,22 @@ describe('AC-A12: applyMigrationV129 - idempotencia', () => {
   });
 });
 
-
 describe('AC-A12: V129 - integracao estatica com db.ts', () => {
   const dbSource = readFileSync(join(__dirname, '..', 'db.ts'), 'utf8');
 
   it('AC-A12: db.ts importa a applyMigrationV129 do arquivo v129-chat-compaction-settings', () => {
-    expect(dbSource).toMatch(
-      /import \{ applyMigrationV129 \} from '\.\/db-migrations\/v129-chat-compaction-settings'/,
-    );
+    expect(dbSource).toMatch(/import \{ applyMigrationV129 \} from '\.\/db-migrations\/v129-chat-compaction-settings'/);
   });
 
   it('AC-A12: db.ts aplica a V129 no runner (if < 129 + INSERT schema_version 129)', () => {
     expect(dbSource).toMatch(/if \(currentVersion < 129\) \{/);
     expect(dbSource).toMatch(/applyMigrationV129\(db\);/);
-    expect(dbSource).toMatch(
-      /INSERT INTO schema_version \(version\) VALUES \(\?\)'\)\.run\(129\)/,
-    );
+    expect(dbSource).toMatch(/INSERT INTO schema_version \(version\) VALUES \(\?\)'\)\.run\(129\)/);
   });
 
   it('AC-A12: re-export __V129_INTERNAL cobre as 2 chaves', () => {
     const keys = __V129_INTERNAL.CHAT_COMPACTION_SETTING_SEEDS.map(([key]) => key);
-    expect(keys).toEqual([
-      CHAT_COMPACTION_TARGET_TOKENS_SETTING_KEY,
-      CHAT_COMPACTION_TRIGGER_PERCENT_SETTING_KEY,
-    ]);
+    expect(keys).toEqual([CHAT_COMPACTION_TARGET_TOKENS_SETTING_KEY, CHAT_COMPACTION_TRIGGER_PERCENT_SETTING_KEY]);
   });
 
   it('AC-A12 (R10 p/ settings): ipc/settings.ts leu o default da MESMA fonte unica (fresh installs)', () => {

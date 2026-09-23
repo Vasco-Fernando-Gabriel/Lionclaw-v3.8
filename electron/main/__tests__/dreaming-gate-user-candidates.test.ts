@@ -1,14 +1,10 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
 
 // eslint-disable-next-line no-var
-var TEST_TMP_DIR: string = path.join(
-  os.tmpdir(),
-  `dreaming-gate-user-test-${process.pid}`,
-);
+var TEST_TMP_DIR: string = path.join(os.tmpdir(), `dreaming-gate-user-test-${process.pid}`);
 
 vi.mock('../paths', () => ({
   getLionClawHome: () => TEST_TMP_DIR,
@@ -24,9 +20,9 @@ vi.mock('../logger', () => ({
 }));
 
 vi.mock('../memory-pipeline', () => ({
-  runStructuredMemoryLlm: vi.fn().mockRejectedValue(
-    new Error('runStructuredMemoryLlm NAO deve ser chamado diretamente nos testes'),
-  ),
+  runStructuredMemoryLlm: vi
+    .fn()
+    .mockRejectedValue(new Error('runStructuredMemoryLlm NAO deve ser chamado diretamente nos testes')),
 }));
 
 vi.mock('../db', () => ({
@@ -34,11 +30,7 @@ vi.mock('../db', () => ({
   setSetting: vi.fn(),
 }));
 
-import {
-  runDreamingGate,
-  type DreamingGateInput,
-  type UserCandidateItem,
-} from '../dreaming-gate';
+import { runDreamingGate, type DreamingGateInput, type UserCandidateItem } from '../dreaming-gate';
 
 const skillDir = path.join(TEST_TMP_DIR, 'skills', 'dreaming');
 const skillPath = path.join(skillDir, 'SKILL.md');
@@ -52,9 +44,7 @@ const VALID_SKILL_CONTENT = `# Skill: Dreaming
 - NUNCA adicionar entrada nova ao USER.md sem quarentena
 `;
 
-const MEMORY_CANDIDATES = [
-  { kind: 'add' as const, text: '[2026-07-01] Decisao de usar Vitest' },
-];
+const MEMORY_CANDIDATES = [{ kind: 'add' as const, text: '[2026-07-01] Decisao de usar Vitest' }];
 
 const USER_CANDIDATES: UserCandidateItem[] = [
   { action: 'add', section: 'Stack tecnologico', fact: 'Usa TypeScript strict mode' },
@@ -179,9 +169,7 @@ describe('AC-50 — prompt e caminho positivo do ADD', () => {
         apply: {
           add: [],
           remove: [],
-          userAdd: [
-            { section: 'stack_ferramentas', text: 'Usa TypeScript strict mode' },
-          ],
+          userAdd: [{ section: 'stack_ferramentas', text: 'Usa TypeScript strict mode' }],
           userRemove: ['- Usa JavaScript [2026-01-01]'],
         },
         quarantine: [],
@@ -192,11 +180,9 @@ describe('AC-50 — prompt e caminho positivo do ADD', () => {
     const result = await runDreamingGate(baseInput(true), { invoker });
 
     expect(result.failSafeTriggered).toBe(false);
-    expect(result.apply.userAdd).toEqual([
-      { section: 'stack_ferramentas', text: 'Usa TypeScript strict mode' },
-    ]);
+    expect(result.apply.userAdd).toEqual([{ section: 'stack_ferramentas', text: 'Usa TypeScript strict mode' }]);
     expect(result.apply.userRemove).toEqual(['- Usa JavaScript [2026-01-01]']);
-    expect(result.quarantine.filter(q => q.reason === 'unaccounted_by_gate')).toEqual([]);
+    expect(result.quarantine.filter((q) => q.reason === 'unaccounted_by_gate')).toEqual([]);
   });
 });
 
@@ -209,10 +195,8 @@ describe('AC-51 — contabilidade por candidato no codigo', () => {
     expect(result.failSafeTriggered).toBe(false);
     expect(result.apply.userAdd).toEqual([]);
     expect(result.apply.userRemove).toEqual([]);
-    const unaccounted = result.quarantine.filter(q => q.reason === 'unaccounted_by_gate');
-    expect(unaccounted.map(q => q.text).sort()).toEqual(
-      [...USER_CANDIDATES.map(c => c.fact)].sort(),
-    );
+    const unaccounted = result.quarantine.filter((q) => q.reason === 'unaccounted_by_gate');
+    expect(unaccounted.map((q) => q.text).sort()).toEqual([...USER_CANDIDATES.map((c) => c.fact)].sort());
   });
 
   it('candidato contabilizado (mesmo reformatado com tag/prefixo) nao vai para quarentena; o esquecido vai', async () => {
@@ -221,9 +205,7 @@ describe('AC-51 — contabilidade por candidato no codigo', () => {
         apply: {
           add: [],
           remove: [],
-          userAdd: [
-            { section: 'stack_ferramentas', text: 'Usa TypeScript strict mode [2026-07-01]' },
-          ],
+          userAdd: [{ section: 'stack_ferramentas', text: 'Usa TypeScript strict mode [2026-07-01]' }],
           userRemove: [],
         },
         quarantine: [],
@@ -233,8 +215,8 @@ describe('AC-51 — contabilidade por candidato no codigo', () => {
 
     const result = await runDreamingGate(baseInput(true), { invoker });
 
-    const unaccounted = result.quarantine.filter(q => q.reason === 'unaccounted_by_gate');
-    expect(unaccounted.map(q => q.text)).toEqual(['Trabalha com Electron']);
+    const unaccounted = result.quarantine.filter((q) => q.reason === 'unaccounted_by_gate');
+    expect(unaccounted.map((q) => q.text)).toEqual(['Trabalha com Electron']);
   });
 
   it('prompt lista candidatos com ids c1/c2 e pede apply.userAccounting no schema', async () => {
@@ -258,9 +240,7 @@ describe('AC-51 — contabilidade por candidato no codigo', () => {
         apply: {
           add: [],
           remove: [],
-          userAdd: [
-            { section: 'stack_ferramentas', text: 'Programa com tipagem estrita habilitada no compilador' },
-          ],
+          userAdd: [{ section: 'stack_ferramentas', text: 'Programa com tipagem estrita habilitada no compilador' }],
           userRemove: [],
           userAccounting: [
             { candidateId: 'c1', destination: 'userAdd' },
@@ -275,7 +255,7 @@ describe('AC-51 — contabilidade por candidato no codigo', () => {
     const result = await runDreamingGate(baseInput(true), { invoker });
 
     expect(result.failSafeTriggered).toBe(false);
-    expect(result.quarantine.filter(q => q.reason === 'unaccounted_by_gate')).toEqual([]);
+    expect(result.quarantine.filter((q) => q.reason === 'unaccounted_by_gate')).toEqual([]);
     expect('userAccounting' in result.apply).toBe(false);
   });
 
@@ -285,9 +265,7 @@ describe('AC-51 — contabilidade por candidato no codigo', () => {
         apply: {
           add: [],
           remove: [],
-          userAdd: [
-            { section: 'stack_ferramentas', text: 'Usa TypeScript em strict mode sempre' },
-          ],
+          userAdd: [{ section: 'stack_ferramentas', text: 'Usa TypeScript em strict mode sempre' }],
           userRemove: [],
         },
         quarantine: [],
@@ -297,7 +275,7 @@ describe('AC-51 — contabilidade por candidato no codigo', () => {
 
     const result = await runDreamingGate(baseInput(true), { invoker });
 
-    expect(result.quarantine.filter(q => q.reason === 'unaccounted_by_gate')).toEqual([]);
+    expect(result.quarantine.filter((q) => q.reason === 'unaccounted_by_gate')).toEqual([]);
   });
 
   it('userAccounting malformado e ignorado (parse leniente): cai no fallback textual sem fail-safe', async () => {
@@ -322,10 +300,8 @@ describe('AC-51 — contabilidade por candidato no codigo', () => {
     const result = await runDreamingGate(baseInput(true), { invoker });
 
     expect(result.failSafeTriggered).toBe(false);
-    const unaccounted = result.quarantine.filter(q => q.reason === 'unaccounted_by_gate');
-    expect(unaccounted.map(q => q.text).sort()).toEqual(
-      [...USER_CANDIDATES.map(c => c.fact)].sort(),
-    );
+    const unaccounted = result.quarantine.filter((q) => q.reason === 'unaccounted_by_gate');
+    expect(unaccounted.map((q) => q.text).sort()).toEqual([...USER_CANDIDATES.map((c) => c.fact)].sort());
   });
 
   it('userAccounting alucinado SEM userCandidates e descartado junto com os demais campos user', async () => {
@@ -358,7 +334,7 @@ describe('AC-48 — fail-safe com userCandidates', () => {
     expect(result.failSafeReason).toBe('llm_error');
     expect(result.apply.userAdd).toEqual([]);
     expect(result.apply.userRemove).toEqual([]);
-    const texts = result.quarantine.map(q => q.text);
+    const texts = result.quarantine.map((q) => q.text);
     for (const c of USER_CANDIDATES) {
       expect(texts).toContain(c.fact);
     }

@@ -1,10 +1,11 @@
-
 import { createLogger } from './logger';
 
 const logger = createLogger('drive-usage-sink');
 
 export interface DriveTurnUsage {
   sessionId: string;
+  projectId: string;
+  driveTurnId?: string;
   tokens: number;
 }
 
@@ -31,15 +32,15 @@ export function onDriveTurnUsage(listener: Listener): () => void {
   };
 }
 
-export function reportDriveTurnUsage(sessionId: string, tokens: number): void {
-  if (!sessionId || tokens <= 0 || listeners.size === 0) return;
-  const usage: DriveTurnUsage = { sessionId, tokens };
+export function reportDriveTurnUsage(usage: DriveTurnUsage): void {
+  const { sessionId, projectId, tokens } = usage;
+  if (!sessionId || !projectId || tokens <= 0 || listeners.size === 0) return;
   for (const listener of Array.from(listeners)) {
     try {
       listener(usage);
     } catch (err) {
       logger.warn(
-        { sessionId, error: (err as Error).message },
+        { sessionId, projectId, error: (err as Error).message },
         'drive-usage listener falhou (turno nao afetado)',
       );
     }
@@ -53,11 +54,7 @@ export function onDriveTurnComplete(listener: CompleteListener): () => void {
   };
 }
 
-export function reportDriveTurnComplete(
-  projectId: string,
-  driveTurnId?: string,
-  outcome?: DriveTurnOutcome,
-): void {
+export function reportDriveTurnComplete(projectId: string, driveTurnId?: string, outcome?: DriveTurnOutcome): void {
   if (!projectId || completeListeners.size === 0) return;
   const complete: DriveTurnComplete = { projectId, driveTurnId, ...(outcome ? { outcome } : {}) };
   for (const listener of Array.from(completeListeners)) {

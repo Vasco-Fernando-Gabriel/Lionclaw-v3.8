@@ -5,20 +5,11 @@ import { createLogger } from './logger.js';
 
 const logger = createLogger('local-agent-tools');
 
-const PRIMITIVE_TOOLS = [
-  'WebSearch', 'WebFetch',
-  'Read', 'Write', 'Edit',
-  'Glob', 'Grep',
-  'Bash',
-] as const;
+const PRIMITIVE_TOOLS = ['WebSearch', 'WebFetch', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash'] as const;
 
-type PrimitiveTool = typeof PRIMITIVE_TOOLS[number];
+type PrimitiveTool = (typeof PRIMITIVE_TOOLS)[number];
 
-const BLOCKED_TOOLS = [
-  'Agent', 'Task', 'TeamCreate',
-  'TodoWrite', 'AskUserQuestion',
-  'NotebookEdit',
-];
+const BLOCKED_TOOLS = ['Agent', 'Task', 'TeamCreate', 'TodoWrite', 'AskUserQuestion', 'NotebookEdit'];
 
 interface OllamaToolSchema {
   type: 'function';
@@ -53,10 +44,7 @@ export function loadLocalTools(allowedTools: string[]): OllamaToolSchema[] {
   return schemas;
 }
 
-export async function executeLocalTool(
-  toolName: string,
-  args: Record<string, unknown>,
-): Promise<string> {
+export async function executeLocalTool(toolName: string, args: Record<string, unknown>): Promise<string> {
   if (!isPrimitiveToolAllowed(toolName)) {
     return `Error: Tool "${toolName}" nao esta disponivel para agentes locais.`;
   }
@@ -71,7 +59,6 @@ export async function executeLocalTool(
     return `Error executando ${toolName}: ${err instanceof Error ? err.message : String(err)}`;
   }
 }
-
 
 const TOOL_SCHEMAS: Record<PrimitiveTool, OllamaToolSchema> = {
   WebSearch: {
@@ -197,7 +184,6 @@ const TOOL_SCHEMAS: Record<PrimitiveTool, OllamaToolSchema> = {
   },
 };
 
-
 const TOOL_IMPLEMENTATIONS: Record<PrimitiveTool, (args: Record<string, unknown>) => Promise<string>> = {
   async Read(args) {
     const filePath = args.file_path as string;
@@ -297,7 +283,9 @@ const TOOL_IMPLEMENTATIONS: Record<PrimitiveTool, (args: Record<string, unknown>
           signal: AbortSignal.timeout(10000),
         });
         if (res.ok) {
-          const data = await res.json() as { web?: { results?: Array<{ title: string; url: string; description: string }> } };
+          const data = (await res.json()) as {
+            web?: { results?: Array<{ title: string; url: string; description: string }> };
+          };
           const results = data.web?.results;
           if (results && results.length > 0) {
             return results.map((r) => `${r.title}\n${r.url}\n${r.description}`).join('\n\n');
@@ -319,11 +307,14 @@ const TOOL_IMPLEMENTATIONS: Record<PrimitiveTool, (args: Record<string, unknown>
       const html = await res.text();
       const results = html.match(/<a rel="nofollow" class="result__a" href="[^"]*">[^<]*/g);
       if (!results) return 'Nenhum resultado encontrado.';
-      return results.slice(0, 5).map((r) => {
-        const hrefMatch = r.match(/href="([^"]*)"/);
-        const textMatch = r.match(/>([^<]*)/);
-        return `${textMatch?.[1] || ''}\n${hrefMatch?.[1] || ''}`;
-      }).join('\n\n');
+      return results
+        .slice(0, 5)
+        .map((r) => {
+          const hrefMatch = r.match(/href="([^"]*)"/);
+          const textMatch = r.match(/>([^<]*)/);
+          return `${textMatch?.[1] || ''}\n${hrefMatch?.[1] || ''}`;
+        })
+        .join('\n\n');
     } catch (err) {
       return `Error: WebSearch falhou - ${err instanceof Error ? err.message : String(err)}`;
     }

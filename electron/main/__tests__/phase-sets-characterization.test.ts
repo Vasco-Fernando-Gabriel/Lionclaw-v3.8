@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -15,7 +14,11 @@ vi.mock('fs', () => ({
   writeFileSync: vi.fn(),
 }));
 vi.mock('path', () => ({ default: { join: (...a: string[]) => a.join('/') }, join: (...a: string[]) => a.join('/') }));
-vi.mock('os', () => ({ default: { homedir: () => '/home/user', tmpdir: () => '/tmp' }, homedir: () => '/home/user', tmpdir: () => '/tmp' }));
+vi.mock('os', () => ({
+  default: { homedir: () => '/home/user', tmpdir: () => '/tmp' },
+  homedir: () => '/home/user',
+  tmpdir: () => '/tmp',
+}));
 vi.mock('../db', () => ({
   getHarnessProject: vi.fn(),
   getAgent: vi.fn(),
@@ -43,7 +46,8 @@ vi.mock('../db', () => ({
   getSecurityAgentStatuses: vi.fn().mockReturnValue([]),
   setProjectStatus: vi.fn(),
 }));
-vi.mock('../agent-runtime', () => ({ executeAgent: vi.fn() }));vi.mock('../harness-engine', () => {
+vi.mock('../agent-runtime', () => ({ executeAgent: vi.fn() }));
+vi.mock('../harness-engine', () => {
   const HarnessEngine = vi.fn();
   HarnessEngine.prototype.abort = vi.fn();
   HarnessEngine.prototype.runSingleSprint = vi.fn();
@@ -95,7 +99,6 @@ import {
   getPhaseArtifactMap,
 } from '../pipeline-engine/registry';
 
-
 const sorted = (s: Iterable<number>): number[] => [...s].sort((a, b) => a - b);
 
 const ALL_BUG_PHASES = [1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -140,7 +143,6 @@ const GOLDEN = {
   },
 } as const;
 
-
 function deriveAuto(phases: readonly PhaseDefinition[]): number[] {
   return sorted(phases.filter((p) => p.type === 'auto').map((p) => p.number));
 }
@@ -150,16 +152,12 @@ function deriveLoop(phases: readonly PhaseDefinition[]): number[] {
 function deriveResetable(phases: readonly PhaseDefinition[]): number[] {
   return sorted(phases.filter((p) => p.resetable).map((p) => p.number));
 }
-function deriveConversation(
-  phases: readonly PhaseDefinition[],
-  overrides: number[],
-): number[] {
+function deriveConversation(phases: readonly PhaseDefinition[], overrides: number[]): number[] {
   const auto = new Set(deriveAuto(phases));
   const loop = new Set(deriveLoop(phases));
   const base = phases.filter((p) => !auto.has(p.number) && !loop.has(p.number)).map((p) => p.number);
   return sorted(new Set([...base, ...overrides]));
 }
-
 
 describe('Layer A — golden literals derive from canonical *_PIPELINE_PHASES', () => {
   it('development: auto/loop/resetable derive by .type/.resetable', () => {
@@ -205,11 +203,12 @@ describe('Layer A — golden literals derive from canonical *_PIPELINE_PHASES', 
     expect(deriveConversation(FEATURE_PIPELINE_PHASES, [9])).toEqual(GOLDEN.feature.conversation);
     expect(deriveConversation(DEVELOPMENT_V2_PIPELINE_PHASES, [12])).toEqual(GOLDEN['development-v2'].conversation);
     expect(deriveConversation(SECURITY_PIPELINE_PHASES, [6])).toEqual(GOLDEN.security.conversation);
-    expect(deriveConversation(ARCHITECTURE_REVIEW_PIPELINE_PHASES, [])).toEqual(GOLDEN['architecture-review'].conversation);
+    expect(deriveConversation(ARCHITECTURE_REVIEW_PIPELINE_PHASES, [])).toEqual(
+      GOLDEN['architecture-review'].conversation,
+    );
     expect(deriveConversation(BUG_PIPELINE_PHASES, [])).toEqual(GOLDEN.bug.conversation);
   });
 });
-
 
 describe('Layer B — conversationPhasesOf(type) equals the golden literals', () => {
   it('conversationPhasesOf(security) == golden', () => {
@@ -247,7 +246,6 @@ describe('Layer B — conversationPhasesOf(type) equals the golden literals', ()
   });
 });
 
-
 describe('Layer C — four conversation-over-auto overrides (dev-9, feature-9, dev-v2-12, security-6)', () => {
   it('dev phase 9 is type:auto in the array yet IS in the dev conversation set', () => {
     expect(PIPELINE_PHASES.find((p) => p.number === 9)?.type).toBe('auto');
@@ -278,7 +276,6 @@ describe('Layer C — four conversation-over-auto overrides (dev-9, feature-9, d
     expect(deriveConversation(SECURITY_PIPELINE_PHASES, [])).not.toContain(6);
   });
 });
-
 
 describe('Layer D — real pipeline.ts derivations equal the golden literals', () => {
   it('development: autoPhasesOf/loopPhasesOf/resetablePhasesOf/conversationPhasesOf', () => {
@@ -331,15 +328,9 @@ describe('Layer D — real pipeline.ts derivations equal the golden literals', (
   });
 
   it('development-v2 resetablePhasesOf is lock-aware (INV-9), NOT the .resetable flag', () => {
-    expect(sorted(resetablePhasesOf('development-v2', false))).toEqual(
-      GOLDEN['development-v2'].resetableBeforeLock,
-    );
-    expect(sorted(resetablePhasesOf('development-v2', true))).toEqual(
-      GOLDEN['development-v2'].resetableAfterLock,
-    );
-    expect(sorted(resetablePhasesOf('development-v2'))).toEqual(
-      GOLDEN['development-v2'].resetableBeforeLock,
-    );
+    expect(sorted(resetablePhasesOf('development-v2', false))).toEqual(GOLDEN['development-v2'].resetableBeforeLock);
+    expect(sorted(resetablePhasesOf('development-v2', true))).toEqual(GOLDEN['development-v2'].resetableAfterLock);
+    expect(sorted(resetablePhasesOf('development-v2'))).toEqual(GOLDEN['development-v2'].resetableBeforeLock);
     expect(sorted(resetablePhasesOf('development-v2', false))).not.toEqual(
       deriveResetable(DEVELOPMENT_V2_PIPELINE_PHASES),
     );
@@ -379,12 +370,9 @@ describe('Layer D — real pipeline.ts derivations equal the golden literals', (
     expect(phaseOfAgent('development-v2', 'harness-evaluator')).toBe(17);
     expect(phaseOfAgent('bug', 'harness-coder')).toBe(8);
     expect(phaseOfAgent('bug', 'harness-evaluator')).toBe(9);
-    expect(phaseOfAgent('feature', 'spec-builder')).toBe(
-      getPhaseNumberForAgent('feature', 'spec-builder'),
-    );
+    expect(phaseOfAgent('feature', 'spec-builder')).toBe(getPhaseNumberForAgent('feature', 'spec-builder'));
   });
 });
-
 
 describe('Layer E — cross-type loop helpers (M-3 / RK-19)', () => {
   it('LOOP_HISTORY_BY_TYPE pins the legacy tails (db.ts:getSprintMessagePhaseNumbersForProject)', () => {
@@ -429,29 +417,16 @@ describe('Layer E — cross-type loop helpers (M-3 / RK-19)', () => {
   });
 
   it('coder and evaluator role Sets are DISJOINT POR TIPO — os papeis nunca se misturam (RK-19)', () => {
-    for (const type of [
-      'development',
-      'feature',
-      'security',
-      'architecture-review',
-      'development-v2',
-      'bug',
-    ]) {
+    for (const type of ['development', 'feature', 'security', 'architecture-review', 'development-v2', 'bug']) {
       const coder = loopPhasesByRoleWithHistoryOf(type, 'coder');
       const evaluator = loopPhasesByRoleWithHistoryOf(type, 'evaluator');
       for (const n of coder) expect(evaluator.has(n)).toBe(false);
       expect(sorted(new Set([...coder, ...evaluator]))).toEqual(
-        sorted(
-          new Set([
-            ...loopPhasesOf(type),
-            ...LOOP_HISTORY_BY_TYPE[type as keyof typeof LOOP_HISTORY_BY_TYPE],
-          ]),
-        ),
+        sorted(new Set([...loopPhasesOf(type), ...LOOP_HISTORY_BY_TYPE[type as keyof typeof LOOP_HISTORY_BY_TYPE]])),
       );
     }
   });
 });
-
 
 describe('Layer F — engine dispatch wrappers (registry) equal the golden', () => {
   const p = (pipelineType: string) => ({ pipelineType });
@@ -483,9 +458,9 @@ describe('Layer F — engine dispatch wrappers (registry) equal the golden', () 
     expect(sorted(getResetablePhases(p('feature')))).toEqual(GOLDEN.feature.resetable);
     expect(sorted(getResetablePhases(p('architecture-review')))).toEqual(GOLDEN['architecture-review'].resetable);
     expect(sorted(getResetablePhases(p('bug')))).toEqual(GOLDEN.bug.resetable);
-    expect(
-      sorted(getResetablePhases({ pipelineType: 'development-v2' })),
-    ).toEqual(GOLDEN['development-v2'].resetableBeforeLock);
+    expect(sorted(getResetablePhases({ pipelineType: 'development-v2' }))).toEqual(
+      GOLDEN['development-v2'].resetableBeforeLock,
+    );
     expect(
       sorted(getResetablePhases({ pipelineType: 'development-v2', config: { openDesign: { locked: false } } })),
     ).toEqual(GOLDEN['development-v2'].resetableBeforeLock);

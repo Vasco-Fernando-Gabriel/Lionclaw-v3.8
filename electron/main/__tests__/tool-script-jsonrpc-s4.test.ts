@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { BrowserWindow } from 'electron';
 
@@ -93,12 +92,13 @@ import {
   setActiveChatTurn,
   __resetChatCapabilityContextForTests,
 } from '../chat-capability-context';
-import { desktopLane } from '../sdk-lane';
+import { getDesktopLane } from '../desktop-lanes';
 import { ToolScriptError } from '../tool-script/tool-script-types';
 import type { ToolScriptToolCallAudit } from '../tool-script/tool-script-dispatch';
 import type { LiveActivityEvent, StreamChunk } from '../../../src/types';
 
 const SESSION_ID = 'sess-1';
+const desktopLane = getDesktopLane(SESSION_ID);
 const TURN_ID = 'turn-1';
 
 const OK_RESULT = {
@@ -199,8 +199,7 @@ beforeEach(() => {
   createDispatcherMock.mockReturnValue(vi.fn());
   runToolScriptMock.mockImplementation(async () => {
     const dispatcherInput = createDispatcherMock.mock.calls[0]?.[0] as
-      | { onToolCall?: (entry: ToolScriptToolCallAudit) => void }
-      | undefined;
+      { onToolCall?: (entry: ToolScriptToolCallAudit) => void } | undefined;
     for (const entry of RPC_AUDITS) {
       dispatcherInput?.onToolCall?.(entry);
     }
@@ -208,11 +207,10 @@ beforeEach(() => {
   });
 });
 
-
 describe('AC-B13 - Activity Log por RPC no turno REAL', () => {
   it('3 RPCs -> 3 entradas com displayName real, no turno getLatestUserTurnIndex (nunca 0)', async () => {
     const { win } = makeWindow();
-    const res = await handleRunToolScript(makeCtx(win), { code: 'print(1)' });
+    const res = await handleRunToolScript(makeCtx(win), { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
     expect(res).toMatchObject({ stdout: 'ok\n' });
 
     const acts = recordedActivities();
@@ -229,11 +227,7 @@ describe('AC-B13 - Activity Log por RPC no turno REAL', () => {
       'run_command cat a.txt | head',
       'mcp__gmail__send_email',
     ]);
-    expect(rpcActs.map((a) => a.ev.toolName)).toEqual([
-      'read_file',
-      'run_command',
-      'mcp_invoke',
-    ]);
+    expect(rpcActs.map((a) => a.ev.toolName)).toEqual(['read_file', 'run_command', 'mcp_invoke']);
     expect(rpcActs.map((a) => a.ev.status)).toEqual(['done', 'done', 'error']);
     expect(rpcActs[2].ev.description).toBe('capability negada');
     for (const a of rpcActs) {
@@ -243,7 +237,7 @@ describe('AC-B13 - Activity Log por RPC no turno REAL', () => {
 
   it('a propria run_tool_script aparece no stream: bloco start/end com o MESMO id', async () => {
     const { win } = makeWindow();
-    await handleRunToolScript(makeCtx(win), { code: 'print(1)' });
+    await handleRunToolScript(makeCtx(win), { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
 
     const acts = recordedActivities();
     const start = acts[0];
@@ -267,7 +261,7 @@ describe('AC-B13 - Activity Log por RPC no turno REAL', () => {
 
   it('send encaminha chat:stream com o sessionId injetado (padrao emitPipelineActivity)', async () => {
     const { win, sendSpy } = makeWindow();
-    await handleRunToolScript(makeCtx(win), { code: 'print(1)' });
+    await handleRunToolScript(makeCtx(win), { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
 
     const { send } = recordedActivities()[0];
     const chunk = { type: 'activity' } as unknown as StreamChunk;
@@ -279,18 +273,16 @@ describe('AC-B13 - Activity Log por RPC no turno REAL', () => {
   });
 
   it('janela nula/destruida: send vira no-op sem quebrar a emissao', async () => {
-    await handleRunToolScript(makeCtx(null), { code: 'print(1)' });
+    await handleRunToolScript(makeCtx(null), { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
     const acts = recordedActivities();
     expect(acts).toHaveLength(5);
     expect(() => acts[0].send({ type: 'activity' } as unknown as StreamChunk)).not.toThrow();
   });
 
   it('erro do motor: bloco da run_tool_script fecha com status error', async () => {
-    runToolScriptMock.mockRejectedValueOnce(
-      new ToolScriptError('python-unavailable', 'sem python3'),
-    );
+    runToolScriptMock.mockRejectedValueOnce(new ToolScriptError('python-unavailable', 'sem python3'));
     const { win } = makeWindow();
-    const res = await handleRunToolScript(makeCtx(win), { code: 'print(1)' });
+    const res = await handleRunToolScript(makeCtx(win), { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
     expect(res).toEqual({ error: 'sem python3', code: 'python-unavailable' });
 
     const acts = recordedActivities();
@@ -305,11 +297,10 @@ describe('AC-B13 - Activity Log por RPC no turno REAL', () => {
 
   it('recordSystemActivity NUNCA e usado', async () => {
     const { win } = makeWindow();
-    await handleRunToolScript(makeCtx(win), { code: 'print(1)' });
+    await handleRunToolScript(makeCtx(win), { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
     expect(recordSystemActivityMock).not.toHaveBeenCalled();
   });
 });
-
 
 describe('AC-B13 - robustez', () => {
   it('recordActivity lancando em TODA emissao: o resultado do script volta intacto', async () => {
@@ -317,19 +308,18 @@ describe('AC-B13 - robustez', () => {
       throw new Error('activity_log corrompido');
     });
     const { win } = makeWindow();
-    const res = await handleRunToolScript(makeCtx(win), { code: 'print(1)' });
+    const res = await handleRunToolScript(makeCtx(win), { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
     expect(res).toMatchObject({ stdout: 'ok\n', exitCode: 0, toolCallCount: 3 });
   });
 
   it('getLatestUserTurnIndex lancando: emissao pulada, script intacto', async () => {
     dbState.throwOnTurnIndex = true;
     const { win } = makeWindow();
-    const res = await handleRunToolScript(makeCtx(win), { code: 'print(1)' });
+    const res = await handleRunToolScript(makeCtx(win), { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
     expect(res).toMatchObject({ stdout: 'ok\n' });
     expect(recordActivityMock).not.toHaveBeenCalled();
   });
 });
-
 
 describe('settings tool_script_* -> deps do motor e do dispatcher', () => {
   it('limites customizados entram nas deps; a MESMA lista de tools vai ao dispatcher', async () => {
@@ -340,7 +330,7 @@ describe('settings tool_script_* -> deps do motor e do dispatcher', () => {
     dbState.settings.set('tool_script_max_tool_calls', '10');
 
     const { win } = makeWindow();
-    await handleRunToolScript(makeCtx(win), { code: 'print(1)' });
+    await handleRunToolScript(makeCtx(win), { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
 
     expect(runToolScriptMock).toHaveBeenCalledTimes(1);
     const deps = runToolScriptMock.mock.calls[0][1];
@@ -359,7 +349,7 @@ describe('settings tool_script_* -> deps do motor e do dispatcher', () => {
 
   it('settings ausentes: defaults completos nas deps (fallback fail-safe)', async () => {
     const { win } = makeWindow();
-    await handleRunToolScript(makeCtx(win), { code: 'print(1)' });
+    await handleRunToolScript(makeCtx(win), { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
 
     const deps = runToolScriptMock.mock.calls[0][1];
     expect(deps).toMatchObject({
@@ -382,7 +372,7 @@ describe('settings tool_script_* -> deps do motor e do dispatcher', () => {
   it('AC-B12 rollback vivo: tool_script_enabled=false nega ANTES do motor', async () => {
     dbState.settings.set('tool_script_enabled', 'false');
     const { win } = makeWindow();
-    const res = await handleRunToolScript(makeCtx(win), { code: 'print(1)' });
+    const res = await handleRunToolScript(makeCtx(win), { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
 
     expect(res).toMatchObject({ code: 'tool-script-disabled' });
     expect((res as { error?: string }).error).toContain('tool_script_enabled=false');

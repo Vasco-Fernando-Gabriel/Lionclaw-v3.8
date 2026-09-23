@@ -1,10 +1,8 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { applyMigrationV80, __V80_INTERNAL } from '../db-migrations/v80-harness-sprints-dedup-unique';
-
 
 interface MockRun {
   events: string[];
@@ -37,7 +35,6 @@ function runWithMockDb(execImpl?: (sql: string) => void): MockRun {
   return { events, execCalls, transactionCalls };
 }
 
-
 describe('applyMigrationV80 - structural', () => {
   it('exports applyMigrationV80 as a function', () => {
     expect(typeof applyMigrationV80).toBe('function');
@@ -47,7 +44,6 @@ describe('applyMigrationV80 - structural', () => {
     expect(__V80_INTERNAL.INDEX_NAME).toBe('idx_harness_sprints_project_sprint');
   });
 });
-
 
 describe('applyMigrationV80 - transacao propria', () => {
   it('creates exactly one db.transaction and runs it', () => {
@@ -63,7 +59,6 @@ describe('applyMigrationV80 - transacao propria', () => {
     expect(events).toEqual(['tx-start', 'exec', 'exec', 'exec', 'exec', 'exec', 'tx-end']);
   });
 });
-
 
 describe('applyMigrationV80 - SQL content e ordem', () => {
   it('statement 1: deleta rounds dos sprints perdedores (rn > 1) via window function', () => {
@@ -128,7 +123,6 @@ describe('applyMigrationV80 - SQL content e ordem', () => {
   });
 });
 
-
 describe('applyMigrationV80 - mock DB (erros)', () => {
   it('does not throw on a clean mock db', () => {
     expect(() => runWithMockDb()).not.toThrow();
@@ -143,7 +137,6 @@ describe('applyMigrationV80 - mock DB (erros)', () => {
   });
 });
 
-
 const MAIN_DIR = join(__dirname, '..');
 
 function readMainSource(relPath: string): string {
@@ -154,9 +147,7 @@ describe('applyMigrationV80 - integracao no runner de db.ts (AC-5, guardrail est
   const dbSrc = readMainSource('db.ts');
 
   it('db.ts importa applyMigrationV80 do arquivo da migration', () => {
-    expect(dbSrc).toContain(
-      "import { applyMigrationV80 } from './db-migrations/v80-harness-sprints-dedup-unique'",
-    );
+    expect(dbSrc).toContain("import { applyMigrationV80 } from './db-migrations/v80-harness-sprints-dedup-unique'");
   });
 
   it('runMigrations tem o bloco if (currentVersion < 80)', () => {
@@ -172,7 +163,6 @@ describe('applyMigrationV80 - integracao no runner de db.ts (AC-5, guardrail est
     expect(block).toMatch(/Applied migration v80/);
   });
 });
-
 
 describe('Parte A - persist idempotente (AC-2/AC-3, guardrail estatico)', () => {
   it('db.ts: replaceHarnessSprintsForProject usa db.transaction com ordem rounds -> sprints -> insert', () => {

@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage } from '../../../../src/types';
-import {
-  buildCodexHistoryPreamble,
-  CODEX_HISTORY_MAX_CHARS,
-  CODEX_HISTORY_MAX_TURNS,
-} from '../history';
+import { buildCodexHistoryPreamble, CODEX_HISTORY_MAX_CHARS, CODEX_HISTORY_MAX_TURNS } from '../history';
 
 function message(id: number, role: ChatMessage['role'], content: string): ChatMessage {
   return {

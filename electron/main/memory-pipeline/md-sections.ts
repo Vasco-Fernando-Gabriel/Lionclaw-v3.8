@@ -1,11 +1,10 @@
-
 export interface MdSectionBlock {
   header: string | null;
   lines: string[];
 }
 
 export function countNonEmptyLines(content: string): number {
-  return content.split('\n').filter(l => l.trim().length > 0).length;
+  return content.split('\n').filter((l) => l.trim().length > 0).length;
 }
 
 export function splitIntoSections(content: string): MdSectionBlock[] {

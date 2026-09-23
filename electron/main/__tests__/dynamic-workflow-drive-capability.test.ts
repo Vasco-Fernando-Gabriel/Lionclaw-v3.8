@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   mintDriveCapability,
@@ -83,31 +82,47 @@ describe('drive-capability scope:gate (E2.3, endurecida por driveTurnId em D7)',
 
   it('sem driveTurnId no contexto = negado (fail-closed), capability intacta', () => {
     mintGate();
-    expect(consumeDriveCapability({ runId: 'run-1', driveTurnId: undefined, action: 'approve', gateId: 'gate-A' })).toBeNull();
+    expect(
+      consumeDriveCapability({ runId: 'run-1', driveTurnId: undefined, action: 'approve', gateId: 'gate-A' }),
+    ).toBeNull();
     expect(consumeDriveCapability({ runId: 'run-1', driveTurnId: '', action: 'approve', gateId: 'gate-A' })).toBeNull();
-    expect(consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'approve', gateId: 'gate-A' })).not.toBeNull();
+    expect(
+      consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'approve', gateId: 'gate-A' }),
+    ).not.toBeNull();
   });
 
   it('expirada: consume apos expiresAt devolve null e remove o registro', () => {
     const now = 1_000_000;
     mintGate({ expiresAt: now + 100 });
-    expect(consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'approve', gateId: 'gate-A' }, now + 101)).toBeNull();
-    expect(consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'approve', gateId: 'gate-A' }, now)).toBeNull();
+    expect(
+      consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'approve', gateId: 'gate-A' }, now + 101),
+    ).toBeNull();
+    expect(
+      consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'approve', gateId: 'gate-A' }, now),
+    ).toBeNull();
   });
 
   it('isolamento de par: outro runId ou outro gateId nao casa; gate nao libera intervene/abort', () => {
     mintGate();
-    expect(consumeDriveCapability({ runId: 'run-2', driveTurnId: TURN, action: 'approve', gateId: 'gate-A' })).toBeNull();
-    expect(consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'approve', gateId: 'gate-B' })).toBeNull();
+    expect(
+      consumeDriveCapability({ runId: 'run-2', driveTurnId: TURN, action: 'approve', gateId: 'gate-A' }),
+    ).toBeNull();
+    expect(
+      consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'approve', gateId: 'gate-B' }),
+    ).toBeNull();
     expect(consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'intervene:pause' })).toBeNull();
     expect(consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'abort' })).toBeNull();
-    expect(consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'approve', gateId: 'gate-A' })).not.toBeNull();
+    expect(
+      consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'approve', gateId: 'gate-A' }),
+    ).not.toBeNull();
   });
 
   it('re-mint para o mesmo par sobrescreve (turno mais recente vence)', () => {
     mintGate({ driveTurnId: 'run-1:1' });
     mintGate({ driveTurnId: 'run-1:2' });
-    expect(consumeDriveCapability({ runId: 'run-1', driveTurnId: 'run-1:1', action: 'approve', gateId: 'gate-A' })).toBeNull();
+    expect(
+      consumeDriveCapability({ runId: 'run-1', driveTurnId: 'run-1:1', action: 'approve', gateId: 'gate-A' }),
+    ).toBeNull();
     const cap = consumeDriveCapability({ runId: 'run-1', driveTurnId: 'run-1:2', action: 'approve', gateId: 'gate-A' });
     expect(cap!.driveTurnId).toBe('run-1:2');
   });
@@ -116,7 +131,9 @@ describe('drive-capability scope:gate (E2.3, endurecida por driveTurnId em D7)',
     mintGate({ runId: '' });
     mintGate({ gateId: '' });
     mintGate({ driveTurnId: '' });
-    expect(consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'approve', gateId: 'gate-A' })).toBeNull();
+    expect(
+      consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'approve', gateId: 'gate-A' }),
+    ).toBeNull();
     expect(consumeDriveCapability({ runId: '', driveTurnId: TURN, action: 'approve', gateId: 'gate-A' })).toBeNull();
   });
 });
@@ -140,7 +157,9 @@ describe('drive-capability scope:wake (D7)', () => {
   it('autoriza intervene pause / rerun-node e abort do MESMO run e MESMO driveTurnId', () => {
     mintWake();
     expect(consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'intervene:pause' })).not.toBeNull();
-    expect(consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'intervene:rerun-node' })).not.toBeNull();
+    expect(
+      consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'intervene:rerun-node' }),
+    ).not.toBeNull();
     expect(consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'abort' })).not.toBeNull();
   });
 
@@ -182,7 +201,9 @@ describe('drive-capability scope:wake (D7)', () => {
   it('TTL: expirada e removida e nao casa', () => {
     const now = 5_000_000;
     mintWake({ expiresAt: now + 10 * 60_000 });
-    expect(consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'intervene:pause' }, now + 10 * 60_000)).toBeNull();
+    expect(
+      consumeDriveCapability({ runId: 'run-1', driveTurnId: TURN, action: 'intervene:pause' }, now + 10 * 60_000),
+    ).toBeNull();
     expect(remainingWakeCapabilityUses('run-1', TURN)).toBe(0);
   });
 

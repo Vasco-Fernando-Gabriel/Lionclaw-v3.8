@@ -1,4 +1,3 @@
-
 import type { OllamaToolSchema } from '../ollama-client';
 
 const BUILTIN_SCHEMAS: Record<string, OllamaToolSchema> = {
@@ -106,12 +105,9 @@ export function builtinToolsToOllamaSchemas(toolNames: string[]): OllamaToolSche
 
 export function activeToolSchemasJson(toolNames: readonly string[]): string {
   if (!toolNames.length) return '';
-  const entries: object[] = toolNames.map(
-    (n) => BUILTIN_SCHEMAS[n] ?? { type: 'function', function: { name: n } },
-  );
+  const entries: object[] = toolNames.map((n) => BUILTIN_SCHEMAS[n] ?? { type: 'function', function: { name: n } });
   return JSON.stringify(entries);
 }
-
 
 export interface McpRegistryToolRow {
   mcpId: string;

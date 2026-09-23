@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -31,11 +30,7 @@ const h = vi.hoisted(() => {
 vi.mock('../db', () => ({
   getHarnessSprints: vi.fn(() => h.state.sprints),
   getHarnessProject: vi.fn(() => h.state.project),
-  getAllAgents: vi.fn(() => [
-    { id: 'backend-developer' },
-    { id: 'frontend-developer' },
-    { id: 'harness-evaluator' },
-  ]),
+  getAllAgents: vi.fn(() => [{ id: 'backend-developer' }, { id: 'frontend-developer' }, { id: 'harness-evaluator' }]),
   replaceHarnessSprintsForProject: h.replaceMock,
   updateHarnessPendingSprintsFromReseed: h.updatePendingMock,
   mergeHarnessProjectSprintJsonHashes: h.mergeHashesMock,
@@ -51,7 +46,6 @@ import {
 import { canonicalJsonStringify } from '../canonical-json';
 import type { SprintsJson, SprintJsonEntry } from '../harness-planner';
 import type { HarnessProject, HarnessSprint } from '../../../src/types';
-
 
 let tmpDir: string;
 
@@ -197,7 +191,6 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-
 describe('reseedHarnessSprintsFromFile (P1)', () => {
   it('(a) split: N -> N+1 chama replace com N+1 linhas + totals derivados na MESMA chamada', () => {
     seedConsistent([makeEntry('sprint-001'), makeEntry('sprint-002')]);
@@ -256,10 +249,7 @@ describe('reseedHarnessSprintsFromFile (P1)', () => {
   });
 
   it('(c2) estado misto + IDs iguais + mudanca SO em pending -> update transacional das linhas pending', () => {
-    seedConsistent(
-      [makeEntry('sprint-001'), makeEntry('sprint-002')],
-      ['passed', 'pending'],
-    );
+    seedConsistent([makeEntry('sprint-001'), makeEntry('sprint-002')], ['passed', 'pending']);
     h.state.roundsCount = 2;
     const edited = makeSprintsJson([
       makeEntry('sprint-001'),
@@ -282,16 +272,9 @@ describe('reseedHarnessSprintsFromFile (P1)', () => {
   });
 
   it('(d) estado misto + divergencia de ID -> lanca com playbook, sem nenhuma escrita', () => {
-    seedConsistent(
-      [makeEntry('sprint-001'), makeEntry('sprint-002')],
-      ['passed', 'pending'],
-    );
+    seedConsistent([makeEntry('sprint-001'), makeEntry('sprint-002')], ['passed', 'pending']);
     h.state.roundsCount = 1;
-    const edited = makeSprintsJson([
-      makeEntry('sprint-001'),
-      makeEntry('sprint-002'),
-      makeEntry('sprint-003'),
-    ]);
+    const edited = makeSprintsJson([makeEntry('sprint-001'), makeEntry('sprint-002'), makeEntry('sprint-003')]);
     writeSprintsFile(edited);
 
     expect(() => reseedHarnessSprintsFromFile(makeProject())).toThrow(/Playbook de recuperacao/);
@@ -300,10 +283,7 @@ describe('reseedHarnessSprintsFromFile (P1)', () => {
   });
 
   it('(e) re-confirm pos-reset sem edicao -> no-op sem erro (guard nao bloqueia o gate)', () => {
-    seedConsistent(
-      [makeEntry('sprint-001'), makeEntry('sprint-002')],
-      ['passed', 'passed'],
-    );
+    seedConsistent([makeEntry('sprint-001'), makeEntry('sprint-002')], ['passed', 'passed']);
     h.state.roundsCount = 4;
 
     const outcome = reseedHarnessSprintsFromFile(makeProject());
@@ -362,14 +342,13 @@ describe('reseedHarnessSprintsFromFile (P1)', () => {
   });
 
   it('(j) edicao de criterios com IDs iguais e sprint passed -> fail-loud (bloqueador 1)', () => {
-    seedConsistent(
-      [makeEntry('sprint-001'), makeEntry('sprint-002')],
-      ['passed', 'pending'],
-    );
+    seedConsistent([makeEntry('sprint-001'), makeEntry('sprint-002')], ['passed', 'pending']);
     h.state.roundsCount = 2;
     const edited = makeSprintsJson([
       makeEntry('sprint-001', {
-        features: [{ id: 'feat-1a', name: 'Feature 1a', description: 'desc', acceptance_criteria: ['criterio REESCRITO'] }],
+        features: [
+          { id: 'feat-1a', name: 'Feature 1a', description: 'desc', acceptance_criteria: ['criterio REESCRITO'] },
+        ],
       }),
       makeEntry('sprint-002'),
     ]);
@@ -418,19 +397,14 @@ describe('reseedHarnessSprintsFromFile (P1)', () => {
 
   it('(P1c) fila all-pending mas com rounds registrados -> NAO faz replace (guard zero-rounds)', () => {
     seedConsistent([makeEntry('sprint-001'), makeEntry('sprint-002')]);
-    h.state.roundsCount = 1; // rounds orfaos de execucao anterior
-    const edited = makeSprintsJson([
-      makeEntry('sprint-001'),
-      makeEntry('sprint-002'),
-      makeEntry('sprint-003'),
-    ]);
+    h.state.roundsCount = 1;
+    const edited = makeSprintsJson([makeEntry('sprint-001'), makeEntry('sprint-002'), makeEntry('sprint-003')]);
     writeSprintsFile(edited);
 
     expect(() => reseedHarnessSprintsFromFile(makeProject())).toThrow(/Playbook de recuperacao/);
     expect(h.replaceMock).not.toHaveBeenCalled();
   });
 });
-
 
 describe('checkHarnessSprintQueueIntegrity (P3)', () => {
   it('(f1) sprint adicionado no arquivo -> fail added-removed com playbook', () => {
@@ -505,11 +479,7 @@ describe('checkHarnessSprintQueueIntegrity (P3)', () => {
   });
 
   it('(k/escape-hatch) projeto legado divergente (mapa ausente, sprint adicionado) com sufixo pendente integro -> tolerado com warning', () => {
-    seedConsistent(
-      [makeEntry('sprint-001'), makeEntry('sprint-002')],
-      ['passed', 'pending'],
-      { withHashMap: false },
-    );
+    seedConsistent([makeEntry('sprint-001'), makeEntry('sprint-002')], ['passed', 'pending'], { withHashMap: false });
     const edited = makeSprintsJson([makeEntry('sprint-001'), makeEntry('sprint-002'), makeEntry('sprint-003')]);
     writeSprintsFile(edited);
 
@@ -523,11 +493,7 @@ describe('checkHarnessSprintQueueIntegrity (P3)', () => {
   });
 
   it('(k/escape-hatch) legado divergente com sprint PENDENTE sumido do arquivo -> fail mesmo sem mapa', () => {
-    seedConsistent(
-      [makeEntry('sprint-001'), makeEntry('sprint-002')],
-      ['passed', 'pending'],
-      { withHashMap: false },
-    );
+    seedConsistent([makeEntry('sprint-001'), makeEntry('sprint-002')], ['passed', 'pending'], { withHashMap: false });
     const edited = makeSprintsJson([makeEntry('sprint-001'), makeEntry('sprint-003')]);
     writeSprintsFile(edited);
 
@@ -545,7 +511,6 @@ describe('checkHarnessSprintQueueIntegrity (P3)', () => {
   });
 });
 
-
 describe('validateSprintsJsonStructure / hash canonico', () => {
   it('id de sprint duplicado e dependencia inexistente -> lancam', () => {
     tmpDir = tmpDir || fs.mkdtempSync(path.join(os.tmpdir(), 'reseed-test-'));
@@ -558,21 +523,15 @@ describe('validateSprintsJsonStructure / hash canonico', () => {
 
   it('hash por sprint e canonico: reordenacao de chaves NAO muda o hash', () => {
     const entry = makeEntry('sprint-001');
-    const reordered = Object.fromEntries(
-      Object.entries(entry).reverse(),
-    ) as unknown as SprintJsonEntry;
+    const reordered = Object.fromEntries(Object.entries(entry).reverse()) as unknown as SprintJsonEntry;
     expect(reordered).not.toEqual(undefined);
     expect(Object.keys(reordered)).not.toEqual(Object.keys(entry));
     expect(entryHash(reordered)).toBe(entryHash(entry));
   });
 });
 
-
 describe('wiring BUG 2 (source-level)', () => {
-  const engineSrc = fs.readFileSync(
-    path.join(__dirname, '..', 'pipeline-engine', 'index.ts'),
-    'utf-8',
-  );
+  const engineSrc = fs.readFileSync(path.join(__dirname, '..', 'pipeline-engine', 'index.ts'), 'utf-8');
   const harnessSrc = fs.readFileSync(path.join(__dirname, '..', 'harness-engine.ts'), 'utf-8');
 
   it('confirmStartDevelopment reseeda, republica a fila para a UI e so entao avanca', () => {
@@ -617,6 +576,8 @@ describe('wiring BUG 2 (source-level)', () => {
     expect(reseedAt).toBeLessThan(readQueueAt);
     expect(checkAt).toBeGreaterThan(loopAt);
     expect(runBody.slice(checkAt, checkAt + 120)).toContain('getHarnessSprints(projectId)');
-    expect(runBody).not.toMatch(/status: 'failed' \}\);\s*\n\s*this\.emitIPC\('harness:sprint-update', \{ projectId, sprintId: sprint\.id, status: 'failed' \}\);\s*\n\s*continue;/);
+    expect(runBody).not.toMatch(
+      /status: 'failed' \}\);\s*\n\s*this\.emitIPC\('harness:sprint-update', \{ projectId, sprintId: sprint\.id, status: 'failed' \}\);\s*\n\s*continue;/,
+    );
   });
 });

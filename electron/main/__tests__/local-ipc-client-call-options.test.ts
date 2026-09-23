@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import net from 'net';
 import fs from 'fs';
@@ -47,8 +46,7 @@ async function startFakeServer(): Promise<void> {
         nl = buf.indexOf('\n');
       }
     });
-    socket.on('error', () => {
-    });
+    socket.on('error', () => {});
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -88,8 +86,7 @@ afterEach(async () => {
   }
   try {
     await fs.promises.rm(SANDBOX, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
 });
 
 describe('LocalIpcClient CallOptions (F1 - SPEC estrada-fixes)', () => {
@@ -106,7 +103,7 @@ describe('LocalIpcClient CallOptions (F1 - SPEC estrada-fixes)', () => {
     try {
       const result = await client.callMethod('pipeline_list', {});
       expect(result).toBe('ok');
-      expect(seen).toHaveLength(2); // 1a tentativa + retry
+      expect(seen).toHaveLength(2);
       expect(seen.map((r) => r.method)).toEqual(['pipeline_list', 'pipeline_list']);
     } finally {
       client.close();
@@ -120,9 +117,9 @@ describe('LocalIpcClient CallOptions (F1 - SPEC estrada-fixes)', () => {
 
     const client = makeClient(5000);
     try {
-      await expect(
-        client.callMethod('pipeline_create', { name: 'x' }, { idempotent: false }),
-      ).rejects.toThrow(/PODE ter completado no servidor.*pipeline_inspect/);
+      await expect(client.callMethod('pipeline_create', { name: 'x' }, { idempotent: false })).rejects.toThrow(
+        /PODE ter completado no servidor.*pipeline_inspect/,
+      );
 
       await new Promise((r) => setTimeout(r, 150));
       expect(seen).toHaveLength(1);
@@ -133,15 +130,14 @@ describe('LocalIpcClient CallOptions (F1 - SPEC estrada-fixes)', () => {
   });
 
   it('timeoutMs por chamada vence o callTimeoutMs global do client', async () => {
-    behavior = () => {
-    };
+    behavior = () => {};
 
     const client = makeClient(5000);
     try {
       const t0 = Date.now();
-      await expect(
-        client.callMethod('pipeline_create', {}, { timeoutMs: 120 }),
-      ).rejects.toThrow(/timed out after 120ms/);
+      await expect(client.callMethod('pipeline_create', {}, { timeoutMs: 120 })).rejects.toThrow(
+        /timed out after 120ms/,
+      );
       expect(Date.now() - t0).toBeLessThan(3000);
     } finally {
       client.close();
@@ -149,14 +145,11 @@ describe('LocalIpcClient CallOptions (F1 - SPEC estrada-fixes)', () => {
   });
 
   it('F1-AC4 (compat): chamada com 2 args usa o timeout do CLIENT', async () => {
-    behavior = () => {
-    };
+    behavior = () => {};
 
     const client = makeClient(150);
     try {
-      await expect(client.callMethod('slow_thing', {})).rejects.toThrow(
-        /timed out after 150ms/,
-      );
+      await expect(client.callMethod('slow_thing', {})).rejects.toThrow(/timed out after 150ms/);
     } finally {
       client.close();
     }
@@ -165,16 +158,16 @@ describe('LocalIpcClient CallOptions (F1 - SPEC estrada-fixes)', () => {
   it('retry preserva as options originais (timeoutMs custom na 2a tentativa)', async () => {
     behavior = (_req, socket) => {
       if (seen.length === 1) {
-        socket.destroy(); // forca retry (call e idempotente por default)
+        socket.destroy();
         return;
       }
     };
 
     const client = makeClient(5000);
     try {
-      await expect(
-        client.callMethod('pipeline_inspect', { id: 'p1' }, { timeoutMs: 200 }),
-      ).rejects.toThrow(/timed out after 200ms/);
+      await expect(client.callMethod('pipeline_inspect', { id: 'p1' }, { timeoutMs: 200 })).rejects.toThrow(
+        /timed out after 200ms/,
+      );
       expect(seen).toHaveLength(2);
     } finally {
       client.close();

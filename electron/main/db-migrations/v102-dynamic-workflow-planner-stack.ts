@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const OLD_BLOCK = `4. ESCOLHA DO ESPECIALISTA POR STACK
    - Atribua o coder de cada sprint conforme a stack: backend, frontend, banco, etc`;
 

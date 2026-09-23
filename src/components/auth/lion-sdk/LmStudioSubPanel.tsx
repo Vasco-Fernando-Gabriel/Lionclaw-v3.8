@@ -132,9 +132,7 @@ export function LmStudioSubPanel({ onComplete }: LmStudioSubPanelProps) {
             autoComplete="off"
           />
         )}
-        <p className="text-xs text-zinc-600 mt-1">
-          Identificador do modelo carregado no LM Studio.
-        </p>
+        <p className="text-xs text-zinc-600 mt-1">Identificador do modelo carregado no LM Studio.</p>
       </div>
 
       {/* Acoes secundarias */}

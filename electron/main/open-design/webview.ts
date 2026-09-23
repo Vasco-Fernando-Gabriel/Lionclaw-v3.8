@@ -85,8 +85,7 @@ export function destroyODView(): void {
   if (activeView && attachedWindow && !attachedWindow.isDestroyed()) {
     try {
       attachedWindow.contentView.removeChildView(activeView);
-    } catch {
-    }
+    } catch {}
   }
   if (activeView && !activeView.webContents.isDestroyed()) {
     activeView.webContents.close();

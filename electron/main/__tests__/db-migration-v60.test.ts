@@ -1,4 +1,3 @@
-
 import Database from 'better-sqlite3';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { __V60_INTERNAL, applyMigrationV60 } from '../db-migrations/v60-fix-model-aliases';
@@ -27,9 +26,7 @@ const SCHEMA = `
 `;
 
 function insertAgent(db: Database.Database, id: string, model: string): void {
-  db.prepare(
-    `INSERT INTO agents (id, name, description, model) VALUES (?, ?, ?, ?)`,
-  ).run(id, id, `desc-${id}`, model);
+  db.prepare(`INSERT INTO agents (id, name, description, model) VALUES (?, ?, ?, ?)`).run(id, id, `desc-${id}`, model);
 }
 
 function setSetting(db: Database.Database, key: string, value: string): void {
@@ -42,9 +39,7 @@ function getAgentModel(db: Database.Database, id: string): string {
 }
 
 function getSettingValue(db: Database.Database, key: string): string | undefined {
-  const row = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(key) as
-    | { value: string }
-    | undefined;
+  const row = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(key) as { value: string } | undefined;
   return row?.value;
 }
 
@@ -159,7 +154,7 @@ describe('db-migration-v60: applyMigrationV60 (banco antigo simulado)', () => {
     insertAgent(db, 'ops', 'sonnet');
     insertAgent(db, 'harness-planner', 'opus');
     insertAgent(db, 'the-notte', 'haiku');
-    insertAgent(db, 'spec-builder', 'claude-sonnet-4-6'); // ja explicito
+    insertAgent(db, 'spec-builder', 'claude-sonnet-4-6');
     setSetting(db, 'default_model', 'sonnet');
 
     applyMigrationV60(db);

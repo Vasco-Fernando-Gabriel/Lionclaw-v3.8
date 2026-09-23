@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../../db', () => ({
@@ -74,7 +73,7 @@ describe('compactIfNeeded - iterative recompact', () => {
     const msgs = makeMessages(14);
     (getSessionMessages as ReturnType<typeof vi.fn>).mockReturnValue(msgs);
 
-    const olderLastId = msgs[14 - 12 - 1].id; // = msgs[1].id = 2
+    const olderLastId = msgs[14 - 12 - 1].id;
     (getCachedSummary as ReturnType<typeof vi.fn>).mockReturnValue({
       session_id: SESSION_ID,
       summary_text: 'summary antigo reusado',

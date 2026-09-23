@@ -18,7 +18,7 @@ describe('normalizeUsage — shape Anthropic (3 buckets separados, somam)', () =
       },
       'anthropic',
     );
-    expect(u.inputTokens).toBe(1000); // uncached, NAO subtrai nada
+    expect(u.inputTokens).toBe(1000);
     expect(u.cacheReadTokens).toBe(40000);
     expect(u.cacheWriteTokens).toBe(500);
     expect(u.outputTokens).toBe(200);
@@ -68,20 +68,17 @@ describe('normalizeUsage — shape OpenAI chat (prompt_tokens JA inclui cache)',
       'openai-chat',
     );
     expect(u.reasoningTokens).toBe(3500);
-    expect(canonicalPromptTokens(u)).toBe(30000); // reasoning fora
+    expect(canonicalPromptTokens(u)).toBe(30000);
   });
 });
 
 describe('normalizeUsage — shape Codex (input_tokens JA inclui cache)', () => {
   it('input = input_tokens - cachedInputTokens (nao dobra cache); prompt = input_total', () => {
-    const u = normalizeUsage(
-      { inputTokens: 150000, cachedInputTokens: 90000, outputTokens: 400 },
-      'codex',
-    );
+    const u = normalizeUsage({ inputTokens: 150000, cachedInputTokens: 90000, outputTokens: 400 }, 'codex');
     expect(u.cacheReadTokens).toBe(90000);
     expect(u.inputTokens).toBe(150000 - 90000);
-    expect(u.cacheWriteTokens).toBe(0); // app-server nao expoe cache-write
-    expect(canonicalPromptTokens(u)).toBe(150000); // volta ao total, sem dobrar
+    expect(u.cacheWriteTokens).toBe(0);
+    expect(canonicalPromptTokens(u)).toBe(150000);
   });
 });
 

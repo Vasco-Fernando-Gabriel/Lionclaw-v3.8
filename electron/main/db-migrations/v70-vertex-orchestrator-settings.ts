@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const VERTEX_ORCHESTRATOR_DEFAULTS: ReadonlyArray<readonly [string, string]> = [
   ['orchestrator_vertex_api_key_ref', ''],
   ['orchestrator_vertex_location', ''],

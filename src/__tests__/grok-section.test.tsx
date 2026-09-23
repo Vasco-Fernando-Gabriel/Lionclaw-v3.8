@@ -60,8 +60,7 @@ describe('GrokSection', () => {
     if (!(input instanceof HTMLInputElement)) throw new Error('input do binario nao encontrado');
     expect(input.value).toBe('/opt/grok/bin/grok');
 
-    const save = [...container.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Salvar');
+    const save = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Salvar');
     if (!save) throw new Error('botao Salvar nao encontrado');
     await act(async () => {
       save.click();
@@ -78,8 +77,9 @@ describe('GrokSection', () => {
 
     expect(container.textContent).toContain('conectado e pronto');
 
-    const button = [...container.querySelectorAll('button')]
-      .find((candidate) => candidate.textContent === 'Testar conexao');
+    const button = [...container.querySelectorAll('button')].find(
+      (candidate) => candidate.textContent === 'Testar conexao',
+    );
     if (!button) throw new Error('botao Testar conexao nao encontrado');
     await act(async () => {
       button.click();

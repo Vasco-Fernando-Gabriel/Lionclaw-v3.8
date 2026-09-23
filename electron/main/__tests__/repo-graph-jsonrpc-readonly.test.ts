@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -66,10 +65,7 @@ vi.mock('../ipc/repo-graph', () => ({
 }));
 
 import { dispatch, type JsonRpcContext } from '../local-ipc/jsonrpc-methods';
-import {
-  setRepoGraphTurnSession,
-  clearRepoGraphTurnSession,
-} from '../repo-graph/turn-context';
+import { setRepoGraphTurnSession, clearRepoGraphTurnSession } from '../repo-graph/turn-context';
 import { RepoGraphEngine, type RepoGraphEngineDb, type RepoGraphProvider } from '../repo-graph/engine';
 import type { LocalRepositoryRecord } from '../repo-graph/types';
 
@@ -116,7 +112,11 @@ describe('AC-8 — escrita NAO existe no dispatch agent-facing', () => {
   it.each(['repo_graph_build', 'repo_graph_update', 'repo_graph_sync', 'repo_graph_index'])(
     '%s -> Method not found (-32601)',
     async (method) => {
-      const res = await dispatch(ctx, { method, id: 1, params: { repositoryId: 'repo-1' } });
+      const res = await dispatch(ctx, {
+        method,
+        id: 1,
+        params: { ...{ sessionId: 'sess-1' }, repositoryId: 'repo-1' },
+      });
       expect(res.result).toBeUndefined();
       expect(res.error).toBeDefined();
       expect(res.error?.code).toBe(-32601);
@@ -165,7 +165,7 @@ describe('AC-8 — escrita NAO existe no dispatch agent-facing', () => {
 
 describe('os 7 methods reader chegam ao RepoGraphReader', () => {
   it('repo_graph_status compoe detect + record do repo', async () => {
-    const res = await dispatch(ctx, { method: 'repo_graph_status', id: 1, params: {} });
+    const res = await dispatch(ctx, { method: 'repo_graph_status', id: 1, params: { ...{ sessionId: 'sess-1' } } });
     expect(res.error).toBeUndefined();
     expect(readerMocks.detect).toHaveBeenCalledTimes(1);
     expect(res.result).toMatchObject({
@@ -182,7 +182,7 @@ describe('os 7 methods reader chegam ao RepoGraphReader', () => {
     ['repo_graph_callers', { symbol: 'executeQuery' }, 'callers'],
     ['repo_graph_callees', { symbol: 'executeQuery' }, 'callees'],
   ] as const)('%s despacha para reader.%s', async (method, params, readerFn) => {
-    const res = await dispatch(ctx, { method, id: 2, params });
+    const res = await dispatch(ctx, { method, id: 2, params: { ...{ sessionId: 'sess-1' }, ...params } });
     expect(res.error).toBeUndefined();
     expect(readerMocks[readerFn]).toHaveBeenCalledTimes(1);
     const input = readerMocks[readerFn].mock.calls[0][0] as { rootPath: string };
@@ -190,7 +190,7 @@ describe('os 7 methods reader chegam ao RepoGraphReader', () => {
   });
 
   it('params invalidos -> { error } sem tocar o reader alem da validacao', async () => {
-    const res = await dispatch(ctx, { method: 'repo_graph_search', id: 3, params: {} });
+    const res = await dispatch(ctx, { method: 'repo_graph_search', id: 3, params: { ...{ sessionId: 'sess-1' } } });
     expect(res.result).toEqual({ error: 'term is required' });
     expect(readerMocks.search).not.toHaveBeenCalled();
   });
@@ -202,7 +202,7 @@ describe('gate de consultabilidade (ready/stale; stale NUNCA bloqueia)', () => {
     const res = await dispatch(ctx, {
       method: 'repo_graph_search',
       id: 4,
-      params: { term: 'x' },
+      params: { ...{ sessionId: 'sess-1' }, term: 'x' },
     });
     expect(res.result).toEqual({
       error: expect.stringContaining('ainda nao foi criado'),
@@ -216,7 +216,7 @@ describe('gate de consultabilidade (ready/stale; stale NUNCA bloqueia)', () => {
     const res = await dispatch(ctx, {
       method: 'repo_graph_callers',
       id: 5,
-      params: { symbol: 'x' },
+      params: { ...{ sessionId: 'sess-1' }, symbol: 'x' },
     });
     expect(res.result).toEqual({
       error: expect.stringContaining('sendo indexado'),
@@ -229,7 +229,7 @@ describe('gate de consultabilidade (ready/stale; stale NUNCA bloqueia)', () => {
     const res = await dispatch(ctx, {
       method: 'repo_graph_search',
       id: 6,
-      params: { term: 'x' },
+      params: { ...{ sessionId: 'sess-1' }, term: 'x' },
     });
     expect(res.error).toBeUndefined();
     expect(readerMocks.search).toHaveBeenCalledTimes(1);
@@ -237,7 +237,7 @@ describe('gate de consultabilidade (ready/stale; stale NUNCA bloqueia)', () => {
 
   it("repo_graph_status responde mesmo com graph 'absent' (estado e consultavel)", async () => {
     getLocalRepositoryMock.mockReturnValue(makeRepo('absent'));
-    const res = await dispatch(ctx, { method: 'repo_graph_status', id: 7, params: {} });
+    const res = await dispatch(ctx, { method: 'repo_graph_status', id: 7, params: { ...{ sessionId: 'sess-1' } } });
     expect(res.error).toBeUndefined();
     expect(res.result).toMatchObject({ repository: { status: 'absent' } });
   });

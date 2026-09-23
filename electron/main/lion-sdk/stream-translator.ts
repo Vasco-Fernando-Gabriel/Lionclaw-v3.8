@@ -1,8 +1,4 @@
-
-import {
-  captureToolResult,
-  captureToolUse,
-} from '../artifact-detector';
+import { captureToolResult, captureToolUse } from '../artifact-detector';
 import type { ArtifactData, StreamChunk } from '../../../src/types';
 import { insertAuditEntry } from '../db';
 import { createLogger } from '../logger';
@@ -46,9 +42,7 @@ export function mcpToolLabel(serverId: string, tool: string): string {
   return `mcp:${serverId}.${tool}`;
 }
 
-export function createLionStreamTranslator(
-  opts: LionStreamTranslatorOptions,
-): LionStreamTranslator {
+export function createLionStreamTranslator(opts: LionStreamTranslatorOptions): LionStreamTranslator {
   const { sessionId, emit, subagent, turnIndex = 0 } = opts;
 
   return {

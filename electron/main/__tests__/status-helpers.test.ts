@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 const updateHarnessProjectMock = vi.fn();
 const emitIPCMock = vi.fn();
@@ -13,13 +11,7 @@ vi.mock('../pipeline-shared/ipc-emitter', () => ({
   emitIPC: (...args: unknown[]) => emitIPCMock(...args),
 }));
 
-import {
-  deriveUIStatus,
-  setProjectStatus,
-  type HarnessProjectStatus,
-  type UIStatus,
-} from '../pipeline-shared/status';
-
+import { deriveUIStatus, setProjectStatus, type HarnessProjectStatus, type UIStatus } from '../pipeline-shared/status';
 
 describe('deriveUIStatus: pure function', () => {
   it('retorna o domain status quando nenhuma flag esta setada', () => {
@@ -99,7 +91,6 @@ describe('deriveUIStatus: pure function', () => {
   });
 });
 
-
 describe('setProjectStatus: chama DB e emite IPC', () => {
   beforeEach(() => {
     updateHarnessProjectMock.mockReset();
@@ -123,9 +114,16 @@ describe('setProjectStatus: chama DB e emite IPC', () => {
 
   it('aceita os 10 status persistidos validos', () => {
     const allStatuses: HarnessProjectStatus[] = [
-      'idle', 'planning', 'reviewing', 'ready',
-      'running', 'paused', 'done', 'failed',
-      'aborted', 'interrupted',
+      'idle',
+      'planning',
+      'reviewing',
+      'ready',
+      'running',
+      'paused',
+      'done',
+      'failed',
+      'aborted',
+      'interrupted',
     ];
     for (const status of allStatuses) {
       setProjectStatus('proj-id', status);
@@ -145,33 +143,55 @@ describe('setProjectStatus: chama DB e emite IPC', () => {
   });
 });
 
-
 describe('HarnessProjectStatus / UIStatus: contratos de tipo', () => {
   it('HarnessProjectStatus tem exatamente os 10 valores esperados (runtime check)', () => {
     const persisted: HarnessProjectStatus[] = [
-      'idle', 'planning', 'reviewing', 'ready',
-      'running', 'paused', 'done', 'failed',
-      'aborted', 'interrupted',
+      'idle',
+      'planning',
+      'reviewing',
+      'ready',
+      'running',
+      'paused',
+      'done',
+      'failed',
+      'aborted',
+      'interrupted',
     ];
     expect(persisted).toHaveLength(10);
   });
 
   it('UIStatus inclui os 10 persistidos + 3 derivados (13 total)', () => {
     const ui: UIStatus[] = [
-      'idle', 'planning', 'reviewing', 'ready',
-      'running', 'paused', 'done', 'failed',
-      'aborted', 'interrupted',
-      'streaming', 'awaiting-user', 'pipeline-completed',
+      'idle',
+      'planning',
+      'reviewing',
+      'ready',
+      'running',
+      'paused',
+      'done',
+      'failed',
+      'aborted',
+      'interrupted',
+      'streaming',
+      'awaiting-user',
+      'pipeline-completed',
     ];
     expect(ui).toHaveLength(13);
-    expect(new Set(ui).size).toBe(13); // todos distintos
+    expect(new Set(ui).size).toBe(13);
   });
 
   it('os 3 valores UI-only NUNCA sao persistidos (nao aparecem em HarnessProjectStatus)', () => {
     const persisted: ReadonlyArray<HarnessProjectStatus> = [
-      'idle', 'planning', 'reviewing', 'ready',
-      'running', 'paused', 'done', 'failed',
-      'aborted', 'interrupted',
+      'idle',
+      'planning',
+      'reviewing',
+      'ready',
+      'running',
+      'paused',
+      'done',
+      'failed',
+      'aborted',
+      'interrupted',
     ];
     expect(persisted as readonly string[]).not.toContain('streaming');
     expect(persisted as readonly string[]).not.toContain('awaiting-user');

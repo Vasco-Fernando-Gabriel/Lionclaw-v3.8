@@ -1,11 +1,5 @@
-
 import { createLogger } from '../logger';
-import {
-  parseFencedBlocks,
-  parseNativeToolCalls,
-  type LionToolUse,
-  type NativeToolCall,
-} from './tool-parser';
+import { parseFencedBlocks, parseNativeToolCalls, type LionToolUse, type NativeToolCall } from './tool-parser';
 import type { LionAdapter, LionChatMessage, LionStreamEvent } from './adapters/types';
 import type { LionToolSchema } from './tool-registry';
 import type { LionStreamTranslator } from './stream-translator';
@@ -17,15 +11,24 @@ const logger = createLogger('lion-sdk-runtime');
 export const MAX_TOOL_TURNS = 30;
 export const MAX_CONSECUTIVE_TOOL_ERRORS = 3;
 
+export interface ToolResultMeta {
+  originalBytes: number | null;
+  spillPath: string | null;
+}
+
+export type TranscriptPushMeta = ToolResultMeta & { isError: boolean };
+
 export interface ToolDispatchResult {
   content: string;
   isError?: boolean;
   displayName?: string;
+  meta?: ToolResultMeta;
 }
 
 export type LionToolDispatcher = (call: LionToolUse) => Promise<ToolDispatchResult>;
 
 export interface RunLionLoopOptions {
+  onTranscriptPush?: (msg: LionChatMessage, meta?: TranscriptPushMeta) => void;
   adapter: LionAdapter;
   model: string;
   initialMessages: LionChatMessage[];
@@ -87,6 +90,15 @@ export async function runLionLoop(opts: RunLionLoopOptions): Promise<RunLionLoop
   const maxToolTurns = opts.maxToolTurns ?? MAX_TOOL_TURNS;
   const maxConsecutiveToolErrors = opts.maxConsecutiveToolErrors ?? MAX_CONSECUTIVE_TOOL_ERRORS;
   const transcript: LionChatMessage[] = [...opts.initialMessages];
+
+  function pushTranscript(msg: LionChatMessage, meta?: TranscriptPushMeta): void {
+    transcript.push(msg);
+    try {
+      opts.onTranscriptPush?.(msg, meta);
+    } catch (error) {
+      logger.error({ error }, 'Lion-SDK: onTranscriptPush falhou');
+    }
+  }
 
   let finalText = '';
   let aggregateUsage = { inputTokens: 0, outputTokens: 0 };
@@ -157,7 +169,7 @@ export async function runLionLoop(opts: RunLionLoopOptions): Promise<RunLionLoop
                 type: 'function',
                 function: {
                   name: b.name,
-                  arguments: (b.input && typeof b.input === 'object') ? (b.input as Record<string, unknown>) : {},
+                  arguments: b.input && typeof b.input === 'object' ? (b.input as Record<string, unknown>) : {},
                 },
               });
             }
@@ -183,15 +195,17 @@ export async function runLionLoop(opts: RunLionLoopOptions): Promise<RunLionLoop
       }
     }
 
-
     if (adapterErrored) {
-      logger.warn({
-        adapter: opts.adapter.name,
-        model: opts.model,
-        error: adapterErrored,
-        toolTurn,
-        transcriptLength: transcript.length,
-      }, 'Lion-SDK adapter returned error');
+      logger.warn(
+        {
+          adapter: opts.adapter.name,
+          model: opts.model,
+          error: adapterErrored,
+          toolTurn,
+          transcriptLength: transcript.length,
+        },
+        'Lion-SDK adapter returned error',
+      );
       opts.translator.emitError(new Error(adapterErrored));
       return finalize(false, 'adapter-error');
     }
@@ -200,10 +214,7 @@ export async function runLionLoop(opts: RunLionLoopOptions): Promise<RunLionLoop
     if (nativeCallsAccum.length > 0) {
       const parsedNativeCalls = parseNativeToolCalls(nativeCallsAccum);
       parsedNativeCalls.forEach((call, index) => {
-        nativeToolCallsByParsedId.set(
-          call.id,
-          toolUseToNativeToolCall(call, nativeCallsAccum[index]),
-        );
+        nativeToolCallsByParsedId.set(call.id, toolUseToNativeToolCall(call, nativeCallsAccum[index]));
       });
       calls.push(...parsedNativeCalls);
     }
@@ -214,16 +225,15 @@ export async function runLionLoop(opts: RunLionLoopOptions): Promise<RunLionLoop
       calls.push(...fenced.calls);
     }
 
-    const transcriptAssistantContent = calls.length > 0 && opts.dropTextWhenToolCalls
-      ? ''
-      : cleanedText;
-    transcript.push({
+    const transcriptAssistantContent = calls.length > 0 && opts.dropTextWhenToolCalls ? '' : cleanedText;
+    pushTranscript({
       role: 'assistant',
       content: transcriptAssistantContent,
       ...(assistantReasoningContent.length > 0 ? { reasoning_content: assistantReasoningContent } : {}),
-      tool_calls: calls.length > 0
-        ? calls.map((call) => nativeToolCallsByParsedId.get(call.id) ?? toolUseToNativeToolCall(call))
-        : undefined,
+      tool_calls:
+        calls.length > 0
+          ? calls.map((call) => nativeToolCallsByParsedId.get(call.id) ?? toolUseToNativeToolCall(call))
+          : undefined,
     });
 
     if (calls.length === 0) {
@@ -231,11 +241,7 @@ export async function runLionLoop(opts: RunLionLoopOptions): Promise<RunLionLoop
       if (opts.deferTextUntilToolParse) {
         opts.translator.emitText(cleanedText);
       }
-      if (
-        cleanedText.trim() === '' &&
-        toolTurn === 0 &&
-        assistantReasoningContent.length === 0
-      ) {
+      if (cleanedText.trim() === '' && toolTurn === 0 && assistantReasoningContent.length === 0) {
         opts.translator.emitError(
           new Error(`[LLM-EMPTY] ${LLM_ERROR_TABLE['LLM-EMPTY'].userMessage} (model ${opts.model})`),
         );
@@ -257,15 +263,20 @@ export async function runLionLoop(opts: RunLionLoopOptions): Promise<RunLionLoop
       if (call.isError) {
         const errMsg = call.errorMessage ?? 'tool call invalida';
         opts.translator.emitToolResult(call.id, displayName, errMsg, true);
-        transcript.push({
-          role: 'tool',
-          content: errMsg,
-          tool_call_id: call.id,
-          name: displayName,
-        });
+        pushTranscript(
+          {
+            role: 'tool',
+            content: errMsg,
+            tool_call_id: call.id,
+            name: displayName,
+          },
+          { isError: true, originalBytes: null, spillPath: null },
+        );
         consecutiveToolErrors++;
         if (consecutiveToolErrors >= maxConsecutiveToolErrors) {
-          opts.translator.emitError(new Error(`Lion-SDK: ${maxConsecutiveToolErrors} erros consecutivos de tool. Abortando.`));
+          opts.translator.emitError(
+            new Error(`Lion-SDK: ${maxConsecutiveToolErrors} erros consecutivos de tool. Abortando.`),
+          );
           return finalize(false, 'max-tool-errors');
         }
         continue;
@@ -277,15 +288,20 @@ export async function runLionLoop(opts: RunLionLoopOptions): Promise<RunLionLoop
       } catch (e) {
         const errMsg = (e as Error).message;
         opts.translator.emitToolResult(call.id, displayName, `Tool dispatch falhou: ${errMsg}`, true);
-        transcript.push({
-          role: 'tool',
-          content: `Tool dispatch falhou: ${errMsg}`,
-          tool_call_id: call.id,
-          name: displayName,
-        });
+        pushTranscript(
+          {
+            role: 'tool',
+            content: `Tool dispatch falhou: ${errMsg}`,
+            tool_call_id: call.id,
+            name: displayName,
+          },
+          { isError: true, originalBytes: null, spillPath: null },
+        );
         consecutiveToolErrors++;
         if (consecutiveToolErrors >= maxConsecutiveToolErrors) {
-          opts.translator.emitError(new Error(`Lion-SDK: ${maxConsecutiveToolErrors} erros consecutivos de tool. Abortando.`));
+          opts.translator.emitError(
+            new Error(`Lion-SDK: ${maxConsecutiveToolErrors} erros consecutivos de tool. Abortando.`),
+          );
           return finalize(false, 'max-tool-errors');
         }
         continue;
@@ -293,16 +309,25 @@ export async function runLionLoop(opts: RunLionLoopOptions): Promise<RunLionLoop
 
       const label = result.displayName ?? displayName;
       opts.translator.emitToolResult(call.id, label, result.content, !!result.isError);
-      transcript.push({
-        role: 'tool',
-        content: result.content,
-        tool_call_id: call.id,
-        name: label,
-      });
+      pushTranscript(
+        {
+          role: 'tool',
+          content: result.content,
+          tool_call_id: call.id,
+          name: label,
+        },
+        {
+          isError: !!result.isError,
+          originalBytes: result.meta?.originalBytes ?? null,
+          spillPath: result.meta?.spillPath ?? null,
+        },
+      );
       if (result.isError) {
         consecutiveToolErrors++;
         if (consecutiveToolErrors >= maxConsecutiveToolErrors) {
-          opts.translator.emitError(new Error(`Lion-SDK: ${maxConsecutiveToolErrors} erros consecutivos de tool. Abortando.`));
+          opts.translator.emitError(
+            new Error(`Lion-SDK: ${maxConsecutiveToolErrors} erros consecutivos de tool. Abortando.`),
+          );
           return finalize(false, 'max-tool-errors');
         }
       } else {
@@ -330,9 +355,7 @@ export async function runLionLoop(opts: RunLionLoopOptions): Promise<RunLionLoop
       const toolName = msg.name ? ` ${msg.name}` : '';
       return total + estimateTokens(`${msg.role}${toolName}\n${content}\n${reasoning}\n${toolCalls}`);
     }, 0);
-    const toolSchemaTokens = opts.tools.length > 0
-      ? estimateTokens(JSON.stringify(opts.tools))
-      : 0;
+    const toolSchemaTokens = opts.tools.length > 0 ? estimateTokens(JSON.stringify(opts.tools)) : 0;
     return messageTokens + toolSchemaTokens;
   }
 
@@ -340,10 +363,7 @@ export async function runLionLoop(opts: RunLionLoopOptions): Promise<RunLionLoop
     emitPromptContextUsage(estimateCurrentPromptTokens(), 'estimate');
   }
 
-  function emitPromptContextUsage(
-    contextTokens: number,
-    source: 'estimate' | 'provider',
-  ): void {
+  function emitPromptContextUsage(contextTokens: number, source: 'estimate' | 'provider'): void {
     const contextWindowTokens = opts.contextWindowTokens;
     if (!contextWindowTokens || contextWindowTokens <= 0) return;
     opts.translator.emitContextUsage({

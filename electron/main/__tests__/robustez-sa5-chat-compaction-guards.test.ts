@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { ChatSession, StreamChunk } from '../../../src/types';
 
@@ -7,9 +6,12 @@ const h = vi.hoisted(() => ({
   getSettingMock: vi.fn((_key: string): string | undefined => undefined),
   compactMock: vi.fn(),
   getContextWindowMock: vi.fn((_model: string, _provider?: string): number | undefined => undefined),
+  laneOrchestrator: null as { runtime: string; provider: string; model: string } | null,
 }));
 
 vi.mock('../db', () => ({
+  threadIdOf: (s: { id: string; sdkSessionId?: string | null }) => s.sdkSessionId ?? s.id,
+  getSessionOrchestrator: () => h.laneOrchestrator,
   getSession: h.getSessionMock,
   getSetting: h.getSettingMock,
 }));
@@ -41,7 +43,6 @@ import {
 } from '../chat-compaction-trigger';
 import { buildExecutionError } from '../agent-runtime/llm-error';
 
-
 function makeSession(overrides: Partial<ChatSession> = {}): ChatSession {
   return {
     id: 's1',
@@ -57,13 +58,15 @@ function makeSession(overrides: Partial<ChatSession> = {}): ChatSession {
 }
 
 function installKnownModel(windowTokens = 200_000): void {
+  h.laneOrchestrator = { runtime: 'claude-sdk', provider: 'anthropic', model: 'modelo-conhecido' };
   h.getSettingMock.mockImplementation((key: string) => {
     if (key === 'orchestrator_model') return 'modelo-conhecido';
     if (key === 'orchestrator_provider') return 'anthropic';
     return undefined;
   });
   h.getContextWindowMock.mockImplementation((model: string) =>
-    model === 'modelo-conhecido' ? windowTokens : undefined);
+    model === 'modelo-conhecido' ? windowTokens : undefined,
+  );
 }
 
 function installHotSession(): void {
@@ -86,6 +89,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers();
   __resetChatCompactionGuardsForTests();
+  h.laneOrchestrator = null;
   h.getSettingMock.mockReturnValue(undefined);
   h.getContextWindowMock.mockReturnValue(undefined);
   h.compactMock.mockResolvedValue({ ok: true, seedTokens: 40_000 });
@@ -95,14 +99,12 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-
 describe('AC-A10 — anti-thrashing (2 compactacoes ineficazes consecutivas param o gatilho)', () => {
   it('AC-A10: 2 compactacoes seguidas salvando <10% -> gatilho PARA e avisa 1x (COMPACT-SKIPPED)', async () => {
     installHotSession();
     const chunks: StreamChunk[] = [];
     const emit = (c: StreamChunk) => chunks.push(c);
-    const nonIndicator = () =>
-      chunks.filter((c) => c.type !== 'compacting' && c.type !== 'context_usage');
+    const nonIndicator = () => chunks.filter((c) => c.type !== 'compacting' && c.type !== 'context_usage');
 
     h.compactMock.mockResolvedValueOnce(okOutcomeWithSavings(5));
     await maybeCompactChatSession('s1', emit);
@@ -129,19 +131,17 @@ describe('AC-A10 — anti-thrashing (2 compactacoes ineficazes consecutivas para
     const chunks: StreamChunk[] = [];
     const emit = (c: StreamChunk) => chunks.push(c);
 
-    h.compactMock.mockResolvedValueOnce(okOutcomeWithSavings(5)); // ineficaz (1)
+    h.compactMock.mockResolvedValueOnce(okOutcomeWithSavings(5));
     await maybeCompactChatSession('s1', emit);
-    h.compactMock.mockResolvedValueOnce(okOutcomeWithSavings(75)); // eficaz -> reset
+    h.compactMock.mockResolvedValueOnce(okOutcomeWithSavings(75));
     await maybeCompactChatSession('s1', emit);
-    h.compactMock.mockResolvedValueOnce(okOutcomeWithSavings(5)); // ineficaz (1 de novo)
+    h.compactMock.mockResolvedValueOnce(okOutcomeWithSavings(5));
     await maybeCompactChatSession('s1', emit);
 
     h.compactMock.mockResolvedValueOnce(okOutcomeWithSavings(75));
     await maybeCompactChatSession('s1', emit);
     expect(h.compactMock).toHaveBeenCalledTimes(4);
-    expect(
-      chunks.filter((c) => c.type !== 'compacting' && c.type !== 'context_usage'),
-    ).toHaveLength(0);
+    expect(chunks.filter((c) => c.type !== 'compacting' && c.type !== 'context_usage')).toHaveLength(0);
   });
 
   it('AC-A10: no-op (delta vazio) NAO conta como ineficaz nem como falha', async () => {
@@ -155,16 +155,15 @@ describe('AC-A10 — anti-thrashing (2 compactacoes ineficazes consecutivas para
 
   it('AC-A10: o estado e por SESSAO — parar s1 nao afeta s2', async () => {
     installKnownModel(200_000);
-    h.getSessionMock.mockImplementation((id: string) =>
-      makeSession({ id, activeContextTokensEst: 200_000 }));
+    h.getSessionMock.mockImplementation((id: string) => makeSession({ id, activeContextTokensEst: 200_000 }));
 
     h.compactMock.mockResolvedValue(okOutcomeWithSavings(5));
     await maybeCompactChatSession('s1');
-    await maybeCompactChatSession('s1'); // s1 parada (2 ineficazes)
+    await maybeCompactChatSession('s1');
     await maybeCompactChatSession('s1');
     expect(h.compactMock).toHaveBeenCalledTimes(2);
 
-    await maybeCompactChatSession('s2'); // s2 segue viva
+    await maybeCompactChatSession('s2');
     expect(h.compactMock).toHaveBeenCalledTimes(3);
   });
 
@@ -173,7 +172,6 @@ describe('AC-A10 — anti-thrashing (2 compactacoes ineficazes consecutivas para
     expect(CHAT_COMPACTION_MIN_SAVINGS_PERCENT).toBe(10);
   });
 });
-
 
 describe('AC-A11 — cooldown pos-falha do sumarizador', () => {
   it('AC-A11: falha do sumarizador arma cooldown — turno seguinte NAO re-tenta', async () => {
@@ -184,7 +182,7 @@ describe('AC-A11 — cooldown pos-falha do sumarizador', () => {
     h.compactMock.mockResolvedValueOnce(failedOutcome);
     await maybeCompactChatSession('s1', emit);
     expect(h.compactMock).toHaveBeenCalledTimes(1);
-    expect(chunks.some(c => c.type === 'error' && c.code === 'COMPACT-EMPTY')).toBe(true);
+    expect(chunks.some((c) => c.type === 'error' && c.code === 'COMPACT-EMPTY')).toBe(true);
 
     await maybeCompactChatSession('s1', emit);
     vi.advanceTimersByTime(CHAT_COMPACTION_FAILURE_COOLDOWN_MS - 1_000);

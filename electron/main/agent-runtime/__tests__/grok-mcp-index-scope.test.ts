@@ -8,12 +8,14 @@ const { getMcpToolSchema, invokeMcpTool } = vi.hoisted(() => ({
 vi.mock('../../db', () => ({ getSetting: () => 'index' }));
 vi.mock('../../mcp-manager', () => ({
   getMCPConfigForAgent: async () => ({ allowed: { command: 'node', args: ['allowed.js'] } }),
-  getMcpToolRegistryEntries: () => [{
-    mcpId: 'allowed',
-    toolName: 'visible',
-    description: 'Tool permitida',
-    inputSchema: JSON.stringify({ type: 'object', properties: {}, additionalProperties: false }),
-  }],
+  getMcpToolRegistryEntries: () => [
+    {
+      mcpId: 'allowed',
+      toolName: 'visible',
+      description: 'Tool permitida',
+      inputSchema: JSON.stringify({ type: 'object', properties: {}, additionalProperties: false }),
+    },
+  ],
 }));
 vi.mock('../../mcp-invoke', () => ({
   getMcpToolSchema,
@@ -53,8 +55,7 @@ describe('Grok MCP index scope', () => {
     const schema = built.externalTools.find((tool) => tool.name === 'mcp_schema');
     expect(schema).toBeDefined();
 
-    await expect(schema!.handler({ server: 'hidden', tool: 'secret' }))
-      .rejects.toThrow('nao pertence ao escopo');
+    await expect(schema!.handler({ server: 'hidden', tool: 'secret' })).rejects.toThrow('nao pertence ao escopo');
     expect(getMcpToolSchema).not.toHaveBeenCalled();
 
     const allowed = await schema!.handler({ server: 'allowed', tool: 'visible' });
@@ -72,10 +73,10 @@ describe('Grok MCP index scope', () => {
     const invoke = built.externalTools.find((tool) => tool.name === 'mcp_invoke')!;
     const schema = built.externalTools.find((tool) => tool.name === 'mcp_schema')!;
 
-    await expect(invoke.handler({ server: 'allowed', tool: 'secret', args: {} }))
-      .rejects.toThrow('nao pertence ao escopo');
-    await expect(schema.handler({ server: 'allowed', tool: 'secret' }))
-      .rejects.toThrow('nao pertence ao escopo');
+    await expect(invoke.handler({ server: 'allowed', tool: 'secret', args: {} })).rejects.toThrow(
+      'nao pertence ao escopo',
+    );
+    await expect(schema.handler({ server: 'allowed', tool: 'secret' })).rejects.toThrow('nao pertence ao escopo');
     expect(invokeMcpTool).not.toHaveBeenCalled();
     expect(getMcpToolSchema).not.toHaveBeenCalled();
   });

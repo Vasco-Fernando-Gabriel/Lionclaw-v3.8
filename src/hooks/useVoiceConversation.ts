@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useChatStore } from '@/stores/chat-store';
+import { selectVisibleThread, useChatStore, useVisibleThread } from '@/stores/chat-store';
 
 export type VoiceConversationState =
   | 'closed'
@@ -171,9 +171,7 @@ function appendPreRollChunk(chunks: Blob[], chunk: Blob, header: Blob | null, ma
 }
 
 function buildTimingDurations(timings: VoiceTurnTimings): Record<string, number | null> {
-  const duration = (start?: number, end?: number) => (
-    start != null && end != null ? Math.round(end - start) : null
-  );
+  const duration = (start?: number, end?: number) => (start != null && end != null ? Math.round(end - start) : null);
 
   return {
     recordingMs: duration(timings.recordingStartedAt, timings.recordingEndedAt),
@@ -182,7 +180,10 @@ function buildTimingDurations(timings: VoiceTurnTimings): Record<string, number 
     agentTotalMs: duration(timings.transcriptionEndedAt, timings.agentDoneAt),
     ttsMs: duration(timings.ttsStartedAt, timings.ttsEndedAt),
     playbackMs: duration(timings.playbackStartedAt, timings.playbackEndedAt),
-    totalMs: duration(timings.recordingStartedAt, timings.playbackEndedAt ?? timings.agentDoneAt ?? timings.transcriptionEndedAt),
+    totalMs: duration(
+      timings.recordingStartedAt,
+      timings.playbackEndedAt ?? timings.agentDoneAt ?? timings.transcriptionEndedAt,
+    ),
   };
 }
 
@@ -193,9 +194,7 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
   const [lastError, setLastError] = useState<string | null>(null);
   const [turnElapsedMs, setTurnElapsedMs] = useState(0);
 
-  const assistantTurnEvents = useChatStore((chatState) => chatState.assistantTurnEvents);
-  const assistantTurnCount = useChatStore((chatState) => chatState.assistantTurnCount);
-  const streamingContent = useChatStore((chatState) => chatState.streamingContent);
+  const { assistantTurnEvents, assistantTurnCount, streamingContent } = useVisibleThread();
   const setVoiceModeActive = useChatStore((chatState) => chatState.setVoiceModeActive);
 
   const stateRef = useRef<VoiceConversationState>('closed');
@@ -251,18 +250,22 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
   const streamingSpeechFirstChunkQueuedRef = useRef(false);
   const streamingSpeechPrefetchRef = useRef<Promise<LiveSpeechResult> | null>(null);
 
-  const isCurrentTimings = useCallback((timings: VoiceTurnTimings) => (
-    timingsRef.current === timings && timingsRef.current.id === timings.id
-  ), []);
+  const isCurrentTimings = useCallback(
+    (timings: VoiceTurnTimings) => timingsRef.current === timings && timingsRef.current.id === timings.id,
+    [],
+  );
 
   const logTimings = useCallback((status: string, extra?: Record<string, unknown>) => {
     if (timingsLoggedRef.current) return;
     timingsLoggedRef.current = true;
-    console.debug('[voice-conversation:timings]', JSON.stringify({
-      status,
-      ...buildTimingDurations(timingsRef.current),
-      ...extra,
-    }));
+    console.debug(
+      '[voice-conversation:timings]',
+      JSON.stringify({
+        status,
+        ...buildTimingDurations(timingsRef.current),
+        ...extra,
+      }),
+    );
   }, []);
 
   const startTimingTurn = useCallback((recordingStartedAt: number): VoiceTurnTimings => {
@@ -382,17 +385,20 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
     }
   }, []);
 
-  const restartListeningSoon = useCallback((delayMs = 0) => {
-    clearRecoveryTimer();
-    if (!activeRef.current || disabled) return;
+  const restartListeningSoon = useCallback(
+    (delayMs = 0) => {
+      clearRecoveryTimer();
+      if (!activeRef.current || disabled) return;
 
-    recoveryTimerRef.current = setTimeout(() => {
-      recoveryTimerRef.current = null;
-      if (activeRef.current && !disabled) {
-        void startCaptureRef.current?.();
-      }
-    }, delayMs);
-  }, [clearRecoveryTimer, disabled]);
+      recoveryTimerRef.current = setTimeout(() => {
+        recoveryTimerRef.current = null;
+        if (activeRef.current && !disabled) {
+          void startCaptureRef.current?.();
+        }
+      }, delayMs);
+    },
+    [clearRecoveryTimer, disabled],
+  );
 
   const promoteBargeInToRecording = useCallback(() => {
     const stream = bargeInStreamRef.current;
@@ -474,150 +480,160 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
       updateState('interrupted');
       restartListeningSoon();
     }
-  }, [isCurrentTimings, logTimings, promoteBargeInToRecording, restartListeningSoon, stopBargeInMonitor, stopPlayback, updateState]);
+  }, [
+    isCurrentTimings,
+    logTimings,
+    promoteBargeInToRecording,
+    restartListeningSoon,
+    stopBargeInMonitor,
+    stopPlayback,
+    updateState,
+  ]);
 
-  const startBargeInMonitor = useCallback(async (speechToken: number) => {
-    if (!activeRef.current || disabled || stateRef.current !== 'speaking') return;
+  const startBargeInMonitor = useCallback(
+    async (speechToken: number) => {
+      if (!activeRef.current || disabled || stateRef.current !== 'speaking') return;
 
-    stopBargeInMonitor();
-    const monitorToken = bargeInMonitorTokenRef.current + 1;
-    bargeInMonitorTokenRef.current = monitorToken;
+      stopBargeInMonitor();
+      const monitorToken = bargeInMonitorTokenRef.current + 1;
+      bargeInMonitorTokenRef.current = monitorToken;
 
-    let setupStream: MediaStream | null = null;
-    let setupAudioContext: AudioContext | null = null;
-    let setupSource: MediaStreamAudioSourceNode | null = null;
+      let setupStream: MediaStream | null = null;
+      let setupAudioContext: AudioContext | null = null;
+      let setupSource: MediaStreamAudioSourceNode | null = null;
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-      setupStream = stream;
-      bargeInStreamRef.current = stream;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+        setupStream = stream;
+        bargeInStreamRef.current = stream;
 
-      if (
-        !activeRef.current
-        || disabled
-        || stateRef.current !== 'speaking'
-        || speechTokenRef.current !== speechToken
-        || bargeInMonitorTokenRef.current !== monitorToken
-      ) {
-        stopBargeInMonitor();
-        return;
-      }
-
-      const audioContext = new window.AudioContext();
-      setupAudioContext = audioContext;
-      bargeInAudioContextRef.current = audioContext;
-      if (audioContext.state === 'suspended') {
-        await audioContext.resume();
-      }
-
-      if (
-        !activeRef.current
-        || disabled
-        || stateRef.current !== 'speaking'
-        || speechTokenRef.current !== speechToken
-        || bargeInMonitorTokenRef.current !== monitorToken
-      ) {
-        stopBargeInMonitor();
-        return;
-      }
-
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 1024;
-      analyser.smoothingTimeConstant = 0.74;
-      const source = audioContext.createMediaStreamSource(stream);
-      setupSource = source;
-      source.connect(analyser);
-      bargeInAnalyserRef.current = analyser;
-      bargeInSourceRef.current = source;
-      bargeInMonitorStartedAtRef.current = performance.now();
-      bargeInCandidateStartedAtRef.current = null;
-      bargeInPreRollChunksRef.current = [];
-
-      const mimeType = getRecorderMimeType();
-      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-      const maxPreRollChunks = Math.max(1, Math.ceil(VOICE_PRE_ROLL_MS / RECORDER_CHUNK_MS) + 1);
-      recorder.ondataavailable = (event) => {
-        if (event.data.size === 0) return;
-        bargeInRecorderHeaderChunkRef.current ??= event.data;
-        const graceElapsed = performance.now() - bargeInMonitorStartedAtRef.current >= BARGE_IN_GRACE_MS;
-        if (!graceElapsed) return;
-
-        bargeInPreRollChunksRef.current = appendPreRollChunk(
-          bargeInPreRollChunksRef.current,
-          event.data,
-          bargeInRecorderHeaderChunkRef.current,
-          maxPreRollChunks,
-        );
-      };
-      recorder.start(RECORDER_CHUNK_MS);
-      bargeInRecorderRef.current = recorder;
-
-      setupStream = null;
-      setupAudioContext = null;
-      setupSource = null;
-
-      const data = new Uint8Array(analyser.fftSize);
-      const tick = () => {
         if (
-          !activeRef.current
-          || disabled
-          || stateRef.current !== 'speaking'
-          || speechTokenRef.current !== speechToken
-          || bargeInMonitorTokenRef.current !== monitorToken
+          !activeRef.current ||
+          disabled ||
+          stateRef.current !== 'speaking' ||
+          speechTokenRef.current !== speechToken ||
+          bargeInMonitorTokenRef.current !== monitorToken
         ) {
           stopBargeInMonitor();
           return;
         }
 
-        analyser.getByteTimeDomainData(data);
-        let sum = 0;
-        for (let i = 0; i < data.length; i += 1) {
-          const value = (data[i] - 128) / 128;
-          sum += value * value;
+        const audioContext = new window.AudioContext();
+        setupAudioContext = audioContext;
+        bargeInAudioContextRef.current = audioContext;
+        if (audioContext.state === 'suspended') {
+          await audioContext.resume();
         }
 
-        const rms = Math.sqrt(sum / data.length);
-        const db = 20 * Math.log10(Math.max(rms, 0.00001));
-        const now = performance.now();
-        const graceElapsed = now - bargeInMonitorStartedAtRef.current >= BARGE_IN_GRACE_MS;
-        const hasVoice = graceElapsed && db > BARGE_IN_START_THRESHOLD_DB;
-
-        if (hasVoice) {
-          bargeInCandidateStartedAtRef.current ??= now;
-        } else {
-          bargeInCandidateStartedAtRef.current = null;
-        }
-
-        const candidateMs = bargeInCandidateStartedAtRef.current == null
-          ? 0
-          : now - bargeInCandidateStartedAtRef.current;
-
-        if (candidateMs >= BARGE_IN_MIN_SPEECH_MS) {
-          triggerBargeIn();
+        if (
+          !activeRef.current ||
+          disabled ||
+          stateRef.current !== 'speaking' ||
+          speechTokenRef.current !== speechToken ||
+          bargeInMonitorTokenRef.current !== monitorToken
+        ) {
+          stopBargeInMonitor();
           return;
         }
 
-        bargeInFrameRef.current = requestAnimationFrame(tick);
-      };
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0.74;
+        const source = audioContext.createMediaStreamSource(stream);
+        setupSource = source;
+        source.connect(analyser);
+        bargeInAnalyserRef.current = analyser;
+        bargeInSourceRef.current = source;
+        bargeInMonitorStartedAtRef.current = performance.now();
+        bargeInCandidateStartedAtRef.current = null;
+        bargeInPreRollChunksRef.current = [];
 
-      bargeInFrameRef.current = requestAnimationFrame(tick);
-    } catch (error) {
-      setupSource?.disconnect();
-      setupStream?.getTracks().forEach((track) => track.stop());
-      void setupAudioContext?.close().catch(() => undefined);
-      stopBargeInMonitor();
-      console.debug('[voice-conversation:barge-in]', {
-        status: 'monitor_indisponivel',
-        errorType: error instanceof Error ? error.name : typeof error,
-      });
-    }
-  }, [disabled, stopBargeInMonitor, triggerBargeIn]);
+        const mimeType = getRecorderMimeType();
+        const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+        const maxPreRollChunks = Math.max(1, Math.ceil(VOICE_PRE_ROLL_MS / RECORDER_CHUNK_MS) + 1);
+        recorder.ondataavailable = (event) => {
+          if (event.data.size === 0) return;
+          bargeInRecorderHeaderChunkRef.current ??= event.data;
+          const graceElapsed = performance.now() - bargeInMonitorStartedAtRef.current >= BARGE_IN_GRACE_MS;
+          if (!graceElapsed) return;
+
+          bargeInPreRollChunksRef.current = appendPreRollChunk(
+            bargeInPreRollChunksRef.current,
+            event.data,
+            bargeInRecorderHeaderChunkRef.current,
+            maxPreRollChunks,
+          );
+        };
+        recorder.start(RECORDER_CHUNK_MS);
+        bargeInRecorderRef.current = recorder;
+
+        setupStream = null;
+        setupAudioContext = null;
+        setupSource = null;
+
+        const data = new Uint8Array(analyser.fftSize);
+        const tick = () => {
+          if (
+            !activeRef.current ||
+            disabled ||
+            stateRef.current !== 'speaking' ||
+            speechTokenRef.current !== speechToken ||
+            bargeInMonitorTokenRef.current !== monitorToken
+          ) {
+            stopBargeInMonitor();
+            return;
+          }
+
+          analyser.getByteTimeDomainData(data);
+          let sum = 0;
+          for (let i = 0; i < data.length; i += 1) {
+            const value = (data[i] - 128) / 128;
+            sum += value * value;
+          }
+
+          const rms = Math.sqrt(sum / data.length);
+          const db = 20 * Math.log10(Math.max(rms, 0.00001));
+          const now = performance.now();
+          const graceElapsed = now - bargeInMonitorStartedAtRef.current >= BARGE_IN_GRACE_MS;
+          const hasVoice = graceElapsed && db > BARGE_IN_START_THRESHOLD_DB;
+
+          if (hasVoice) {
+            bargeInCandidateStartedAtRef.current ??= now;
+          } else {
+            bargeInCandidateStartedAtRef.current = null;
+          }
+
+          const candidateMs =
+            bargeInCandidateStartedAtRef.current == null ? 0 : now - bargeInCandidateStartedAtRef.current;
+
+          if (candidateMs >= BARGE_IN_MIN_SPEECH_MS) {
+            triggerBargeIn();
+            return;
+          }
+
+          bargeInFrameRef.current = requestAnimationFrame(tick);
+        };
+
+        bargeInFrameRef.current = requestAnimationFrame(tick);
+      } catch (error) {
+        setupSource?.disconnect();
+        setupStream?.getTracks().forEach((track) => track.stop());
+        void setupAudioContext?.close().catch(() => undefined);
+        stopBargeInMonitor();
+        console.debug('[voice-conversation:barge-in]', {
+          status: 'monitor_indisponivel',
+          errorType: error instanceof Error ? error.name : typeof error,
+        });
+      }
+    },
+    [disabled, stopBargeInMonitor, triggerBargeIn],
+  );
 
   const stopRecorderToBlob = useCallback((): Promise<Blob> => {
     const recorder = mediaRecorderRef.current;
@@ -637,47 +653,138 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
     });
   }, []);
 
-  const speakResponse = useCallback(async (rawText: string) => {
-    const cleanText = cleanAssistantText(rawText);
-    if (!activeRef.current || disabled) return;
+  const speakResponse = useCallback(
+    async (rawText: string) => {
+      const cleanText = cleanAssistantText(rawText);
+      if (!activeRef.current || disabled) return;
 
-    if (cleanText.length < 2) {
-      updateState('idle');
-      restartListeningSoon();
-      logTimings('sem_tts');
-      return;
-    }
-
-    updateState('speaking');
-    interruptedPlaybackRef.current = false;
-    const speechToken = speechTokenRef.current + 1;
-    speechTokenRef.current = speechToken;
-    const timings = timingsRef.current;
-    if (isCurrentTimings(timings)) {
-      timings.ttsStartedAt = performance.now();
-    }
-    let ttsCompleted = false;
-
-    const canContinueSpeaking = () => (
-      activeRef.current
-      && !disabled
-      && !interruptedPlaybackRef.current
-      && speechTokenRef.current === speechToken
-    );
-
-    try {
-      if (!canContinueSpeaking()) return;
-
-      const result = await window.lionclaw.voice.speakLive(cleanText.slice(0, 5000));
-      if (isCurrentTimings(timings)) {
-        timings.ttsEndedAt = performance.now();
+      if (cleanText.length < 2) {
+        updateState('idle');
+        restartListeningSoon();
+        logTimings('sem_tts');
+        return;
       }
-      ttsCompleted = true;
-      if (!canContinueSpeaking()) return;
+
+      updateState('speaking');
+      interruptedPlaybackRef.current = false;
+      const speechToken = speechTokenRef.current + 1;
+      speechTokenRef.current = speechToken;
+      const timings = timingsRef.current;
+      if (isCurrentTimings(timings)) {
+        timings.ttsStartedAt = performance.now();
+      }
+      let ttsCompleted = false;
+
+      const canContinueSpeaking = () =>
+        activeRef.current && !disabled && !interruptedPlaybackRef.current && speechTokenRef.current === speechToken;
+
+      try {
+        if (!canContinueSpeaking()) return;
+
+        const result = await window.lionclaw.voice.speakLive(cleanText.slice(0, 5000));
+        if (isCurrentTimings(timings)) {
+          timings.ttsEndedAt = performance.now();
+        }
+        ttsCompleted = true;
+        if (!canContinueSpeaking()) return;
+
+        const mimeType = result.format === 'opus' ? 'audio/ogg' : 'audio/mpeg';
+        const audio = new Audio(`data:${mimeType};base64,${result.base64}`);
+        if (!canContinueSpeaking()) return;
+
+        audioRef.current = audio;
+
+        await new Promise<void>((resolve, reject) => {
+          let settled = false;
+          const cleanup = () => {
+            audio.onended = null;
+            audio.onerror = null;
+            if (playbackCancelRef.current === cancelPlayback) {
+              playbackCancelRef.current = null;
+            }
+          };
+          const settle = (callback: () => void) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            callback();
+          };
+          const cancelPlayback = () => {
+            settle(resolve);
+          };
+
+          playbackCancelRef.current = cancelPlayback;
+          audio.onended = () => settle(resolve);
+          audio.onerror = () => settle(() => reject(new VoicePlaybackError()));
+          if (isCurrentTimings(timings)) {
+            timings.playbackStartedAt = performance.now();
+          }
+          const playPromise = audio.play();
+          playPromise
+            .then(() => {
+              if (canContinueSpeaking()) {
+                void startBargeInMonitor(speechToken);
+              }
+            })
+            .catch((error: unknown) => settle(() => reject(new VoicePlaybackError(error))));
+        });
+        stopBargeInMonitor();
+        if (isCurrentTimings(timings)) {
+          timings.playbackEndedAt = performance.now();
+        }
+
+        if (audioRef.current === audio) {
+          audioRef.current = null;
+        }
+        if (canContinueSpeaking()) {
+          logTimings('completo');
+          updateState('idle');
+          restartListeningSoon();
+        }
+      } catch (error) {
+        if (!canContinueSpeaking()) return;
+        stopBargeInMonitor();
+        if (isCurrentTimings(timings)) {
+          if (ttsCompleted) {
+            timings.playbackEndedAt ??= timings.playbackStartedAt ? performance.now() : undefined;
+          } else {
+            timings.ttsEndedAt ??= performance.now();
+          }
+        }
+        logTimings(ttsCompleted ? 'erro_playback' : 'erro_tts', {
+          errorType: error instanceof Error ? error.name : typeof error,
+        });
+        console.error('Voice conversation TTS failed:', error);
+        setLastError('Nao consegui reproduzir a resposta em voz.');
+        updateState('error');
+        restartListeningSoon(1200);
+      }
+    },
+    [
+      disabled,
+      isCurrentTimings,
+      logTimings,
+      restartListeningSoon,
+      startBargeInMonitor,
+      stopBargeInMonitor,
+      updateState,
+    ],
+  );
+
+  const generateLiveAudio = useCallback((text: string): Promise<LiveSpeechResult> => {
+    return window.lionclaw.voice.speakLive(text.slice(0, 5000));
+  }, []);
+
+  const playLiveSpeechChunk = useCallback(
+    async (result: LiveSpeechResult, speechToken: number, timings: VoiceTurnTimings) => {
+      const canContinueSpeaking = () =>
+        activeRef.current && !disabled && !interruptedPlaybackRef.current && speechTokenRef.current === speechToken;
+
+      if (!canContinueSpeaking()) return false;
 
       const mimeType = result.format === 'opus' ? 'audio/ogg' : 'audio/mpeg';
       const audio = new Audio(`data:${mimeType};base64,${result.base64}`);
-      if (!canContinueSpeaking()) return;
+      if (!canContinueSpeaking()) return false;
 
       audioRef.current = audio;
 
@@ -704,7 +811,7 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
         audio.onended = () => settle(resolve);
         audio.onerror = () => settle(() => reject(new VoicePlaybackError()));
         if (isCurrentTimings(timings)) {
-          timings.playbackStartedAt = performance.now();
+          timings.playbackStartedAt ??= performance.now();
         }
         const playPromise = audio.play();
         playPromise
@@ -715,106 +822,19 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
           })
           .catch((error: unknown) => settle(() => reject(new VoicePlaybackError(error))));
       });
+
       stopBargeInMonitor();
       if (isCurrentTimings(timings)) {
         timings.playbackEndedAt = performance.now();
       }
-
       if (audioRef.current === audio) {
         audioRef.current = null;
       }
-      if (canContinueSpeaking()) {
-        logTimings('completo');
-        updateState('idle');
-        restartListeningSoon();
-      }
-    } catch (error) {
-      if (!canContinueSpeaking()) return;
-      stopBargeInMonitor();
-      if (isCurrentTimings(timings)) {
-        if (ttsCompleted) {
-          timings.playbackEndedAt ??= timings.playbackStartedAt ? performance.now() : undefined;
-        } else {
-          timings.ttsEndedAt ??= performance.now();
-        }
-      }
-      logTimings(ttsCompleted ? 'erro_playback' : 'erro_tts', { errorType: error instanceof Error ? error.name : typeof error });
-      console.error('Voice conversation TTS failed:', error);
-      setLastError('Nao consegui reproduzir a resposta em voz.');
-      updateState('error');
-      restartListeningSoon(1200);
-    }
-  }, [disabled, isCurrentTimings, logTimings, restartListeningSoon, startBargeInMonitor, stopBargeInMonitor, updateState]);
 
-  const generateLiveAudio = useCallback((text: string): Promise<LiveSpeechResult> => {
-    return window.lionclaw.voice.speakLive(text.slice(0, 5000));
-  }, []);
-
-  const playLiveSpeechChunk = useCallback(async (
-    result: LiveSpeechResult,
-    speechToken: number,
-    timings: VoiceTurnTimings,
-  ) => {
-    const canContinueSpeaking = () => (
-      activeRef.current
-      && !disabled
-      && !interruptedPlaybackRef.current
-      && speechTokenRef.current === speechToken
-    );
-
-    if (!canContinueSpeaking()) return false;
-
-    const mimeType = result.format === 'opus' ? 'audio/ogg' : 'audio/mpeg';
-    const audio = new Audio(`data:${mimeType};base64,${result.base64}`);
-    if (!canContinueSpeaking()) return false;
-
-    audioRef.current = audio;
-
-    await new Promise<void>((resolve, reject) => {
-      let settled = false;
-      const cleanup = () => {
-        audio.onended = null;
-        audio.onerror = null;
-        if (playbackCancelRef.current === cancelPlayback) {
-          playbackCancelRef.current = null;
-        }
-      };
-      const settle = (callback: () => void) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        callback();
-      };
-      const cancelPlayback = () => {
-        settle(resolve);
-      };
-
-      playbackCancelRef.current = cancelPlayback;
-      audio.onended = () => settle(resolve);
-      audio.onerror = () => settle(() => reject(new VoicePlaybackError()));
-      if (isCurrentTimings(timings)) {
-        timings.playbackStartedAt ??= performance.now();
-      }
-      const playPromise = audio.play();
-      playPromise
-        .then(() => {
-          if (canContinueSpeaking()) {
-            void startBargeInMonitor(speechToken);
-          }
-        })
-        .catch((error: unknown) => settle(() => reject(new VoicePlaybackError(error))));
-    });
-
-    stopBargeInMonitor();
-    if (isCurrentTimings(timings)) {
-      timings.playbackEndedAt = performance.now();
-    }
-    if (audioRef.current === audio) {
-      audioRef.current = null;
-    }
-
-    return canContinueSpeaking();
-  }, [disabled, isCurrentTimings, startBargeInMonitor, stopBargeInMonitor]);
+      return canContinueSpeaking();
+    },
+    [disabled, isCurrentTimings, startBargeInMonitor, stopBargeInMonitor],
+  );
 
   const processStreamingSpeechQueue = useCallback(async () => {
     if (streamingSpeechProcessingRef.current) return;
@@ -834,12 +854,8 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
       if (speechToken == null) return;
       const timings = timingsRef.current;
 
-      const guardsOk = () => (
-        activeRef.current
-        && !disabled
-        && !interruptedPlaybackRef.current
-        && speechTokenRef.current === speechToken
-      );
+      const guardsOk = () =>
+        activeRef.current && !disabled && !interruptedPlaybackRef.current && speechTokenRef.current === speechToken;
 
       if (isCurrentTimings(timings)) {
         timings.ttsStartedAt ??= performance.now();
@@ -856,7 +872,7 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
         const following = streamingSpeechQueueRef.current.shift();
         if (following) {
           const prefetch = generateLiveAudio(following);
-          prefetch.catch(() => {}); // descartado em cancel/barge-in: evita unhandled rejection
+          prefetch.catch(() => {});
           streamingSpeechPrefetchRef.current = prefetch;
         }
 
@@ -869,15 +885,15 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
         if (!continued) return;
       }
 
-      const drained = streamingSpeechQueueRef.current.length === 0
-        && streamingSpeechBufferRef.current.trim().length === 0;
+      const drained =
+        streamingSpeechQueueRef.current.length === 0 && streamingSpeechBufferRef.current.trim().length === 0;
       if (
-        streamingSpeechFinalRef.current
-        && drained
-        && activeRef.current
-        && !disabled
-        && !interruptedPlaybackRef.current
-        && speechTokenRef.current === speechToken
+        streamingSpeechFinalRef.current &&
+        drained &&
+        activeRef.current &&
+        !disabled &&
+        !interruptedPlaybackRef.current &&
+        speechTokenRef.current === speechToken
       ) {
         logTimings('completo_streaming');
         resetStreamingSpeech();
@@ -901,11 +917,12 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
     } finally {
       streamingSpeechProcessingRef.current = false;
       const speechToken = streamingSpeechTokenRef.current;
-      const canContinue = speechToken != null
-        && activeRef.current
-        && !disabled
-        && !interruptedPlaybackRef.current
-        && speechTokenRef.current === speechToken;
+      const canContinue =
+        speechToken != null &&
+        activeRef.current &&
+        !disabled &&
+        !interruptedPlaybackRef.current &&
+        speechTokenRef.current === speechToken;
       if (canContinue && streamingSpeechQueueRef.current.length > 0) {
         void processStreamingSpeechQueue();
       }
@@ -922,68 +939,73 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
     updateState,
   ]);
 
-  const appendStreamingSpeechContent = useCallback((fullContent: string, final = false) => {
-    if (final) {
-      streamingSpeechFinalRef.current = true;
-    }
-
-    if (fullContent.length < streamingSpeechRawOffsetRef.current) {
-      streamingSpeechRawOffsetRef.current = 0;
-      streamingSpeechBufferRef.current = '';
-    }
-
-    const rawDelta = fullContent.slice(streamingSpeechRawOffsetRef.current);
-    streamingSpeechRawOffsetRef.current = fullContent.length;
-    const cleanDelta = cleanAssistantText(rawDelta);
-    if (cleanDelta) {
-      const buffer = streamingSpeechBufferRef.current;
-      const needsSpace = buffer.length > 0 && !/[\s([{'"-]$/.test(buffer) && !/^[.,!?;:)\]}]/.test(cleanDelta);
-      streamingSpeechBufferRef.current = `${buffer}${needsSpace ? ' ' : ''}${cleanDelta}`;
-    }
-
-    const chunks: string[] = [];
-    let buffer = streamingSpeechBufferRef.current.trimStart();
-
-    if (final) {
-      const finalText = buffer.trim();
-      if (finalText.length >= 2) {
-        chunks.push(finalText);
+  const appendStreamingSpeechContent = useCallback(
+    (fullContent: string, final = false) => {
+      if (final) {
+        streamingSpeechFinalRef.current = true;
       }
-      buffer = '';
-    } else if (!streamingSpeechFirstChunkQueuedRef.current) {
-      const cut = findStreamingSpeechCut(buffer, false);
-      if (cut >= 0) {
-        const chunk = buffer.slice(0, cut).trim();
-        buffer = buffer.slice(cut).trimStart();
-        if (chunk.length >= 2) {
-          chunks.push(chunk);
-          streamingSpeechFirstChunkQueuedRef.current = true;
+
+      if (fullContent.length < streamingSpeechRawOffsetRef.current) {
+        streamingSpeechRawOffsetRef.current = 0;
+        streamingSpeechBufferRef.current = '';
+      }
+
+      const rawDelta = fullContent.slice(streamingSpeechRawOffsetRef.current);
+      streamingSpeechRawOffsetRef.current = fullContent.length;
+      const cleanDelta = cleanAssistantText(rawDelta);
+      if (cleanDelta) {
+        const buffer = streamingSpeechBufferRef.current;
+        const needsSpace = buffer.length > 0 && !/[\s([{'"-]$/.test(buffer) && !/^[.,!?;:)\]}]/.test(cleanDelta);
+        streamingSpeechBufferRef.current = `${buffer}${needsSpace ? ' ' : ''}${cleanDelta}`;
+      }
+
+      const chunks: string[] = [];
+      let buffer = streamingSpeechBufferRef.current.trimStart();
+
+      if (final) {
+        const finalText = buffer.trim();
+        if (finalText.length >= 2) {
+          chunks.push(finalText);
+        }
+        buffer = '';
+      } else if (!streamingSpeechFirstChunkQueuedRef.current) {
+        const cut = findStreamingSpeechCut(buffer, false);
+        if (cut >= 0) {
+          const chunk = buffer.slice(0, cut).trim();
+          buffer = buffer.slice(cut).trimStart();
+          if (chunk.length >= 2) {
+            chunks.push(chunk);
+            streamingSpeechFirstChunkQueuedRef.current = true;
+          }
+        }
+      } else {
+        let cut = findFollowUpSpeechCut(buffer);
+        while (cut >= 0) {
+          const chunk = buffer.slice(0, cut).trim();
+          buffer = buffer.slice(cut).trimStart();
+          if (chunk.length >= 2) chunks.push(chunk);
+          cut = findFollowUpSpeechCut(buffer);
         }
       }
-    } else {
-      let cut = findFollowUpSpeechCut(buffer);
-      while (cut >= 0) {
-        const chunk = buffer.slice(0, cut).trim();
-        buffer = buffer.slice(cut).trimStart();
-        if (chunk.length >= 2) chunks.push(chunk);
-        cut = findFollowUpSpeechCut(buffer);
+
+      streamingSpeechBufferRef.current = buffer;
+
+      if (chunks.length > 0) {
+        streamingSpeechQueueRef.current.push(...chunks);
+        void processStreamingSpeechQueue();
+      } else if (final && streamingSpeechStartedRef.current) {
+        void processStreamingSpeechQueue();
       }
-    }
 
-    streamingSpeechBufferRef.current = buffer;
-
-    if (chunks.length > 0) {
-      streamingSpeechQueueRef.current.push(...chunks);
-      void processStreamingSpeechQueue();
-    } else if (final && streamingSpeechStartedRef.current) {
-      void processStreamingSpeechQueue();
-    }
-
-    return chunks.length > 0
-      || streamingSpeechStartedRef.current
-      || streamingSpeechQueueRef.current.length > 0
-      || streamingSpeechBufferRef.current.trim().length > 0;
-  }, [processStreamingSpeechQueue]);
+      return (
+        chunks.length > 0 ||
+        streamingSpeechStartedRef.current ||
+        streamingSpeechQueueRef.current.length > 0 ||
+        streamingSpeechBufferRef.current.trim().length > 0
+      );
+    },
+    [processStreamingSpeechQueue],
+  );
 
   const finishTurn = useCallback(async () => {
     if (finishingTurnRef.current || stateRef.current !== 'recording') return;
@@ -1037,8 +1059,7 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
 
       awaitingResponseRef.current = true;
       resetStreamingSpeech();
-      const chatState = useChatStore.getState();
-      voiceExpectedTurnSequenceRef.current = chatState.submittedUserTurnCount + 1;
+      voiceExpectedTurnSequenceRef.current = selectVisibleThread(useChatStore.getState()).submittedUserTurnCount + 1;
       updateState('thinking');
       await onSendMessage(text);
       if (!activeRef.current || lifecycleTokenRef.current !== lifecycleToken) {
@@ -1062,7 +1083,16 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
       preRollChunksRef.current = [];
       recorderHeaderChunkRef.current = null;
     }
-  }, [isCurrentTimings, logTimings, onSendMessage, releaseCapture, resetStreamingSpeech, restartListeningSoon, stopRecorderToBlob, updateState]);
+  }, [
+    isCurrentTimings,
+    logTimings,
+    onSendMessage,
+    releaseCapture,
+    resetStreamingSpeech,
+    restartListeningSoon,
+    stopRecorderToBlob,
+    updateState,
+  ]);
 
   finishTurnRef.current = finishTurn;
 
@@ -1150,7 +1180,8 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
 
   const startCapture = useCallback(async () => {
     if (disabled || startingCaptureRef.current || !activeRef.current) return;
-    if (!['closed', 'idle', 'interrupted', 'error', 'permission-denied', 'listening'].includes(stateRef.current)) return;
+    if (!['closed', 'idle', 'interrupted', 'error', 'permission-denied', 'listening'].includes(stateRef.current))
+      return;
     startingCaptureRef.current = true;
     clearRecoveryTimer();
     releaseCapture();
@@ -1278,7 +1309,15 @@ export function useVoiceConversation({ disabled, autoStart, onSendMessage }: Use
     stopPlayback();
     setVoiceModeActive(false);
     updateState('closed');
-  }, [clearRecoveryTimer, releaseCapture, resetStreamingSpeech, setVoiceModeActive, stopBargeInMonitor, stopPlayback, updateState]);
+  }, [
+    clearRecoveryTimer,
+    releaseCapture,
+    resetStreamingSpeech,
+    setVoiceModeActive,
+    stopBargeInMonitor,
+    stopPlayback,
+    updateState,
+  ]);
 
   const interrupt = useCallback(() => {
     if (stateRef.current !== 'speaking') return;

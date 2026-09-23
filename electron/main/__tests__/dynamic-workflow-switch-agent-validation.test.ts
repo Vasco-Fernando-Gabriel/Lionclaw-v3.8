@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import type {
   DynamicWorkflowDefinition,
@@ -6,10 +5,7 @@ import type {
   DynamicWorkflowDefinitionCreateInput,
 } from '../dynamic-workflows/types';
 import type { SwitchAgentResolvedAgent } from '../dynamic-workflows/switch-agent-validation';
-import {
-  resolveSwitchAgentVerdict,
-  makePersistSwitchedDefinition,
-} from '../dynamic-workflows/switch-agent-validation';
+import { resolveSwitchAgentVerdict, makePersistSwitchedDefinition } from '../dynamic-workflows/switch-agent-validation';
 
 function node(over: Partial<DynamicWorkflowManifestNode> = {}): DynamicWorkflowManifestNode {
   return {
@@ -76,9 +72,7 @@ describe('resolveSwitchAgentVerdict', () => {
     const n = node({ access: 'workspace-write', allowedTools: ['Read', 'Write', 'Bash'], writeSet: ['src/**'] });
     const verdict = await resolveSwitchAgentVerdict(n, 'a-amplia', {
       resolveAgent: async (id) =>
-        id === 'a-amplia'
-          ? agent({ allowedTools: ['Read', 'Write', 'Bash'] })
-          : agent({ allowedTools: ['Read'] }),
+        id === 'a-amplia' ? agent({ allowedTools: ['Read', 'Write', 'Bash'] }) : agent({ allowedTools: ['Read'] }),
       loadActiveAgentIds: () => ['a-amplia'],
     });
     expect(verdict.exists).toBe(true);
@@ -118,8 +112,26 @@ describe('makePersistSwitchedDefinition (cadeia 22.7)', () => {
         name: 'wf',
         phases: [],
         nodes: [
-          { id: 'coder-s1', type: 'agent', phaseId: 'P', agentId: 'a-coder', access: 'read-only', canResume: true, produces: [], consumes: [] },
-          { id: 'coder-s2', type: 'agent', phaseId: 'P', agentId: 'a-other', access: 'read-only', canResume: true, produces: [], consumes: [] },
+          {
+            id: 'coder-s1',
+            type: 'agent',
+            phaseId: 'P',
+            agentId: 'a-coder',
+            access: 'read-only',
+            canResume: true,
+            produces: [],
+            consumes: [],
+          },
+          {
+            id: 'coder-s2',
+            type: 'agent',
+            phaseId: 'P',
+            agentId: 'a-other',
+            access: 'read-only',
+            canResume: true,
+            produces: [],
+            consumes: [],
+          },
         ],
         parallelism: { maxConcurrentAgents: 1, parallelWritersAllowed: false },
         gates: [],

@@ -60,18 +60,14 @@ describe('extractAndProcessOnboardingData', () => {
 
     expect(cleaned).toBe('Pronto.');
     expect(mocks.setSetting).toHaveBeenCalledWith('onboarding_completed', 'true');
-    expect(chunks.map((chunk) => chunk.type)).toEqual([
-      'replace_content',
-      'onboarding_completed',
-    ]);
+    expect(chunks.map((chunk) => chunk.type)).toEqual(['replace_content', 'onboarding_completed']);
   });
 
   it('processa JSON finalizado com marcador de fechamento sem abertura HTML', () => {
     const chunks: StreamChunk[] = [];
-    const cleaned = extractAndProcessOnboardingData(
-      `Pronto.\n\n${payload}\nONBOARDING_DATA -->`,
-      { sendStream: (chunk) => chunks.push(chunk) },
-    );
+    const cleaned = extractAndProcessOnboardingData(`Pronto.\n\n${payload}\nONBOARDING_DATA -->`, {
+      sendStream: (chunk) => chunks.push(chunk),
+    });
 
     expect(cleaned).toBe('Pronto.');
     expect(mocks.setSetting).toHaveBeenCalledWith('onboarding_completed', 'true');
@@ -109,10 +105,9 @@ seu nome Aria
 
 seu estilo proativo`;
 
-    const completed = completeOnboardingFromUserProfileMessage(
-      userMessage,
-      { sendStream: (chunk) => chunks.push(chunk) },
-    );
+    const completed = completeOnboardingFromUserProfileMessage(userMessage, {
+      sendStream: (chunk) => chunks.push(chunk),
+    });
 
     expect(completed).toBe(true);
     expect(mocks.saveUser).toHaveBeenCalledWith(expect.stringContaining('# Sobre o Usuario'));
@@ -148,10 +143,9 @@ seu estilo proativo`;
 ## Ferramentas
 - n8n, Google Sheets, GitHub, Obsidian, Excalidraw e Google Workspace.`;
 
-    const completed = completeOnboardingFromUserProfileMessage(
-      userMessage,
-      { sendStream: (chunk) => chunks.push(chunk) },
-    );
+    const completed = completeOnboardingFromUserProfileMessage(userMessage, {
+      sendStream: (chunk) => chunks.push(chunk),
+    });
 
     expect(completed).toBe(false);
     expect(mocks.saveUser).not.toHaveBeenCalled();
@@ -251,10 +245,9 @@ seu estilo proativo`;
 
   it('nao conclui fallback com mensagem curta de onboarding', () => {
     const chunks: StreamChunk[] = [];
-    const completed = completeOnboardingFromUserProfileMessage(
-      'Oi, meu nome e Alex e seu nome Aria',
-      { sendStream: (chunk) => chunks.push(chunk) },
-    );
+    const completed = completeOnboardingFromUserProfileMessage('Oi, meu nome e Alex e seu nome Aria', {
+      sendStream: (chunk) => chunks.push(chunk),
+    });
 
     expect(completed).toBe(false);
     expect(mocks.setSetting).not.toHaveBeenCalled();
@@ -284,10 +277,9 @@ describe('generateUserMd canonico (SPEC telegram-cron-compaction 12.5 / AC-56)',
     });
 
     const chunks: StreamChunk[] = [];
-    extractAndProcessOnboardingData(
-      `Pronto.\n\n<!-- ONBOARDING_DATA\n${fullPayload}\nONBOARDING_DATA -->`,
-      { sendStream: (chunk) => chunks.push(chunk) },
-    );
+    extractAndProcessOnboardingData(`Pronto.\n\n<!-- ONBOARDING_DATA\n${fullPayload}\nONBOARDING_DATA -->`, {
+      sendStream: (chunk) => chunks.push(chunk),
+    });
 
     expect(mocks.saveUser).toHaveBeenCalledTimes(1);
     const userMd = mocks.saveUser.mock.calls[0][0] as string;
@@ -321,10 +313,9 @@ describe('generateUserMd canonico (SPEC telegram-cron-compaction 12.5 / AC-56)',
 
   it('campos opcionais ausentes: os 6 headers continuam presentes (secoes vazias)', () => {
     const chunks: StreamChunk[] = [];
-    extractAndProcessOnboardingData(
-      `Pronto.\n\n<!-- ONBOARDING_DATA\n${payload}\nONBOARDING_DATA -->`,
-      { sendStream: (chunk) => chunks.push(chunk) },
-    );
+    extractAndProcessOnboardingData(`Pronto.\n\n<!-- ONBOARDING_DATA\n${payload}\nONBOARDING_DATA -->`, {
+      sendStream: (chunk) => chunks.push(chunk),
+    });
 
     const userMd = mocks.saveUser.mock.calls[0][0] as string;
     for (const h of [

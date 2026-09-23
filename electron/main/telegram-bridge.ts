@@ -16,16 +16,11 @@ import { executeTelegramLaneQuery, enqueueTelegramLaneTask, resetTelegramSession
 import { InvalidOrchestratorSelectionError } from './orchestrator-selection';
 import { smokeAudit } from './smoke-audit';
 import { buildExecutionError, translateProviderError } from './agent-runtime/llm-error';
-import {
-  runtimeSupportsImageInput,
-} from './agent-runtime/runtime-capabilities';
-import {
-  describeImage,
-  buildTranscriptionBlock,
-  visionUnavailableNotice,
-} from './vision-engine';
+import { runtimeSupportsImageInput } from './agent-runtime/runtime-capabilities';
+import { describeImage, buildTranscriptionBlock, visionUnavailableNotice } from './vision-engine';
 import type { OrchestratorRuntime } from '../../src/types';
-import { runCompaction } from './memory-pipeline';
+import { runCompaction, isCompactionStepError } from './memory-pipeline';
+import { tryAcquireDreamingMutex } from './dreaming-mutex';
 import { estimateTokens } from './token-estimator';
 import { getModelContextWindow } from './pricing';
 import type { ChatMessage, ChatSession } from '../../src/types';
@@ -46,7 +41,6 @@ function telegramErrorReply(error: unknown): string {
   return `${typed.userMessage} ${typed.suggestedAction}`;
 }
 
-
 export const TELEGRAM_MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
 export const TELEGRAM_MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 export const TELEGRAM_MAX_PHOTO_BYTES = 10 * 1024 * 1024;
@@ -58,9 +52,8 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${Math.round(bytes)} bytes`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   const mb = bytes / (1024 * 1024);
-  const rendered = mb >= 100
-    ? String(Math.round(mb))
-    : (Math.round(mb * 10) / 10).toFixed(1).replace(/\.0$/, '').replace('.', ',');
+  const rendered =
+    mb >= 100 ? String(Math.round(mb)) : (Math.round(mb * 10) / 10).toFixed(1).replace(/\.0$/, '').replace('.', ',');
   return `${rendered} MB`;
 }
 
@@ -100,11 +93,7 @@ function sanitizeTelegramErrorMessage(error: unknown): string {
     .slice(0, 500);
 }
 
-async function withTelegramTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  message: string,
-): Promise<T> {
+async function withTelegramTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null;
   try {
     return await Promise.race([
@@ -132,11 +121,7 @@ function classifyTelegramConflict(message: string): TelegramConflictKind {
 }
 
 function isCurrentBot(instance: TelegramBot, generation: number): boolean {
-  return (
-    bot === instance &&
-    botGeneration === generation &&
-    !stoppingBotGenerations.has(generation)
-  );
+  return bot === instance && botGeneration === generation && !stoppingBotGenerations.has(generation);
 }
 
 function getActiveBotInstance(): TelegramBot | null {
@@ -148,29 +133,20 @@ async function stopBotInstance(instance: TelegramBot, generation: number): Promi
   stoppingBotGenerations.add(generation);
   let stopError: unknown = null;
   try {
-    await withTelegramTimeout(
-      instance.stopPolling(),
-      TELEGRAM_STOP_TIMEOUT_MS,
-      'Telegram polling stop timed out',
-    );
+    await withTelegramTimeout(instance.stopPolling(), TELEGRAM_STOP_TIMEOUT_MS, 'Telegram polling stop timed out');
   } catch (error) {
     stopError = error;
   }
 
   if (instance.isPolling()) {
-    const safeError = sanitizeTelegramErrorMessage(
-      stopError ?? new Error('Polling permaneceu ativo apos stop'),
-    );
+    const safeError = sanitizeTelegramErrorMessage(stopError ?? new Error('Polling permaneceu ativo apos stop'));
     logger.error({ error: safeError }, 'Telegram: polling stop not confirmed');
     updateChannelStatus('telegram', 'error', 'Nao foi possivel parar o Telegram');
     return false;
   }
 
   if (stopError !== null) {
-    logger.warn(
-      { error: sanitizeTelegramErrorMessage(stopError) },
-      'Telegram: polling stopped after stop error',
-    );
+    logger.warn({ error: sanitizeTelegramErrorMessage(stopError) }, 'Telegram: polling stopped after stop error');
   }
   if (bot === instance && botGeneration === generation) {
     bot = null;
@@ -262,73 +238,262 @@ export async function startTelegramBot(
       let suppressedTransientErrors = 0;
 
       void currentBot
-      .setMyCommands([
-        { command: 'compact', description: 'Compacta a conversa (mesmo contexto, mais enxuto)' },
-        { command: 'clear', description: 'Arquiva a conversa e comeca uma nova' },
-        { command: 'reset', description: 'Igual ao /clear' },
-        { command: 'status', description: 'Sessao atual, contexto e tokens' },
-        { command: 'tasks', description: 'Tarefas agendadas' },
-        { command: 'help', description: 'Lista de comandos' },
-      ])
-      .then(() => logger.info('Telegram: menu de comandos registrado (setMyCommands)'))
-      .catch((error) =>
-        logger.warn(
-          { error: sanitizeTelegramErrorMessage(error) },
-          'Telegram: setMyCommands falhou (menu de autocomplete; nao-fatal)',
-        ),
-      );
+        .setMyCommands([
+          { command: 'compact', description: 'Compacta a conversa (mesmo contexto, mais enxuto)' },
+          { command: 'clear', description: 'Arquiva a conversa e comeca uma nova' },
+          { command: 'reset', description: 'Igual ao /clear' },
+          { command: 'status', description: 'Sessao atual, contexto e tokens' },
+          { command: 'tasks', description: 'Tarefas agendadas' },
+          { command: 'help', description: 'Lista de comandos' },
+        ])
+        .then(() => logger.info('Telegram: menu de comandos registrado (setMyCommands)'))
+        .catch((error) =>
+          logger.warn(
+            { error: sanitizeTelegramErrorMessage(error) },
+            'Telegram: setMyCommands falhou (menu de autocomplete; nao-fatal)',
+          ),
+        );
 
       currentBot.on('message', async (msg) => {
-      if (!isCurrentBot(currentBot, generation)) return;
-      const dedupKey = `${msg.chat.id}:${msg.message_id}`;
-      if (processedMessageIds.has(dedupKey)) {
-        logger.debug({ messageId: msg.message_id, chatId: msg.chat.id }, 'Telegram: duplicate message, skipping');
-        return;
-      }
-      processedMessageIds.add(dedupKey);
-      if (processedMessageIds.size > MAX_PROCESSED_IDS) {
-        const oldest = processedMessageIds.values().next().value;
-        if (oldest !== undefined) processedMessageIds.delete(oldest);
-      }
+        if (!isCurrentBot(currentBot, generation)) return;
+        const dedupKey = `${msg.chat.id}:${msg.message_id}`;
+        if (processedMessageIds.has(dedupKey)) {
+          logger.debug({ messageId: msg.message_id, chatId: msg.chat.id }, 'Telegram: duplicate message, skipping');
+          return;
+        }
+        processedMessageIds.add(dedupKey);
+        if (processedMessageIds.size > MAX_PROCESSED_IDS) {
+          const oldest = processedMessageIds.values().next().value;
+          if (oldest !== undefined) processedMessageIds.delete(oldest);
+        }
 
-      if (!msg.from?.id || msg.from.id !== allowedUserId) {
-        logger.warn({ fromId: msg.from?.id }, 'Telegram: unauthorized user, ignoring');
-        return;
-      }
+        if (!msg.from?.id || msg.from.id !== allowedUserId) {
+          logger.warn({ fromId: msg.from?.id }, 'Telegram: unauthorized user, ignoring');
+          return;
+        }
 
-      const userName = config.allowedUserName || msg.from?.first_name || 'Usuario';
+        const userName = config.allowedUserName || msg.from?.first_name || 'Usuario';
 
-      if (msg.voice) {
-        logger.info({ duration: msg.voice.duration, user: userName }, 'Telegram: voice message received');
+        if (msg.voice) {
+          logger.info({ duration: msg.voice.duration, user: userName }, 'Telegram: voice message received');
+
+          try {
+            await currentBot.sendChatAction(msg.chat.id, 'typing');
+            if (!isCurrentBot(currentBot, generation)) return;
+
+            const fileLink = await currentBot.getFileLink(msg.voice.file_id);
+            if (!isCurrentBot(currentBot, generation)) return;
+            const audioResponse = await fetch(fileLink);
+            if (!isCurrentBot(currentBot, generation)) return;
+            const audioBytes = await audioResponse.arrayBuffer();
+            if (!isCurrentBot(currentBot, generation)) return;
+            const audioBuffer = Buffer.from(audioBytes);
+            const audioBase64 = audioBuffer.toString('base64');
+
+            const transcribedText = await transcribeAudio(audioBase64, 'ogg');
+            if (!isCurrentBot(currentBot, generation)) return;
+
+            if (!transcribedText.trim()) {
+              if (!isCurrentBot(currentBot, generation)) return;
+              await currentBot.sendMessage(msg.chat.id, 'Nao consegui entender o audio. Tente novamente.');
+              return;
+            }
+
+            logger.info({ text: transcribedText.substring(0, 50) }, 'Telegram: voice transcribed');
+
+            if (!isCurrentBot(currentBot, generation)) return;
+            const sessionId = getOrCreateTelegramSession();
+            const response = await executeTelegramQuery(
+              transcribedText,
+              sessionId,
+              msg.chat.id,
+              userName,
+              undefined,
+              currentBot,
+              () => isCurrentBot(currentBot, generation),
+            );
+            if (!isCurrentBot(currentBot, generation)) return;
+            await sendTelegramResponse(msg.chat.id, response, currentBot, () => isCurrentBot(currentBot, generation));
+          } catch (error) {
+            if (!isCurrentBot(currentBot, generation)) return;
+            logger.error({ error }, 'Telegram: voice processing failed');
+            await currentBot.sendMessage(msg.chat.id, telegramErrorReply(error));
+          }
+          return;
+        }
+
+        if (msg.photo && msg.photo.length > 0) {
+          logger.info({ sizes: msg.photo.length, user: userName }, 'Telegram: photo received');
+          try {
+            await currentBot.sendChatAction(msg.chat.id, 'typing');
+            if (!isCurrentBot(currentBot, generation)) return;
+
+            const largest = msg.photo[msg.photo.length - 1];
+            const fileLink = await currentBot.getFileLink(largest.file_id);
+            if (!isCurrentBot(currentBot, generation)) return;
+            const imgResponse = await fetch(fileLink);
+            if (!isCurrentBot(currentBot, generation)) return;
+            const imageBytes = await imgResponse.arrayBuffer();
+            if (!isCurrentBot(currentBot, generation)) return;
+            const imgBuffer = Buffer.from(imageBytes);
+            const base64 = imgBuffer.toString('base64');
+
+            const attachment = {
+              id: `tg-${msg.chat.id}-${msg.message_id}`,
+              type: 'image',
+              filename: `telegram-${msg.message_id}.jpg`,
+              mimeType: 'image/jpeg',
+              data: base64,
+              size: imgBuffer.length,
+            };
+
+            const captionText = msg.caption?.trim() || 'O usuario enviou esta imagem. Analise e responda.';
+            const sessionId = getOrCreateTelegramSession();
+            const resolved = await transcribeAndResolveImageTurn(msg.chat.id, captionText, attachment, currentBot, () =>
+              isCurrentBot(currentBot, generation),
+            );
+            if (!isCurrentBot(currentBot, generation)) return;
+            const response = await executeTelegramQuery(
+              resolved.text,
+              sessionId,
+              msg.chat.id,
+              userName,
+              resolved.attachment ? [resolved.attachment] : undefined,
+              currentBot,
+              () => isCurrentBot(currentBot, generation),
+            );
+            if (!isCurrentBot(currentBot, generation)) return;
+            await sendTelegramResponse(msg.chat.id, response, currentBot, () => isCurrentBot(currentBot, generation));
+          } catch (error) {
+            if (!isCurrentBot(currentBot, generation)) return;
+            logger.error({ error }, 'Telegram: photo processing failed');
+            await currentBot.sendMessage(msg.chat.id, 'Erro ao processar imagem.');
+          }
+          return;
+        }
+
+        if (msg.document && msg.document.mime_type?.startsWith('image/')) {
+          logger.info({ mime: msg.document.mime_type, user: userName }, 'Telegram: image document received');
+          try {
+            await currentBot.sendChatAction(msg.chat.id, 'typing');
+            if (!isCurrentBot(currentBot, generation)) return;
+
+            const fileLink = await currentBot.getFileLink(msg.document.file_id);
+            if (!isCurrentBot(currentBot, generation)) return;
+            const imgResponse = await fetch(fileLink);
+            if (!isCurrentBot(currentBot, generation)) return;
+            const imageBytes = await imgResponse.arrayBuffer();
+            if (!isCurrentBot(currentBot, generation)) return;
+            const imgBuffer = Buffer.from(imageBytes);
+            const base64 = imgBuffer.toString('base64');
+            const mimeType = msg.document.mime_type;
+            const ext = mimeType.split('/')[1] || 'jpg';
+
+            const attachment = {
+              id: `tg-${msg.chat.id}-${msg.message_id}`,
+              type: 'image',
+              filename: msg.document.file_name || `telegram-${msg.message_id}.${ext}`,
+              mimeType,
+              data: base64,
+              size: imgBuffer.length,
+            };
+
+            const captionText = msg.caption?.trim() || 'O usuario enviou esta imagem. Analise e responda.';
+            const sessionId = getOrCreateTelegramSession();
+            const resolved = await transcribeAndResolveImageTurn(msg.chat.id, captionText, attachment, currentBot, () =>
+              isCurrentBot(currentBot, generation),
+            );
+            if (!isCurrentBot(currentBot, generation)) return;
+            const response = await executeTelegramQuery(
+              resolved.text,
+              sessionId,
+              msg.chat.id,
+              userName,
+              resolved.attachment ? [resolved.attachment] : undefined,
+              currentBot,
+              () => isCurrentBot(currentBot, generation),
+            );
+            if (!isCurrentBot(currentBot, generation)) return;
+            await sendTelegramResponse(msg.chat.id, response, currentBot, () => isCurrentBot(currentBot, generation));
+          } catch (error) {
+            if (!isCurrentBot(currentBot, generation)) return;
+            logger.error({ error }, 'Telegram: image document processing failed');
+            await currentBot.sendMessage(msg.chat.id, 'Erro ao processar imagem.');
+          }
+          return;
+        }
+
+        if (msg.animation) {
+          await replyUnprocessableAttachment(msg.chat.id, 'animation', currentBot, () =>
+            isCurrentBot(currentBot, generation),
+          );
+          return;
+        }
+
+        if (msg.document) {
+          try {
+            await handleIncomingDocument(msg, msg.chat.id, userName, currentBot, () =>
+              isCurrentBot(currentBot, generation),
+            );
+          } catch (error) {
+            if (!isCurrentBot(currentBot, generation)) return;
+            logger.error({ error }, 'Telegram: document processing failed');
+            await currentBot.sendMessage(msg.chat.id, 'Erro ao processar o documento. Tente novamente.');
+          }
+          return;
+        }
+
+        if (msg.audio) {
+          await replyUnprocessableAttachment(msg.chat.id, 'audio', currentBot, () =>
+            isCurrentBot(currentBot, generation),
+          );
+          return;
+        }
+        if (msg.video) {
+          await replyUnprocessableAttachment(msg.chat.id, 'video', currentBot, () =>
+            isCurrentBot(currentBot, generation),
+          );
+          return;
+        }
+        if (msg.video_note) {
+          await replyUnprocessableAttachment(msg.chat.id, 'video_note', currentBot, () =>
+            isCurrentBot(currentBot, generation),
+          );
+          return;
+        }
+        if (msg.sticker) {
+          await replyUnprocessableAttachment(msg.chat.id, 'sticker', currentBot, () =>
+            isCurrentBot(currentBot, generation),
+          );
+          return;
+        }
+        if (msg.contact || msg.location || msg.venue || msg.poll || msg.dice) {
+          await replyUnprocessableAttachment(msg.chat.id, 'outro', currentBot, () =>
+            isCurrentBot(currentBot, generation),
+          );
+          return;
+        }
+
+        const text = msg.text;
+        if (!text) {
+          logger.info({ user: userName }, 'Telegram: unsupported message type, ignoring');
+          return;
+        }
+
+        if (text.startsWith('/')) {
+          await handleBotCommand(text, msg.chat.id, config, currentBot, () => isCurrentBot(currentBot, generation));
+          return;
+        }
+
+        logger.info({ text: text.substring(0, 50), user: userName }, 'Telegram: message received');
 
         try {
           await currentBot.sendChatAction(msg.chat.id, 'typing');
-          if (!isCurrentBot(currentBot, generation)) return;
-
-          const fileLink = await currentBot.getFileLink(msg.voice.file_id);
-          if (!isCurrentBot(currentBot, generation)) return;
-          const audioResponse = await fetch(fileLink);
-          if (!isCurrentBot(currentBot, generation)) return;
-          const audioBytes = await audioResponse.arrayBuffer();
-          if (!isCurrentBot(currentBot, generation)) return;
-          const audioBuffer = Buffer.from(audioBytes);
-          const audioBase64 = audioBuffer.toString('base64');
-
-          const transcribedText = await transcribeAudio(audioBase64, 'ogg');
-          if (!isCurrentBot(currentBot, generation)) return;
-
-          if (!transcribedText.trim()) {
-            if (!isCurrentBot(currentBot, generation)) return;
-            await currentBot.sendMessage(msg.chat.id, 'Nao consegui entender o audio. Tente novamente.');
-            return;
-          }
-
-          logger.info({ text: transcribedText.substring(0, 50) }, 'Telegram: voice transcribed');
 
           if (!isCurrentBot(currentBot, generation)) return;
           const sessionId = getOrCreateTelegramSession();
           const response = await executeTelegramQuery(
-            transcribedText,
+            text,
             sessionId,
             msg.chat.id,
             userName,
@@ -337,233 +502,13 @@ export async function startTelegramBot(
             () => isCurrentBot(currentBot, generation),
           );
           if (!isCurrentBot(currentBot, generation)) return;
-          await sendTelegramResponse(
-            msg.chat.id,
-            response,
-            currentBot,
-            () => isCurrentBot(currentBot, generation),
-          );
+          await sendTelegramResponse(msg.chat.id, response, currentBot, () => isCurrentBot(currentBot, generation));
         } catch (error) {
           if (!isCurrentBot(currentBot, generation)) return;
-          logger.error({ error }, 'Telegram: voice processing failed');
+          logger.error({ error }, 'Telegram: query failed');
           await currentBot.sendMessage(msg.chat.id, telegramErrorReply(error));
         }
-        return;
-      }
-
-      if (msg.photo && msg.photo.length > 0) {
-        logger.info({ sizes: msg.photo.length, user: userName }, 'Telegram: photo received');
-        try {
-          await currentBot.sendChatAction(msg.chat.id, 'typing');
-          if (!isCurrentBot(currentBot, generation)) return;
-
-          const largest = msg.photo[msg.photo.length - 1];
-          const fileLink = await currentBot.getFileLink(largest.file_id);
-          if (!isCurrentBot(currentBot, generation)) return;
-          const imgResponse = await fetch(fileLink);
-          if (!isCurrentBot(currentBot, generation)) return;
-          const imageBytes = await imgResponse.arrayBuffer();
-          if (!isCurrentBot(currentBot, generation)) return;
-          const imgBuffer = Buffer.from(imageBytes);
-          const base64 = imgBuffer.toString('base64');
-
-          const attachment = {
-            id: `tg-${msg.chat.id}-${msg.message_id}`,
-            type: 'image',
-            filename: `telegram-${msg.message_id}.jpg`,
-            mimeType: 'image/jpeg',
-            data: base64,
-            size: imgBuffer.length,
-          };
-
-          const captionText = msg.caption?.trim() || 'O usuario enviou esta imagem. Analise e responda.';
-          const sessionId = getOrCreateTelegramSession();
-          const resolved = await transcribeAndResolveImageTurn(
-            msg.chat.id,
-            captionText,
-            attachment,
-            currentBot,
-            () => isCurrentBot(currentBot, generation),
-          );
-          if (!isCurrentBot(currentBot, generation)) return;
-          const response = await executeTelegramQuery(
-            resolved.text,
-            sessionId,
-            msg.chat.id,
-            userName,
-            resolved.attachment ? [resolved.attachment] : undefined,
-            currentBot,
-            () => isCurrentBot(currentBot, generation),
-          );
-          if (!isCurrentBot(currentBot, generation)) return;
-          await sendTelegramResponse(
-            msg.chat.id,
-            response,
-            currentBot,
-            () => isCurrentBot(currentBot, generation),
-          );
-        } catch (error) {
-          if (!isCurrentBot(currentBot, generation)) return;
-          logger.error({ error }, 'Telegram: photo processing failed');
-          await currentBot.sendMessage(msg.chat.id, 'Erro ao processar imagem.');
-        }
-        return;
-      }
-
-      if (msg.document && msg.document.mime_type?.startsWith('image/')) {
-        logger.info({ mime: msg.document.mime_type, user: userName }, 'Telegram: image document received');
-        try {
-          await currentBot.sendChatAction(msg.chat.id, 'typing');
-          if (!isCurrentBot(currentBot, generation)) return;
-
-          const fileLink = await currentBot.getFileLink(msg.document.file_id);
-          if (!isCurrentBot(currentBot, generation)) return;
-          const imgResponse = await fetch(fileLink);
-          if (!isCurrentBot(currentBot, generation)) return;
-          const imageBytes = await imgResponse.arrayBuffer();
-          if (!isCurrentBot(currentBot, generation)) return;
-          const imgBuffer = Buffer.from(imageBytes);
-          const base64 = imgBuffer.toString('base64');
-          const mimeType = msg.document.mime_type;
-          const ext = mimeType.split('/')[1] || 'jpg';
-
-          const attachment = {
-            id: `tg-${msg.chat.id}-${msg.message_id}`,
-            type: 'image',
-            filename: msg.document.file_name || `telegram-${msg.message_id}.${ext}`,
-            mimeType,
-            data: base64,
-            size: imgBuffer.length,
-          };
-
-          const captionText = msg.caption?.trim() || 'O usuario enviou esta imagem. Analise e responda.';
-          const sessionId = getOrCreateTelegramSession();
-          const resolved = await transcribeAndResolveImageTurn(
-            msg.chat.id,
-            captionText,
-            attachment,
-            currentBot,
-            () => isCurrentBot(currentBot, generation),
-          );
-          if (!isCurrentBot(currentBot, generation)) return;
-          const response = await executeTelegramQuery(
-            resolved.text,
-            sessionId,
-            msg.chat.id,
-            userName,
-            resolved.attachment ? [resolved.attachment] : undefined,
-            currentBot,
-            () => isCurrentBot(currentBot, generation),
-          );
-          if (!isCurrentBot(currentBot, generation)) return;
-          await sendTelegramResponse(
-            msg.chat.id,
-            response,
-            currentBot,
-            () => isCurrentBot(currentBot, generation),
-          );
-        } catch (error) {
-          if (!isCurrentBot(currentBot, generation)) return;
-          logger.error({ error }, 'Telegram: image document processing failed');
-          await currentBot.sendMessage(msg.chat.id, 'Erro ao processar imagem.');
-        }
-        return;
-      }
-
-      if (msg.animation) {
-        await replyUnprocessableAttachment(
-          msg.chat.id,
-          'animation',
-          currentBot,
-          () => isCurrentBot(currentBot, generation),
-        );
-        return;
-      }
-
-      if (msg.document) {
-        try {
-          await handleIncomingDocument(
-            msg,
-            msg.chat.id,
-            userName,
-            currentBot,
-            () => isCurrentBot(currentBot, generation),
-          );
-        } catch (error) {
-          if (!isCurrentBot(currentBot, generation)) return;
-          logger.error({ error }, 'Telegram: document processing failed');
-          await currentBot.sendMessage(msg.chat.id, 'Erro ao processar o documento. Tente novamente.');
-        }
-        return;
-      }
-
-      if (msg.audio) {
-        await replyUnprocessableAttachment(msg.chat.id, 'audio', currentBot, () => isCurrentBot(currentBot, generation));
-        return;
-      }
-      if (msg.video) {
-        await replyUnprocessableAttachment(msg.chat.id, 'video', currentBot, () => isCurrentBot(currentBot, generation));
-        return;
-      }
-      if (msg.video_note) {
-        await replyUnprocessableAttachment(msg.chat.id, 'video_note', currentBot, () => isCurrentBot(currentBot, generation));
-        return;
-      }
-      if (msg.sticker) {
-        await replyUnprocessableAttachment(msg.chat.id, 'sticker', currentBot, () => isCurrentBot(currentBot, generation));
-        return;
-      }
-      if (msg.contact || msg.location || msg.venue || msg.poll || msg.dice) {
-        await replyUnprocessableAttachment(msg.chat.id, 'outro', currentBot, () => isCurrentBot(currentBot, generation));
-        return;
-      }
-
-      const text = msg.text;
-      if (!text) {
-        logger.info({ user: userName }, 'Telegram: unsupported message type, ignoring');
-        return;
-      }
-
-      if (text.startsWith('/')) {
-        await handleBotCommand(
-          text,
-          msg.chat.id,
-          config,
-          currentBot,
-          () => isCurrentBot(currentBot, generation),
-        );
-        return;
-      }
-
-      logger.info({ text: text.substring(0, 50), user: userName }, 'Telegram: message received');
-
-      try {
-        await currentBot.sendChatAction(msg.chat.id, 'typing');
-
-        if (!isCurrentBot(currentBot, generation)) return;
-        const sessionId = getOrCreateTelegramSession();
-        const response = await executeTelegramQuery(
-          text,
-          sessionId,
-          msg.chat.id,
-          userName,
-          undefined,
-          currentBot,
-          () => isCurrentBot(currentBot, generation),
-        );
-        if (!isCurrentBot(currentBot, generation)) return;
-          await sendTelegramResponse(
-            msg.chat.id,
-            response,
-            currentBot,
-            () => isCurrentBot(currentBot, generation),
-          );
-      } catch (error) {
-        if (!isCurrentBot(currentBot, generation)) return;
-        logger.error({ error }, 'Telegram: query failed');
-        await currentBot.sendMessage(msg.chat.id, telegramErrorReply(error));
-      }
-    });
+      });
 
       currentBot.on('callback_query', (query) => {
         if (!isCurrentBot(currentBot, generation)) return;
@@ -581,8 +526,7 @@ export async function startTelegramBot(
 
         const safeMessage = sanitizeTelegramErrorMessage(error);
         const normalizedMessage = safeMessage.toLowerCase();
-        const is409 =
-          safeMessage.includes('409') || normalizedMessage.includes('conflict');
+        const is409 = safeMessage.includes('409') || normalizedMessage.includes('conflict');
 
         if (!is409) {
           const now = Date.now();
@@ -614,9 +558,7 @@ export async function startTelegramBot(
         updateChannelStatus(
           'telegram',
           'error',
-          conflictKind === 'webhook-active'
-            ? 'Conflict: webhook ativo'
-            : 'Conflict: polling ativo em outra instancia',
+          conflictKind === 'webhook-active' ? 'Conflict: webhook ativo' : 'Conflict: polling ativo em outra instancia',
         );
 
         void serializeTelegramLifecycle(async () => {
@@ -625,11 +567,7 @@ export async function startTelegramBot(
       });
 
       await currentBot.startPolling();
-      if (
-        requestedEpoch !== lifecycleEpoch ||
-        conflictHandled ||
-        !isCurrentBot(currentBot, generation)
-      ) {
+      if (requestedEpoch !== lifecycleEpoch || conflictHandled || !isCurrentBot(currentBot, generation)) {
         return false;
       }
 
@@ -696,8 +634,7 @@ async function transcribeAndResolveImageTurn(
   currentBot: TelegramBot | null = getActiveBotInstance(),
   isActive: () => boolean = () => currentBot !== null && currentBot === getActiveBotInstance(),
 ): Promise<ResolvedImageTurn> {
-  const runtime = ((getSetting('orchestrator_runtime') || '').trim() ||
-    'claude-sdk') as OrchestratorRuntime;
+  const runtime = ((getSetting('orchestrator_runtime') || '').trim() || 'claude-sdk') as OrchestratorRuntime;
   const supportsNative = runtimeSupportsImageInput(runtime);
   const nativeAttachment = supportsNative ? attachment : undefined;
   const inactiveResult = { text: captionText, attachment: nativeAttachment };
@@ -719,10 +656,7 @@ async function transcribeAndResolveImageTurn(
     }
   } catch (err) {
     if (!isActive()) return inactiveResult;
-    logger.warn(
-      { err, runtime },
-      'Telegram: vision indisponivel; turno segue so com texto',
-    );
+    logger.warn({ err, runtime }, 'Telegram: vision indisponivel; turno segue so com texto');
     try {
       if (currentBot && isActive()) {
         await currentBot.sendMessage(chatId, visionUnavailableNotice(err));
@@ -756,12 +690,7 @@ export async function sendTelegramNotification(text: string): Promise<void> {
   if (!config?.allowedUserId) throw new Error('Telegram sem destinatario configurado');
 
   try {
-    await sendTelegramResponse(
-      config.allowedUserId,
-      text,
-      currentBot,
-      () => isCurrentBot(currentBot, generation),
-    );
+    await sendTelegramResponse(config.allowedUserId, text, currentBot, () => isCurrentBot(currentBot, generation));
   } catch (error) {
     logger.error({ error }, 'Failed to send Telegram notification');
     throw error instanceof Error ? error : new Error(String(error));
@@ -805,12 +734,17 @@ export async function sendTelegramPhoto(
     const ext = mimeType.includes('png') ? 'png' : 'jpg';
 
     if (!isActive()) return;
-    await currentBot.sendPhoto(chatId, buffer, {
-      caption: caption?.substring(0, 1024),
-    }, {
-      filename: `image.${ext}`,
-      contentType: mimeType,
-    });
+    await currentBot.sendPhoto(
+      chatId,
+      buffer,
+      {
+        caption: caption?.substring(0, 1024),
+      },
+      {
+        filename: `image.${ext}`,
+        contentType: mimeType,
+      },
+    );
 
     logger.info('Telegram: photo sent');
   } catch (error) {
@@ -833,12 +767,17 @@ export async function sendTelegramDocument(
     const buffer = typeof file === 'string' ? fs.readFileSync(file) : file;
 
     if (!isActive()) return;
-    await currentBot.sendDocument(chatId, buffer, {
-      caption: caption?.substring(0, 1024),
-    }, {
-      filename: fileName,
-      contentType: mimeType || 'application/octet-stream',
-    });
+    await currentBot.sendDocument(
+      chatId,
+      buffer,
+      {
+        caption: caption?.substring(0, 1024),
+      },
+      {
+        filename: fileName,
+        contentType: mimeType || 'application/octet-stream',
+      },
+    );
 
     logger.info({ fileName, sizeBytes: buffer.length }, 'Telegram: document sent');
   } catch (error) {
@@ -875,8 +814,13 @@ async function handleBotCommand(
         }),
       );
       if (!isActive()) return;
-      if (outcome.ok && outcome.noop) {
-        await currentBot.sendMessage(chatId, 'Nada novo para compactar desde a ultima compactacao. Seguimos na mesma conversa.');
+      if (outcome.ok && outcome.noop && outcome.reason === 'dreaming_busy') {
+        await currentBot.sendMessage(chatId, TELEGRAM_DREAMING_BUSY_MESSAGE);
+      } else if (outcome.ok && outcome.noop) {
+        await currentBot.sendMessage(
+          chatId,
+          'Nada novo para compactar desde a ultima compactacao. Seguimos na mesma conversa.',
+        );
       }
       break;
     }
@@ -895,7 +839,10 @@ async function handleBotCommand(
       );
       if (!isActive()) return;
       if (!outcome.ok) {
-        await currentBot.sendMessage(chatId, 'Nao consegui salvar a conversa na memoria agora, entao nao encerrei nada. A conversa continua; tente de novo em breve.');
+        await currentBot.sendMessage(
+          chatId,
+          'Nao consegui salvar a conversa na memoria agora, entao nao encerrei nada. A conversa continua; tente de novo em breve.',
+        );
         break;
       }
       updateSessionStatus(sessionId, 'archived');
@@ -906,15 +853,22 @@ async function handleBotCommand(
     }
     case '/status': {
       const db = getDb();
-      const sessionCount = (db.prepare("SELECT COUNT(*) as c FROM sessions WHERE type = 'telegram' AND status = 'active'").get() as { c: number }).c;
+      const sessionCount = (
+        db.prepare("SELECT COUNT(*) as c FROM sessions WHERE type = 'telegram' AND status = 'active'").get() as {
+          c: number;
+        }
+      ).c;
       const pendingReviews = getPendingReviewCount();
-      const tasks = getAllScheduledTasks().filter(t => t.status === 'active');
+      const tasks = getAllScheduledTasks().filter((t) => t.status === 'active');
 
       const sessionId = getOrCreateTelegramSession();
       const session = getSession(sessionId);
       const tokensAtivos = session ? getActiveContextTokens(session) : 0;
       const threshold = getTelegramCompactionThreshold();
-      const target = readPositiveNumberSetting('telegram_compaction_target_tokens', DEFAULT_TELEGRAM_COMPACTION_TARGET_TOKENS);
+      const target = readPositiveNumberSetting(
+        'telegram_compaction_target_tokens',
+        DEFAULT_TELEGRAM_COMPACTION_TARGET_TOKENS,
+      );
       const pct = threshold > 0 ? Math.round((tokensAtivos / threshold) * 100) : 0;
 
       let statusMsg = '== Status do LionClaw ==\n\n';
@@ -955,13 +909,15 @@ async function handleBotCommand(
     }
     default: {
       if (!isActive()) return;
-      await currentBot.sendMessage(chatId,
+      await currentBot.sendMessage(
+        chatId,
         'Comandos disponiveis:\n' +
-        '/compact - Compacta a conversa (mesma conversa, contexto condensado)\n' +
-        '/clear - Salva na memoria e encerra; proxima mensagem comeca do zero\n' +
-        '/reset - Alias de /clear\n' +
-        '/status - Status do sistema e contexto da conversa\n' +
-        '/tasks - Tasks agendadas');
+          '/compact - Compacta a conversa (mesma conversa, contexto condensado)\n' +
+          '/clear - Salva na memoria e encerra; proxima mensagem comeca do zero\n' +
+          '/reset - Alias de /clear\n' +
+          '/status - Status do sistema e contexto da conversa\n' +
+          '/tasks - Tasks agendadas',
+      );
     }
   }
 }
@@ -1022,19 +978,23 @@ async function executeTelegramQuery(
   const contextualMessage = TELEGRAM_CONTEXT + userPrefix + text;
 
   const db = getDb();
-  const lastBefore = db.prepare(
-    "SELECT id FROM messages WHERE session_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1",
-  ).get(sessionId) as { id: number } | undefined;
+  const lastBefore = db
+    .prepare("SELECT id FROM messages WHERE session_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1")
+    .get(sessionId) as { id: number } | undefined;
   const lastIdBefore = lastBefore?.id ?? 0;
 
   try {
-    await executeTelegramLaneQuery(contextualMessage, {
-      sessionId,
-      silent: true,
-      displayMessage: text,
-      attachments,
-      skipVisionTranscription: true,
-    }, getWindowFn || (() => null));
+    await executeTelegramLaneQuery(
+      contextualMessage,
+      {
+        sessionId,
+        silent: true,
+        displayMessage: text,
+        attachments,
+        skipVisionTranscription: true,
+      },
+      getWindowFn || (() => null),
+    );
   } catch (err) {
     if (err instanceof InvalidOrchestratorSelectionError) {
       smokeAudit('orchestrator_error', {
@@ -1056,12 +1016,17 @@ async function executeTelegramQuery(
 
   if (!isActive()) return '';
 
-  const row = db.prepare(
-    "SELECT id, content, metadata FROM messages WHERE session_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1",
-  ).get(sessionId) as { id: number; content: string; metadata?: string } | undefined;
+  const row = db
+    .prepare(
+      "SELECT id, content, metadata FROM messages WHERE session_id = ? AND role = 'assistant' ORDER BY id DESC LIMIT 1",
+    )
+    .get(sessionId) as { id: number; content: string; metadata?: string } | undefined;
 
   if (!row || row.id <= lastIdBefore) {
-    logger.warn({ sessionId, lastIdBefore }, 'Telegram: no new assistant message after executeQuery — possible silent failure');
+    logger.warn(
+      { sessionId, lastIdBefore },
+      'Telegram: no new assistant message after executeQuery — possible silent failure',
+    );
     const empty = buildExecutionError('LLM-EMPTY');
     return `${empty.userMessage} ${empty.suggestedAction}`;
   }
@@ -1094,7 +1059,10 @@ async function executeTelegramQuery(
               let ext = '.mp3';
               if (typeof artifact.data.audioBase64 === 'string' && artifact.data.audioBase64) {
                 audioBuffer = Buffer.from(artifact.data.audioBase64, 'base64');
-                ext = typeof artifact.data.mimeType === 'string' && artifact.data.mimeType.includes('ogg') ? '.ogg' : '.mp3';
+                ext =
+                  typeof artifact.data.mimeType === 'string' && artifact.data.mimeType.includes('ogg')
+                    ? '.ogg'
+                    : '.mp3';
               } else if (typeof artifact.data.filePath === 'string' && fs.existsSync(artifact.data.filePath)) {
                 audioBuffer = fs.readFileSync(artifact.data.filePath);
                 ext = path.extname(artifact.data.filePath).toLowerCase();
@@ -1123,7 +1091,9 @@ async function executeTelegramQuery(
           }
         }
       }
-    } catch { /* metadata parse error, ignore */ }
+    } catch {
+      /* metadata parse error, ignore */
+    }
   }
 
   const content = row?.content || 'Sem resposta.';
@@ -1135,14 +1105,7 @@ async function executeTelegramQuery(
         const imageBuffer = fs.readFileSync(imagePath);
         const base64 = imageBuffer.toString('base64');
         const mimeType = imagePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
-        await sendTelegramPhoto(
-          chatId,
-          base64,
-          mimeType,
-          'Imagem gerada',
-          currentBot,
-          isActive,
-        );
+        await sendTelegramPhoto(chatId, base64, mimeType, 'Imagem gerada', currentBot, isActive);
       }
     } catch (err) {
       logger.warn({ err, imagePath }, 'Failed to send generated image via Telegram');
@@ -1174,15 +1137,7 @@ async function executeTelegramQuery(
     if (!isActive()) break;
     const docPath = documentMatch[1].trim();
     if (sentDocumentPaths.has(docPath)) continue;
-    await sendDocumentPathViaTelegram(
-      chatId,
-      docPath,
-      undefined,
-      undefined,
-      undefined,
-      currentBot,
-      isActive,
-    );
+    await sendDocumentPathViaTelegram(chatId, docPath, undefined, undefined, undefined, currentBot, isActive);
     sentDocumentPaths.add(docPath);
   }
 
@@ -1217,15 +1172,7 @@ async function sendDocumentPathViaTelegram(
       );
       return;
     }
-    await sendTelegramDocument(
-      chatId,
-      filePath,
-      name,
-      mimeType,
-      caption || name,
-      currentBot,
-      isActive,
-    );
+    await sendTelegramDocument(chatId, filePath, name, mimeType, caption || name, currentBot, isActive);
   } catch (err) {
     logger.warn({ err, filePath }, 'Failed to send document file via Telegram');
   }
@@ -1275,7 +1222,6 @@ async function sendTelegramResponse(
   }
 }
 
-
 export type TelegramDocumentType = 'pdf' | 'docx' | 'xlsx' | 'csv' | 'txt' | 'md';
 
 const TELEGRAM_SUPPORTED_TYPES_NOTE =
@@ -1296,25 +1242,27 @@ async function replyUnprocessableAttachment(
   isActive: () => boolean = () => currentBot !== null && currentBot === getActiveBotInstance(),
 ): Promise<void> {
   if (!currentBot || !isActive()) return;
-  const reply = UNPROCESSABLE_ATTACHMENT_REPLIES[kind]
-    ?? `Recebi um anexo que ainda nao processo. ${TELEGRAM_SUPPORTED_TYPES_NOTE}`;
+  const reply =
+    UNPROCESSABLE_ATTACHMENT_REPLIES[kind] ??
+    `Recebi um anexo que ainda nao processo. ${TELEGRAM_SUPPORTED_TYPES_NOTE}`;
   logger.info({ kind }, 'Telegram: anexo nao processavel, respondendo por tipo (SPEC 8.1)');
   await currentBot.sendMessage(chatId, reply).catch(() => {});
 }
 
-export function detectTelegramDocumentType(
-  fileName: string,
-  mimeType?: string,
-): TelegramDocumentType | null {
+export function detectTelegramDocumentType(fileName: string, mimeType?: string): TelegramDocumentType | null {
   const ext = path.extname(fileName || '').toLowerCase();
   const mime = (mimeType || '').toLowerCase();
   if (ext === '.pdf' || mime === 'application/pdf') return 'pdf';
-  if (ext === '.docx' || mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx';
+  if (ext === '.docx' || mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    return 'docx';
   if (
-    ext === '.xlsx' || ext === '.xls' || ext === '.xlsm'
-    || mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    || mime === 'application/vnd.ms-excel'
-  ) return 'xlsx';
+    ext === '.xlsx' ||
+    ext === '.xls' ||
+    ext === '.xlsm' ||
+    mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    mime === 'application/vnd.ms-excel'
+  )
+    return 'xlsx';
   if (ext === '.csv' || mime === 'text/csv') return 'csv';
   if (ext === '.md' || ext === '.markdown' || mime === 'text/markdown') return 'md';
   if (ext === '.txt' || mime === 'text/plain') return 'txt';
@@ -1346,8 +1294,7 @@ export async function extractTelegramDocumentText(
   } finally {
     try {
       fs.unlinkSync(tempPath);
-    } catch {
-    }
+    } catch {}
   }
 }
 
@@ -1363,8 +1310,10 @@ export function buildTelegramDocumentPrompt(
     body = `${body.slice(0, TELEGRAM_DOC_TEXT_MAX_CHARS)}\n[documento truncado para caber no contexto]`;
   }
   const instruction = caption?.trim() || 'O usuario enviou este documento; analise e responda.';
-  return `[Documento recebido: ${fileName} (${docType.toUpperCase()}, ${formatBytes(sizeBytes)})]\n`
-    + `${instruction}\n\n=== CONTEUDO ===\n${body}`;
+  return (
+    `[Documento recebido: ${fileName} (${docType.toUpperCase()}, ${formatBytes(sizeBytes)})]\n` +
+    `${instruction}\n\n=== CONTEUDO ===\n${body}`
+  );
 }
 
 function telegramDownloadLimitMessage(sizeBytes?: number): string {
@@ -1446,15 +1395,7 @@ async function handleIncomingDocument(
   if (!isActive()) return;
   const prompt = buildTelegramDocumentPrompt(fileName, docType, buffer.length, msg.caption, text);
   const sessionId = getOrCreateTelegramSession();
-  const response = await executeTelegramQuery(
-    prompt,
-    sessionId,
-    chatId,
-    userName,
-    undefined,
-    currentBot,
-    isActive,
-  );
+  const response = await executeTelegramQuery(prompt, sessionId, chatId, userName, undefined, currentBot, isActive);
   if (!isActive()) return;
   await sendTelegramResponse(chatId, response, currentBot, isActive);
 }
@@ -1475,9 +1416,9 @@ function getOrCreateTelegramSession(): string {
   if (activeSessionId) return activeSessionId;
 
   const db = getDb();
-  const existing = db.prepare(
-    "SELECT id FROM sessions WHERE type = 'telegram' AND status = 'active' ORDER BY updated_at DESC LIMIT 1",
-  ).get() as { id: string } | undefined;
+  const existing = db
+    .prepare("SELECT id FROM sessions WHERE type = 'telegram' AND status = 'active' ORDER BY updated_at DESC LIMIT 1")
+    .get() as { id: string } | undefined;
 
   if (existing) {
     setActiveTelegramSession(existing.id);
@@ -1492,9 +1433,8 @@ function getOrCreateTelegramSession(): string {
 
 function getTelegramConfig(): TelegramConfig | null {
   const db = getDb();
-  const row = db.prepare(
-    "SELECT config FROM channels WHERE type = 'telegram' AND is_active = 1",
-  ).get() as { config: string } | undefined;
+  const row = db.prepare("SELECT config FROM channels WHERE type = 'telegram' AND is_active = 1").get() as
+    { config: string } | undefined;
 
   if (!row) return null;
   try {
@@ -1550,18 +1490,17 @@ function getTelegramConfig(): TelegramConfig | null {
   }
 }
 
-export function onTelegramSessionCompacted(oldSessionId: string, newSessionId: string): void {
-  if (activeSessionId === oldSessionId) {
-    activeSessionId = newSessionId;
-  }
-}
-
-
 const DEFAULT_TELEGRAM_COMPACTION_TOKEN_THRESHOLD = 600_000;
 const DEFAULT_TELEGRAM_COMPACTION_WINDOW_FRACTION = 0.75;
 const DEFAULT_TELEGRAM_COMPACTION_TARGET_TOKENS = 50_000;
 
 const compactingTelegramSessions = new Set<string>();
+
+export const TELEGRAM_COMPACTION_MEMORY_BACKOFF_MS = 15 * 60_000;
+
+const telegramCompactionBackoffUntil = new Map<string, number>();
+
+export const TELEGRAM_DREAMING_BUSY_MESSAGE = 'Clear do desktop em andamento; tente em alguns minutos.';
 
 function readPositiveNumberSetting(key: string, fallback: number): number {
   const raw = getSetting(key);
@@ -1570,7 +1509,7 @@ function readPositiveNumberSetting(key: string, fallback: number): number {
 }
 
 function getActiveContextTokens(session: ChatSession): number {
-  return session.activeContextTokensEst ?? ((session.inputTokens || 0) + (session.outputTokens || 0));
+  return session.activeContextTokensEst ?? (session.inputTokens || 0) + (session.outputTokens || 0);
 }
 
 function getTelegramCompactionThreshold(): number {
@@ -1597,7 +1536,7 @@ export function buildTelegramCompactionSeed(
   const SEPARATOR = '\n\n';
   let remaining = targetTokens - estimateTokens(header);
 
-  const convo = messages.filter(m => m.role === 'user' || m.role === 'assistant');
+  const convo = messages.filter((m) => m.role === 'user' || m.role === 'assistant');
   const turns: string[] = [];
   let current: string[] = [];
   for (const m of convo) {
@@ -1634,6 +1573,7 @@ async function sendCompactionNotice(
   success: boolean,
   currentBot: TelegramBot | null = getActiveBotInstance(),
   isActive: () => boolean = () => currentBot !== null && currentBot === getActiveBotInstance(),
+  cause?: string,
 ): Promise<void> {
   if (!currentBot || !isActive()) return;
   const config = getTelegramConfig();
@@ -1643,17 +1583,19 @@ async function sendCompactionNotice(
       config.allowedUserId,
       success
         ? 'Compactei nossa conversa para nao perder o fio: mantive um resumo e as mensagens recentes. Seguimos.'
-        : 'Nao consegui compactar agora. Nada foi perdido; tento de novo em breve.',
+        : cause
+          ? `Nao consegui compactar agora: ${cause}. Nada foi perdido; volto a tentar mais tarde.`
+          : 'Nao consegui compactar agora. Nada foi perdido; tento de novo em breve.',
       currentBot,
       isActive,
     );
-  } catch {
-  }
+  } catch {}
 }
 
 export interface TelegramCompactionOutcome {
   ok: boolean;
   noop?: boolean;
+  reason?: 'dreaming_busy';
   error?: string;
 }
 
@@ -1666,12 +1608,7 @@ export async function compactTelegramSessionInPlace(
     isActive?: () => boolean;
   } = {},
 ): Promise<TelegramCompactionOutcome> {
-  const {
-    force = false,
-    notify = true,
-    currentBot = getActiveBotInstance(),
-    isActive = () => true,
-  } = opts;
+  const { force = false, notify = true, currentBot = getActiveBotInstance(), isActive = () => true } = opts;
 
   if (!isActive()) return { ok: false, noop: true, error: 'bot inativo' };
 
@@ -1692,28 +1629,40 @@ export async function compactTelegramSessionInPlace(
   try {
     const boundary = session.compactedUpToMessageId;
     const allMessages = getSessionMessages(sessionId);
-    const deltaMessages = boundary !== undefined
-      ? allMessages.filter(m => m.id > boundary)
-      : allMessages;
+    const deltaMessages = boundary !== undefined ? allMessages.filter((m) => m.id > boundary) : allMessages;
     if (deltaMessages.length === 0) {
       logger.info({ sessionId, boundary }, 'Telegram: nada novo para compactar (delta vazio)');
       return { ok: true, noop: true };
     }
 
     const periodStart = new Date(deltaMessages[0].createdAt ?? session.createdAt);
+    const releaseDreaming = tryAcquireDreamingMutex();
+    if (!releaseDreaming) {
+      logger.info({ sessionId }, 'Telegram: dreaming ocupado pelo Clear do desktop (noop dreaming_busy)');
+      return { ok: true, noop: true, reason: 'dreaming_busy' };
+    }
     let compactionResult: Awaited<ReturnType<typeof runCompaction>>;
     try {
       compactionResult = await runCompaction(periodStart, new Date(), sessionId, {
         sinceMessageId: boundary,
         priorSummary: session.rollingSummary,
         skipDailySummary: true,
+        dreamingMutex: 'held',
       });
       if (!isActive()) return { ok: false, noop: true, error: 'bot inativo' };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      if (isCompactionStepError(err) && err.code === 'COMPACT-MEMORY-FAILED') {
+        telegramCompactionBackoffUntil.set(sessionId, Date.now() + TELEGRAM_COMPACTION_MEMORY_BACKOFF_MS);
+        logger.error({ err, sessionId }, 'Telegram: gate de memoria falhou; boundary intacto, backoff armado');
+        if (notify && isActive()) await sendCompactionNotice(false, currentBot, isActive, msg);
+        return { ok: false, error: msg };
+      }
       logger.error({ err, sessionId }, 'Telegram: compactacao abortada (summarizer falhou); contexto intacto');
       if (notify && isActive()) await sendCompactionNotice(false, currentBot, isActive);
       return { ok: false, error: msg };
+    } finally {
+      releaseDreaming();
     }
     if (!compactionResult) {
       logger.info({ sessionId }, 'Telegram: runCompaction sem mensagens no delta (noop)');
@@ -1772,16 +1721,27 @@ async function maybeCompactTelegramSession(
     if (!session || session.type !== 'telegram' || session.status !== 'active') return;
     if (compactingTelegramSessions.has(sessionId)) return;
 
+    const backoffUntil = telegramCompactionBackoffUntil.get(sessionId);
+    if (backoffUntil !== undefined) {
+      if (Date.now() < backoffUntil) return;
+      telegramCompactionBackoffUntil.delete(sessionId);
+    }
+
     const tokensAtivos = getActiveContextTokens(session);
     const threshold = getTelegramCompactionThreshold();
     if (tokensAtivos < threshold) return;
 
-    logger.info({ sessionId, tokensAtivos, threshold }, 'Telegram: gatilho de compactacao in-place atingido (SPEC 5.2)');
-    await enqueueTelegramLaneTask(() => compactTelegramSessionInPlace(sessionId, {
-      force: false,
-      currentBot,
-      isActive,
-    }));
+    logger.info(
+      { sessionId, tokensAtivos, threshold },
+      'Telegram: gatilho de compactacao in-place atingido (SPEC 5.2)',
+    );
+    await enqueueTelegramLaneTask(() =>
+      compactTelegramSessionInPlace(sessionId, {
+        force: false,
+        currentBot,
+        isActive,
+      }),
+    );
   } catch (err) {
     logger.error({ err, sessionId }, 'Telegram: falha no gatilho de compactacao (nao-fatal)');
   }
@@ -1805,6 +1765,12 @@ export const __telegramInternal = {
   },
   setActiveSessionIdForTests(id: string | null): void {
     activeSessionId = id;
+  },
+  resetCompactionBackoffForTests(): void {
+    telegramCompactionBackoffUntil.clear();
+  },
+  getCompactionBackoffUntilForTests(sessionId: string): number | undefined {
+    return telegramCompactionBackoffUntil.get(sessionId);
   },
   getActiveSessionIdForTests(): string | null {
     return activeSessionId;

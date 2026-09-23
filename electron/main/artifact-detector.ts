@@ -3,36 +3,37 @@ import fs from 'fs';
 import path from 'path';
 import { createLogger } from './logger';
 import { storeExcalidrawView } from './excalidraw-views';
+import { detectHtmlArtifact } from './html-artifact';
 import type { ArtifactData } from '../../src/types';
 
 const logger = createLogger('artifact-detector');
 
-
 function isExcalidrawTool(name: string): boolean {
   const lower = name.toLowerCase();
-  return lower.includes('excalidraw') && (
-    lower.endsWith('create_view') ||
-    lower.endsWith('export_to_excalidraw') ||
-    lower.endsWith('save_checkpoint')
+  return (
+    lower.includes('excalidraw') &&
+    (lower.endsWith('create_view') || lower.endsWith('export_to_excalidraw') || lower.endsWith('save_checkpoint'))
   );
 }
 
-
 function buildExcalidrawFile(elements: unknown[], appState: Record<string, unknown>): string {
-  return JSON.stringify({
-    type: 'excalidraw',
-    version: 2,
-    source: 'lionclaw',
-    elements,
-    appState: {
-      gridSize: null,
-      viewBackgroundColor: '#ffffff',
-      ...appState,
+  return JSON.stringify(
+    {
+      type: 'excalidraw',
+      version: 2,
+      source: 'lionclaw',
+      elements,
+      appState: {
+        gridSize: null,
+        viewBackgroundColor: '#ffffff',
+        ...appState,
+      },
+      files: {},
     },
-    files: {},
-  }, null, 2);
+    null,
+    2,
+  );
 }
-
 
 function extractElements(input: Record<string, unknown>): {
   elements: unknown[];
@@ -52,7 +53,9 @@ function extractElements(input: Record<string, unknown>): {
         rawElements = parsed;
         appState = (input.appState as Record<string, unknown>) || {};
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   } else if (typeof input.content === 'string') {
     try {
       const parsed = JSON.parse(input.content);
@@ -62,7 +65,9 @@ function extractElements(input: Record<string, unknown>): {
       } else if (Array.isArray(parsed)) {
         rawElements = parsed;
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   } else if (Array.isArray(input.content)) {
     rawElements = input.content;
   }
@@ -113,7 +118,9 @@ function firstExistingImagePath(content: string): { imagePath: string; title?: s
     if (imagePath) return { imagePath, title: match[1]?.trim() || undefined };
   }
 
-  const labelled = content.matchAll(/(?:Arquivo|Imagem|Image|File):\s*((?:\/|[A-Za-z]:\\).+?\.(?:png|jpe?g|webp|gif))(?:\s|\\n|\n|$)/gi);
+  const labelled = content.matchAll(
+    /(?:Arquivo|Imagem|Image|File):\s*((?:\/|[A-Za-z]:\\).+?\.(?:png|jpe?g|webp|gif))(?:\s|\\n|\n|$)/gi,
+  );
   for (const match of labelled) {
     const imagePath = existingImagePath(match[1]);
     if (imagePath) return { imagePath };
@@ -128,19 +135,27 @@ function firstExistingImagePath(content: string): { imagePath: string; title?: s
   return null;
 }
 
-function buildImageArtifact(toolUseId: string, imagePath: string, content: string, title?: string): ArtifactData | null {
+function buildImageArtifact(
+  toolUseId: string,
+  imagePath: string,
+  content: string,
+  title?: string,
+): ArtifactData | null {
   try {
     const imageBuffer = fs.readFileSync(imagePath);
     const imageBase64 = imageBuffer.toString('base64');
     const ext = path.extname(imagePath).toLowerCase();
     const mimeType =
-      ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
-        : ext === '.webp' ? 'image/webp'
-          : ext === '.gif' ? 'image/gif'
+      ext === '.jpg' || ext === '.jpeg'
+        ? 'image/jpeg'
+        : ext === '.webp'
+          ? 'image/webp'
+          : ext === '.gif'
+            ? 'image/gif'
             : 'image/png';
 
     const promptMatch = content.match(/Prompt:\s*(.+?)(?:\n|\\n|$)/);
-    const prompt = promptMatch ? promptMatch[1].trim() : (title || 'Imagem gerada');
+    const prompt = promptMatch ? promptMatch[1].trim() : title || 'Imagem gerada';
 
     logger.info({ toolUseId, imagePath, sizeBytes: imageBuffer.length }, 'Image file read successfully for artifact');
     return {
@@ -160,7 +175,6 @@ function buildImageArtifact(toolUseId: string, imagePath: string, content: strin
     return null;
   }
 }
-
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   '.pdf': 'application/pdf',
@@ -219,9 +233,7 @@ function firstDocumentArtifact(content: string): ArtifactData | null {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
 
 function normalizeBase64Image(raw: string): { imageBase64: string; mimeType: string } | null {
@@ -278,28 +290,24 @@ function firstInlineImage(content: string): {
   const record = asRecord(parsed);
   const data = asRecord(record?.data);
   const imageRaw =
-    firstString(record, ['imageBase64', 'image_base64', 'b64_json', 'result', 'image'])
-    ?? firstString(data, ['imageBase64', 'image_base64', 'b64_json', 'result', 'image']);
+    firstString(record, ['imageBase64', 'image_base64', 'b64_json', 'result', 'image']) ??
+    firstString(data, ['imageBase64', 'image_base64', 'b64_json', 'result', 'image']);
   if (!imageRaw) return null;
 
   const image = normalizeBase64Image(imageRaw);
   if (!image) return null;
 
   const prompt =
-    firstString(record, ['prompt', 'revised_prompt', 'revisedPrompt'])
-    ?? firstString(data, ['prompt', 'revised_prompt', 'revisedPrompt'])
-    ?? 'Imagem gerada';
-  const title =
-    firstString(record, ['title'])
-    ?? firstString(data, ['title']);
+    firstString(record, ['prompt', 'revised_prompt', 'revisedPrompt']) ??
+    firstString(data, ['prompt', 'revised_prompt', 'revisedPrompt']) ??
+    'Imagem gerada';
+  const title = firstString(record, ['title']) ?? firstString(data, ['title']);
   const toolName =
-    firstString(record, ['toolName', 'tool_name'])
-    ?? firstString(data, ['toolName', 'tool_name'])
-    ?? 'image-generation';
+    firstString(record, ['toolName', 'tool_name']) ??
+    firstString(data, ['toolName', 'tool_name']) ??
+    'image-generation';
   const mimeType =
-    firstString(record, ['mimeType', 'mime_type'])
-    ?? firstString(data, ['mimeType', 'mime_type'])
-    ?? image.mimeType;
+    firstString(record, ['mimeType', 'mime_type']) ?? firstString(data, ['mimeType', 'mime_type']) ?? image.mimeType;
 
   return {
     imageBase64: image.imageBase64,
@@ -336,7 +344,6 @@ function buildInlineImageArtifact(
     },
   };
 }
-
 
 export function captureToolUse(
   toolUseId: string,
@@ -400,12 +407,11 @@ export function captureToolUse(
   };
 }
 
-export function captureToolResult(
-  toolUseId: string,
-  content: string,
-  isError: boolean,
-): ArtifactData | null {
+export function captureToolResult(toolUseId: string, content: string, isError: boolean): ArtifactData | null {
   if (isError) return null;
+
+  const html = detectHtmlArtifact(content);
+  if (html?.kind === 'artifact') return html.artifact;
 
   const document = firstDocumentArtifact(content);
   if (document) return document;
@@ -439,12 +445,14 @@ export function captureToolResult(
         },
       };
     } catch (err) {
-      logger.warn({ audioPath, err }, 'Audio file could not be read for artifact -- check path exists and is accessible');
+      logger.warn(
+        { audioPath, err },
+        'Audio file could not be read for artifact -- check path exists and is accessible',
+      );
     }
   }
 
   return null;
 }
 
-export function resetArtifactDetector(): void {
-}
+export function resetArtifactDetector(): void {}

@@ -1,10 +1,8 @@
-
 import http from 'http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { startKimiMcpBridge, type KimiMcpBridge } from '../mcp-http-bridge';
 import { getKimiBridgeRegistry } from '../mcp-bridge-registry';
 import type { KimiExternalTool } from '../../agent-runtime/kimi-external-tools';
-
 
 interface HttpResult {
   status: number;
@@ -57,8 +55,7 @@ function openSse(
           res,
         });
       });
-      res.on('error', () => {
-      });
+      res.on('error', () => {});
     });
     req.on('error', reject);
     req.end();
@@ -82,7 +79,6 @@ async function expectPortRefused(port: number, token: string): Promise<void> {
     }),
   ).rejects.toMatchObject({ code: expect.stringMatching(/^ECONN(REFUSED|RESET)$/) });
 }
-
 
 const SUBAGENT_OUTPUT = 'subagent synthesized result';
 
@@ -115,7 +111,6 @@ function buildFakeTools(): {
   };
   return { tools: [subagent, userQuestion, catalog], subagentHandler };
 }
-
 
 describe('mcp-http-bridge integration (B6, full proven sequence over loopback)', () => {
   const live: KimiMcpBridge[] = [];
@@ -198,9 +193,7 @@ describe('mcp-http-bridge integration (B6, full proven sequence over loopback)',
       expect(item).toHaveProperty('description');
       expect(item).toHaveProperty('inputSchema');
     }
-    expect(listParsed.result.tools.map((t: { name: string }) => t.name)).toEqual(
-      tools.map((t) => t.name),
-    );
+    expect(listParsed.result.tools.map((t: { name: string }) => t.name)).toEqual(tools.map((t) => t.name));
 
     const callRes = await request(bridge.url, {
       method: 'POST',

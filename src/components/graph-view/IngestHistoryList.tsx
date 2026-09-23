@@ -1,19 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import {
-  RefreshCw,
-  CheckCircle,
-  XCircle,
-  X,
-  Clock,
-  Loader2,
-  AlertTriangle,
-} from 'lucide-react';
+import { RefreshCw, CheckCircle, XCircle, X, Clock, Loader2, AlertTriangle } from 'lucide-react';
 import type { IngestJob } from '@/types';
 
-
 function IngestProgressBar({ job }: { job: IngestJob }) {
-  const pct =
-    job.totalChunks > 0 ? Math.round((job.processedChunks / job.totalChunks) * 100) : 0;
+  const pct = job.totalChunks > 0 ? Math.round((job.processedChunks / job.totalChunks) * 100) : 0;
   return (
     <div className="mt-1.5">
       <div className="flex justify-between text-[10px] text-zinc-500 mb-1">
@@ -23,15 +13,11 @@ function IngestProgressBar({ job }: { job: IngestJob }) {
         <span>{pct}%</span>
       </div>
       <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
-        <div
-          className="h-full bg-amber-500 transition-all duration-300"
-          style={{ width: `${pct}%` }}
-        />
+        <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
 }
-
 
 interface IngestConfirmDialogProps {
   job: IngestJob | null;
@@ -42,29 +28,22 @@ interface IngestConfirmDialogProps {
 function IngestConfirmDialog({ job, onConfirm, onCancel }: IngestConfirmDialogProps) {
   if (!job) return null;
 
-  const estimatedTokens =
-    (job.estimatedCostUsd ?? 0) > 0
-      ? Math.round((job.estimatedCostUsd! / 0.000003))
-      : null;
+  const estimatedTokens = (job.estimatedCostUsd ?? 0) > 0 ? Math.round(job.estimatedCostUsd! / 0.000003) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-md mx-4 p-5 shadow-2xl">
-        <h3 className="text-sm font-semibold text-zinc-200 mb-1">
-          Confirmar processamento
-        </h3>
+        <h3 className="text-sm font-semibold text-zinc-200 mb-1">Confirmar processamento</h3>
         <p className="text-xs text-zinc-400 mb-4">
-          O documento{' '}
-          <span className="text-zinc-200 font-medium">"{job.fileName}"</span> requer
-          confirmação antes de processar com IA.
+          O documento <span className="text-zinc-200 font-medium">"{job.fileName}"</span> requer confirmação antes de
+          processar com IA.
         </p>
 
         {job.truncated && job.originalChunkCount != null && (
           <div className="flex items-start gap-2 mb-3 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
             <AlertTriangle size={13} className="text-amber-400 shrink-0 mt-0.5" />
             <p className="text-[11px] text-amber-300">
-              Documento muito grande. Processando primeiros {job.totalChunks} chunks de{' '}
-              {job.originalChunkCount} total.
+              Documento muito grande. Processando primeiros {job.totalChunks} chunks de {job.originalChunkCount} total.
             </p>
           </div>
         )}
@@ -82,9 +61,7 @@ function IngestConfirmDialog({ job, onConfirm, onCancel }: IngestConfirmDialogPr
           )}
           <div className="flex justify-between text-xs">
             <span className="text-zinc-500">Custo estimado</span>
-            <span className="text-amber-400 font-medium">
-              ${(job.estimatedCostUsd ?? 0).toFixed(4)} USD
-            </span>
+            <span className="text-amber-400 font-medium">${(job.estimatedCostUsd ?? 0).toFixed(4)} USD</span>
           </div>
         </div>
 
@@ -107,29 +84,22 @@ function IngestConfirmDialog({ job, onConfirm, onCancel }: IngestConfirmDialogPr
   );
 }
 
-
-const STATUS_CONFIG: Record<
-  IngestJob['status'],
-  { label: string; className: string }
-> = {
-  extracting:     { label: 'Extraindo',   className: 'bg-blue-500/20 text-blue-400' },
-  estimating:     { label: 'Estimando',   className: 'bg-purple-500/20 text-purple-400' },
-  waiting_confirm:{ label: 'Aguardando',  className: 'bg-amber-500/20 text-amber-400' },
-  processing:     { label: 'Processando', className: 'bg-amber-500/20 text-amber-400' },
-  completed:      { label: 'Concluído',   className: 'bg-green-500/20 text-green-400' },
-  failed:         { label: 'Falhou',      className: 'bg-red-500/20 text-red-400' },
-  partial:        { label: 'Parcial',     className: 'bg-orange-500/20 text-orange-400' },
+const STATUS_CONFIG: Record<IngestJob['status'], { label: string; className: string }> = {
+  extracting: { label: 'Extraindo', className: 'bg-blue-500/20 text-blue-400' },
+  estimating: { label: 'Estimando', className: 'bg-purple-500/20 text-purple-400' },
+  waiting_confirm: { label: 'Aguardando', className: 'bg-amber-500/20 text-amber-400' },
+  processing: { label: 'Processando', className: 'bg-amber-500/20 text-amber-400' },
+  completed: { label: 'Concluído', className: 'bg-green-500/20 text-green-400' },
+  failed: { label: 'Falhou', className: 'bg-red-500/20 text-red-400' },
+  partial: { label: 'Parcial', className: 'bg-orange-500/20 text-orange-400' },
 };
 
 function StatusBadge({ status }: { status: IngestJob['status'] }) {
   const cfg = STATUS_CONFIG[status] ?? { label: status, className: 'bg-zinc-800 text-zinc-400' };
   return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${cfg.className}`}>
-      {cfg.label}
-    </span>
+    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${cfg.className}`}>{cfg.label}</span>
   );
 }
-
 
 interface JobCardProps {
   job: IngestJob;
@@ -141,8 +111,7 @@ interface JobCardProps {
 
 function JobCard({ job, onResume, onAccept, onDiscard, onDelete }: JobCardProps) {
   const isDone = job.status === 'completed' || job.status === 'failed';
-  const isActive =
-    job.status === 'extracting' || job.status === 'estimating' || job.status === 'processing';
+  const isActive = job.status === 'extracting' || job.status === 'estimating' || job.status === 'processing';
 
   return (
     <div className="px-3 py-3 bg-zinc-900 border border-zinc-800 rounded-lg">
@@ -150,9 +119,7 @@ function JobCard({ job, onResume, onAccept, onDiscard, onDelete }: JobCardProps)
         <div className="flex-1 min-w-0">
           {/* File name + badges */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs font-medium text-zinc-200 truncate max-w-[180px]">
-              {job.fileName}
-            </span>
+            <span className="text-xs font-medium text-zinc-200 truncate max-w-[180px]">{job.fileName}</span>
             <span className="text-[10px] bg-zinc-800 text-zinc-500 px-1.5 py-0.5 rounded-full shrink-0">
               {job.sourceType}
             </span>
@@ -161,12 +128,8 @@ function JobCard({ job, onResume, onAccept, onDiscard, onDelete }: JobCardProps)
 
           {/* Status description */}
           <div className="mt-1">
-            {job.status === 'extracting' && (
-              <span className="text-[11px] text-zinc-500">Extraindo texto...</span>
-            )}
-            {job.status === 'estimating' && (
-              <span className="text-[11px] text-zinc-500">Calculando estimativa...</span>
-            )}
+            {job.status === 'extracting' && <span className="text-[11px] text-zinc-500">Extraindo texto...</span>}
+            {job.status === 'estimating' && <span className="text-[11px] text-zinc-500">Calculando estimativa...</span>}
             {job.status === 'waiting_confirm' && (
               <span className="text-[11px] text-zinc-500">
                 {job.totalChunks} chunks · ${(job.estimatedCostUsd ?? 0).toFixed(4)} USD estimado
@@ -179,9 +142,7 @@ function JobCard({ job, onResume, onAccept, onDiscard, onDelete }: JobCardProps)
               </span>
             )}
             {job.status === 'failed' && (
-              <span className="text-[11px] text-red-400">
-                {job.error || 'Falha no processamento'}
-              </span>
+              <span className="text-[11px] text-red-400">{job.error || 'Falha no processamento'}</span>
             )}
             {job.status === 'partial' && (
               <span className="text-[11px] text-zinc-500">
@@ -238,7 +199,6 @@ function JobCard({ job, onResume, onAccept, onDiscard, onDelete }: JobCardProps)
   );
 }
 
-
 function DiscardConfirmDialog({
   open,
   onConfirm,
@@ -280,7 +240,6 @@ function DiscardConfirmDialog({
   );
 }
 
-
 interface IngestHistoryListProps {
   newJobs?: IngestJob[];
 }
@@ -290,7 +249,6 @@ export function IngestHistoryList({ newJobs = [] }: IngestHistoryListProps) {
   const [loading, setLoading] = useState(true);
   const [confirmJob, setConfirmJob] = useState<IngestJob | null>(null);
   const [discardId, setDiscardId] = useState<string | null>(null);
-
 
   const loadHistory = useCallback(async () => {
     try {
@@ -307,7 +265,6 @@ export function IngestHistoryList({ newJobs = [] }: IngestHistoryListProps) {
     loadHistory();
   }, [loadHistory]);
 
-
   useEffect(() => {
     if (newJobs.length === 0) return;
     setJobs((prev) => {
@@ -316,7 +273,6 @@ export function IngestHistoryList({ newJobs = [] }: IngestHistoryListProps) {
       return additions.length > 0 ? [...additions, ...prev] : prev;
     });
   }, [newJobs]);
-
 
   useEffect(() => {
     const unsub = window.lionclaw.mgraph.onIngestProgress((data) => {
@@ -338,22 +294,22 @@ export function IngestHistoryList({ newJobs = [] }: IngestHistoryListProps) {
     return unsub;
   }, []);
 
-
   useEffect(() => {
     if (loading) return;
     const pending = jobs.find((j) => j.status === 'waiting_confirm');
     if (pending && !confirmJob) {
       setConfirmJob(pending);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
-
 
   const handleConfirm = async (jobId: string) => {
     setConfirmJob(null);
     try {
       await window.lionclaw.mgraph.ingestAccept(jobId);
-    } catch { /* progress event will update state */ }
+    } catch {
+      /* progress event will update state */
+    }
   };
 
   const handleConfirmCancel = async (jobId: string) => {
@@ -361,26 +317,32 @@ export function IngestHistoryList({ newJobs = [] }: IngestHistoryListProps) {
     try {
       await window.lionclaw.mgraph.ingestCancel(jobId);
       setJobs((prev) => prev.filter((j) => j.id !== jobId));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
 
   const handleResume = async (jobId: string) => {
     try {
       const updated = await window.lionclaw.mgraph.ingestResume(jobId);
       if ('error' in updated) {
-        setJobs((prev) => prev.map((job) => (
-          job.id === jobId ? { ...job, status: 'failed', error: updated.error } : job
-        )));
+        setJobs((prev) =>
+          prev.map((job) => (job.id === jobId ? { ...job, status: 'failed', error: updated.error } : job)),
+        );
         return;
       }
       setJobs((prev) => prev.map((j) => (j.id === jobId ? updated : j)));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
 
   const handleAccept = async (jobId: string) => {
     try {
       await window.lionclaw.mgraph.ingestAccept(jobId);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
 
   const handleDiscardRequest = (jobId: string) => {
@@ -394,7 +356,9 @@ export function IngestHistoryList({ newJobs = [] }: IngestHistoryListProps) {
     try {
       await window.lionclaw.mgraph.ingestDiscard(id);
       setJobs((prev) => prev.filter((j) => j.id !== id));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   };
 
   const handleDelete = (jobId: string) => {
@@ -403,23 +367,22 @@ export function IngestHistoryList({ newJobs = [] }: IngestHistoryListProps) {
 
   const handleClearHistory = () => {
     const ACTIVE_STATUSES = new Set<IngestJob['status']>([
-      'processing', 'extracting', 'estimating', 'waiting_confirm', 'partial',
+      'processing',
+      'extracting',
+      'estimating',
+      'waiting_confirm',
+      'partial',
     ]);
     setJobs((prev) => prev.filter((j) => ACTIVE_STATUSES.has(j.status)));
   };
 
-  const completedCount = jobs.filter(
-    (j) => j.status === 'completed' || j.status === 'failed',
-  ).length;
-
+  const completedCount = jobs.filter((j) => j.status === 'completed' || j.status === 'failed').length;
 
   return (
     <>
       {/* Section header */}
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
-          Histórico de ingestões
-        </span>
+        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Histórico de ingestões</span>
         {completedCount > 0 && (
           <button
             onClick={handleClearHistory}
@@ -455,11 +418,7 @@ export function IngestHistoryList({ newJobs = [] }: IngestHistoryListProps) {
       )}
 
       {/* Confirm dialog for waiting_confirm status */}
-      <IngestConfirmDialog
-        job={confirmJob}
-        onConfirm={handleConfirm}
-        onCancel={handleConfirmCancel}
-      />
+      <IngestConfirmDialog job={confirmJob} onConfirm={handleConfirm} onCancel={handleConfirmCancel} />
 
       {/* Discard confirmation dialog */}
       <DiscardConfirmDialog

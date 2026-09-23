@@ -11,8 +11,7 @@ export function getLastContractIssues(htmlPath: string): string[] {
 
 const logger = createLogger('open-design-contract');
 
-const CONTRACT_SCRIPT_RE =
-  /<script[^>]*id=["']lionclaw-design-contract["'][^>]*>([\s\S]*?)<\/script>/i;
+const CONTRACT_SCRIPT_RE = /<script[^>]*id=["']lionclaw-design-contract["'][^>]*>([\s\S]*?)<\/script>/i;
 
 export async function extractContractFromHtml(htmlPath: string): Promise<DesignContract | null> {
   let html: string;
@@ -25,10 +24,7 @@ export async function extractContractFromHtml(htmlPath: string): Promise<DesignC
 
   const match = CONTRACT_SCRIPT_RE.exec(html);
   if (!match || !match[1]) {
-    logger.warn(
-      { htmlPath },
-      'extractContractFromHtml: <script id="lionclaw-design-contract"> not found in HTML',
-    );
+    logger.warn({ htmlPath }, 'extractContractFromHtml: <script id="lionclaw-design-contract"> not found in HTML');
     return null;
   }
 

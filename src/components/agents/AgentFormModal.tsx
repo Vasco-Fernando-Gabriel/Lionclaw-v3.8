@@ -37,13 +37,21 @@ import { CLAUDE_MODELS } from '@/constants/claude-models';
 import { GROK_MODELS, GROK_DEFAULT_MODEL } from '@/constants/grok-models';
 
 const TOOL_IDS = [
-  'Read', 'Write', 'Edit', 'Glob', 'Grep', 'NotebookEdit',
-  'Bash', 'WebSearch', 'WebFetch', 'Agent', 'TodoWrite', 'AskUserQuestion',
+  'Read',
+  'Write',
+  'Edit',
+  'Glob',
+  'Grep',
+  'NotebookEdit',
+  'Bash',
+  'WebSearch',
+  'WebFetch',
+  'Agent',
+  'TodoWrite',
+  'AskUserQuestion',
 ] as const;
 
-const LOCAL_ALLOWED_TOOLS = [
-  'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch',
-] as const;
+const LOCAL_ALLOWED_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch'] as const;
 
 const CLOUD_MODELS = CLAUDE_MODELS.map((m) => ({
   value: m.id,
@@ -51,10 +59,10 @@ const CLOUD_MODELS = CLAUDE_MODELS.map((m) => ({
 }));
 
 const ZAI_MODELS = CLAUDE_COMPAT_PRESETS.find((p) => p.id === 'zai')?.models ?? [];
-const ZAI_DEFAULT_MODEL = ZAI_MODELS[0]?.id ?? 'glm-4.7'; // gate-allow: default do picker de agent.model, DADO por agente (SPEC 4.6)
+const ZAI_DEFAULT_MODEL = ZAI_MODELS[0]?.id ?? 'glm-4.7'; // gate-allow: default do picker de agent.model, DADO por agente
 
 const MINIMAX_TP_MODELS = CLAUDE_COMPAT_PRESETS.find((p) => p.id === 'minimax')?.models ?? [];
-const MINIMAX_TP_DEFAULT_MODEL = MINIMAX_TP_MODELS[0]?.id ?? 'MiniMax-M2.7'; // gate-allow: default do picker de agent.model, DADO por agente (SPEC 4.6)
+const MINIMAX_TP_DEFAULT_MODEL = MINIMAX_TP_MODELS[0]?.id ?? 'MiniMax-M2.7'; // gate-allow: default do picker de agent.model, DADO por agente
 
 const KIMI_DEFAULT_MODEL = KIMI_DEFAULT_MODEL_CONST;
 
@@ -72,30 +80,25 @@ const THINKING_OPTIONS = [
 ];
 
 const EXTERNAL_PROVIDERS: Array<{ value: ExternalProvider; label: string }> = [
-  { value: 'openrouter',            label: 'OpenRouter' },
-  { value: 'openai',                label: 'OpenAI' },
-  { value: 'kimi',                  label: 'Kimi (Moonshot)' },
-  { value: 'deepseek',              label: 'DeepSeek' },
-  { value: 'qwen',                  label: 'Qwen (DashScope)' },
-  { value: 'minimax-payg',          label: 'MiniMax (Pay-as-you-go)' },
+  { value: 'openrouter', label: 'OpenRouter' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'kimi', label: 'Kimi (Moonshot)' },
+  { value: 'deepseek', label: 'DeepSeek' },
+  { value: 'qwen', label: 'Qwen (DashScope)' },
+  { value: 'minimax-payg', label: 'MiniMax (Pay-as-you-go)' },
   { value: 'gemini-agent-platform', label: 'Gemini Agent Platform' },
-  { value: 'openai-compatible',     label: 'Custom (OpenAI Compatible)' },
+  { value: 'openai-compatible', label: 'Custom (OpenAI Compatible)' },
 ];
 
 function modelSupportsReasoning(provider: ExternalProvider, model: string): boolean {
   if (provider === 'openai') {
-    return model.startsWith('gpt-5.5') || model.startsWith('o');
+    return model.startsWith('gpt-6') || model.startsWith('gpt-5.5') || model.startsWith('o');
   }
   if (provider === 'openrouter') {
-    if (model.startsWith('openai/gpt-5')) return true;
-    if (model.startsWith('qwen/qwen3.6') ) return true;
+    if (model.startsWith('openai/gpt-6') || model.startsWith('openai/gpt-5')) return true;
+    if (model.startsWith('qwen/qwen3.6')) return true;
   }
-  if (
-    provider === 'kimi' ||
-    provider === 'deepseek' ||
-    provider === 'qwen' ||
-    provider === 'minimax-payg'
-  ) {
+  if (provider === 'kimi' || provider === 'deepseek' || provider === 'qwen' || provider === 'minimax-payg') {
     const catalogEntry = MODEL_CATALOG[provider]?.find((m) => m.id === model);
     if (catalogEntry?.reasoning && catalogEntry.reasoning.kind !== 'none') return true;
   }
@@ -138,33 +141,35 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
   const [thinkingBudget, setThinkingBudget] = useState<string>(agent?.thinkingBudget?.toString() || '');
 
   const [cloudModel, setCloudModel] = useState<string>(
-    agent?.runtime === 'cloud' ? (agent?.model || 'claude-sonnet-4-6') : 'claude-sonnet-4-6', // gate-allow: default do picker de agent.model (cloud), DADO por agente (SPEC 4.6)
+    agent?.runtime === 'cloud' ? agent?.model || 'claude-sonnet-4-6' : 'claude-sonnet-4-6', // gate-allow: default do picker de agent.model (cloud), DADO por agente (SPEC 4.6)
   );
   const [maxTurns, setMaxTurns] = useState<string>(agent?.maxTurns?.toString() || '');
 
   const [zaiModel, setZaiModel] = useState<string>(
-    agent?.runtime === 'zai' ? (agent.model || ZAI_DEFAULT_MODEL) : ZAI_DEFAULT_MODEL,
+    agent?.runtime === 'zai' ? agent.model || ZAI_DEFAULT_MODEL : ZAI_DEFAULT_MODEL,
   );
   const [zaiStatus, setZaiStatus] = useState<ProviderStatusEntry | null>(null);
   const [zaiChecking, setZaiChecking] = useState(false);
 
   const [minimaxTpModel, setMinimaxTpModel] = useState<string>(
-    agent?.runtime === 'minimax-tp' ? (agent.model || MINIMAX_TP_DEFAULT_MODEL) : MINIMAX_TP_DEFAULT_MODEL,
+    agent?.runtime === 'minimax-tp' ? agent.model || MINIMAX_TP_DEFAULT_MODEL : MINIMAX_TP_DEFAULT_MODEL,
   );
   const [minimaxTpStatus, setMinimaxTpStatus] = useState<ProviderStatusEntry | null>(null);
   const [minimaxTpChecking, setMinimaxTpChecking] = useState(false);
 
   const [kimiModel, setKimiModel] = useState<string>(
-    agent?.runtime === 'kimi' ? (agent.model || KIMI_DEFAULT_MODEL) : KIMI_DEFAULT_MODEL,
+    agent?.runtime === 'kimi' ? agent.model || KIMI_DEFAULT_MODEL : KIMI_DEFAULT_MODEL,
   );
   const [grokModel, setGrokModel] = useState<string>(
-    agent?.runtime === 'grok' ? (agent.model || GROK_DEFAULT_MODEL) : GROK_DEFAULT_MODEL,
+    agent?.runtime === 'grok' ? agent.model || GROK_DEFAULT_MODEL : GROK_DEFAULT_MODEL,
   );
 
   const [localProvider, setLocalProvider] = useState<string>(agent?.localConfig?.provider || 'ollama');
   const [localBaseUrl, setLocalBaseUrl] = useState(agent?.localConfig?.baseUrl || 'http://localhost:11434');
   const [localModel, setLocalModel] = useState(agent?.localConfig?.model || '');
-  const [localTemperature, setLocalTemperature] = useState<string>(agent?.localConfig?.temperature?.toString() || '0.7');
+  const [localTemperature, setLocalTemperature] = useState<string>(
+    agent?.localConfig?.temperature?.toString() || '0.7',
+  );
   const [localMaxTokens] = useState<string>(agent?.localConfig?.maxTokens?.toString() || '');
   const [localMode, setLocalMode] = useState<'simple' | 'smart'>(agent?.localMode || 'simple');
   const [maxToolRounds, setMaxToolRounds] = useState<string>(agent?.maxToolRounds?.toString() || '5');
@@ -172,9 +177,7 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
   const [loadingModels, setLoadingModels] = useState(false);
   const [modelsError, setModelsError] = useState<string | null>(null);
 
-  const [extProvider, setExtProvider] = useState<ExternalProvider>(
-    agent?.externalConfig?.provider || 'openrouter',
-  );
+  const [extProvider, setExtProvider] = useState<ExternalProvider>(agent?.externalConfig?.provider || 'openrouter');
   const [extBaseUrl, setExtBaseUrl] = useState<string>(
     agent?.externalConfig?.baseUrl || PROVIDER_PRESETS['openrouter']?.baseUrl || '',
   );
@@ -186,12 +189,10 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
     agent?.externalConfig?.apiKeyRef || PROVIDER_PRESETS['openrouter']?.vaultKey || '',
   );
   const [extTemperature, setExtTemperature] = useState<string>(
-    agent?.externalConfig?.temperature?.toString()
-      ?? (agent?.runtime === 'external' ? '0.7' : ''),
+    agent?.externalConfig?.temperature?.toString() ?? (agent?.runtime === 'external' ? '0.7' : ''),
   );
   const [extMaxTokens, setExtMaxTokens] = useState<string>(
-    agent?.externalConfig?.maxTokens?.toString()
-      ?? (agent?.runtime === 'external' ? '8000' : ''),
+    agent?.externalConfig?.maxTokens?.toString() ?? (agent?.runtime === 'external' ? '8000' : ''),
   );
   const [extCustomVaultSlug, setExtCustomVaultSlug] = useState<string>('');
   const [extExtraHeaders, setExtExtraHeaders] = useState<string>(
@@ -204,9 +205,7 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
     agent?.runtime === 'external' && agent.maxToolRounds ? agent.maxToolRounds.toString() : '50',
   );
 
-  const [codexModel, setCodexModel] = useState<string>(
-    agent?.codexConfig?.model || CODEX_DEFAULT_MODEL,
-  );
+  const [codexModel, setCodexModel] = useState<string>(agent?.codexConfig?.model || CODEX_DEFAULT_MODEL);
   const [codexReasoningEffort, setCodexReasoningEffort] = useState<CodexChatReasoningEffort>(
     agent?.codexConfig?.reasoningEffort || 'medium',
   );
@@ -214,9 +213,7 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
   useEffect(() => {
     if (runtime !== 'codex') return;
     if (discoveredEffortsFor(codexModel).includes(codexReasoningEffort)) return;
-    setCodexReasoningEffort(
-      clampCodexEffortToSupported(codexReasoningEffort, discoveredEffortsFor(codexModel)),
-    );
+    setCodexReasoningEffort(clampCodexEffortToSupported(codexReasoningEffort, discoveredEffortsFor(codexModel)));
   }, [runtime, codexModel, codexReasoningEffort, discoveredEffortsFor]);
 
   const [codexStatus, setCodexStatus] = useState<{
@@ -301,6 +298,7 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
           runtime: 'claude-compat-sdk',
           provider: 'zai',
           connected: false,
+          available: false,
           reason: status.error,
         });
       } else {
@@ -327,6 +325,7 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
           runtime: 'claude-compat-sdk',
           provider: 'minimax',
           connected: false,
+          available: false,
           reason: (status as { error: string }).error,
         });
       } else {
@@ -370,15 +369,13 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    Promise.all([
-      window.lionclaw.tools.getEnabled(),
-      window.lionclaw.mcp.list(),
-      window.lionclaw.skills.list(),
-    ]).then(([tools, mcp, sk]) => {
-      setGlobalTools(tools);
-      setAvailableMCP(mcp.filter((s) => s.isActive));
-      setAvailableSkills(sk);
-    });
+    Promise.all([window.lionclaw.tools.getEnabled(), window.lionclaw.mcp.list(), window.lionclaw.skills.list()]).then(
+      ([tools, mcp, sk]) => {
+        setGlobalTools(tools);
+        setAvailableMCP(mcp.filter((s) => s.isActive));
+        setAvailableSkills(sk);
+      },
+    );
 
     if (agent?.runtime === 'external' && agent.externalConfig?.apiKeyRef) {
       window.lionclaw.vault.check(agent.externalConfig.apiKeyRef).then((configured) => {
@@ -392,27 +389,30 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchLocalModels = useCallback(async (provider: string, baseUrl: string) => {
-    setLoadingModels(true);
-    setModelsError(null);
-    try {
-      const result = await window.lionclaw.ollama.listModels(provider, baseUrl);
-      if (result.error) {
-        setModelsError(result.error);
-        setAvailableLocalModels([]);
-      } else {
-        setAvailableLocalModels(result.models);
-        if (result.models.length > 0 && !localModel) {
-          setLocalModel(result.models[0]);
+  const fetchLocalModels = useCallback(
+    async (provider: string, baseUrl: string) => {
+      setLoadingModels(true);
+      setModelsError(null);
+      try {
+        const result = await window.lionclaw.ollama.listModels(provider, baseUrl);
+        if (result.error) {
+          setModelsError(result.error);
+          setAvailableLocalModels([]);
+        } else {
+          setAvailableLocalModels(result.models);
+          if (result.models.length > 0 && !localModel) {
+            setLocalModel(result.models[0]);
+          }
         }
+      } catch {
+        setModelsError('Falha ao conectar');
+        setAvailableLocalModels([]);
+      } finally {
+        setLoadingModels(false);
       }
-    } catch {
-      setModelsError('Falha ao conectar');
-      setAvailableLocalModels([]);
-    } finally {
-      setLoadingModels(false);
-    }
-  }, [localModel]);
+    },
+    [localModel],
+  );
 
   useEffect(() => {
     if (runtime === 'local' && localBaseUrl) {
@@ -429,7 +429,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
       if (cancelled) return;
       setApiKeyStatus(configured ? 'saved' : 'unconfigured');
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [runtime, extApiKeyRef, apiKeyStatus]);
 
   const handleProviderChange = (provider: ExternalProvider) => {
@@ -458,9 +460,7 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
       setExtBaseUrl(preset?.baseUrl || '');
       setExtModel(preset?.defaultModel || '');
       setExtApiKeyRef(preset?.vaultKey || '');
-      setExtExtraHeaders(
-        preset?.extraHeaders ? JSON.stringify(preset.extraHeaders, null, 2) : '',
-      );
+      setExtExtraHeaders(preset?.extraHeaders ? JSON.stringify(preset.extraHeaders, null, 2) : '');
 
       if (preset?.vaultKey) {
         window.lionclaw.vault.check(preset.vaultKey).then((configured) => {
@@ -482,9 +482,7 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
 
     try {
       if (extProvider === 'openai-compatible') {
-        const entryLabel = extCustomVaultSlug
-          ? `Custom Provider (${extCustomVaultSlug})`
-          : 'Custom Provider API Key';
+        const entryLabel = extCustomVaultSlug ? `Custom Provider (${extCustomVaultSlug})` : 'Custom Provider API Key';
         const result = await window.lionclaw.vault.registerAndSet(
           {
             key: vaultKey,
@@ -514,11 +512,7 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
         await window.lionclaw.vault.set(vaultKey, keyValue);
       }
 
-      const testResult = await window.lionclaw.provider.testConnection(
-        extProvider,
-        extBaseUrl,
-        vaultKey,
-      );
+      const testResult = await window.lionclaw.provider.testConnection(extProvider, extBaseUrl, vaultKey);
 
       if (testResult.ok) {
         setApiKeyStatus('ok');
@@ -541,11 +535,7 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
     setApiKeyError('');
 
     try {
-      const testResult = await window.lionclaw.provider.testConnection(
-        extProvider,
-        extBaseUrl,
-        vaultKey,
-      );
+      const testResult = await window.lionclaw.provider.testConnection(extProvider, extBaseUrl, vaultKey);
       if (testResult.ok) {
         setApiKeyStatus('ok');
       } else {
@@ -560,7 +550,10 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
 
   const resolveVaultKey = (): string => {
     if (extProvider === 'openai-compatible') {
-      const slug = extCustomVaultSlug.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_');
+      const slug = extCustomVaultSlug
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '_');
       return slug ? `HARNESS_CUSTOM_${slug}_KEY` : '';
     }
     return extApiKeyRef || PROVIDER_PRESETS[extProvider]?.vaultKey || '';
@@ -601,11 +594,15 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
   const kimiBlocking = runtime === 'kimi' && !isManagedKimiSelectionUsable(kimiStatus, kimiModel);
   const grokBlocking = runtime === 'grok' && grokStatus?.usable !== true;
 
-  const isValid = baseFieldsValid && !externalKeyBlocking && !zaiKeyBlocking && !minimaxTpKeyBlocking && !kimiBlocking && !grokBlocking;
+  const isValid =
+    baseFieldsValid &&
+    !externalKeyBlocking &&
+    !zaiKeyBlocking &&
+    !minimaxTpKeyBlocking &&
+    !kimiBlocking &&
+    !grokBlocking;
 
-  const catalogModels: CatalogedModel[] = extProvider !== 'openai-compatible'
-    ? (MODEL_CATALOG[extProvider] ?? [])
-    : [];
+  const catalogModels: CatalogedModel[] = extProvider !== 'openai-compatible' ? (MODEL_CATALOG[extProvider] ?? []) : [];
 
   const selectedMcpTools = Array.from(allowedTools).filter((t) => t.startsWith('mcp__'));
 
@@ -618,15 +615,16 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
     name: name || '',
     description: '',
     systemPrompt: '',
-    model: runtime === 'minimax-tp'
-      ? minimaxTpModel
-      : runtime === 'kimi'
-        ? kimiModel
-        : runtime === 'grok'
-          ? grokModel
-        : runtime === 'zai'
-          ? zaiModel
-          : cloudModel,
+    model:
+      runtime === 'minimax-tp'
+        ? minimaxTpModel
+        : runtime === 'kimi'
+          ? kimiModel
+          : runtime === 'grok'
+            ? grokModel
+            : runtime === 'zai'
+              ? zaiModel
+              : cloudModel,
     allowedTools: [],
     mcpServers: [],
     isActive: true,
@@ -643,7 +641,7 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
     let parsedHeaders: Record<string, string> | undefined;
     if (extProvider === 'openai-compatible') {
       try {
-        parsedHeaders = extExtraHeaders.trim() ? JSON.parse(extExtraHeaders) as Record<string, string> : undefined;
+        parsedHeaders = extExtraHeaders.trim() ? (JSON.parse(extExtraHeaders) as Record<string, string>) : undefined;
       } catch {
         parsedHeaders = undefined;
       }
@@ -662,9 +660,8 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
       temperature: extTemperature ? parseFloat(extTemperature) : undefined,
       maxTokens: extMaxTokens ? parseInt(extMaxTokens, 10) : undefined,
       extraHeaders: parsedHeaders,
-      contextWindow: extProvider === 'openai-compatible' && extContextWindow
-        ? parseInt(extContextWindow, 10)
-        : undefined,
+      contextWindow:
+        extProvider === 'openai-compatible' && extContextWindow ? parseInt(extContextWindow, 10) : undefined,
     };
   }
 
@@ -684,7 +681,13 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
       const externalCfg = runtime === 'external' ? buildExternalConfig() : undefined;
 
       await onSave({
-        id: agent?.id || name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+        id:
+          agent?.id ||
+          name
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/[^a-z0-9-]/g, ''),
         name: name.trim(),
         description: description.trim(),
         systemPrompt: systemPrompt.trim(),
@@ -699,15 +702,11 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                   ? kimiModel
                   : runtime === 'grok'
                     ? grokModel
-                  : runtime === 'zai'
-                    ? zaiModel
-                    : cloudModel,
+                    : runtime === 'zai'
+                      ? zaiModel
+                      : cloudModel,
         allowedTools:
-          runtime === 'local' && localMode === 'simple'
-            ? []
-            : runtime === 'codex'
-              ? []
-              : Array.from(allowedTools),
+          runtime === 'local' && localMode === 'simple' ? [] : runtime === 'codex' ? [] : Array.from(allowedTools),
         mcpServers: runtime === 'local' || runtime === 'codex' ? [] : Array.from(mcpServers),
         isActive: agent?.isActive ?? true,
         effort,
@@ -716,13 +715,16 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
         maxTurns: runtime !== 'external' && runtime !== 'codex' && maxTurns ? parseInt(maxTurns, 10) : undefined,
         skills: runtime === 'local' || runtime === 'codex' ? [] : Array.from(skills),
         runtime,
-        localConfig: runtime === 'local' ? {
-          provider: localProvider as 'ollama' | 'lmstudio' | 'openai-compatible',
-          baseUrl: localBaseUrl,
-          model: localModel,
-          temperature: localTemperature ? parseFloat(localTemperature) : undefined,
-          maxTokens: localMaxTokens ? parseInt(localMaxTokens, 10) : undefined,
-        } : undefined,
+        localConfig:
+          runtime === 'local'
+            ? {
+                provider: localProvider as 'ollama' | 'lmstudio' | 'openai-compatible',
+                baseUrl: localBaseUrl,
+                model: localModel,
+                temperature: localTemperature ? parseFloat(localTemperature) : undefined,
+                maxTokens: localMaxTokens ? parseInt(localMaxTokens, 10) : undefined,
+              }
+            : undefined,
         localMode: runtime === 'local' ? localMode : undefined,
         maxToolRounds:
           runtime === 'external'
@@ -741,9 +743,10 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
   };
 
   const vaultKeyResolved = resolveVaultKey();
-  const canSaveKey = extApiKeyInput.trim().length > 0 && (
-    extProvider !== 'openai-compatible' || extCustomVaultSlug.trim().length > 0
-  ) && (extProvider === 'gemini-agent-platform' || extBaseUrl.trim().length > 0);
+  const canSaveKey =
+    extApiKeyInput.trim().length > 0 &&
+    (extProvider !== 'openai-compatible' || extCustomVaultSlug.trim().length > 0) &&
+    (extProvider === 'gemini-agent-platform' || extBaseUrl.trim().length > 0);
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
@@ -797,7 +800,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
               <datalist id="squad-options">
                 {/* Categorias canonicas (mesma lista em qualquer instalacao) */}
                 {AGENT_CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
                 ))}
                 {/* Categorias custom que ja existem no banco mas nao sao canonicas */}
                 {existingSquads
@@ -820,8 +825,12 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
               <option value="cloud">Cloud (Claude SDK)</option>
               <option value="zai">Z.ai (GLM via assinatura)</option>
               <option value="minimax-tp">MiniMax TokenPlan</option>
-              <option value="kimi" disabled={kimiStatus?.usable !== true}>Kimi (assinatura via CLI)</option>
-              <option value="grok" disabled={grokStatus?.usable !== true}>Grok Build (assinatura via CLI)</option>
+              <option value="kimi" disabled={kimiStatus?.usable !== true}>
+                Kimi (assinatura via CLI)
+              </option>
+              <option value="grok" disabled={grokStatus?.usable !== true}>
+                Grok Build (assinatura via CLI)
+              </option>
               <option value="local">Local (Ollama / LM Studio)</option>
               <option value="external">External (OpenRouter, OpenAI, Custom)</option>
               <option value="codex">Codex (OpenAI via OAuth)</option>
@@ -841,7 +850,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50 transition-colors"
                   >
                     {CLOUD_MODELS.map((m) => (
-                      <option key={m.value} value={m.value}>{m.label}</option>
+                      <option key={m.value} value={m.value}>
+                        {m.label}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -853,7 +864,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50 transition-colors"
                   >
                     {EFFORT_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -865,7 +878,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50 transition-colors"
                   >
                     {THINKING_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -910,7 +925,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50 transition-colors"
                 >
                   {ZAI_MODELS.map((m) => (
-                    <option key={m.id} value={m.id}>{m.displayName}</option>
+                    <option key={m.id} value={m.id}>
+                      {m.displayName}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -924,7 +941,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50 transition-colors"
                   >
                     {EFFORT_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -936,7 +955,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50 transition-colors"
                   >
                     {THINKING_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -980,9 +1001,7 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                       <span className="w-2 h-2 rounded-full bg-red-500" />
                       <p className="text-xs text-red-400">Z.ai nao conectado</p>
                     </div>
-                    {zaiStatus?.reason && (
-                      <p className="text-[10px] text-zinc-500">{zaiStatus.reason}</p>
-                    )}
+                    {zaiStatus?.reason && <p className="text-[10px] text-zinc-500">{zaiStatus.reason}</p>}
                   </div>
                 )}
               </div>
@@ -998,7 +1017,8 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
 
               <div className="p-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
                 <p className="text-xs text-zinc-500">
-                  Usa o Claude Agent SDK em processo separado apontando para Z.ai. Tools, MCPs e Skills do LionClaw continuam disponiveis para este runtime.
+                  Usa o Claude Agent SDK em processo separado apontando para Z.ai. Tools, MCPs e Skills do LionClaw
+                  continuam disponiveis para este runtime.
                 </p>
               </div>
             </div>
@@ -1007,7 +1027,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
           {/* MINIMAX TOKENPLAN SECTION */}
           {runtime === 'minimax-tp' && (
             <div className="space-y-4 p-3 rounded-lg border border-zinc-700 bg-zinc-800/30">
-              <h5 className="text-xs font-medium text-purple-400 uppercase tracking-wide">Configuracao MiniMax TokenPlan</h5>
+              <h5 className="text-xs font-medium text-purple-400 uppercase tracking-wide">
+                Configuracao MiniMax TokenPlan
+              </h5>
 
               <div>
                 <label className="block text-xs text-zinc-400 mb-1">Modelo</label>
@@ -1042,7 +1064,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50 transition-colors"
                   >
                     {EFFORT_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -1054,7 +1078,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                     className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50 transition-colors"
                   >
                     {THINKING_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -1126,7 +1152,8 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
 
               <div className="p-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
                 <p className="text-xs text-zinc-500">
-                  Usa o Claude Agent SDK em processo separado apontando para MiniMax. Tools, MCPs e Skills do LionClaw continuam disponiveis para este runtime. Custo exibido e estimativa equivalente pay-as-you-go.
+                  Usa o Claude Agent SDK em processo separado apontando para MiniMax. Tools, MCPs e Skills do LionClaw
+                  continuam disponiveis para este runtime. Custo exibido e estimativa equivalente pay-as-you-go.
                 </p>
               </div>
             </div>
@@ -1169,7 +1196,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                       className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50 transition-colors"
                     >
                       {getKimiModel(kimiModel)?.efforts.map((option) => (
-                        <option key={option} value={option}>{option}</option>
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
                       ))}
                     </select>
                   ) : (
@@ -1230,7 +1259,8 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
 
               <div className="p-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
                 <p className="text-xs text-zinc-500">
-                  Runtime Kimi nativo via CLI, full assinatura. Autentique em Configuracoes &gt; Provedores externos &gt; Kimi CLI (/login). O custo exibido e uma estimativa equivalente pay-as-you-go.
+                  Runtime Kimi nativo via CLI, full assinatura. Autentique em Configuracoes &gt; Provedores externos
+                  &gt; Kimi CLI (/login). O custo exibido e uma estimativa equivalente pay-as-you-go.
                 </p>
               </div>
             </div>
@@ -1242,13 +1272,25 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-zinc-400 mb-1">Modelo</label>
-                  <select value={grokModel} onChange={(event) => setGrokModel(event.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100">
-                    {GROK_MODELS.map((model) => <option key={model.slug} value={model.slug}>{model.label}</option>)}
+                  <select
+                    value={grokModel}
+                    onChange={(event) => setGrokModel(event.target.value)}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100"
+                  >
+                    {GROK_MODELS.map((model) => (
+                      <option key={model.slug} value={model.slug}>
+                        {model.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs text-zinc-400 mb-1">Effort</label>
-                  <select value={effort} onChange={(event) => setEffort(event.target.value as AgentConfig['effort'])} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100">
+                  <select
+                    value={effort}
+                    onChange={(event) => setEffort(event.target.value as AgentConfig['effort'])}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100"
+                  >
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
@@ -1257,12 +1299,19 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
               </div>
               <div className="p-2 rounded-lg bg-zinc-800 border border-zinc-700">
                 {grokStatus?.usable ? (
-                  <p className="text-xs text-green-400">Grok Build conectado e pronto ({grokStatus.version ?? 'versao desconhecida'})</p>
+                  <p className="text-xs text-green-400">
+                    Grok Build conectado e pronto ({grokStatus.version ?? 'versao desconhecida'})
+                  </p>
                 ) : (
-                  <p className="text-xs text-amber-400">Conecte e valide o Grok Build em Configuracoes &gt; Provedores externos antes de salvar.</p>
+                  <p className="text-xs text-amber-400">
+                    Conecte e valide o Grok Build em Configuracoes &gt; Provedores externos antes de salvar.
+                  </p>
                 )}
               </div>
-              <p className="text-xs text-zinc-500">Grok via ACP oficial. Subagentes, MCPs, Skills, permissões, métricas e cancelamento continuam orquestrados pelo LionClaw.</p>
+              <p className="text-xs text-zinc-500">
+                Grok via ACP oficial. Subagentes, MCPs, Skills, permissões, métricas e cancelamento continuam
+                orquestrados pelo LionClaw.
+              </p>
             </div>
           )}
 
@@ -1316,7 +1365,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                     >
                       {!localModel && <option value="">Selecione um modelo</option>}
                       {availableLocalModels.map((m) => (
-                        <option key={m} value={m}>{m}</option>
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
                       ))}
                     </select>
                   ) : (
@@ -1406,7 +1457,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50 transition-colors"
                 >
                   {EXTERNAL_PROVIDERS.map((p) => (
-                    <option key={p.value} value={p.value}>{p.label}</option>
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -1456,8 +1509,8 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
               {extProvider === 'gemini-agent-platform' && (
                 <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/30">
                   <p className="text-xs text-blue-300">
-                    Usando key compartilhada com Settings &gt; Vertex Gemini.
-                    A referencia fica congelada no agente apos salvar.
+                    Usando key compartilhada com Settings &gt; Vertex Gemini. A referencia fica congelada no agente apos
+                    salvar.
                   </p>
                 </div>
               )}
@@ -1492,16 +1545,17 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                     <Key size={11} />
                     Salvar no Vault e Testar
                   </button>
-                  {(apiKeyStatus === 'saved' || apiKeyStatus === 'ok' || apiKeyStatus === 'error') && vaultKeyResolved && (
-                    <button
-                      type="button"
-                      onClick={handleTestKey}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-xs text-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <Wifi size={11} />
-                      Testar conexao
-                    </button>
-                  )}
+                  {(apiKeyStatus === 'saved' || apiKeyStatus === 'ok' || apiKeyStatus === 'error') &&
+                    vaultKeyResolved && (
+                      <button
+                        type="button"
+                        onClick={handleTestKey}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-xs text-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <Wifi size={11} />
+                        Testar conexao
+                      </button>
+                    )}
                 </div>
               </div>
 
@@ -1533,7 +1587,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                       >
                         <option value="">Selecione da lista</option>
                         {availableLocalModels.map((m) => (
-                          <option key={m} value={m}>{m}</option>
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
                         ))}
                       </select>
                     )}
@@ -1582,7 +1638,8 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                       className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 outline-none focus:border-amber-500/50 transition-colors"
                     />
                     <p className="text-[10px] text-zinc-600 mt-1">
-                      Consulte a documentacao do provider. Sem este valor, o LionClaw nao pode avisar antes de estourar o contexto.
+                      Consulte a documentacao do provider. Sem este valor, o LionClaw nao pode avisar antes de estourar
+                      o contexto.
                     </p>
                   </div>
                 )}
@@ -1639,7 +1696,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                   min={1}
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50 transition-colors"
                 />
-                <p className="text-[10px] text-zinc-600 mt-1">Limita quantas vezes o agente pode chamar ferramentas por requisicao.</p>
+                <p className="text-[10px] text-zinc-600 mt-1">
+                  Limita quantas vezes o agente pode chamar ferramentas por requisicao.
+                </p>
               </div>
 
               {/* Reasoning params (effort, thinking) — visible but disabled when not supported */}
@@ -1656,7 +1715,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                       className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {EFFORT_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -1670,7 +1731,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                       className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {THINKING_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -1729,7 +1792,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50 transition-colors"
                 >
                   {discoveredEffortsFor(codexModel).map((opt) => (
-                    <option key={opt} value={opt}>{CODEX_EFFORT_LABELS[opt] ?? opt}</option>
+                    <option key={opt} value={opt}>
+                      {CODEX_EFFORT_LABELS[opt] ?? opt}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -1787,7 +1852,8 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
               {/* Informative message about LionClaw permissions vs Codex sandbox */}
               <div className="p-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
                 <p className="text-xs text-zinc-500">
-                  Codex usa ferramentas nativas (read/write/exec) dentro do sandbox `workspace-write` (escreve so dentro do projeto). Tools e MCPs do LionClaw sao ignorados neste runtime, e o permission-guard e bypassado.
+                  Codex usa ferramentas nativas (read/write/exec) dentro do sandbox `workspace-write` (escreve so dentro
+                  do projeto). Tools e MCPs do LionClaw sao ignorados neste runtime, e o permission-guard e bypassado.
                 </p>
               </div>
             </div>
@@ -1798,7 +1864,8 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
             <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
               <AlertTriangle size={14} className="text-yellow-400 mt-0.5 shrink-0" />
               <p className="text-xs text-yellow-400">
-                Skills e Knowledge Base nao funcionam no runtime Codex -- serao ignorados na execucao. Considere remover ou trocar de runtime.
+                Skills e Knowledge Base nao funcionam no runtime Codex -- serao ignorados na execucao. Considere remover
+                ou trocar de runtime.
               </p>
             </div>
           )}
@@ -1916,7 +1983,9 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
             <div className="flex items-start gap-2">
               <AlertTriangle size={14} className="mt-0.5 shrink-0 text-yellow-700" />
               <p className="text-xs">
-                Atencao: o runtime External nao suporta MCP. As {selectedMcpTools.length} tool{selectedMcpTools.length !== 1 ? 's' : ''} MCP selecionada{selectedMcpTools.length !== 1 ? 's' : ''} serao ignoradas em runtime.
+                Atencao: o runtime External nao suporta MCP. As {selectedMcpTools.length} tool
+                {selectedMcpTools.length !== 1 ? 's' : ''} MCP selecionada{selectedMcpTools.length !== 1 ? 's' : ''}{' '}
+                serao ignoradas em runtime.
               </p>
             </div>
           </div>
@@ -1930,13 +1999,7 @@ export function AgentFormModal({ mode, agent, existingSquads = [], onSave, onClo
           >
             Cancelar
           </button>
-          <div
-            title={
-              externalKeyBlocking
-                ? 'Configure e teste a API key antes de salvar o agente.'
-                : undefined
-            }
-          >
+          <div title={externalKeyBlocking ? 'Configure e teste a API key antes de salvar o agente.' : undefined}>
             <button
               onClick={handleSave}
               disabled={!isValid || saving}

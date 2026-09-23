@@ -1,9 +1,7 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
-
 
 // eslint-disable-next-line no-var
 var TEST_TMP_DIR: string = path.join(os.tmpdir(), `dreaming-turn-engine-test-${process.pid}`);
@@ -21,15 +19,16 @@ vi.mock('../logger', () => ({
   }),
 }));
 
-
 const mockGetSetting = vi.fn<(key: string) => string | null>();
-const mockGetDreamingState = vi.fn<() => {
-  lastGateRunAt: number | null;
-  lastTurnRunAt: number | null;
-  turnCount: number;
-  totalTurnRuns: number;
-  totalTurnFailsafes: number;
-}>();
+const mockGetDreamingState = vi.fn<
+  () => {
+    lastGateRunAt: number | null;
+    lastTurnRunAt: number | null;
+    turnCount: number;
+    totalTurnRuns: number;
+    totalTurnFailsafes: number;
+  }
+>();
 const mockGetDreamingTurnInterval = vi.fn<() => number>().mockReturnValue(20);
 const mockIncrementTurnCount = vi.fn<() => number>();
 const mockResetTurnCount = vi.fn<() => void>();
@@ -37,16 +36,12 @@ const mockSetLastTurnRunAt = vi.fn<(timestamp: number) => void>();
 const mockIncrementTotalTurnRuns = vi.fn<() => void>();
 const mockIncrementTotalTurnFailsafes = vi.fn<() => void>();
 
-const mockAllFn = vi.fn<
-  (sessionId: string, limit: number) => Array<{ role: string; content: string }>
->();
+const mockAllFn = vi.fn<(sessionId: string, limit: number) => Array<{ role: string; content: string }>>();
 const mockGetDb = vi.fn(() => ({
   prepare: vi.fn(() => ({ all: mockAllFn })),
 }));
 
-const mockGetSession = vi.fn<
-  (sessionId: string) => { type: string } | undefined
->(() => ({ type: 'chat' }));
+const mockGetSession = vi.fn<(sessionId: string) => { type: string } | undefined>(() => ({ type: 'chat' }));
 
 vi.mock('../db', () => ({
   getSetting: (...args: Parameters<typeof mockGetSetting>) => mockGetSetting(...args),
@@ -61,19 +56,13 @@ vi.mock('../db', () => ({
   getDb: () => mockGetDb(),
 }));
 
-const mockTryWithMemoryGateLock = vi.fn<
-  (fn: () => Promise<unknown>) => Promise<unknown>
->();
+const mockTryWithMemoryGateLock = vi.fn<(fn: () => Promise<unknown>) => Promise<unknown>>();
 const mockApplyMemoryUpdates = vi.fn<(updates: unknown) => Promise<void>>();
-const mockRunStructuredMemoryLlm = vi.fn<
-  (prompt: string, options?: unknown) => Promise<string>
->();
+const mockRunStructuredMemoryLlm = vi.fn<(prompt: string, options?: unknown) => Promise<string>>();
 
 vi.mock('../memory-pipeline', () => ({
-  runStructuredMemoryLlm: (prompt: string, options?: unknown) =>
-    mockRunStructuredMemoryLlm(prompt, options),
-  tryWithMemoryGateLock: (fn: () => Promise<unknown>) =>
-    mockTryWithMemoryGateLock(fn),
+  runStructuredMemoryLlm: (prompt: string, options?: unknown) => mockRunStructuredMemoryLlm(prompt, options),
+  tryWithMemoryGateLock: (fn: () => Promise<unknown>) => mockTryWithMemoryGateLock(fn),
   applyMemoryUpdates: (updates: unknown) => mockApplyMemoryUpdates(updates),
 }));
 
@@ -92,7 +81,6 @@ import {
 const tmpDir = TEST_TMP_DIR;
 const skillDir = path.join(tmpDir, 'skills', 'dreaming');
 const skillPath = path.join(skillDir, 'SKILL.md');
-
 
 const VALID_SKILL_CONTENT = `# Skill: Dreaming
 
@@ -142,7 +130,6 @@ const VALID_LLM_OUTPUT = {
   discarded: [],
 };
 
-
 beforeEach(() => {
   fs.mkdirSync(skillDir, { recursive: true });
   fs.writeFileSync(skillPath, VALID_SKILL_CONTENT, 'utf-8');
@@ -174,7 +161,6 @@ beforeEach(() => {
 afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
-
 
 describe('(a) JSON valido com REMOVE+UPDATE', () => {
   it('retorna apply correto e failSafeTriggered=false quando LLM retorna JSON bem-formado', async () => {
@@ -240,7 +226,6 @@ describe('(a) JSON valido com REMOVE+UPDATE', () => {
   });
 });
 
-
 describe('(b) JSON com apply.add presente', () => {
   it('descarta apply.add silenciosamente, preserva remove e update, failSafeTriggered=false', async () => {
     const outputWithAdd = {
@@ -292,7 +277,6 @@ describe('(b) JSON com apply.add presente', () => {
   });
 });
 
-
 describe('(c) JSON invalido', () => {
   it('retorna failSafeReason=json_parse_error quando LLM retorna texto nao-JSON', async () => {
     const mockInvoker = vi.fn().mockResolvedValue('not json at all');
@@ -341,7 +325,6 @@ describe('(c) JSON invalido', () => {
   });
 });
 
-
 describe('(d) invoker throw', () => {
   it('retorna failSafeReason=llm_error quando o invoker rejeita', async () => {
     const mockInvoker = vi.fn().mockRejectedValue(new Error('LLM offline'));
@@ -369,7 +352,6 @@ describe('(d) invoker throw', () => {
     expect(result.discarded).toEqual([]);
   });
 });
-
 
 describe('(e) SKILL.md ausente', () => {
   it('retorna failSafeReason=skill_md_missing quando SKILL.md nao existe', async () => {
@@ -417,15 +399,13 @@ describe('(e) SKILL.md ausente', () => {
   });
 });
 
-
 describe('(f) timeout', () => {
   it('retorna failSafeReason=timeout quando invoker demora mais que timeoutMs', async () => {
-    const slowInvoker = vi.fn().mockImplementation(
-      () =>
-        new Promise<string>((resolve) =>
-          setTimeout(() => resolve(JSON.stringify(VALID_LLM_OUTPUT)), 2000),
-        ),
-    );
+    const slowInvoker = vi
+      .fn()
+      .mockImplementation(
+        () => new Promise<string>((resolve) => setTimeout(() => resolve(JSON.stringify(VALID_LLM_OUTPUT)), 2000)),
+      );
 
     const result = await runTurnDreaming(BASE_INPUT, { invoker: slowInvoker, timeoutMs: 50 });
 
@@ -445,9 +425,9 @@ describe('(f) timeout', () => {
   });
 
   it('quarantine e discarded ficam vazios em timeout', async () => {
-    const slowInvoker = vi.fn().mockImplementation(
-      () => new Promise<string>((resolve) => setTimeout(() => resolve('{}'), 2000)),
-    );
+    const slowInvoker = vi
+      .fn()
+      .mockImplementation(() => new Promise<string>((resolve) => setTimeout(() => resolve('{}'), 2000)));
 
     const result = await runTurnDreaming(BASE_INPUT, { invoker: slowInvoker, timeoutMs: 50 });
 
@@ -455,7 +435,6 @@ describe('(f) timeout', () => {
     expect(result.discarded).toEqual([]);
   }, 3000);
 });
-
 
 describe('saveTurnDreamingReport', () => {
   it('cria arquivo com nome no formato YYYY-MM-DD_HHmmss_<uuid>_turn-dreaming-report.md', async () => {
@@ -465,9 +444,7 @@ describe('saveTurnDreamingReport', () => {
     const filePath = await saveTurnDreamingReport(result);
 
     expect(fs.existsSync(filePath)).toBe(true);
-    expect(path.basename(filePath)).toMatch(
-      /^\d{4}-\d{2}-\d{2}_\d{6}_[0-9a-f-]+_turn-dreaming-report\.md$/,
-    );
+    expect(path.basename(filePath)).toMatch(/^\d{4}-\d{2}-\d{2}_\d{6}_[0-9a-f-]+_turn-dreaming-report\.md$/);
   });
 
   it('gera 20 paths unicos em chamadas back-to-back (UUID anti-colisao)', async () => {
@@ -546,8 +523,6 @@ describe('saveTurnDreamingReport', () => {
   });
 });
 
-
-
 function makeGetWindow() {
   const sentChunks: Array<{ type: string; isDreaming?: boolean }> = [];
   const win = {
@@ -562,12 +537,10 @@ function makeGetWindow() {
   return { getWindow, win, sentChunks };
 }
 
-
 function writeMemoryMd(lines: string[]): void {
   const memoryPath = path.join(tmpDir, 'MEMORY.md');
   fs.writeFileSync(memoryPath, lines.join('\n'), 'utf-8');
 }
-
 
 describe('Sprint4 Cenario 1: dreaming_turn_based_enabled=false', () => {
   it('maybeRunTurnDreaming retorna sem tocar no lock, LLM ou emit', async () => {
@@ -597,7 +570,6 @@ describe('Sprint4 Cenario 1: dreaming_turn_based_enabled=false', () => {
     expect(mockIncrementTurnCount).not.toHaveBeenCalled();
   });
 });
-
 
 describe('Sprint4 Cenario 2: cooldown ativo', () => {
   it('skip silencioso quando last_gate_run_at < 5min atras', async () => {
@@ -642,7 +614,6 @@ describe('Sprint4 Cenario 2: cooldown ativo', () => {
   });
 });
 
-
 describe('Sprint4 Cenario 3: lock ocupado', () => {
   it('skip silencioso quando tryWithMemoryGateLock retorna null', async () => {
     mockGetSetting.mockImplementation((key: string) => {
@@ -667,7 +638,6 @@ describe('Sprint4 Cenario 3: lock ocupado', () => {
   });
 });
 
-
 describe('Sprint4 Cenario 4: MEMORY.md pequeno', () => {
   it('skip memory_too_small quando MEMORY.md tem < 10 linhas nao-vazias', async () => {
     mockGetSetting.mockImplementation((key: string) => {
@@ -688,14 +658,13 @@ describe('Sprint4 Cenario 4: MEMORY.md pequeno', () => {
 
     await maybeRunTurnDreaming('session-1', getWindow);
 
-    await new Promise(r => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 10));
 
     expect(sentChunks).toHaveLength(0);
     expect(mockResetTurnCount).toHaveBeenCalledTimes(1);
     expect(mockSetLastTurnRunAt).not.toHaveBeenCalled();
   });
 });
-
 
 describe('Sprint4 Cenario 5: execucao completa com sucesso', () => {
   it('emit true antes, false no finally; state commits APOS exec; applyMemoryUpdates chamado', async () => {
@@ -728,9 +697,9 @@ describe('Sprint4 Cenario 5: execucao completa com sucesso', () => {
 
     await maybeRunTurnDreaming('session-1', getWindow);
 
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 50));
 
-    const dreamingChunks = sentChunks.filter(c => c.type === 'dreaming_status');
+    const dreamingChunks = sentChunks.filter((c) => c.type === 'dreaming_status');
     expect(dreamingChunks).toHaveLength(2);
     expect(dreamingChunks[0].isDreaming).toBe(true);
     expect(dreamingChunks[1].isDreaming).toBe(false);
@@ -746,7 +715,6 @@ describe('Sprint4 Cenario 5: execucao completa com sucesso', () => {
     expect(mockIncrementTotalTurnFailsafes).not.toHaveBeenCalled();
   });
 });
-
 
 describe('Sprint4 Cenario 6: fail-safe acionado', () => {
   it('MEMORY.md nao tocado, report criado, incrementTotalTurnFailsafes chamado', async () => {
@@ -771,9 +739,9 @@ describe('Sprint4 Cenario 6: fail-safe acionado', () => {
 
     await maybeRunTurnDreaming('session-1', getWindow);
 
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 50));
 
-    const dreamingChunks = sentChunks.filter(c => c.type === 'dreaming_status');
+    const dreamingChunks = sentChunks.filter((c) => c.type === 'dreaming_status');
     expect(dreamingChunks).toHaveLength(2);
     expect(dreamingChunks[0].isDreaming).toBe(true);
     expect(dreamingChunks[1].isDreaming).toBe(false);
@@ -787,7 +755,6 @@ describe('Sprint4 Cenario 6: fail-safe acionado', () => {
     expect(mockResetTurnCount).toHaveBeenCalledTimes(1);
   });
 });
-
 
 describe('Sprint4 Cenario 7: collectRecentTurns SQL', () => {
   it('passa session_id e LIMIT = turnCount * 2 para o prepare().all()', async () => {
@@ -819,7 +786,7 @@ describe('Sprint4 Cenario 7: collectRecentTurns SQL', () => {
     const { getWindow } = makeGetWindow();
 
     await maybeRunTurnDreaming('session-abc', getWindow);
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 50));
 
     expect(mockAllFn).toHaveBeenCalledWith('session-abc', 40);
   });
@@ -855,7 +822,7 @@ describe('Sprint4 Cenario 7: collectRecentTurns SQL', () => {
 
     const { getWindow } = makeGetWindow();
     await maybeRunTurnDreaming('session-1', getWindow);
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 50));
 
     const posA = capturedPrompt.indexOf('Pergunta A');
     const posB = capturedPrompt.indexOf('Pergunta B');
@@ -864,7 +831,6 @@ describe('Sprint4 Cenario 7: collectRecentTurns SQL', () => {
     expect(posA).toBeLessThan(posB);
   });
 });
-
 
 describe('Sprint4 Cenario 8 (D7-a): modelo dedicado preenchido e ignorado', () => {
   it('NAO passa modelOverride nem providerOverride mesmo com dreaming_turn_based_model setado', async () => {
@@ -891,13 +857,12 @@ describe('Sprint4 Cenario 8 (D7-a): modelo dedicado preenchido e ignorado', () =
 
     const { getWindow } = makeGetWindow();
     await maybeRunTurnDreaming('session-1', getWindow);
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 50));
 
     expect(mockRunStructuredMemoryLlm).toHaveBeenCalledTimes(1);
     expect(capturedOpts).toBeUndefined();
   });
 });
-
 
 describe('Sprint4 Cenario 9: modelo vazio usa runStructuredMemoryLlm sem overrides', () => {
   it('chama runStructuredMemoryLlm sem opts quando setting vazio', async () => {
@@ -924,13 +889,12 @@ describe('Sprint4 Cenario 9: modelo vazio usa runStructuredMemoryLlm sem overrid
 
     const { getWindow } = makeGetWindow();
     await maybeRunTurnDreaming('session-1', getWindow);
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 50));
 
     expect(mockRunStructuredMemoryLlm).toHaveBeenCalledTimes(1);
     expect(capturedOpts).toBeUndefined();
   });
 });
-
 
 describe('Sprint4 recordCompletedMainChatTurn', () => {
   it('incrementa contador quando enabled=true e nao dispara quando count < interval', () => {
@@ -939,7 +903,7 @@ describe('Sprint4 recordCompletedMainChatTurn', () => {
       return null;
     });
     mockGetDreamingTurnInterval.mockReturnValue(20);
-    mockIncrementTurnCount.mockReturnValue(5); // abaixo do threshold
+    mockIncrementTurnCount.mockReturnValue(5);
 
     const { getWindow } = makeGetWindow();
     recordCompletedMainChatTurn('session-1', getWindow);
@@ -955,7 +919,7 @@ describe('Sprint4 recordCompletedMainChatTurn', () => {
       return null;
     });
     mockGetDreamingTurnInterval.mockReturnValue(20);
-    mockIncrementTurnCount.mockReturnValue(20); // igual ao threshold
+    mockIncrementTurnCount.mockReturnValue(20);
 
     mockGetDreamingState.mockReturnValue({
       lastGateRunAt: Date.now() - 60 * 1000, // 1min atras -> cooldown
@@ -968,7 +932,7 @@ describe('Sprint4 recordCompletedMainChatTurn', () => {
     const { getWindow } = makeGetWindow();
     recordCompletedMainChatTurn('session-1', getWindow);
 
-    await new Promise(r => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, 20));
 
     expect(mockGetDreamingState).toHaveBeenCalled();
   });

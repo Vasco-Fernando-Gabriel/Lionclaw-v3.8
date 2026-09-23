@@ -1,9 +1,7 @@
-
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { callTool, KIMI_MCP_MAX_ERROR_CHARS, toListItem } from '../mcp-bridge-tools';
 import type { KimiExternalTool } from '../../agent-runtime/kimi-external-tools';
-
 
 describe('toListItem (pure adapter, AC-B2.1)', () => {
   it('passes a populated parameters schema through as inputSchema verbatim', () => {
@@ -47,7 +45,6 @@ describe('toListItem (pure adapter, AC-B2.1)', () => {
     expect(toListItem(tool).name).toBe('mcp__google_calendar__list_events');
   });
 });
-
 
 describe('callTool (handler reuse + never-rethrow, AC-B2.2 / DB3)', () => {
   it('wraps a {output, message} return as {content:[{type:text,text:output}]} with isError unset', async () => {

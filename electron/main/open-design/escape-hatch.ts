@@ -8,13 +8,11 @@ import { getDb, savePipelinePhaseMetrics } from '../db';
 
 const logger = createLogger('open-design-escape-hatch');
 
-
 export interface DestructiveUnlockResult {
   ok: true;
   designRevisionId: string;
   archivePath: string;
 }
-
 
 export async function destructiveUnlock(
   projectId: string,
@@ -44,19 +42,27 @@ export async function destructiveUnlock(
 
     const db = getDb();
 
-    const messages = db.prepare(`
+    const messages = db
+      .prepare(
+        `
       SELECT id, phase_number, role, content, tool_calls, sprint_index, round_index, agent_id, created_at
       FROM pipeline_messages
       WHERE project_id = ? AND phase_number >= 5
       ORDER BY phase_number ASC, created_at ASC
-    `).all(projectId) as Array<Record<string, unknown>>;
+    `,
+      )
+      .all(projectId) as Array<Record<string, unknown>>;
 
-    const metrics = db.prepare(`
+    const metrics = db
+      .prepare(
+        `
       SELECT *
       FROM pipeline_phase_metrics
       WHERE project_id = ? AND phase_number >= 5
       ORDER BY phase_number ASC
-    `).all(projectId) as Array<Record<string, unknown>>;
+    `,
+      )
+      .all(projectId) as Array<Record<string, unknown>>;
 
     const archivedStatePath = path.join(revisionDir, 'archived-state.json');
     fs.writeFileSync(
@@ -75,13 +81,17 @@ export async function destructiveUnlock(
       'utf-8',
     );
 
-    db.prepare(`
+    db.prepare(
+      `
       DELETE FROM pipeline_messages WHERE project_id = ? AND phase_number >= 5
-    `).run(projectId);
+    `,
+    ).run(projectId);
 
-    db.prepare(`
+    db.prepare(
+      `
       DELETE FROM pipeline_phase_metrics WHERE project_id = ? AND phase_number >= 5
-    `).run(projectId);
+    `,
+    ).run(projectId);
 
     try {
       if (fs.existsSync(snapshotDir)) {
@@ -89,12 +99,7 @@ export async function destructiveUnlock(
         if (fs.existsSync(artifactDir)) {
           fs.rmSync(artifactDir, { recursive: true, force: true });
         }
-        for (const file of [
-          'design-contract.json',
-          'design-brief.md',
-          'design-lock-report.md',
-          'manifest.json',
-        ]) {
+        for (const file of ['design-contract.json', 'design-brief.md', 'design-lock-report.md', 'manifest.json']) {
           const fp = path.join(snapshotDir, file);
           if (fs.existsSync(fp)) fs.unlinkSync(fp);
         }
@@ -113,11 +118,13 @@ export async function destructiveUnlock(
       manifestPath: undefined,
     });
 
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE harness_projects
       SET status = 'running', pipeline_current_phase = 5, updated_at = datetime('now')
       WHERE id = ?
-    `).run(projectId);
+    `,
+    ).run(projectId);
 
     savePipelinePhaseMetrics({
       projectId,
@@ -146,10 +153,7 @@ export async function destructiveUnlock(
       },
     });
 
-    logger.info(
-      { projectId, designRevisionId, revisionDir },
-      'Escape hatch: destructive unlock complete',
-    );
+    logger.info({ projectId, designRevisionId, revisionDir }, 'Escape hatch: destructive unlock complete');
 
     return { ok: true, designRevisionId, archivePath: revisionDir };
   } catch (err) {
@@ -157,7 +161,6 @@ export async function destructiveUnlock(
     return { error: (err as Error).message };
   }
 }
-
 
 function copyDirRecursive(src: string, dest: string): void {
   if (!fs.existsSync(src)) return;

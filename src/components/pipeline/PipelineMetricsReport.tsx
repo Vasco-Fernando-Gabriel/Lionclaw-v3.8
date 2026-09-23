@@ -46,7 +46,6 @@ function loopPhaseNumbers(pipelineType: PipelineType): { coder: number; evaluato
   return { coder, evaluator };
 }
 
-
 const PHASE_CSS_VARS = `
   :root {
     --phase-1:  #6366f1;
@@ -66,7 +65,6 @@ const PHASE_CSS_VARS = `
   }
 `;
 
-
 const SECURITY_PHASE_CSS_VARS = `
   :root {
     --security-phase-1:  #ef4444;
@@ -81,7 +79,6 @@ const SECURITY_PHASE_CSS_VARS = `
     --security-phase-10: #2dd4bf;
   }
 `;
-
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
@@ -107,16 +104,7 @@ const PIPELINE_RUNTIME_LABELS: Record<string, string> = {
   grok: 'Grok',
 };
 
-const PIPELINE_RUNTIME_ORDER = [
-  'cloud',
-  'local',
-  'external',
-  'codex',
-  'zai',
-  'minimax-tp',
-  'kimi',
-  'grok',
-];
+const PIPELINE_RUNTIME_ORDER = ['cloud', 'local', 'external', 'codex', 'zai', 'minimax-tp', 'kimi', 'grok'];
 
 const PIPELINE_PAYG_EQUIVALENT_RUNTIMES = new Set(['minimax-tp', 'kimi', 'grok']);
 
@@ -133,17 +121,10 @@ export function formatRuntimeCost(
   cost: number,
   costStatus: 'known' | 'unknown' | 'estimated-partial' = 'known',
 ): string {
-  return formatPipelineTotalCost(
-    cost,
-    PIPELINE_PAYG_EQUIVALENT_RUNTIMES.has(runtime) ? cost : 0,
-    { costStatus },
-  );
+  return formatPipelineTotalCost(cost, PIPELINE_PAYG_EQUIVALENT_RUNTIMES.has(runtime) ? cost : 0, { costStatus });
 }
 
-export function formatCostWithMeta(
-  costUsd: number,
-  metadata?: Record<string, unknown>,
-): string {
+export function formatCostWithMeta(costUsd: number, metadata?: Record<string, unknown>): string {
   const costStatus = (metadata?.costStatus as string | undefined) ?? 'known';
   if (costStatus === 'unknown') return 'Custo nao estimado';
   if (costStatus === 'estimated-partial') return `~${formatCost(costUsd)}`;
@@ -161,11 +142,12 @@ export function formatPipelineTotalCost(
   metadata?: Pick<PipelineMetricsResult['totals'], 'costStatus'>,
 ): string {
   const equivalent = Math.min(total, Math.max(0, subscriptionEquivalent));
-  const known = equivalent <= 0
-    ? formatCost(total)
-    : total - equivalent <= 1e-9
-      ? `~${formatCost(total)}`
-      : `${formatCost(total)} (incl. ~${formatCost(equivalent)})`;
+  const known =
+    equivalent <= 0
+      ? formatCost(total)
+      : total - equivalent <= 1e-9
+        ? `~${formatCost(total)}`
+        : `${formatCost(total)} (incl. ~${formatCost(equivalent)})`;
   if (metadata?.costStatus === 'unknown') {
     return total > 0 ? `${known} + nao estim.` : 'Custo nao estimado';
   }
@@ -207,23 +189,17 @@ function formatAggregatedCost(costUsd: number, hasUnknownCost: boolean): string 
   return 'Custo nao estimado';
 }
 
-function isSyntheticSecurityAuditWrapperPhase(
-  phase: PipelinePhaseMetrics,
-  pipelineType: PipelineType,
-): boolean {
-  return pipelineType === 'security'
-    && phase.phaseNumber === 2
-    && phase.agentId === 'multi-agent'
-    && phase.metadata?.auditAgent !== true;
+function isSyntheticSecurityAuditWrapperPhase(phase: PipelinePhaseMetrics, pipelineType: PipelineType): boolean {
+  return (
+    pipelineType === 'security' &&
+    phase.phaseNumber === 2 &&
+    phase.agentId === 'multi-agent' &&
+    phase.metadata?.auditAgent !== true
+  );
 }
 
-function buildDisplayMetrics(
-  metrics: PipelineMetricsResult,
-  pipelineType: PipelineType,
-): PipelineMetricsResult {
-  const phases = metrics.phases.filter(
-    (phase) => !isSyntheticSecurityAuditWrapperPhase(phase, pipelineType),
-  );
+function buildDisplayMetrics(metrics: PipelineMetricsResult, pipelineType: PipelineType): PipelineMetricsResult {
+  const phases = metrics.phases.filter((phase) => !isSyntheticSecurityAuditWrapperPhase(phase, pipelineType));
   const sprintPhases = metrics.sprintPhases.filter(
     (phase) => !isSyntheticSecurityAuditWrapperPhase(phase, pipelineType),
   );
@@ -253,10 +229,8 @@ function pct(value: number, max: number): number {
   return Math.min(100, (value / max) * 100);
 }
 
-
-const phaseSortKey = (n: number): number => n === 91 ? 9.1 : n;
-const phaseDisplayLabel = (n: number): string => n === 91 ? '9.1' : String(n);
-
+const phaseSortKey = (n: number): number => (n === 91 ? 9.1 : n);
+const phaseDisplayLabel = (n: number): string => (n === 91 ? '9.1' : String(n));
 
 type PhaseType = 'conversation' | 'auto' | 'loop';
 
@@ -285,12 +259,10 @@ function phaseTypeLabel(type: PhaseType): string {
   return 'Loop';
 }
 
-
 function getPhaseDisplayNames(pipelineType: PipelineType): Record<number, string> {
   const phases = phasesForPipelineType(pipelineType);
   return Object.fromEntries(phases.map((p) => [p.number, p.name]));
 }
-
 
 function phaseVarColor(phaseNumber: number, pipelineType: PipelineType): string {
   if (phaseNumber === 91) return 'var(--phase-9)';
@@ -301,7 +273,6 @@ function phaseVarColor(phaseNumber: number, pipelineType: PipelineType): string 
   const n = Math.max(1, Math.min(14, phaseNumber));
   return `var(--phase-${n})`;
 }
-
 
 interface KpiCardProps {
   icon: React.ReactNode;
@@ -319,13 +290,10 @@ function KpiCard({ icon, label, value, sub, color = 'text-zinc-100' }: KpiCardPr
         <span className="text-[11px] text-zinc-500 uppercase tracking-wide font-medium">{label}</span>
       </div>
       <span className={`text-2xl font-bold leading-none ${color}`}>{value}</span>
-      {sub !== undefined && (
-        <span className="text-[11px] text-zinc-600">{sub}</span>
-      )}
+      {sub !== undefined && <span className="text-[11px] text-zinc-600">{sub}</span>}
     </div>
   );
 }
-
 
 interface BarRowProps {
   label: string;
@@ -340,7 +308,18 @@ interface BarRowProps {
   extraColor?: string;
 }
 
-function BarRow({ label, value, maxValue, formattedValue, barColor, barCssVar, badge, badgeColor, extra, extraColor }: BarRowProps) {
+function BarRow({
+  label,
+  value,
+  maxValue,
+  formattedValue,
+  barColor,
+  barCssVar,
+  badge,
+  badgeColor,
+  extra,
+  extraColor,
+}: BarRowProps) {
   const width = pct(value, maxValue);
 
   return (
@@ -355,7 +334,11 @@ function BarRow({ label, value, maxValue, formattedValue, barColor, barCssVar, b
       </div>
       <div className="flex-1 h-5 bg-zinc-800 rounded overflow-hidden">
         <div
-          className={barCssVar ? 'h-5 rounded transition-all duration-500' : `h-5 rounded transition-all duration-500 ${barColor}`}
+          className={
+            barCssVar
+              ? 'h-5 rounded transition-all duration-500'
+              : `h-5 rounded transition-all duration-500 ${barColor}`
+          }
           style={{
             width: `${width}%`,
             minWidth: width > 0 ? '4px' : '0',
@@ -363,9 +346,7 @@ function BarRow({ label, value, maxValue, formattedValue, barColor, barCssVar, b
           }}
         />
       </div>
-      <span className="text-xs text-zinc-400 w-32 text-right shrink-0 font-mono">
-        {formattedValue}
-      </span>
+      <span className="text-xs text-zinc-400 w-32 text-right shrink-0 font-mono">{formattedValue}</span>
       {extra !== undefined && (
         <span className={`text-[11px] w-14 text-right shrink-0 font-mono ${extraColor ?? 'text-zinc-500'}`}>
           {extra}
@@ -374,7 +355,6 @@ function BarRow({ label, value, maxValue, formattedValue, barColor, barCssVar, b
     </div>
   );
 }
-
 
 interface KpiSectionProps {
   metrics: PipelineMetricsResult;
@@ -387,20 +367,17 @@ function KpiSection({ metrics, pipelineType }: KpiSectionProps) {
   const totalTokens = totalTokensFromInclusiveInput(totals.inputTokens, totals.outputTokens);
 
   const executedPhases = metrics.phases.filter((p) => p.status === 'completed');
-  const passRate =
-    metrics.phases.length > 0
-      ? Math.round((executedPhases.length / metrics.phases.length) * 100)
-      : 0;
+  const passRate = metrics.phases.length > 0 ? Math.round((executedPhases.length / metrics.phases.length) * 100) : 0;
 
-  const passColor =
-    passRate >= 70 ? 'text-green-400' : passRate >= 50 ? 'text-yellow-400' : 'text-red-400';
+  const passColor = passRate >= 70 ? 'text-green-400' : passRate >= 50 ? 'text-yellow-400' : 'text-red-400';
 
-  const costSubParts = orderedRuntimeEntries(metrics.costByRuntime).map(([runtime, cost]) =>
-    `${PIPELINE_RUNTIME_LABELS[runtime] ?? runtime}: ${formatRuntimeCost(
-      runtime,
-      cost,
-      metrics.costStatusByRuntime?.[runtime],
-    )}`,
+  const costSubParts = orderedRuntimeEntries(metrics.costByRuntime).map(
+    ([runtime, cost]) =>
+      `${PIPELINE_RUNTIME_LABELS[runtime] ?? runtime}: ${formatRuntimeCost(
+        runtime,
+        cost,
+        metrics.costStatusByRuntime?.[runtime],
+      )}`,
   );
 
   return (
@@ -408,33 +385,21 @@ function KpiSection({ metrics, pipelineType }: KpiSectionProps) {
       <KpiCard
         icon={<DollarSign size={14} />}
         label="Custo Total"
-        value={formatPipelineTotalCost(
-          totals.costUsd,
-          metrics.subscriptionEquivalentCost,
-          totals,
-        )}
+        value={formatPipelineTotalCost(totals.costUsd, metrics.subscriptionEquivalentCost, totals)}
         sub={[
           costSubParts.join(' / '),
-          metrics.subscriptionEquivalentCost > 0
-            ? 'Equivalente da API; nao e cobranca da assinatura.'
-            : null,
-          (totals.unknownCostCount ?? 0) > 0
-            ? `${totals.unknownCostCount} execucao(oes) com custo nao estimado`
-            : null,
-        ].filter(Boolean).join(' · ')}
+          metrics.subscriptionEquivalentCost > 0 ? 'Equivalente da API; nao e cobranca da assinatura.' : null,
+          (totals.unknownCostCount ?? 0) > 0 ? `${totals.unknownCostCount} execucao(oes) com custo nao estimado` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
       />
-      <KpiCard
-        icon={<Clock size={14} />}
-        label="Duracao Total"
-        value={formatDuration(totals.durationMs)}
-      />
+      <KpiCard icon={<Clock size={14} />} label="Duracao Total" value={formatDuration(totals.durationMs)} />
       <KpiCard
         icon={<RotateCcw size={14} />}
         label="Total Rounds"
         value={String(
-          metrics.sprintPhases.filter((p) =>
-            p.phaseNumber === coderNum || p.phaseNumber === evalNum,
-          ).length,
+          metrics.sprintPhases.filter((p) => p.phaseNumber === coderNum || p.phaseNumber === evalNum).length,
         )}
         sub={`${metrics.sprintPhases.length} execucoes de loop`}
       />
@@ -461,7 +426,6 @@ function KpiSection({ metrics, pipelineType }: KpiSectionProps) {
   );
 }
 
-
 interface PhaseBarChartProps {
   phases: PipelinePhaseMetrics[];
   pipelineType: PipelineType;
@@ -471,9 +435,7 @@ function PhaseBarChart({ phases, pipelineType }: PhaseBarChartProps) {
   const phaseDisplayNames = getPhaseDisplayNames(pipelineType);
 
   if (phases.length === 0) {
-    return (
-      <p className="text-xs text-zinc-600 text-center py-6">Nenhuma fase executada ainda.</p>
-    );
+    return <p className="text-xs text-zinc-600 text-center py-6">Nenhuma fase executada ainda.</p>;
   }
 
   const phaseMap = new Map<number, { costUsd: number; hasUnknownCost: boolean }>();
@@ -526,7 +488,6 @@ function PhaseBarChart({ phases, pipelineType }: PhaseBarChartProps) {
   );
 }
 
-
 interface AgentBarChartProps {
   phases: PipelinePhaseMetrics[];
   agentNames: Record<string, string>;
@@ -548,9 +509,7 @@ function AgentBarChart({ phases, agentNames }: AgentBarChartProps) {
     .slice(0, 10);
 
   if (rows.length === 0) {
-    return (
-      <p className="text-xs text-zinc-600 text-center py-6">Nenhum dado de agente disponivel.</p>
-    );
+    return <p className="text-xs text-zinc-600 text-center py-6">Nenhum dado de agente disponivel.</p>;
   }
 
   const maxCost = Math.max(...rows.map(([, v]) => v.costUsd), 0.0001);
@@ -571,22 +530,17 @@ function AgentBarChart({ phases, agentNames }: AgentBarChartProps) {
   );
 }
 
-
 interface SecurityAuditBreakdownProps {
   phases: PipelinePhaseMetrics[];
   agentNames: Record<string, string>;
 }
 
 function SecurityAuditBreakdown({ phases, agentNames }: SecurityAuditBreakdownProps) {
-  const auditRows = phases.filter(
-    (p) => p.phaseNumber === 2 && p.metadata?.auditAgent === true,
-  );
+  const auditRows = phases.filter((p) => p.phaseNumber === 2 && p.metadata?.auditAgent === true);
 
   if (auditRows.length === 0) {
     return (
-      <p className="text-xs text-zinc-600 text-center py-6">
-        Dados de agentes de auditoria nao disponiveis ainda.
-      </p>
+      <p className="text-xs text-zinc-600 text-center py-6">Dados de agentes de auditoria nao disponiveis ainda.</p>
     );
   }
 
@@ -602,8 +556,7 @@ function SecurityAuditBreakdown({ phases, agentNames }: SecurityAuditBreakdownPr
     });
   }
 
-  const rows = Array.from(agentMap.entries())
-    .sort(([, a], [, b]) => b.costUsd - a.costUsd);
+  const rows = Array.from(agentMap.entries()).sort(([, a], [, b]) => b.costUsd - a.costUsd);
 
   const maxCost = Math.max(...rows.map(([, v]) => v.costUsd), 0.0001);
   const totalCost = rows.reduce((acc, [, v]) => acc + v.costUsd, 0);
@@ -634,16 +587,11 @@ function SecurityAuditBreakdown({ phases, agentNames }: SecurityAuditBreakdownPr
             {formatAggregatedCost(totalCost, totalHasUnknownCost)}
           </span>
         </span>
-        {totalFindings > 0 && (
-          <span className="text-[11px] text-red-400 font-medium">
-            {totalFindings} findings
-          </span>
-        )}
+        {totalFindings > 0 && <span className="text-[11px] text-red-400 font-medium">{totalFindings} findings</span>}
       </div>
     </div>
   );
 }
-
 
 interface SprintBarData {
   sprintIndex: number;
@@ -659,9 +607,12 @@ function buildSprintBarData(sprintPhases: PipelinePhaseMetrics[], pipelineType: 
   const sprintMap = new Map<number, SprintBarData>();
 
   for (const p of sprintPhases) {
-    const si = (p.sprintIndex ?? -1) >= 0
-      ? (p.sprintIndex as number)
-      : (typeof p.metadata?.sprintIndex === 'number' ? p.metadata.sprintIndex : -1);
+    const si =
+      (p.sprintIndex ?? -1) >= 0
+        ? (p.sprintIndex as number)
+        : typeof p.metadata?.sprintIndex === 'number'
+          ? p.metadata.sprintIndex
+          : -1;
     if (si < 0) continue;
 
     if (!sprintMap.has(si)) {
@@ -698,9 +649,7 @@ function SprintCostChart({ sprintPhases, pipelineType }: SprintCostChartProps) {
   const rows = buildSprintBarData(sprintPhases, pipelineType);
 
   if (rows.length === 0) {
-    return (
-      <p className="text-xs text-zinc-600 text-center py-6">Nenhum sprint executado ainda.</p>
-    );
+    return <p className="text-xs text-zinc-600 text-center py-6">Nenhum sprint executado ainda.</p>;
   }
 
   const maxTotal = Math.max(...rows.map((r) => r.total), 0.0001);
@@ -713,9 +662,7 @@ function SprintCostChart({ sprintPhases, pipelineType }: SprintCostChartProps) {
 
         return (
           <div key={row.sprintIndex} className="flex items-center gap-3">
-            <span className="text-xs text-zinc-400 w-20 shrink-0">
-              Sprint {row.sprintIndex + 1}
-            </span>
+            <span className="text-xs text-zinc-400 w-20 shrink-0">Sprint {row.sprintIndex + 1}</span>
             <div className="flex-1 h-5 bg-zinc-800 rounded overflow-hidden flex">
               {coderW > 0 && (
                 <div
@@ -732,9 +679,7 @@ function SprintCostChart({ sprintPhases, pipelineType }: SprintCostChartProps) {
                 />
               )}
             </div>
-            <span className="text-xs text-zinc-400 w-16 text-right font-mono shrink-0">
-              {formatCost(row.total)}
-            </span>
+            <span className="text-xs text-zinc-400 w-16 text-right font-mono shrink-0">{formatCost(row.total)}</span>
           </div>
         );
       })}
@@ -753,7 +698,6 @@ function SprintCostChart({ sprintPhases, pipelineType }: SprintCostChartProps) {
     </div>
   );
 }
-
 
 interface PhaseTableProps {
   phases: PipelinePhaseMetrics[];
@@ -778,10 +722,7 @@ function PhaseRow({
 }) {
   const type = classifyPhase(phase.phaseNumber, pipelineType);
   const isPass =
-    phase.status === 'done' ||
-    phase.status === 'approved' ||
-    phase.status === 'passed' ||
-    phase.status === 'completed';
+    phase.status === 'done' || phase.status === 'approved' || phase.status === 'passed' || phase.status === 'completed';
   const isFail = phase.status === 'failed' || phase.status === 'rejected';
 
   return (
@@ -796,9 +737,7 @@ function PhaseRow({
         {phase.agentId ? (agentNames?.[phase.agentId] ?? phase.agentId) : '-'}
       </td>
       <td className="px-4 py-2 text-center">
-        <span
-          className={`text-[9px] px-1.5 py-0.5 rounded font-medium uppercase ${phaseTypeBadgeColor(type)}`}
-        >
+        <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium uppercase ${phaseTypeBadgeColor(type)}`}>
           {phaseTypeLabel(type)}
         </span>
       </td>
@@ -816,11 +755,15 @@ function PhaseRow({
               phase.metadata?.costEstimationKind === 'subscription-equivalent-payg'
                 ? 'Custo: estimativa equivalente pay-as-you-go.\nToken Plan desconta da quota primeiro.'
                 : null,
-            ].filter(Boolean).join('\n')}
+            ]
+              .filter(Boolean)
+              .join('\n')}
           >
             {shortenModel(phase.model)}
           </span>
-        ) : '-'}
+        ) : (
+          '-'
+        )}
       </td>
       <td className="px-4 py-2 text-zinc-300 text-right font-mono">
         {formatCostWithMeta(phase.costUsd, phase.metadata)}
@@ -828,9 +771,7 @@ function PhaseRow({
       <td className="px-4 py-2 text-zinc-400 text-right">
         {formatTokensWithMeta(phase.inputTokens, phase.outputTokens, phase.metadata)}
       </td>
-      <td className="px-4 py-2 text-zinc-400 text-right">
-        {formatDuration(phase.durationMs)}
-      </td>
+      <td className="px-4 py-2 text-zinc-400 text-right">{formatDuration(phase.durationMs)}</td>
       <td className="px-4 py-2 text-center">
         {isPass ? (
           <span className="flex items-center justify-center gap-1 text-green-400">
@@ -858,14 +799,9 @@ function PhaseTable({ phases, agentNames, pipelineType }: PhaseTableProps) {
   const preparationPhases = phases
     .filter((p) => p.phaseNumber < coderPhaseNum || p.phaseNumber === 91)
     .sort((a, b) => phaseSortKey(a.phaseNumber) - phaseSortKey(b.phaseNumber));
-  const sprintPhases = phases.filter(
-    (p) => p.phaseNumber === coderPhaseNum || p.phaseNumber === evalPhaseNum,
-  );
+  const sprintPhases = phases.filter((p) => p.phaseNumber === coderPhaseNum || p.phaseNumber === evalPhaseNum);
 
-  const sprintMap = new Map<
-    number,
-    { coder: PipelinePhaseMetrics[]; evaluator: PipelinePhaseMetrics[] }
-  >();
+  const sprintMap = new Map<number, { coder: PipelinePhaseMetrics[]; evaluator: PipelinePhaseMetrics[] }>();
   for (const p of sprintPhases) {
     const si =
       (p.sprintIndex ?? -1) >= 0
@@ -922,20 +858,13 @@ function PhaseTable({ phases, agentNames, pipelineType }: PhaseTableProps) {
               (group.coder[0]?.metadata?.sprintName as string) ||
               (group.evaluator[0]?.metadata?.sprintName as string) ||
               `Sprint ${si + 1}`;
-            const sprintTotal =
-              [...group.coder, ...group.evaluator].reduce(
-                (acc, p) => acc + p.costUsd,
-                0,
-              );
+            const sprintTotal = [...group.coder, ...group.evaluator].reduce((acc, p) => acc + p.costUsd, 0);
 
             return (
               <Fragment key={`sprint-${si}`}>
                 {/* Sprint header row */}
                 <tr className="bg-zinc-800/70 border-t border-zinc-700">
-                  <td
-                    colSpan={4}
-                    className="px-4 py-2 font-semibold text-amber-400 text-xs"
-                  >
+                  <td colSpan={4} className="px-4 py-2 font-semibold text-amber-400 text-xs">
                     Sprint {si + 1}: {sprintName}
                   </td>
                   <td className="px-4 py-2 text-amber-400 text-right font-mono font-semibold text-xs">
@@ -977,7 +906,6 @@ function PhaseTable({ phases, agentNames, pipelineType }: PhaseTableProps) {
                     />
                   );
                 })}
-
               </Fragment>
             );
           })}
@@ -995,7 +923,6 @@ function PhaseTable({ phases, agentNames, pipelineType }: PhaseTableProps) {
   );
 }
 
-
 interface SprintTableProps {
   sprintPhases: PipelinePhaseMetrics[];
   pipelineType: PipelineType;
@@ -1005,15 +932,15 @@ function SprintDetailTable({ sprintPhases, pipelineType }: SprintTableProps) {
   const { coder: coderNum } = loopPhaseNumbers(pipelineType);
   const rows = buildSprintBarData(sprintPhases, pipelineType);
 
-  const sprintExtras = new Map<
-    number,
-    { tokens: number; durationMs: number; verdict: string }
-  >();
+  const sprintExtras = new Map<number, { tokens: number; durationMs: number; verdict: string }>();
 
   for (const p of sprintPhases) {
-    const si = (p.sprintIndex ?? -1) >= 0
-      ? (p.sprintIndex as number)
-      : (typeof p.metadata?.sprintIndex === 'number' ? p.metadata.sprintIndex : -1);
+    const si =
+      (p.sprintIndex ?? -1) >= 0
+        ? (p.sprintIndex as number)
+        : typeof p.metadata?.sprintIndex === 'number'
+          ? p.metadata.sprintIndex
+          : -1;
     if (si < 0) continue;
     const existing = sprintExtras.get(si) ?? {
       tokens: 0,
@@ -1026,9 +953,7 @@ function SprintDetailTable({ sprintPhases, pipelineType }: SprintTableProps) {
   }
 
   if (rows.length === 0) {
-    return (
-      <p className="text-xs text-zinc-600 text-center py-6">Nenhum sprint executado ainda.</p>
-    );
+    return <p className="text-xs text-zinc-600 text-center py-6">Nenhum sprint executado ainda.</p>;
   }
 
   return (
@@ -1052,24 +977,21 @@ function SprintDetailTable({ sprintPhases, pipelineType }: SprintTableProps) {
             const coderRounds = sprintPhases.filter(
               (p) =>
                 p.phaseNumber === coderNum &&
-                ((p.sprintIndex ?? -1) >= 0 ? p.sprintIndex === row.sprintIndex
-                  : (typeof p.metadata?.sprintIndex === 'number' ? p.metadata.sprintIndex === row.sprintIndex : false)),
+                ((p.sprintIndex ?? -1) >= 0
+                  ? p.sprintIndex === row.sprintIndex
+                  : typeof p.metadata?.sprintIndex === 'number'
+                    ? p.metadata.sprintIndex === row.sprintIndex
+                    : false),
             ).length;
             const rowBg = idx % 2 === 0 ? 'bg-zinc-900' : 'bg-zinc-800/30';
 
             const verdictStatus = extras?.verdict ?? '';
-            const isPass =
-              verdictStatus === 'done' ||
-              verdictStatus === 'approved' ||
-              verdictStatus === 'passed';
-            const isFail =
-              verdictStatus === 'failed' || verdictStatus === 'rejected';
+            const isPass = verdictStatus === 'done' || verdictStatus === 'approved' || verdictStatus === 'passed';
+            const isFail = verdictStatus === 'failed' || verdictStatus === 'rejected';
 
             return (
               <tr key={row.sprintIndex} className={rowBg}>
-                <td className="px-4 py-2 text-zinc-200 font-medium">
-                  Sprint {row.sprintIndex + 1}
-                </td>
+                <td className="px-4 py-2 text-zinc-200 font-medium">Sprint {row.sprintIndex + 1}</td>
                 <td className="px-4 py-2 text-zinc-400 text-right">{coderRounds}</td>
                 <td className="px-4 py-2 text-right font-mono">
                   <div className="flex flex-col items-end gap-0.5">
@@ -1091,15 +1013,9 @@ function SprintDetailTable({ sprintPhases, pipelineType }: SprintTableProps) {
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-2 text-zinc-200 text-right font-mono font-medium">
-                  {formatCost(row.total)}
-                </td>
-                <td className="px-4 py-2 text-zinc-400 text-right">
-                  {formatTokens(extras?.tokens ?? 0)}
-                </td>
-                <td className="px-4 py-2 text-zinc-400 text-right">
-                  {formatDuration(extras?.durationMs ?? 0)}
-                </td>
+                <td className="px-4 py-2 text-zinc-200 text-right font-mono font-medium">{formatCost(row.total)}</td>
+                <td className="px-4 py-2 text-zinc-400 text-right">{formatTokens(extras?.tokens ?? 0)}</td>
+                <td className="px-4 py-2 text-zinc-400 text-right">{formatDuration(extras?.durationMs ?? 0)}</td>
                 <td className="px-4 py-2 text-center">
                   {isPass ? (
                     <span className="flex items-center justify-center gap-1 text-green-400">
@@ -1112,9 +1028,7 @@ function SprintDetailTable({ sprintPhases, pipelineType }: SprintTableProps) {
                       <span className="text-[10px]">Falhou</span>
                     </span>
                   ) : (
-                    <span className="text-[10px] text-zinc-600 uppercase">
-                      {verdictStatus || '-'}
-                    </span>
+                    <span className="text-[10px] text-zinc-600 uppercase">{verdictStatus || '-'}</span>
                   )}
                 </td>
               </tr>
@@ -1125,7 +1039,6 @@ function SprintDetailTable({ sprintPhases, pipelineType }: SprintTableProps) {
     </div>
   );
 }
-
 
 interface RuntimeCostSectionProps {
   costByRuntime: Record<string, number>;
@@ -1143,10 +1056,7 @@ function RuntimeCostSection({ costByRuntime, costStatusByRuntime, phases }: Runt
   for (const phase of phases) {
     const runtime = phase.runtime ?? 'cloud';
     runtimesWithPhases.add(runtime);
-    runtimeTokens.set(
-      runtime,
-      (runtimeTokens.get(runtime) ?? 0) + phase.inputTokens + phase.outputTokens,
-    );
+    runtimeTokens.set(runtime, (runtimeTokens.get(runtime) ?? 0) + phase.inputTokens + phase.outputTokens);
   }
   const barColors: Record<string, string> = {
     cloud: 'bg-blue-500',
@@ -1167,7 +1077,9 @@ function RuntimeCostSection({ costByRuntime, costStatusByRuntime, phases }: Runt
         Custo por Runtime
       </h3>
 
-      <div className={`grid gap-4 ${entries.length >= 4 ? 'grid-cols-2 lg:grid-cols-4' : entries.length >= 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      <div
+        className={`grid gap-4 ${entries.length >= 4 ? 'grid-cols-2 lg:grid-cols-4' : entries.length >= 2 ? 'grid-cols-2' : 'grid-cols-1'}`}
+      >
         {entries.map(([runtime, cost]) => {
           const Icon = runtime === 'cloud' ? Cloud : Server;
           const hasPhase = runtimesWithPhases.has(runtime);
@@ -1175,9 +1087,7 @@ function RuntimeCostSection({ costByRuntime, costStatusByRuntime, phases }: Runt
             <div key={runtime} className="space-y-2">
               <div className="flex items-center gap-2">
                 <Icon size={13} className="text-zinc-400" />
-                <span className="text-xs text-zinc-300">
-                  {PIPELINE_RUNTIME_LABELS[runtime] ?? runtime}
-                </span>
+                <span className="text-xs text-zinc-300">{PIPELINE_RUNTIME_LABELS[runtime] ?? runtime}</span>
               </div>
               <div className="h-2 bg-zinc-800 rounded overflow-hidden">
                 <div
@@ -1200,9 +1110,8 @@ function RuntimeCostSection({ costByRuntime, costStatusByRuntime, phases }: Runt
 
       {localCost > 0 && (
         <p className="text-[11px] text-zinc-600">
-          Economizado com modelos locais:{' '}
-          <span className="text-green-400 font-medium">{formatCost(localCost)}</span>{' '}
-          ({pct(localCost, grandTotal).toFixed(0)}% do custo equivalente)
+          Economizado com modelos locais: <span className="text-green-400 font-medium">{formatCost(localCost)}</span> (
+          {pct(localCost, grandTotal).toFixed(0)}% do custo equivalente)
         </p>
       )}
       {entries.some(([runtime]) => PIPELINE_PAYG_EQUIVALENT_RUNTIMES.has(runtime)) && (
@@ -1214,21 +1123,13 @@ function RuntimeCostSection({ costByRuntime, costStatusByRuntime, phases }: Runt
   );
 }
 
-
 interface SecurityFindingsSummaryProps {
   securitySummary: SecuritySummary;
 }
 
 function SecurityFindingsSummary({ securitySummary }: SecurityFindingsSummaryProps) {
-  const {
-    totalFindings,
-    bySeverity,
-    removedByValidator,
-    confirmedFindings,
-    resolved,
-    partiallyResolved,
-    unresolved,
-  } = securitySummary;
+  const { totalFindings, bySeverity, removedByValidator, confirmedFindings, resolved, partiallyResolved, unresolved } =
+    securitySummary;
 
   const total = totalFindings ?? 0;
   const confirmed = confirmedFindings ?? 0;
@@ -1240,16 +1141,13 @@ function SecurityFindingsSummary({ securitySummary }: SecurityFindingsSummaryPro
     barColor: string;
     textColor: string;
   }> = [
-    { key: 'critical', label: 'CRITICO', barColor: 'bg-red-600',    textColor: 'text-red-400'    },
-    { key: 'high',     label: 'ALTO',    barColor: 'bg-orange-500', textColor: 'text-orange-400' },
-    { key: 'medium',   label: 'MEDIO',   barColor: 'bg-yellow-500', textColor: 'text-yellow-400' },
-    { key: 'low',      label: 'BAIXO',   barColor: 'bg-blue-500',   textColor: 'text-blue-400'   },
+    { key: 'critical', label: 'CRITICO', barColor: 'bg-red-600', textColor: 'text-red-400' },
+    { key: 'high', label: 'ALTO', barColor: 'bg-orange-500', textColor: 'text-orange-400' },
+    { key: 'medium', label: 'MEDIO', barColor: 'bg-yellow-500', textColor: 'text-yellow-400' },
+    { key: 'low', label: 'BAIXO', barColor: 'bg-blue-500', textColor: 'text-blue-400' },
   ];
 
-  const maxSeverity = Math.max(
-    ...severities.map((s) => bySeverity?.[s.key] ?? 0),
-    1,
-  );
+  const maxSeverity = Math.max(...severities.map((s) => bySeverity?.[s.key] ?? 0), 1);
 
   const hasResolution = resolved !== undefined || partiallyResolved !== undefined || unresolved !== undefined;
   const resolvedCount = resolved ?? 0;
@@ -1310,9 +1208,7 @@ function SecurityFindingsSummary({ securitySummary }: SecurityFindingsSummaryPro
       {/* Resolucao */}
       {hasResolution ? (
         <div className="pt-3 border-t border-zinc-800 space-y-1.5">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-wide font-semibold mb-2">
-            Resolucao pelo Coder
-          </p>
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wide font-semibold mb-2">Resolucao pelo Coder</p>
           <div className="flex justify-between text-[11px]">
             <span className="text-zinc-500">Resolvidos</span>
             <span className="text-green-400 font-mono font-medium">
@@ -1344,7 +1240,6 @@ function SecurityFindingsSummary({ securitySummary }: SecurityFindingsSummaryPro
   );
 }
 
-
 interface SectionProps {
   title: string;
   subtitle?: string;
@@ -1360,15 +1255,12 @@ function Section({ title, subtitle, icon, children }: SectionProps) {
           {icon}
           {title}
         </h3>
-        {subtitle && (
-          <p className="text-[10px] text-zinc-600 mt-0.5">{subtitle}</p>
-        )}
+        {subtitle && <p className="text-[10px] text-zinc-600 mt-0.5">{subtitle}</p>}
       </div>
       <div className="p-5">{children}</div>
     </div>
   );
 }
-
 
 interface PipelineMetricsReportProps {
   projectId: string;
@@ -1376,17 +1268,24 @@ interface PipelineMetricsReportProps {
 }
 
 export function PipelineMetricsReport({ projectId, onClose }: PipelineMetricsReportProps) {
-  const metrics = useActiveProjectState(s => s.metrics) ?? null;
-  const projects = usePipelineStore(s => s.projects);
+  const metrics = useActiveProjectState((s) => s.metrics) ?? null;
+  const projects = usePipelineStore((s) => s.projects);
 
   const [smokeTestExists, setSmokeTestExists] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    window.lionclaw.pipeline.getSmokeTestPath(projectId).then((result) => {
-      if (!cancelled) setSmokeTestExists(result.exists);
-    }).catch(() => { /* silencioso */ });
-    return () => { cancelled = true; };
+    window.lionclaw.pipeline
+      .getSmokeTestPath(projectId)
+      .then((result) => {
+        if (!cancelled) setSmokeTestExists(result.exists);
+      })
+      .catch(() => {
+        /* silencioso */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [projectId]);
 
   const project = projects.find((p) => p.id === projectId);
@@ -1394,9 +1293,8 @@ export function PipelineMetricsReport({ projectId, onClose }: PipelineMetricsRep
   const isSecurity = pipelineType === 'security';
 
   const rawSummary = (project?.metadata as Record<string, unknown> | undefined)?.securitySummary;
-  const securitySummary = (rawSummary !== null && typeof rawSummary === 'object')
-    ? (rawSummary as SecuritySummary)
-    : null;
+  const securitySummary =
+    rawSummary !== null && typeof rawSummary === 'object' ? (rawSummary as SecuritySummary) : null;
 
   if (metrics === null) {
     return (
@@ -1414,9 +1312,7 @@ export function PipelineMetricsReport({ projectId, onClose }: PipelineMetricsRep
         )}
         <Activity size={28} className="text-zinc-700 mb-3" />
         <p className="text-sm text-zinc-500">Nenhuma metrica disponivel ainda.</p>
-        <p className="text-xs text-zinc-600 mt-1">
-          Execute o pipeline para ver o relatorio completo.
-        </p>
+        <p className="text-xs text-zinc-600 mt-1">Execute o pipeline para ver o relatorio completo.</p>
       </div>
     );
   }
@@ -1442,9 +1338,12 @@ export function PipelineMetricsReport({ projectId, onClose }: PipelineMetricsRep
             {smokeTestExists && (
               <button
                 onClick={() => {
-                  window.lionclaw.pipeline.openSmokeTest(projectId).then((result) => {
-                    if ('error' in result) console.error('pipeline:open-smoke-test:', result.error);
-                  }).catch((err: unknown) => console.error('pipeline:open-smoke-test:', err));
+                  window.lionclaw.pipeline
+                    .openSmokeTest(projectId)
+                    .then((result) => {
+                      if ('error' in result) console.error('pipeline:open-smoke-test:', result.error);
+                    })
+                    .catch((err: unknown) => console.error('pipeline:open-smoke-test:', err));
                 }}
                 className="flex items-center gap-1.5 px-2 py-1 text-xs text-zinc-300 border border-zinc-700 hover:border-zinc-500 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg transition-colors"
                 title="Abrir relatorio de smoke test no Finder"
@@ -1491,10 +1390,7 @@ export function PipelineMetricsReport({ projectId, onClose }: PipelineMetricsRep
             subtitle="Quanto cada agente especializado gastou no scan de seguranca"
             icon={<Shield size={13} />}
           >
-            <SecurityAuditBreakdown
-              phases={displayMetrics.phases}
-              agentNames={displayMetrics.agentNames ?? {}}
-            />
+            <SecurityAuditBreakdown phases={displayMetrics.phases} agentNames={displayMetrics.agentNames ?? {}} />
           </Section>
         )}
 

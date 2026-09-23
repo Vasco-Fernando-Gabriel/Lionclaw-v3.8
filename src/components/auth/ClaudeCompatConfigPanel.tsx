@@ -29,8 +29,7 @@ export function ClaudeCompatConfigPanel({ onComplete }: ClaudeCompatConfigPanelP
   };
 
   const trimmedKey = apiKey.trim();
-  const canContinue =
-    trimmedKey.length > 0 && selectedModelId.length > 0 && !isSubmitting;
+  const canContinue = trimmedKey.length > 0 && selectedModelId.length > 0 && !isSubmitting;
 
   const handleContinue = async () => {
     if (!canContinue) return;
@@ -89,9 +88,7 @@ export function ClaudeCompatConfigPanel({ onComplete }: ClaudeCompatConfigPanelP
             >
               <span
                 className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 transition-colors ${
-                  chosenProvider === opt.id
-                    ? 'border-amber-500 bg-amber-500'
-                    : 'border-zinc-600 bg-transparent'
+                  chosenProvider === opt.id ? 'border-amber-500 bg-amber-500' : 'border-zinc-600 bg-transparent'
                 }`}
               />
               <span className="flex flex-col">
@@ -123,9 +120,7 @@ export function ClaudeCompatConfigPanel({ onComplete }: ClaudeCompatConfigPanelP
             {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         </div>
-        <p className="text-xs text-zinc-600 mt-1.5">
-          Armazenada no keychain do SO, nunca em plaintext.
-        </p>
+        <p className="text-xs text-zinc-600 mt-1.5">Armazenada no keychain do SO, nunca em plaintext.</p>
       </div>
 
       {/* Model dropdown */}
@@ -146,9 +141,7 @@ export function ClaudeCompatConfigPanel({ onComplete }: ClaudeCompatConfigPanelP
       </div>
 
       {/* Local error */}
-      {localError && (
-        <p className="text-sm text-red-400">{localError}</p>
-      )}
+      {localError && <p className="text-sm text-red-400">{localError}</p>}
 
       {/* Continue button */}
       <button

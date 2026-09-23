@@ -21,11 +21,7 @@ import type {
   LocalRepositoryStatus,
 } from '@/types/repo-graph';
 
-
-const STATUS_VISUALS: Record<
-  LocalRepositoryStatus,
-  { label: string; className: string; icon: React.ReactNode }
-> = {
+const STATUS_VISUALS: Record<LocalRepositoryStatus, { label: string; className: string; icon: React.ReactNode }> = {
   absent: {
     label: 'Sem graph',
     className: 'bg-zinc-800 text-zinc-400',
@@ -85,7 +81,6 @@ function formatAvgTokens(value: number | null): string {
   return value >= 1000 ? `${(value / 1000).toFixed(1)}K` : value.toFixed(1);
 }
 
-
 function SavingsMetricsCard({ metrics }: { metrics: RepoGraphSavingsMetrics | null }) {
   if (!metrics) {
     return (
@@ -135,20 +130,14 @@ function SavingsMetricsCard({ metrics }: { metrics: RepoGraphSavingsMetrics | nu
       <div className="grid grid-cols-2 gap-3 mb-3">
         {groups.map((group) => (
           <div key={group.title} className="rounded-md bg-zinc-950/60 border border-zinc-800/60 p-3">
-            <p className="text-[11px] uppercase tracking-wider text-zinc-500 mb-1.5">
-              {group.title}
-            </p>
+            <p className="text-[11px] uppercase tracking-wider text-zinc-500 mb-1.5">{group.title}</p>
             <div className="flex items-baseline gap-4">
               <div>
-                <p className="text-lg font-semibold text-zinc-200 tabular-nums">
-                  {group.avgToolCalls ?? '-'}
-                </p>
+                <p className="text-lg font-semibold text-zinc-200 tabular-nums">{group.avgToolCalls ?? '-'}</p>
                 <p className="text-[10px] text-zinc-500">tool calls/turno</p>
               </div>
               <div>
-                <p className="text-lg font-semibold text-zinc-200 tabular-nums">
-                  {formatAvgTokens(group.avgTokens)}
-                </p>
+                <p className="text-lg font-semibold text-zinc-200 tabular-nums">{formatAvgTokens(group.avgTokens)}</p>
                 <p className="text-[10px] text-zinc-500">tokens/turno</p>
               </div>
               <div className="ml-auto">
@@ -163,11 +152,7 @@ function SavingsMetricsCard({ metrics }: { metrics: RepoGraphSavingsMetrics | nu
         <div className="flex items-center gap-4 text-sm">
           <span className="text-zinc-400">
             Tool calls:{' '}
-            <strong
-              className={
-                (metrics.toolCallsSavingsPct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
-              }
-            >
+            <strong className={(metrics.toolCallsSavingsPct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}>
               {metrics.toolCallsSavingsPct === null
                 ? 'sem base'
                 : `${metrics.toolCallsSavingsPct > 0 ? '-' : '+'}${Math.abs(metrics.toolCallsSavingsPct)}%`}
@@ -175,11 +160,7 @@ function SavingsMetricsCard({ metrics }: { metrics: RepoGraphSavingsMetrics | nu
           </span>
           <span className="text-zinc-400">
             Tokens:{' '}
-            <strong
-              className={
-                (metrics.tokensSavingsPct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
-              }
-            >
+            <strong className={(metrics.tokensSavingsPct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}>
               {metrics.tokensSavingsPct === null
                 ? 'sem base'
                 : `${metrics.tokensSavingsPct > 0 ? '-' : '+'}${Math.abs(metrics.tokensSavingsPct)}%`}
@@ -188,15 +169,13 @@ function SavingsMetricsCard({ metrics }: { metrics: RepoGraphSavingsMetrics | nu
         </div>
       ) : (
         <p className="text-xs text-zinc-500">
-          Janela insuficiente: a economia aparece quando os dois grupos atingem{' '}
-          {metrics.minTurnsWindow}+ turnos ({metrics.withRepo.turns} com repo,{' '}
-          {metrics.withoutRepo.turns} sem repo ate agora).
+          Janela insuficiente: a economia aparece quando os dois grupos atingem {metrics.minTurnsWindow}+ turnos (
+          {metrics.withRepo.turns} com repo, {metrics.withoutRepo.turns} sem repo ate agora).
         </p>
       )}
     </div>
   );
 }
-
 
 interface RepositoryRowProps {
   repo: LocalRepositoryRecord;
@@ -258,9 +237,7 @@ function RepositoryRow({ repo, pending, progress, onBuild, onUpdate, onRemove }:
             onClick={() => onBuild(repo)}
             disabled={pending || building}
             title={
-              repo.status === 'absent'
-                ? 'Criar o code graph deste repositorio'
-                : 'Reindexar do zero (index --force)'
+              repo.status === 'absent' ? 'Criar o code graph deste repositorio' : 'Reindexar do zero (index --force)'
             }
             className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-600/20 text-blue-300 text-xs hover:bg-blue-600/30 transition-colors disabled:opacity-50"
           >
@@ -292,7 +269,6 @@ function RepositoryRow({ repo, pending, progress, onBuild, onUpdate, onRemove }:
     </div>
   );
 }
-
 
 export default function RepositoriesPage() {
   const repositories = useRepoGraphStore((s) => s.repositories);
@@ -408,9 +384,9 @@ export default function RepositoriesPage() {
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <p className="text-xs text-zinc-500 max-w-2xl">
-          Repositorios locais com code graph (provider 100% local). O graph e consultado pelo
-          orquestrador antes de buscas brutas nas conversas com repo ativo. Criar e atualizar o
-          graph exige acao sua — agentes nunca tem acesso de escrita.
+          Repositorios locais com code graph (provider 100% local). O graph e consultado pelo orquestrador antes de
+          buscas brutas nas conversas com repo ativo. Criar e atualizar o graph exige acao sua — agentes nunca tem
+          acesso de escrita.
         </p>
 
         {error && (

@@ -1,35 +1,14 @@
 import { ipcMain } from 'electron';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import type { IpcContext } from './context';
 import { createLogger } from '../logger';
 import { getSetting, setSetting } from '../db';
-import { getApiKey } from '../secrets-vault';
-import {
-  getClaudeCodeExecutablePath,
-} from '../pipeline-shared/sdk-bootstrap';
-import {
-  isPackagedDistributionRuntime,
-  resolveInternalNodeBinary,
-} from '../distribution-runtime';
-
+import { getClaudeCodeExecutablePath } from '../pipeline-shared/sdk-bootstrap';
+import { detectClaudeAuthMode, detectClaudeCliStatus, type ClaudeAuthMode } from '../claude-cli-status';
+import { isPackagedDistributionRuntime, resolveInternalNodeBinary } from '../distribution-runtime';
 
 const logger = createLogger('claude-cli');
-
-type ClaudeAuthMode = 'oauth' | 'api-key' | 'none';
-
-async function detectClaudeAuthMode(): Promise<ClaudeAuthMode> {
-  if (process.env.ANTHROPIC_API_KEY) return 'api-key';
-  const claudeDir = path.join(os.homedir(), '.claude');
-  if (fs.existsSync(claudeDir)) return 'oauth';
-  try {
-    const apiKey = await getApiKey();
-    if (apiKey) return 'api-key';
-  } catch {
-  }
-  return 'none';
-}
 
 function readAdjacentPackageVersion(cliPath: string): string | null {
   try {
@@ -47,8 +26,7 @@ function readNativeCliVersion(cliPath: string): Promise<string | null> {
     void (async () => {
       try {
         const { spawn } = await import('child_process');
-        const useShell =
-          process.platform === 'win32' && cliPath.toLowerCase().endsWith('.cmd');
+        const useShell = process.platform === 'win32' && cliPath.toLowerCase().endsWith('.cmd');
         const child = spawn(cliPath, ['--version'], {
           stdio: ['ignore', 'pipe', 'pipe'],
           shell: useShell,
@@ -86,9 +64,7 @@ function isJsEntry(p: string): boolean {
 }
 
 export async function readClaudeCliVersion(cliPath: string): Promise<string | null> {
-  return isJsEntry(cliPath)
-    ? readAdjacentPackageVersion(cliPath)
-    : readNativeCliVersion(cliPath);
+  return isJsEntry(cliPath) ? readAdjacentPackageVersion(cliPath) : readNativeCliVersion(cliPath);
 }
 
 function authLabel(mode: ClaudeAuthMode): string {
@@ -99,24 +75,14 @@ function authLabel(mode: ClaudeAuthMode): string {
 
 export function registerClaudeCliHandlers(_ctx: IpcContext): void {
   ipcMain.handle('claude-cli:status', async () => {
-    let resolvedPath = '';
-    let resolveError: string | null = null;
-    try {
-      resolvedPath = getClaudeCodeExecutablePath();
-    } catch (err) {
-      resolveError = err instanceof Error ? err.message : String(err);
-    }
-    const installed = resolvedPath !== '' && fs.existsSync(resolvedPath);
+    const status = await detectClaudeCliStatus();
+    const { resolvedPath, installed, authMode, resolveError } = status;
     const version = installed ? await readClaudeCliVersion(resolvedPath) : null;
-    const authMode = await detectClaudeAuthMode();
-    logger.info(
-      { resolvedPath, installed, version, authMode, resolveError },
-      'claude-cli:status',
-    );
+    logger.info({ resolvedPath, installed, version, authMode, resolveError }, 'claude-cli:status');
     return {
       installed,
       version,
-      authenticated: authMode !== 'none',
+      authenticated: status.authenticated,
       authMode,
       resolvedPath: resolvedPath || (resolveError ?? ''),
     };
@@ -142,14 +108,9 @@ export function registerClaudeCliHandlers(_ctx: IpcContext): void {
     }
 
     const runViaNode = isJsEntry(cliPath);
-    const cmd = runViaNode
-      ? isPackagedDistributionRuntime()
-        ? resolveInternalNodeBinary()
-        : 'node'
-      : cliPath;
+    const cmd = runViaNode ? (isPackagedDistributionRuntime() ? resolveInternalNodeBinary() : 'node') : cliPath;
     const argv = runViaNode ? [cliPath, '--version'] : ['--version'];
-    const useShell =
-      process.platform === 'win32' && cmd.toLowerCase().endsWith('.cmd');
+    const useShell = process.platform === 'win32' && cmd.toLowerCase().endsWith('.cmd');
     const authMode = await detectClaudeAuthMode();
 
     return new Promise<{ ok: boolean; message: string }>((resolve) => {
@@ -177,8 +138,7 @@ export function registerClaudeCliHandlers(_ctx: IpcContext): void {
         } else {
           resolve({
             ok: false,
-            message:
-              (err || out).trim() || `Claude Code CLI saiu com codigo ${code}`,
+            message: (err || out).trim() || `Claude Code CLI saiu com codigo ${code}`,
           });
         }
       });
@@ -196,31 +156,24 @@ export function registerClaudeCliHandlers(_ctx: IpcContext): void {
 
   ipcMain.handle('claude-cli:open-login', async () => {
     const { spawn } = await import('child_process');
-    const { shellEscapePOSIX, appleScriptEscape, cmdQuote } = await import(
-      '../shell-escape'
-    );
+    const { shellEscapePOSIX, appleScriptEscape, cmdQuote } = await import('../shell-escape');
 
     const custom = (getSetting('claude_cli_binary_path') || '').trim();
     let resolvedEngine = '';
     try {
       const candidate = getClaudeCodeExecutablePath();
       if (fs.existsSync(candidate)) resolvedEngine = candidate;
-    } catch {
-    }
+    } catch {}
     const loginBin = custom || resolvedEngine || 'claude';
     const viaNode = loginBin !== 'claude' ? isJsEntry(loginBin) : false;
     const platform = process.platform;
 
     if (platform === 'darwin') {
-      const shellCmd = viaNode
-        ? `node ${shellEscapePOSIX(loginBin)} login`
-        : `${shellEscapePOSIX(loginBin)} login`;
+      const shellCmd = viaNode ? `node ${shellEscapePOSIX(loginBin)} login` : `${shellEscapePOSIX(loginBin)} login`;
       const asExpr = `tell application "Terminal" to do script "${appleScriptEscape(shellCmd)}"`;
       spawn('osascript', ['-e', asExpr]);
     } else if (platform === 'win32') {
-      const inner = viaNode
-        ? `node ${cmdQuote(loginBin)} login`
-        : `${cmdQuote(loginBin)} login`;
+      const inner = viaNode ? `node ${cmdQuote(loginBin)} login` : `${cmdQuote(loginBin)} login`;
       spawn('cmd', ['/c', 'start', '""', 'cmd', '/k', inner], {
         detached: true,
         shell: false,

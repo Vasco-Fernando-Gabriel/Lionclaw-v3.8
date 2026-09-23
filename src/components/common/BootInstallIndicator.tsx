@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Loader2, CheckCircle2, AlertCircle, RotateCw } from 'lucide-react';
 import type { BootInstallStatus, BootInstallStreamEvent } from '@/types/open-design';
 
-
 interface IndicatorProps {
   collapsed?: boolean;
 }
@@ -28,8 +27,7 @@ export function BootInstallIndicator({ collapsed = false }: IndicatorProps) {
         } else if (result.kind === 'installing') {
           everInstalled = true;
         }
-      } catch {
-      }
+      } catch {}
     })();
 
     const off = window.lionclaw.openDesign.onBootInstallStream((event: BootInstallStreamEvent) => {
@@ -87,10 +85,11 @@ export function BootInstallIndicator({ collapsed = false }: IndicatorProps) {
 
   if (collapsed) {
     return (
-      <div className="px-2 py-2 border-t border-zinc-800 flex justify-center" title={status.kind === 'installing' ? 'Preparando motor de design' : undefined}>
-        {status.kind === 'installing' && (
-          <Loader2 size={14} className="animate-spin text-amber-500" />
-        )}
+      <div
+        className="px-2 py-2 border-t border-zinc-800 flex justify-center"
+        title={status.kind === 'installing' ? 'Preparando motor de design' : undefined}
+      >
+        {status.kind === 'installing' && <Loader2 size={14} className="animate-spin text-amber-500" />}
         {status.kind === 'ready' && showReadyFade && (
           <CheckCircle2 size={14} className="text-green-400 transition-opacity duration-500" />
         )}
@@ -125,7 +124,10 @@ export function BootInstallIndicator({ collapsed = false }: IndicatorProps) {
       )}
 
       {status.kind === 'failed' && (
-        <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30" title={status.error}>
+        <div
+          className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30"
+          title={status.error}
+        >
           <AlertCircle size={13} className="text-red-400 shrink-0" />
           <span className="text-[11px] text-red-300 truncate flex-1" title={status.error}>
             Falha no motor

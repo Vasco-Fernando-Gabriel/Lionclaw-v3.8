@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const state = vi.hoisted(() => ({
@@ -92,7 +91,6 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-
 describe('default sem capabilities — legado on/on, secoes completas', () => {
   it('prompt full-mode contem as 2 secoes COMPLETAS e nenhum stub', () => {
     const prompt = buildSystemPrompt();
@@ -121,7 +119,6 @@ describe('default sem capabilities — legado on/on, secoes completas', () => {
   });
 });
 
-
 describe('capability off — stub substitui a secao completa (A.5)', () => {
   it('pipelineControl=false: stub de Pipelines presente, secao completa AUSENTE, Workflows completa fica', () => {
     const prompt = buildSystemPrompt(undefined, { capabilities: PIPELINE_OFF });
@@ -137,9 +134,7 @@ describe('capability off — stub substitui a secao completa (A.5)', () => {
   it('pipelineControl=false: o UNICO delta vs o default e stub<->secao (replace reproduz byte a byte)', () => {
     const promptOff = buildSystemPrompt(undefined, { capabilities: PIPELINE_OFF });
     const promptDefault = buildSystemPrompt();
-    expect(
-      promptOff.replace(buildPipelineControlStub(), buildPipelineControlSection()),
-    ).toBe(promptDefault);
+    expect(promptOff.replace(buildPipelineControlStub(), buildPipelineControlSection())).toBe(promptDefault);
   });
 
   it('dynamicWorkflows=false: stub de Workflows presente, secao completa AUSENTE, Pipelines completa fica', () => {
@@ -152,9 +147,7 @@ describe('capability off — stub substitui a secao completa (A.5)', () => {
 
   it('dynamicWorkflows=false: replace(stub -> secao completa) reproduz o default byte a byte', () => {
     const promptOff = buildSystemPrompt(undefined, { capabilities: WORKFLOWS_OFF });
-    expect(
-      promptOff.replace(buildDynamicWorkflowStub(), buildDynamicWorkflowSection()),
-    ).toBe(buildSystemPrompt());
+    expect(promptOff.replace(buildDynamicWorkflowStub(), buildDynamicWorkflowSection())).toBe(buildSystemPrompt());
   });
 
   it('ambos=false: 2 stubs; replace duplo reproduz o default byte a byte', () => {
@@ -189,7 +182,6 @@ describe('capability off — stub substitui a secao completa (A.5)', () => {
   });
 });
 
-
 describe('indice MCP — capability off nao vaza para o bloco do indice', () => {
   it('buildMcpIndexSection com capability off: helper gated ausente, negocio presente', () => {
     const section = buildMcpIndexSection(BOTH_OFF);
@@ -209,7 +201,6 @@ describe('indice MCP — capability off nao vaza para o bloco do indice', () => 
   });
 });
 
-
 describe('minimal mode — intacto', () => {
   it('minimal com capabilities off == minimal sem capabilities, byte a byte', () => {
     const withOff = buildSystemPrompt(undefined, { mode: 'minimal', capabilities: BOTH_OFF });
@@ -225,7 +216,6 @@ describe('minimal mode — intacto', () => {
     expect(minimal).not.toContain(WORKFLOW_STUB_HEADER);
   });
 });
-
 
 const TOOLSCRIPT_HEADER = '## Executar suas tools em lote (run_tool_script)';
 
@@ -258,5 +248,16 @@ describe('secao run_tool_script — gatilhada por disponibilidade', () => {
     });
     expect(() => buildSystemPrompt()).not.toThrow();
     expect(buildSystemPrompt()).not.toContain(TOOLSCRIPT_HEADER);
+  });
+});
+
+describe('pipeline control: contrato de lanes', () => {
+  it('explica propriedade, limite por lane e a acao humana no Pipeline', () => {
+    const prompt = buildPipelineControlSection();
+    expect(prompt).toContain('cada lane de chat conduz no maximo um pipeline');
+    expect(prompt).toContain('pipelines dirigidos por outra lane nao aparecem para voce e nao sao seus');
+    expect(prompt).toContain(
+      'Parar ou Assumir um drive e pela pagina Pipeline: nao existe tool para isso, diga ao humano',
+    );
   });
 });

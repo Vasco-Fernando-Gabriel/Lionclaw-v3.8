@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -62,9 +61,7 @@ describe('migration v133 - fresh fixer no prompt do builder (R10, sem DB)', () =
 
   it('a migration esta registrada no runner de migrations do db.ts', () => {
     const dbSrc = readFileSync(join(__dirname, '..', 'db.ts'), 'utf8');
-    expect(dbSrc).toContain(
-      "import { applyMigrationV133 } from './db-migrations/v133-dynamic-workflow-fresh-fixer'",
-    );
+    expect(dbSrc).toContain("import { applyMigrationV133 } from './db-migrations/v133-dynamic-workflow-fresh-fixer'");
     expect(dbSrc).toContain('if (currentVersion < 133)');
     expect(dbSrc).toContain('applyMigrationV133(db)');
     expect(dbSrc).toMatch(/INSERT INTO schema_version \(version\) VALUES \(\?\)'\)\.run\(133\)/);

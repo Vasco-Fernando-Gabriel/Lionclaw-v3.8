@@ -1,6 +1,5 @@
 import { FileText } from 'lucide-react';
 
-
 const PHASE_DOC_LABELS: Record<number, string> = {
   1: 'Ver Discovery Notes',
   2: 'Ver User Stories',
@@ -13,19 +12,13 @@ const PHASE_DOC_LABELS: Record<number, string> = {
   9: 'Ver Sprints',
 };
 
-
 interface PhaseDocumentButtonProps {
   phase: number;
   label?: string;
   onClick: () => void;
 }
 
-
-export function PhaseDocumentButton({
-  phase,
-  label: labelOverride,
-  onClick,
-}: PhaseDocumentButtonProps) {
+export function PhaseDocumentButton({ phase, label: labelOverride, onClick }: PhaseDocumentButtonProps) {
   const label = labelOverride ?? PHASE_DOC_LABELS[phase];
 
   if (!label) return null;

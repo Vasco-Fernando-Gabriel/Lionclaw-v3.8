@@ -24,10 +24,7 @@ export interface DynamicWorkflowGateModalProps {
   findings?: GateFindingView[];
   allowReplan?: boolean;
   onClose: () => void;
-  onDecide: (
-    decision: 'approve' | 'reject' | 'replan',
-    reason?: string,
-  ) => Promise<string | null>;
+  onDecide: (decision: 'approve' | 'reject' | 'replan', reason?: string) => Promise<string | null>;
 }
 
 function severityColor(sev: string): string {
@@ -82,9 +79,7 @@ export function DynamicWorkflowGateModal({
         {/* Header */}
         <div className="flex items-center gap-2.5 px-5 pt-5 pb-3 border-b border-zinc-800 shrink-0">
           <ShieldCheck size={16} className="text-amber-400 shrink-0" />
-          <h2 className="text-sm font-semibold text-zinc-100 leading-tight">
-            {`Gate: ${gateId}`}
-          </h2>
+          <h2 className="text-sm font-semibold text-zinc-100 leading-tight">{`Gate: ${gateId}`}</h2>
           <span className="ml-auto text-[10px] font-mono text-zinc-500">{mode}</span>
         </div>
 
@@ -100,10 +95,7 @@ export function DynamicWorkflowGateModal({
               </p>
               <ul className="flex flex-col gap-1">
                 {checks.map((c) => (
-                  <li
-                    key={c.id}
-                    className="flex items-start gap-2 text-[11px] bg-zinc-800/60 rounded px-2 py-1"
-                  >
+                  <li key={c.id} className="flex items-start gap-2 text-[11px] bg-zinc-800/60 rounded px-2 py-1">
                     {c.ok ? (
                       <Check size={12} className="text-green-400 shrink-0 mt-0.5" />
                     ) : (
@@ -111,9 +103,7 @@ export function DynamicWorkflowGateModal({
                     )}
                     <span className="min-w-0">
                       <span className="font-mono text-zinc-300">{c.label ?? c.id}</span>
-                      {c.detail && (
-                        <span className="block text-zinc-500">{c.detail}</span>
-                      )}
+                      {c.detail && <span className="block text-zinc-500">{c.detail}</span>}
                     </span>
                   </li>
                 ))}
@@ -129,26 +119,17 @@ export function DynamicWorkflowGateModal({
               </p>
               <ul className="flex flex-col gap-1.5 max-h-48 overflow-y-auto">
                 {findings.map((f, i) => (
-                  <li
-                    key={`${f.problem}-${i}`}
-                    className="rounded border border-zinc-800 bg-zinc-800/40 px-2 py-1.5"
-                  >
+                  <li key={`${f.problem}-${i}`} className="rounded border border-zinc-800 bg-zinc-800/40 px-2 py-1.5">
                     <div className="flex items-center gap-2">
                       <span
                         className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${severityColor(f.severity)}`}
                       >
                         {f.severity}
                       </span>
-                      {f.where && (
-                        <span className="font-mono text-[10px] text-zinc-500 truncate">
-                          {f.where}
-                        </span>
-                      )}
+                      {f.where && <span className="font-mono text-[10px] text-zinc-500 truncate">{f.where}</span>}
                     </div>
                     <p className="mt-1 text-[11px] text-zinc-300">{f.problem}</p>
-                    {f.fix && (
-                      <p className="mt-0.5 text-[10px] text-zinc-500">fix: {f.fix}</p>
-                    )}
+                    {f.fix && <p className="mt-0.5 text-[10px] text-zinc-500">fix: {f.fix}</p>}
                   </li>
                 ))}
               </ul>
@@ -159,15 +140,10 @@ export function DynamicWorkflowGateModal({
           {checks.length > 0 && (
             <div
               className={`flex items-start gap-2.5 rounded-lg px-3 py-2.5 border ${
-                allOk
-                  ? 'border-green-500/30 bg-green-500/10'
-                  : 'border-amber-500/30 bg-amber-500/10'
+                allOk ? 'border-green-500/30 bg-green-500/10' : 'border-amber-500/30 bg-amber-500/10'
               }`}
             >
-              <AlertTriangle
-                size={14}
-                className={`${allOk ? 'text-green-400' : 'text-amber-400'} shrink-0 mt-0.5`}
-              />
+              <AlertTriangle size={14} className={`${allOk ? 'text-green-400' : 'text-amber-400'} shrink-0 mt-0.5`} />
               <p className={`text-xs leading-relaxed ${allOk ? 'text-green-300' : 'text-amber-200'}`}>
                 {allOk
                   ? 'Todos os checks passaram. Aprovar libera o merge/entrega.'
@@ -181,9 +157,7 @@ export function DynamicWorkflowGateModal({
           {/* Motivo opcional (auditado em gate_decisions.reason) */}
           {canDecide && (
             <div>
-              <label className="text-[11px] text-zinc-500 mb-1 block">
-                Motivo (opcional, auditado)
-              </label>
+              <label className="text-[11px] text-zinc-500 mb-1 block">Motivo (opcional, auditado)</label>
               <textarea
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -229,11 +203,7 @@ export function DynamicWorkflowGateModal({
                   disabled={deciding !== null}
                   className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium rounded-lg border border-sky-500/40 text-sky-300 hover:bg-sky-500/10 transition-colors disabled:opacity-50"
                 >
-                  {deciding === 'replan' ? (
-                    <Loader2 size={11} className="animate-spin" />
-                  ) : (
-                    <RotateCcw size={11} />
-                  )}
+                  {deciding === 'replan' ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />}
                   Voltar pro planner
                 </button>
               )}

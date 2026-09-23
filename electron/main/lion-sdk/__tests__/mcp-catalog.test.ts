@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { buildLionMcpCatalogPrompt, parsePrefixedMcpName } from '../prompt';
 import type { LionMcpToolEntry } from '../prompt';
@@ -10,10 +9,7 @@ function toolsToEntries(tools: OllamaToolSchema[]): LionMcpToolEntry[] {
     const parsed = parsePrefixedMcpName(t.function.name);
     if (!parsed) continue;
     const required = (t.function.parameters?.required ?? []) as string[];
-    const props = (t.function.parameters?.properties ?? {}) as Record<
-      string,
-      { type?: string; description?: string }
-    >;
+    const props = (t.function.parameters?.properties ?? {}) as Record<string, { type?: string; description?: string }>;
     entries.push({
       serverId: parsed.serverId,
       toolName: parsed.toolName,

@@ -1,4 +1,3 @@
-
 import { captureToolResult, captureToolUse } from '../artifact-detector';
 import { insertAuditEntry } from '../db';
 import { createLogger } from '../logger';
@@ -6,6 +5,11 @@ import { recordActivity, isWriteTool } from '../activity-log';
 import { calculateCost, getPricingSnapshot, hasKnownPricing } from '../pricing';
 import type { ArtifactData, AuditEntry, StreamChunk } from '../../../src/types';
 import type { CursorSidecarUsage } from '../agent-runtime/cursor-sidecar/protocol';
+import {
+  createObservedTimelineRecorder,
+  type TimelineMetricsEvent,
+  type TimelineTurnHandle,
+} from '../session-timeline';
 
 const logger = createLogger('cursor-stream-translator');
 
@@ -17,6 +21,7 @@ export interface CursorStreamTranslatorOptions {
   onAuditEntry?: (entry: Omit<AuditEntry, 'id' | 'createdAt'>) => void;
   subagent?: string;
   turnIndex?: number;
+  timeline?: TimelineTurnHandle;
 }
 
 export interface CursorStreamTranslator {
@@ -25,6 +30,8 @@ export interface CursorStreamTranslator {
   toolUses(): number;
   finalize(usage: NonNullable<StreamChunk['usage']>): void;
   fail(error: unknown): void;
+  settledPending(): boolean;
+  timelineEvents(): TimelineMetricsEvent[];
 }
 
 export function buildCursorUsageSnapshot(
@@ -53,8 +60,7 @@ export function buildCursorUsageSnapshot(
   const pricingKnown = hasKnownPricing(model);
   const snapshot = getPricingSnapshot(model);
   const cacheWriteUnpriced =
-    snapshot.entry?.cacheCreationBilling === 'not-separately-reported'
-    && usage.cacheWriteTokens > 0;
+    snapshot.entry?.cacheCreationBilling === 'not-separately-reported' && usage.cacheWriteTokens > 0;
   const costUsd = pricingKnown
     ? calculateCost(model, aggregatedInput, usage.outputTokens, usage.cacheReadTokens, usage.cacheWriteTokens)
     : null;
@@ -68,9 +74,7 @@ export function buildCursorUsageSnapshot(
     model,
     costUsd,
     costStatus: costUsd === null ? 'unknown' : cacheWriteUnpriced ? 'estimated-partial' : 'known',
-    ...(cacheWriteUnpriced && costUsd !== null
-      ? { costStatusReasons: ['cache-write-not-reported'] as const }
-      : {}),
+    ...(cacheWriteUnpriced && costUsd !== null ? { costStatusReasons: ['cache-write-not-reported'] as const } : {}),
     tokenStatus: 'reported',
     ...(costUsd === null ? { costUnknownReason: 'unknown-pricing' } : {}),
     costEstimationKind: 'subscription-equivalent-payg',
@@ -79,24 +83,28 @@ export function buildCursorUsageSnapshot(
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : null;
 }
 
 function stringify(value: unknown): string {
   if (typeof value === 'string') return value;
   if (value === null || value === undefined) return '';
-  try { return JSON.stringify(value); } catch { return String(value); }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
 
-export function createCursorStreamTranslator(
-  opts: CursorStreamTranslatorOptions,
-): CursorStreamTranslator {
+export function createCursorStreamTranslator(opts: CursorStreamTranslatorOptions): CursorStreamTranslator {
   const turnIndex = opts.turnIndex ?? 0;
   let accumulatedText = '';
   let toolUseCount = 0;
   const seenArtifacts = new Set<string>();
   const openActivities = new Map<string, string>();
+  const timeline = createObservedTimelineRecorder(opts.timeline);
+  let pendingSettled = false;
 
   const audit = (entry: Omit<AuditEntry, 'id' | 'createdAt'>): void => {
     try {
@@ -134,6 +142,8 @@ export function createCursorStreamTranslator(
   };
   const settlePending = (status: 'done' | 'error'): void => {
     for (const [callId, name] of [...openActivities]) {
+      pendingSettled = true;
+      timeline.toolResult({ toolUseId: callId, toolName: name, content: 'interrompido', isError: true });
       closeActivity(callId, name, status);
       opts.emit({ type: 'tool_result', tool: name, toolCallId: callId, result: 'interrompido' });
     }
@@ -141,14 +151,20 @@ export function createCursorStreamTranslator(
 
   const onToolCall = (evt: Record<string, unknown>): void => {
     const name = typeof evt['name'] === 'string' ? (evt['name'] as string) : 'unknown';
-    const callId = typeof evt['call_id'] === 'string' && evt['call_id'].length > 0
-      ? (evt['call_id'] as string)
-      : `${name}-${toolUseCount}`;
+    const callId =
+      typeof evt['call_id'] === 'string' && evt['call_id'].length > 0
+        ? (evt['call_id'] as string)
+        : `${name}-${toolUseCount}`;
     const status = evt['status'];
     if (status === 'running') {
-      if (openActivities.has(callId)) return; // evento repetido do SDK
+      if (openActivities.has(callId)) return;
       openActivities.set(callId, name);
-      try { artifact(captureToolUse(callId, name, asRecord(evt['args']) ?? {})); } catch { /* best effort */ }
+      timeline.toolCall({ toolUseId: callId, toolName: name, content: stringify(evt['args']) });
+      try {
+        artifact(captureToolUse(callId, name, asRecord(evt['args']) ?? {}));
+      } catch {
+        /* best effort */
+      }
       opts.emit({ type: 'tool_call', tool: name, toolCallId: callId, input: asRecord(evt['args']) ?? {} });
       audit({
         sessionId: opts.sessionId,
@@ -176,7 +192,12 @@ export function createCursorStreamTranslator(
     if (status === 'completed' || status === 'error') {
       toolUseCount += 1;
       const output = stringify(evt['result']);
-      try { artifact(captureToolResult(callId, output, status === 'error')); } catch { /* best effort */ }
+      timeline.toolResult({ toolUseId: callId, toolName: name, content: output, isError: status === 'error' });
+      try {
+        artifact(captureToolResult(callId, output, status === 'error'));
+      } catch {
+        /* best effort */
+      }
       opts.emit({
         type: 'tool_result',
         tool: name,
@@ -248,5 +269,7 @@ export function createCursorStreamTranslator(
       settlePending('error');
       opts.emit({ type: 'error', error: error instanceof Error ? error.message : String(error) });
     },
+    settledPending: () => pendingSettled,
+    timelineEvents: timeline.events,
   };
 }

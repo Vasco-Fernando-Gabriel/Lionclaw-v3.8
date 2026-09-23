@@ -1,49 +1,3 @@
-/**
- * Development-v2 pipeline handlers (SPEC §3 / Sprint 8A.4).
- *
- * Houses the per-phase runners + conversational handlers that were inline in
- * `PipelineEngine` (index.ts) for the `development-v2` pipelineType. Moved
- * VERBATIM (mechanical move, not a rewrite) and reparameterized from `this.X` to
- * an injected `ctx: PipelineEngineContext` — the same late-bound `buildXEngine`
- * pattern as reset.ts / message-router.ts / lifecycle.ts and the 8A.1-8A.3
- * extractions. index.ts keeps a thin delegator method for each (so the existing
- * runAutoPhase / sendMessage / approvePhase dispatch via `this.runDevV2*` /
- * `this.handleDevV2*` is unchanged) and builds the ctx per call with bound
- * delegates.
- *
- * Methods housed here (bodies):
- *   - runPhase2WithBriefing          (phase 2, auto — User Stories with optional briefing)
- *   - runDevV2Phase4DesignPlan       (phase 4, auto — Design Plan -> open-design-prompt.md)
- *   - runDevV2Phase6DesignLock       (phase 6, auto — Design Lock gate + auto-correct loop)
- *   - runDevV2Phase7PrdCompleto      (phase 7, auto — PRD Completo, pipe2-prd-completo)
- *   - runDevV2Phase12SpecGeneration  (phase 12, auto loop — builder<->validator + spec-review entry)
- *   - runDevV2Phase14Planner         (phase 14, auto — Planner with design-contract IDs briefing)
- *   - handleDevV2Phase12SpecReview   (phase 12, conversation — pipe2-spec-validator review)
- *   - handlePhase1MessageDevV2       (phase 1, conversation — Discovery)
- *   - handlePhase3MessageDevV2       (phase 3, conversation — PRD Validator)
- *   - handleDevV2Phase13SpecEnricher (phase 13, conversation — pipe2-spec-enricher)
- *   - finalizeDevV2ConversationPhase (approval tail — flush metrics + advance/gate)
- *
- * `runDevV2AutoPhase` (pure if/else dispatch to the runners above) STAYS in
- * index.ts so every per-phase call remains late-bound through `this.runDevV2*`
- * (the dev-v2-phase12-gate + lifecycle characterization spy
- * `engine.runDevV2Phase6DesignLock` / `engine.runDevV2Phase12SpecGeneration`
- * directly on the instance).
- *
- * INVARIANTS PRESERVED
- *  - INV-2 (R8): every agent run goes through `ctx.spawnAgent` — the single
- *    executeAgent entry point in index.ts. No executeAgent here, no second copy.
- *  - INV-13 (SQL only in db.ts): the handlers route through updateHarnessProject /
- *    savePipelinePhaseMetrics / persistMessage / ctx.updateProjectColumns /
- *    ctx.flushAccumulatedMetrics exactly as they did inline; no new SQL.
- *  - INV-14 (loop delegates to HarnessEngine): runDevV2Phase14Planner delegates to
- *    ctx.runPhase11WithBriefing (the shared Planner runner), NOT spawnAgent.
- *  - INV-16 (spies): handleDevV2Phase12SpecReview / flushAccumulatedMetrics /
- *    advanceToNextPhase are reached via ctx (late-bound) so instance spies fire.
- *  - INV-1 (IPC): all pipeline:* emits are on the same channels with the same
- *    payloads, unchanged.
- */
-
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../../logger';
@@ -52,11 +6,7 @@ import { emitPipelineStream } from '../stream';
 import { persistMessage } from '../../pipeline-shared/persist';
 import { buildCodexResumePrompt } from '../codex-sessions';
 import { rethrowPipelinePause } from '../provider-auth';
-import {
-  getHarnessProject,
-  savePipelinePhaseMetrics,
-  updateHarnessProject,
-} from '../../db';
+import { getHarnessProject, savePipelinePhaseMetrics, updateHarnessProject } from '../../db';
 import { getPipelineDocsContext } from '../../pipeline-paths';
 import {
   DISCOVERY_AGENT_ID,
@@ -74,10 +24,6 @@ import type { PipelineEngineContext, HandlerPhaseState, ResolvedHarnessProject }
 
 const logger = createLogger('pipeline-engine');
 
-/**
- * Runs Phase 2 of development-v2 (User Stories/PRD) with an optional briefing.
- * Reuses the standard prd-generator agent.
- */
 export async function runPhase2WithBriefing(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -89,13 +35,15 @@ export async function runPhase2WithBriefing(
   if (!project) throw new Error(`Project not found: ${projectId}`);
 
   const docsCtx = getPipelineDocsContext(projectPath, project.pipelineDocsId ?? null);
-  const notesPath = project.discoveryNotesPath
-    || (docsCtx ? docsCtx.resolveDocPath('discovery.md') : path.join(projectPath, 'discovery-notes.md'));
+  const notesPath =
+    project.discoveryNotesPath ||
+    (docsCtx ? docsCtx.resolveDocPath('discovery.md') : path.join(projectPath, 'discovery-notes.md'));
   const storiesPath = docsCtx
     ? docsCtx.resolveDocPath('stories-requisitos.md')
     : path.join(projectPath, 'stories-requisitos.md');
 
-  let prompt = `Arquivo de discovery: ${notesPath}\n` +
+  let prompt =
+    `Arquivo de discovery: ${notesPath}\n` +
     `Gere o arquivo de user stories e requisitos em: ${storiesPath}\n\n` +
     `Leia o discovery, gere as user stories, requisitos funcionais e nao-funcionais. ` +
     `Salve o resultado em ${storiesPath}.`;
@@ -137,12 +85,6 @@ export async function runPhase2WithBriefing(
   await ctx.advanceToNextPhase(projectId, state);
 }
 
-/**
- * Phase 4 of development-v2: explicit Design Plan.
- *
- * Produces the official `open-design-prompt.md` consumed by phase 5. This is
- * intentionally not hidden inside the Open Design bootstrap.
- */
 export async function runDevV2Phase4DesignPlan(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -150,8 +92,9 @@ export async function runDevV2Phase4DesignPlan(
   state: HandlerPhaseState,
 ): Promise<void> {
   const docsCtx = getPipelineDocsContext(project.projectPath, project.pipelineDocsId ?? null);
-  const discoveryPath = project.discoveryNotesPath
-    || (docsCtx ? docsCtx.resolveDocPath('discovery.md') : path.join(project.projectPath, 'discovery-notes.md'));
+  const discoveryPath =
+    project.discoveryNotesPath ||
+    (docsCtx ? docsCtx.resolveDocPath('discovery.md') : path.join(project.projectPath, 'discovery-notes.md'));
   const storiesPath = docsCtx
     ? docsCtx.resolveDocPath('stories-requisitos.md')
     : path.join(project.projectPath, 'stories-requisitos.md');
@@ -175,11 +118,8 @@ export async function runDevV2Phase4DesignPlan(
   });
 
   const { ensureDesignPlan } = await import('../../open-design/design-plan');
-  const {
-    buildInitialPrompt,
-    persistOpenDesignPromptMessage,
-    persistOpenDesignPromptOutput,
-  } = await import('../../open-design/bootstrap');
+  const { buildInitialPrompt, persistOpenDesignPromptMessage, persistOpenDesignPromptOutput } =
+    await import('../../open-design/bootstrap');
   const { getSessionConfig } = await import('../../open-design/session-config');
 
   const planResult = await ensureDesignPlan({
@@ -238,23 +178,14 @@ export async function runDevV2Phase4DesignPlan(
   await ctx.advanceToNextPhase(projectId, state);
 }
 
-/**
- * Phase 6 of development-v2: Design Lock gate (Sprint 5).
- */
 export async function runDevV2Phase6DesignLock(
   ctx: PipelineEngineContext,
   projectId: string,
   state: HandlerPhaseState,
 ): Promise<void> {
-  // import lazily to avoid potential circular dependency in tests
   const { lock } = await import('../../open-design/lock');
-  const { requestAgentCorrection, waitForAgentCorrection } = await import(
-    '../../open-design/auto-correct'
-  );
+  const { requestAgentCorrection, waitForAgentCorrection } = await import('../../open-design/auto-correct');
 
-  // Quantas tentativas de auto-correcao antes de mostrar o banner ambar
-  // ao usuario. 3 cobre os erros mais comuns sem segurar a UI indefinidamente
-  // (cada tentativa eh ~30-90s do agente regenerando + lock revalidando).
   const MAX_ATTEMPTS = 3;
 
   let lastResult: Awaited<ReturnType<typeof lock>> | null = null;
@@ -273,8 +204,6 @@ export async function runDevV2Phase6DesignLock(
     const result = await lock(projectId);
     lastResult = result;
 
-    // Hard error (ex: snapshot falhou, runDir ausente) — nao tenta corrigir
-    // via agente; sai pro caminho de falha permanente.
     if ('error' in result) {
       logger.error(
         { projectId, error: result.error, attempt },
@@ -287,11 +216,6 @@ export async function runDevV2Phase6DesignLock(
         status: 'failed',
         completedAt: new Date().toISOString(),
       });
-      // Sprint 7 (SPEC §4.5 / LC-1 / D3 / INV-5): FAIL-site #4 (dev-v2 Design
-      // Lock hard error). The ONLY fail-site with a COMPOSITE statusUpdate
-      // (updateProjectColumns({status:'paused', pipelineCurrentPhase:6}) — D3),
-      // the ONLY one that emits stream {done}, the ONLY one that omits
-      // pipeline:error, and the ONLY one that does NOT set state.status.
       ctx.failPhase(projectId, state, {
         phase: 6,
         phaseName: 'Design Lock',
@@ -304,10 +228,8 @@ export async function runDevV2Phase6DesignLock(
       return;
     }
 
-    // Aprovado — sai do loop e segue pro caminho de sucesso abaixo.
     if (result.ok) break;
 
-    // Rejeitado pelo validator. Tenta auto-correcao via agente OD.
     const reportProblems = result.report.problems;
     logger.info(
       { projectId, attempt, problemCount: reportProblems.length },
@@ -320,13 +242,8 @@ export async function runDevV2Phase6DesignLock(
       content: `[Design Lock] Rejeitado (${reportProblems.length} pendencia${reportProblems.length === 1 ? '' : 's'}). Pedindo correcao automatica ao agente do Open Design...`,
     });
 
-    // Ultima tentativa: nao despacha mais correcao — deixa o erro escalar
-    // pro banner ambar (que vem do emit do proprio lock.ts).
     if (attempt === MAX_ATTEMPTS) {
-      logger.warn(
-        { projectId, attempt },
-        'runDevV2Phase6DesignLock: max attempts reached — surrendering to user',
-      );
+      logger.warn({ projectId, attempt }, 'runDevV2Phase6DesignLock: max attempts reached — surrendering to user');
       emitPipelineStream({ projectId, phase: 6, type: 'done' });
       state.currentPhase = 5;
       state.status = 'running';
@@ -356,15 +273,12 @@ export async function runDevV2Phase6DesignLock(
     // Volta pro topo do loop e tenta novo `lock(projectId)`.
   }
 
-  // Sucesso: precisa ser LockResult (ok: true).
   if (!lastResult || !('ok' in lastResult) || lastResult.ok !== true) {
-    // Defensive — chegamos aqui sem aprovacao mas tambem sem erro. Trata como rejection final.
     state.currentPhase = 5;
     state.status = 'running';
     return;
   }
 
-  // Lock approved — record metrics and advance to phase 7
   logger.info({ projectId }, 'runDevV2Phase6DesignLock: lock approved, advancing to phase 7');
 
   savePipelinePhaseMetrics({
@@ -387,9 +301,6 @@ export async function runDevV2Phase6DesignLock(
   await ctx.advanceToNextPhase(projectId, state);
 }
 
-/**
- * Phase 7 of development-v2: PRD Completo using pipe2-prd-completo agent.
- */
 export async function runDevV2Phase7PrdCompleto(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -400,9 +311,7 @@ export async function runDevV2Phase7PrdCompleto(
   const storiesPath = docsCtx
     ? docsCtx.resolveDocPath('stories-requisitos.md')
     : path.join(project.projectPath, 'stories-requisitos.md');
-  const prdPath = docsCtx
-    ? docsCtx.resolveDocPath('PRD.md')
-    : path.join(project.projectPath, 'PRD.md');
+  const prdPath = docsCtx ? docsCtx.resolveDocPath('PRD.md') : path.join(project.projectPath, 'PRD.md');
 
   const basePrompt =
     `Stories/Requisitos: ${storiesPath}\n` +
@@ -449,17 +358,6 @@ export async function runDevV2Phase7PrdCompleto(
   await ctx.advanceToNextPhase(projectId, state);
 }
 
-/**
- * Phase 12 of development-v2: SPEC Generation.
- *
- * Espelha runPhase9 (dev/feature): loop builder -> validator (max 3 rounds)
- * e, ao terminar, entra em revisao conversacional (status awaiting-spec-review)
- * na MESMA fase 12, com o pipe2-spec-validator. Sem renumeracao e sem fase nova.
- *
- * INVARIANTE (R6 ADR / SPEC-007 2.1.1): usa PIPE2_SPEC_VALIDATOR_ID (validator
- * DEDICADO do dev-v2 que valida a SPEC contra o contrato de design/frontend) —
- * NUNCA o SPEC_VALIDATOR_ID compartilhado.
- */
 export async function runDevV2Phase12SpecGeneration(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -467,23 +365,18 @@ export async function runDevV2Phase12SpecGeneration(
   state: HandlerPhaseState,
 ): Promise<void> {
   const docsCtx = getPipelineDocsContext(project.projectPath, project.pipelineDocsId ?? null);
-  const prdPath = docsCtx
-    ? docsCtx.resolveDocPath('PRD.md')
-    : path.join(project.projectPath, 'PRD.md');
+  const prdPath = docsCtx ? docsCtx.resolveDocPath('PRD.md') : path.join(project.projectPath, 'PRD.md');
   const storiesPath = docsCtx
     ? docsCtx.resolveDocPath('stories-requisitos.md')
     : path.join(project.projectPath, 'stories-requisitos.md');
-  const specPath = project.specPath
-    || (docsCtx ? docsCtx.resolveDocPath('SPEC.md') : path.join(project.projectPath, 'SPEC.md'));
+  const specPath =
+    project.specPath || (docsCtx ? docsCtx.resolveDocPath('SPEC.md') : path.join(project.projectPath, 'SPEC.md'));
   const validationReportPath = docsCtx
     ? docsCtx.resolveDocPath('spec-validation.md')
     : path.join(project.projectPath, '.spec-validation-report.md');
 
   const phaseName = getPhaseName(12, project) ?? 'Spec Generation';
 
-  // Bloco de paths do design lock — prefixa builder E validator (SPEC-007 5.3,
-  // Correcao #1). Computado UMA vez. Sem ele, o validator do loop nao valida a
-  // SPEC contra o contrato de design (criterio de aceite #3).
   const lockBlock = ctx.buildDesignLockPathsBlock(project);
   const withLock = (p: string): string => (lockBlock ? `${lockBlock}\n\n${p}` : p);
 
@@ -523,7 +416,6 @@ export async function runDevV2Phase12SpecGeneration(
         metadata: { round, maxRounds: MAX_ROUNDS },
       });
 
-      // --- Spec Builder ---
       let builderPrompt: string;
       if (round === 1) {
         builderPrompt =
@@ -557,7 +449,11 @@ export async function runDevV2Phase12SpecGeneration(
         onText: (chunk) => {
           builderOutput += chunk;
           emitPipelineStream({
-            projectId, phase: 12, type: 'text', content: chunk, metadata: { agent: 'pipe2-spec-builder', round },
+            projectId,
+            phase: 12,
+            type: 'text',
+            content: chunk,
+            metadata: { agent: 'pipe2-spec-builder', round },
           });
         },
         onToolUse: (toolName) => {
@@ -581,7 +477,6 @@ export async function runDevV2Phase12SpecGeneration(
 
       if (state.abortController.signal.aborted) break;
 
-      // --- Spec Validator (DEDICADO: PIPE2_SPEC_VALIDATOR_ID) ---
       emitIPC('pipeline:phase-changed', {
         projectId,
         phase: 12,
@@ -609,7 +504,11 @@ export async function runDevV2Phase12SpecGeneration(
         onText: (chunk) => {
           validatorOutput += chunk;
           emitPipelineStream({
-            projectId, phase: 12, type: 'text', content: chunk, metadata: { agent: 'pipe2-spec-validator', round },
+            projectId,
+            phase: 12,
+            type: 'text',
+            content: chunk,
+            metadata: { agent: 'pipe2-spec-validator', round },
           });
         },
         onToolUse: (toolName) => {
@@ -623,7 +522,6 @@ export async function runDevV2Phase12SpecGeneration(
 
       ctx.accumulateMetrics(state, 121, validatorResult);
 
-      // Check validation result
       const validationReport = fs.existsSync(validationReportPath)
         ? fs.readFileSync(validationReportPath, 'utf-8')
         : '';
@@ -650,8 +548,6 @@ export async function runDevV2Phase12SpecGeneration(
     logger.error({ projectId, error: lastError }, '[dev-v2] Phase 12 failed — pausing pipeline');
     ctx.flushAccumulatedMetrics(projectId, 12, PIPE2_SPEC_BUILDER_ID, state, 'failed', project);
     ctx.flushAccumulatedMetrics(projectId, 121, PIPE2_SPEC_VALIDATOR_ID, state, 'failed', project);
-    // Sprint 7 (SPEC §4.5 / LC-1): FAIL-site #5 (dev-v2 Phase 12). Pure-paused +
-    // error + phase-changed:failed; no stream done; sets state.status.
     ctx.failPhase(projectId, state, {
       phase: 12,
       phaseName,
@@ -665,14 +561,10 @@ export async function runDevV2Phase12SpecGeneration(
     return;
   }
 
-  // Persist specPath in DB now that the builder has written it.
   updateHarnessProject(projectId, { specPath });
 
   emitPipelineStream({ projectId, phase: 12, type: 'done' });
 
-  // After the auto loop, enter conversational review (MESMA fase 12) with the
-  // dedicated validator. Metrics for builder (12) and validator (121) stay in
-  // the accumulator and are flushed on approval by finalizeDevV2ConversationPhase.
   logger.info({ projectId, passed }, '[dev-v2] Phase 12 auto loop complete — entering spec review conversation');
 
   emitIPC('pipeline:phase-changed', {
@@ -684,7 +576,6 @@ export async function runDevV2Phase12SpecGeneration(
     metadata: { passed },
   });
 
-  // Auto-trigger the validator greeting so it presents its analysis.
   const greetingProject = getHarnessProject(projectId);
   const greetingMsg =
     `Projeto "${greetingProject?.name ?? projectId}". ` +
@@ -702,11 +593,6 @@ export async function runDevV2Phase12SpecGeneration(
   }
 }
 
-/**
- * Phase 12 of development-v2 (conversational review): continues the
- * pipe2-spec-validator session opened after the auto loop. Espelha
- * handlePhase9Message adaptado para o validator DEDICADO do dev-v2.
- */
 export async function handleDevV2Phase12SpecReview(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -724,11 +610,9 @@ export async function handleDevV2Phase12SpecReview(
   }
 
   const docsCtx = getPipelineDocsContext(project.projectPath, project.pipelineDocsId ?? null);
-  const specPath = project.specPath
-    || (docsCtx ? docsCtx.resolveDocPath('SPEC.md') : path.join(project.projectPath, 'SPEC.md'));
-  const prdPath = docsCtx
-    ? docsCtx.resolveDocPath('PRD.md')
-    : path.join(project.projectPath, 'PRD.md');
+  const specPath =
+    project.specPath || (docsCtx ? docsCtx.resolveDocPath('SPEC.md') : path.join(project.projectPath, 'SPEC.md'));
+  const prdPath = docsCtx ? docsCtx.resolveDocPath('PRD.md') : path.join(project.projectPath, 'PRD.md');
   const storiesPath = docsCtx
     ? docsCtx.resolveDocPath('stories-requisitos.md')
     : path.join(project.projectPath, 'stories-requisitos.md');
@@ -738,9 +622,7 @@ export async function handleDevV2Phase12SpecReview(
 
   const isFirstTurn = !sessionEntry.alive;
 
-  const previousSpecContent = fs.existsSync(specPath)
-    ? fs.readFileSync(specPath, 'utf-8')
-    : '';
+  const previousSpecContent = fs.existsSync(specPath) ? fs.readFileSync(specPath, 'utf-8') : '';
 
   let prompt: string;
   if (isFirstTurn) {
@@ -750,7 +632,9 @@ export async function handleDevV2Phase12SpecReview(
       `## SPEC.md\nCaminho: ${specPath}\n\n` +
       `## PRD de referencia\nCaminho: ${prdPath}\n\n` +
       (fs.existsSync(storiesPath) ? `## User Stories de referencia\nCaminho: ${storiesPath}\n\n` : '') +
-      (fs.existsSync(validationReportPath) ? `## Relatorio de validacao automatica\nCaminho: ${validationReportPath}\n\n` : '') +
+      (fs.existsSync(validationReportPath)
+        ? `## Relatorio de validacao automatica\nCaminho: ${validationReportPath}\n\n`
+        : '') +
       `## Instrucao importante\n` +
       `Voce e o Spec Validator. Leia os arquivos acima (incluindo o contrato de design), ` +
       `apresente um resumo da SPEC.md e aponte pontos fortes e ressalvas do relatorio de validacao. ` +
@@ -758,7 +642,6 @@ export async function handleDevV2Phase12SpecReview(
       `Quando o usuario estiver satisfeito ele clicara em Aprovar para avancar.\n\n` +
       `## Mensagem do usuario\n${message}`;
   } else {
-    // Follow-up turns: just the user message (agent has full context from session)
     prompt = message;
   }
 
@@ -770,7 +653,6 @@ export async function handleDevV2Phase12SpecReview(
     abortController: state.abortController,
     continueSession: sessionEntry.alive,
     docsDir: docsCtx?.docsDir,
-    // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
     rebuildPromptOnRetry: () => {
       const lockBlock = ctx.buildDesignLockPathsBlock(project);
       return buildCodexResumePrompt({
@@ -780,7 +662,9 @@ export async function handleDevV2Phase12SpecReview(
           (lockBlock ? `${lockBlock}\n\n` : '') +
           `## SPEC.md\nCaminho: ${specPath}\n\n` +
           `## PRD de referencia\nCaminho: ${prdPath}\n\n` +
-          (fs.existsSync(validationReportPath) ? `## Relatorio de validacao automatica\nCaminho: ${validationReportPath}\n\n` : '') +
+          (fs.existsSync(validationReportPath)
+            ? `## Relatorio de validacao automatica\nCaminho: ${validationReportPath}\n\n`
+            : '') +
           `## Instrucao importante\n` +
           `Voce e o Spec Validator. Se o usuario pedir ajustes, edite ${specPath} diretamente usando Edit. ` +
           `Quando o usuario estiver satisfeito ele clicara em Aprovar para avancar.`,
@@ -815,15 +699,6 @@ export async function handleDevV2Phase12SpecReview(
   emitPipelineStream({ projectId, phase: 12, type: 'done' });
 }
 
-/**
- * Phase 14 of development-v2: Planner with DevelopmentV2SprintMetadata briefing.
- *
- * Reads the locked design-contract.json (if available) to extract screenIds and
- * componentIds, builds the dev-v2 planner briefing, then delegates to runPhase11
- * (which calls harnessEngine.plan with the briefing).
- *
- * Per Sprint 6 task 6.4 and SPEC L946-974.
- */
 export async function runDevV2Phase14Planner(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -833,7 +708,6 @@ export async function runDevV2Phase14Planner(
   let screenIds: string[] = [];
   let componentIds: string[] = [];
 
-  // Try to read the locked design contract to extract IDs for the planner briefing.
   const contractPath = project.config?.openDesign?.contractPath;
   if (contractPath) {
     try {
@@ -844,10 +718,16 @@ export async function runDevV2Phase14Planner(
         screenIds = contractParsed.screens.map((s) => s.id);
         componentIds = contractParsed.components.map((c) => c.id);
       } else {
-        logger.warn({ projectId, contractPath }, 'runDevV2Phase14Planner: design contract failed validation, proceeding without IDs');
+        logger.warn(
+          { projectId, contractPath },
+          'runDevV2Phase14Planner: design contract failed validation, proceeding without IDs',
+        );
       }
     } catch (err) {
-      logger.warn({ projectId, contractPath, err }, 'runDevV2Phase14Planner: could not read design contract, proceeding without IDs');
+      logger.warn(
+        { projectId, contractPath, err },
+        'runDevV2Phase14Planner: could not read design contract, proceeding without IDs',
+      );
     }
   } else {
     logger.info({ projectId }, 'runDevV2Phase14Planner: no contractPath in openDesign config, proceeding without IDs');
@@ -856,13 +736,9 @@ export async function runDevV2Phase14Planner(
   const briefingCtx: DevV2BriefingCtx = { screenIds, componentIds };
   const plannerBriefing = getDevV2Briefing('harness-planner', briefingCtx);
 
-  // Delegate to the shared planner runner with the briefing.
   await ctx.runPhase11WithBriefing(projectId, state, plannerBriefing);
 }
 
-/**
- * Phase 1 of development-v2: Discovery conversation (reuses discovery-agent with optional briefing).
- */
 export async function handlePhase1MessageDevV2(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -881,13 +757,12 @@ export async function handlePhase1MessageDevV2(
   }
 
   const docsCtx = getPipelineDocsContext(project.projectPath, project.pipelineDocsId ?? null);
-  const notesPath = project.discoveryNotesPath
-    || (docsCtx ? docsCtx.resolveDocPath('discovery.md') : path.join(project.projectPath, 'discovery-notes.md'));
+  const notesPath =
+    project.discoveryNotesPath ||
+    (docsCtx ? docsCtx.resolveDocPath('discovery.md') : path.join(project.projectPath, 'discovery-notes.md'));
   const isFirstTurn = !sessionEntry.alive;
 
-  let prompt = isFirstTurn
-    ? `Arquivo de notas do discovery: ${notesPath}\n\nMensagem do usuario: ${message}`
-    : message;
+  let prompt = isFirstTurn ? `Arquivo de notas do discovery: ${notesPath}\n\nMensagem do usuario: ${message}` : message;
   if (briefing && isFirstTurn) {
     prompt = `${briefing}\n\n${prompt}`;
   }
@@ -900,14 +775,11 @@ export async function handlePhase1MessageDevV2(
     abortController: state.abortController,
     continueSession: sessionEntry.alive,
     docsDir: docsCtx?.docsDir,
-    // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
     rebuildPromptOnRetry: () =>
       buildCodexResumePrompt({
         projectId,
         phaseNumber: 1,
-        preamble:
-          (briefing ? `${briefing}\n\n` : '') +
-          `Arquivo de notas do discovery: ${notesPath}`,
+        preamble: (briefing ? `${briefing}\n\n` : '') + `Arquivo de notas do discovery: ${notesPath}`,
         userMessage: message,
       }),
     onText: ctx.makeConversationOnText(projectId, 1, acc),
@@ -927,9 +799,6 @@ export async function handlePhase1MessageDevV2(
   emitPipelineStream({ projectId, phase: 1, type: 'done' });
 }
 
-/**
- * Phase 3 of development-v2: PRD Validator conversation (reuses prd-validator with optional briefing).
- */
 export async function handlePhase3MessageDevV2(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -953,9 +822,7 @@ export async function handlePhase3MessageDevV2(
     : path.join(project.projectPath, 'stories-requisitos.md');
   const isFirstTurn = !sessionEntry.alive;
 
-  let prompt = isFirstTurn
-    ? `User stories e requisitos: ${storiesPath}\n\nMensagem do usuario: ${message}`
-    : message;
+  let prompt = isFirstTurn ? `User stories e requisitos: ${storiesPath}\n\nMensagem do usuario: ${message}` : message;
   if (briefing && isFirstTurn) {
     prompt = `${briefing}\n\n${prompt}`;
   }
@@ -968,14 +835,11 @@ export async function handlePhase3MessageDevV2(
     abortController: state.abortController,
     continueSession: sessionEntry.alive,
     docsDir: docsCtx?.docsDir,
-    // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
     rebuildPromptOnRetry: () =>
       buildCodexResumePrompt({
         projectId,
         phaseNumber: 3,
-        preamble:
-          (briefing ? `${briefing}\n\n` : '') +
-          `User stories e requisitos: ${storiesPath}`,
+        preamble: (briefing ? `${briefing}\n\n` : '') + `User stories e requisitos: ${storiesPath}`,
         userMessage: message,
       }),
     onText: ctx.makeConversationOnText(projectId, 3, acc),
@@ -995,9 +859,6 @@ export async function handlePhase3MessageDevV2(
   emitPipelineStream({ projectId, phase: 3, type: 'done' });
 }
 
-/**
- * Phase 13 of development-v2: Spec Enricher conversation using pipe2-spec-enricher.
- */
 export async function handleDevV2Phase13SpecEnricher(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -1015,13 +876,11 @@ export async function handleDevV2Phase13SpecEnricher(
   }
 
   const docsCtx = getPipelineDocsContext(project.projectPath, project.pipelineDocsId ?? null);
-  const specPath = project.specPath
-    || (docsCtx ? docsCtx.resolveDocPath('SPEC.md') : path.join(project.projectPath, 'SPEC.md'));
+  const specPath =
+    project.specPath || (docsCtx ? docsCtx.resolveDocPath('SPEC.md') : path.join(project.projectPath, 'SPEC.md'));
   const isFirstTurn = !sessionEntry.alive;
 
-  const prompt = isFirstTurn
-    ? `SPEC: ${specPath}\n\nMensagem do usuario: ${message}`
-    : message;
+  const prompt = isFirstTurn ? `SPEC: ${specPath}\n\nMensagem do usuario: ${message}` : message;
 
   const acc = { text: '', completed: false };
   const result = await ctx.spawnAgent(PIPE2_SPEC_ENRICHER_ID, prompt, {
@@ -1031,7 +890,6 @@ export async function handleDevV2Phase13SpecEnricher(
     abortController: state.abortController,
     continueSession: sessionEntry.alive,
     docsDir: docsCtx?.docsDir,
-    // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
     rebuildPromptOnRetry: () =>
       buildCodexResumePrompt({
         projectId,
@@ -1056,9 +914,6 @@ export async function handleDevV2Phase13SpecEnricher(
   emitPipelineStream({ projectId, phase: 13, type: 'done' });
 }
 
-/**
- * Finalizes a development-v2 conversation phase approval and advances.
- */
 export async function finalizeDevV2ConversationPhase(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -1067,26 +922,12 @@ export async function finalizeDevV2ConversationPhase(
   project: ResolvedHarnessProject,
 ): Promise<void> {
   const phaseName = getPhaseName(phase, project) ?? `Phase ${phase}`;
-  // Gate humano "Iniciar Desenvolvimento" antes do loop Coder: resolve a fase
-  // do Sprint Validator DINAMICAMENTE (nao hardcodar numero). A renumeracao
-  // +1 (insercao do Design Plan na fase 4) moveu o Sprint Validator de 14->15;
-  // hardcodar `phase === 14` apontava para o Planner (auto) e pulava o gate.
-  // Mesmo helper/padrao usado em confirmStartDevelopment.
   const sprintValidatorPhase = getPhaseNumberForAgent(project, 'sprint-validator');
-  const isSprintValidatorPhase =
-    sprintValidatorPhase !== undefined && phase === sprintValidatorPhase;
+  const isSprintValidatorPhase = sprintValidatorPhase !== undefined && phase === sprintValidatorPhase;
 
-  // Salva metrica acumulada da fase conversation no DB. Sem isso, as fases
-  // conversacionais do dev-v2 (1, 3, 5, 8, 9, 10, 11, 13, 15) nunca apareciam
-  // como `completed` na tabela `pipeline_phase_metrics`, e o UI mostrava as
-  // fases sem historico (cinza pendente) ao reabrir o projeto. Equivalente ao
-  // que `finalizeConversationPhase` faz para os outros pipelines.
   const agentId = getPhaseAgentId(phase, project) ?? 'unknown';
   ctx.flushAccumulatedMetrics(projectId, phase, agentId, state, 'completed', project);
 
-  // Fase 12 (Spec Generation) acumula metricas do validator sob a sub-linha
-  // 121 (analogo ao 91 da fase 9 em finalizeConversationPhase). Sem este flush
-  // adicional as metricas do pipe2-spec-validator seriam perdidas (SPEC-007 5.6).
   if (phase === 12) {
     ctx.flushAccumulatedMetrics(projectId, 121, PIPE2_SPEC_VALIDATOR_ID, state, 'completed', project, true);
   }

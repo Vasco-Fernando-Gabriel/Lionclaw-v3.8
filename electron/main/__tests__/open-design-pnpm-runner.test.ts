@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-
 vi.mock('../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
@@ -131,25 +130,20 @@ describe('open-design/pnpm-runner', () => {
     const sourceText = (() => {
       const fs = require('fs') as typeof import('fs');
       const p = require('path') as typeof import('path');
-      return fs.readFileSync(
-        p.resolve(__dirname, '..', 'open-design', 'pnpm-runner.ts'),
-        'utf-8',
-      );
+      return fs.readFileSync(p.resolve(__dirname, '..', 'open-design', 'pnpm-runner.ts'), 'utf-8');
     })();
 
     it('source exports `findBinInPath` helper used by the shim writer', () => {
       expect(sourceText).toMatch(/function findBinInPath\(/);
     });
 
-    it('shim writer branches on `cached.kind === \'pnpm\'` to resolve absolute path', () => {
+    it("shim writer branches on `cached.kind === 'pnpm'` to resolve absolute path", () => {
       expect(sourceText).toMatch(/cached\.kind === 'pnpm'/);
       expect(sourceText).toMatch(/findBinInPath\(['"]pnpm['"]/);
     });
 
     it('shim writer NEVER builds the recursive `exec pnpm` body for the direct branch', () => {
-      const directBranchMatch = sourceText.match(
-        /cached\.kind === 'pnpm'[\s\S]*?cmdParts =[\s\S]*?(?=\n\s*\}\s*else)/,
-      );
+      const directBranchMatch = sourceText.match(/cached\.kind === 'pnpm'[\s\S]*?cmdParts =[\s\S]*?(?=\n\s*\}\s*else)/);
       expect(directBranchMatch).not.toBeNull();
       if (directBranchMatch) {
         expect(directBranchMatch[0]).toMatch(/quoted\(realPnpm\)/);

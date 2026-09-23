@@ -48,9 +48,12 @@ export async function processAgentStream(
   callbacks: StreamCallbacks,
 ): Promise<StreamProcessorResult> {
   const metrics: StreamMetrics = {
-    inputTokens: 0, outputTokens: 0,
-    cacheReadTokens: 0, cacheCreationTokens: 0,
-    toolUses: 0, apiRequests: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    toolUses: 0,
+    apiRequests: 0,
   };
   let output = '';
   let accumulatedText = '';
@@ -112,8 +115,7 @@ export async function processAgentStream(
           accumulatedText += text;
           currentBlock += text;
           callbacks.onText?.(text);
-        }
-        else if (delta.type === 'thinking_delta') callbacks.onThinking?.(delta.thinking as string);
+        } else if (delta.type === 'thinking_delta') callbacks.onThinking?.(delta.thinking as string);
         else if (delta.type === 'input_json_delta') {
           const partial = delta.partial_json as string;
           if (partial) currentToolInputJson += partial;
@@ -127,11 +129,7 @@ export async function processAgentStream(
           currentToolName = block.name as string;
           currentToolInputJson = '';
           const initialInput = block.input;
-          if (
-            initialInput &&
-            typeof initialInput === 'object' &&
-            Object.keys(initialInput as object).length > 0
-          ) {
+          if (initialInput && typeof initialInput === 'object' && Object.keys(initialInput as object).length > 0) {
             currentToolInputJson = JSON.stringify(initialInput);
           }
           callbacks.onToolUse?.(block.name as string);
@@ -159,8 +157,7 @@ export async function processAgentStream(
               }
             }
           }
-          const mappedToolName =
-            deriveMcpGatewayDisplayName(currentToolName, parsedInput) ?? currentToolName;
+          const mappedToolName = deriveMcpGatewayDisplayName(currentToolName, parsedInput) ?? currentToolName;
           callbacks.onToolUseComplete?.(mappedToolName, parsedInput);
           currentToolName = null;
           currentToolInputJson = '';
@@ -171,10 +168,7 @@ export async function processAgentStream(
         metrics.apiRequests++;
         const msgData = event.message as Record<string, unknown> | undefined;
         const rawId = msgData?.['id'];
-        const reliableId =
-          typeof rawId === 'string' && rawId.length > 0 && !startClaimedIds.has(rawId)
-            ? rawId
-            : null;
+        const reliableId = typeof rawId === 'string' && rawId.length > 0 && !startClaimedIds.has(rawId) ? rawId : null;
         if (reliableId !== null) startClaimedIds.add(reliableId);
         currentRequestKey = reliableId ?? `synthetic:start:${++syntheticSeq}`;
         entryFor(currentRequestKey);
@@ -207,9 +201,7 @@ export async function processAgentStream(
     }
 
     if ((msg as { type: string }).type === 'assistant') {
-      const message = (msg as Record<string, unknown>)['message'] as
-        | Record<string, unknown>
-        | undefined;
+      const message = (msg as Record<string, unknown>)['message'] as Record<string, unknown> | undefined;
       const usage = message?.['usage'] as Record<string, number> | undefined;
       if (usage) {
         const rawId = message?.['id'];
@@ -255,9 +247,7 @@ export async function processAgentStream(
           if (!u || typeof u !== 'object') continue;
           const fields = u as Record<string, unknown>;
           const num = (k: string): number =>
-            typeof fields[k] === 'number' && Number.isFinite(fields[k] as number)
-              ? (fields[k] as number)
-              : 0;
+            typeof fields[k] === 'number' && Number.isFinite(fields[k] as number) ? (fields[k] as number) : 0;
           parsed[model] = {
             inputTokens: num('inputTokens'),
             outputTokens: num('outputTokens'),

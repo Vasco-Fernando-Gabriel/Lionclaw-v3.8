@@ -1,27 +1,10 @@
 import { useEffect, useState } from 'react';
-import {
-  AlertTriangle,
-  PlayCircle,
-  Clock,
-  UserCog,
-  Square,
-  LifeBuoy,
-  RotateCcw,
-  KeyRound,
-} from 'lucide-react';
+import { AlertTriangle, PlayCircle, Clock, UserCog, Square, LifeBuoy, RotateCcw, KeyRound } from 'lucide-react';
 import type { DynamicWorkflowRun, DynamicWorkflowSnapshot } from '@/types';
 import { translateLlmError } from '@/utils/translate-llm-error';
 
-
 export type RecoveryScenario =
-  | 'stall'
-  | 'provider-limit'
-  | 'provider-auth'
-  | 'policy-changed'
-  | 'interrupted'
-  | 'failed'
-  | 'node-failed'
-  | 'none';
+  'stall' | 'provider-limit' | 'provider-auth' | 'policy-changed' | 'interrupted' | 'failed' | 'node-failed' | 'none';
 
 const PROVIDER_FAILURE_CLASSES = ['provider-limit', 'provider-error', 'timeout'];
 
@@ -73,9 +56,7 @@ export function deriveRecoveryView(
     return {
       scenario: 'node-failed',
       title: 'Bloqueado por infra (inconclusivo)',
-      reason:
-        infoPd.prompt ??
-        'Os checks nao produziram veredito (toolchain/infra). Conserte o ambiente e retome.',
+      reason: infoPd.prompt ?? 'Os checks nao produziram veredito (toolchain/infra). Conserte o ambiente e retome.',
       nodeId: infoPd.nodeId ?? null,
     };
   }
@@ -95,7 +76,8 @@ export function deriveRecoveryView(
       return {
         scenario: 'provider-auth',
         title: 'Autenticacao caiu',
-        reason: pd.prompt ?? 'A credencial do provedor expirou. Reconecte em Settings > Provedores e clique em Retomar.',
+        reason:
+          pd.prompt ?? 'A credencial do provedor expirou. Reconecte em Settings > Provedores e clique em Retomar.',
         nodeId: pd.nodeId ?? null,
       };
     }
@@ -108,9 +90,7 @@ export function deriveRecoveryView(
           (fc === 'schema'
             ? 'O node nao produziu saida no formato esperado (schema). Ajuste e re-execute a rodada (Resetar node/rodada) ou resolva com agente.'
             : `O node falhou no proprio trabalho (${fc}), nao e limite de provedor. Ajuste o escopo/plano e re-execute a rodada (Resetar node/rodada) ou resolva com agente.`) +
-          (pd?.nodeError ?? snapPd?.nodeError
-            ? `\n\nErro do node: ${pd?.nodeError ?? snapPd?.nodeError}`
-            : ''),
+          ((pd?.nodeError ?? snapPd?.nodeError) ? `\n\nErro do node: ${pd?.nodeError ?? snapPd?.nodeError}` : ''),
         nodeId: pd?.nodeId ?? snapPd?.nodeId ?? null,
       };
     }
@@ -130,7 +110,8 @@ export function deriveRecoveryView(
     return {
       scenario: 'interrupted',
       title: 'Interrompido',
-      reason: 'O run foi interrompido (queda do app ou pausa). Retomar de onde parou; o progresso foi preservado (WIP commit).',
+      reason:
+        'O run foi interrompido (queda do app ou pausa). Retomar de onde parou; o progresso foi preservado (WIP commit).',
       nodeId: run.currentNodeId ?? null,
     };
   }
@@ -171,7 +152,6 @@ export function deriveRecoveryView(
   return none;
 }
 
-
 export function formatCountdown(atIso: string | null, nowMs: number): string | null {
   if (!atIso) return null;
   const at = Date.parse(atIso);
@@ -184,7 +164,6 @@ export function formatCountdown(atIso: string | null, nowMs: number): string | n
   if (min > 0) return `${min}min${sec > 0 ? ` ${sec}s` : ''}`;
   return `${sec}s`;
 }
-
 
 export interface RecoveryBannerProps {
   run: DynamicWorkflowRun | null;
@@ -237,9 +216,7 @@ export function RecoveryBanner({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-[12px] font-semibold text-amber-200">{view.title}</span>
-            {view.nodeId && (
-              <span className="font-mono text-[10px] text-amber-300/70">[{view.nodeId}]</span>
-            )}
+            {view.nodeId && <span className="font-mono text-[10px] text-amber-300/70">[{view.nodeId}]</span>}
             {countdown && (
               <span
                 className="rounded-md border border-amber-500/40 px-1.5 py-0.5 font-mono text-[10px] text-amber-300"
@@ -307,8 +284,7 @@ export function RecoveryBanner({
             requestReplan scope:node faz sentido (re-executa a rodada do node que
             falhou por trabalho). Num failed estrutural pre-node o currentNodeId
             costuma ser null e o reset cairia num no-op (botao morto) - removido. */}
-        {(view.scenario === 'interrupted' || view.scenario === 'node-failed') &&
-          view.nodeId && (
+        {(view.scenario === 'interrupted' || view.scenario === 'node-failed') && view.nodeId && (
           <RecoveryButton
             onClick={() => onResetNode(view.nodeId)}
             icon={<RotateCcw size={12} />}

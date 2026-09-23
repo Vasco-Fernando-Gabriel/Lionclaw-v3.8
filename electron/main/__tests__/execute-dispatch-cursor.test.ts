@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -36,17 +35,27 @@ const runSpies = {
   cursor: vi.fn(),
 };
 
-vi.mock('../agent-runtime/cloud-executor', () => ({ cloudExecutor: { run: (...a: unknown[]) => runSpies.cloud(...a) } }));
-vi.mock('../agent-runtime/local-executor', () => ({ localExecutor: { run: (...a: unknown[]) => runSpies.local(...a) } }));
-vi.mock('../agent-runtime/external-executor', () => ({ externalExecutor: { run: (...a: unknown[]) => runSpies.external(...a) } }));
-vi.mock('../agent-runtime/codex-executor', () => ({ codexExecutor: { run: (...a: unknown[]) => runSpies.codex(...a) } }));
+vi.mock('../agent-runtime/cloud-executor', () => ({
+  cloudExecutor: { run: (...a: unknown[]) => runSpies.cloud(...a) },
+}));
+vi.mock('../agent-runtime/local-executor', () => ({
+  localExecutor: { run: (...a: unknown[]) => runSpies.local(...a) },
+}));
+vi.mock('../agent-runtime/external-executor', () => ({
+  externalExecutor: { run: (...a: unknown[]) => runSpies.external(...a) },
+}));
+vi.mock('../agent-runtime/codex-executor', () => ({
+  codexExecutor: { run: (...a: unknown[]) => runSpies.codex(...a) },
+}));
 vi.mock('../agent-runtime/zai-executor', () => ({ zaiExecutor: { run: (...a: unknown[]) => runSpies.zai(...a) } }));
 vi.mock('../agent-runtime/minimax-tokenplan-executor', () => ({
   minimaxTokenplanExecutor: { run: (...a: unknown[]) => runSpies['minimax-tp'](...a) },
 }));
 vi.mock('../agent-runtime/kimi-executor', () => ({ kimiExecutor: { run: (...a: unknown[]) => runSpies.kimi(...a) } }));
 vi.mock('../agent-runtime/grok-executor', () => ({ grokExecutor: { run: (...a: unknown[]) => runSpies.grok(...a) } }));
-vi.mock('../agent-runtime/cursor-executor', () => ({ cursorExecutor: { run: (...a: unknown[]) => runSpies.cursor(...a) } }));
+vi.mock('../agent-runtime/cursor-executor', () => ({
+  cursorExecutor: { run: (...a: unknown[]) => runSpies.cursor(...a) },
+}));
 
 import { executeAgent } from '../agent-runtime/execute';
 import type { AgentExecutionRequest } from '../agent-runtime/types';
@@ -72,7 +81,6 @@ beforeEach(() => {
   for (const spy of Object.values(runSpies)) spy.mockResolvedValue({ output: 'ok' });
 });
 
-
 describe('E8: executeAgent despacha runtime cursor para cursorExecutor', () => {
   it("runtime:'cursor' chama cursorExecutor.run exatamente uma vez (e nenhum outro executor)", async () => {
     mockResolveAgentQueryConfig.mockResolvedValue(fakeConfig('cursor'));
@@ -88,10 +96,7 @@ describe('E8: executeAgent despacha runtime cursor para cursorExecutor', () => {
     mockResolveAgentQueryConfig.mockResolvedValue(fakeConfig('cursor'));
     const req = fakeRequest();
     await executeAgent(req);
-    const [passedReq, passedConfig] = runSpies.cursor.mock.calls[0] as [
-      AgentExecutionRequest,
-      { runtime: string },
-    ];
+    const [passedReq, passedConfig] = runSpies.cursor.mock.calls[0] as [AgentExecutionRequest, { runtime: string }];
     expect(passedReq.prompt).toBe('hello');
     expect(passedReq.permission).toBe(req.permission);
     expect(passedConfig.runtime).toBe('cursor');
@@ -117,7 +122,6 @@ describe('E8: executeAgent despacha runtime cursor para cursorExecutor', () => {
   );
 });
 
-
 describe('E8: execute.ts source pin do despacho cursor', () => {
   const source = readFileSync(join(MAIN, 'agent-runtime', 'execute.ts'), 'utf8');
 
@@ -127,10 +131,7 @@ describe('E8: execute.ts source pin do despacho cursor', () => {
 
   it("tem case 'cursor' delegando a cursorExecutor.run", () => {
     expect(source).toContain("case 'cursor':");
-    const caseBlock = source.slice(
-      source.indexOf("case 'cursor':"),
-      source.indexOf("case 'cursor':") + 120,
-    );
+    const caseBlock = source.slice(source.indexOf("case 'cursor':"), source.indexOf("case 'cursor':") + 120);
     expect(caseBlock).toContain('cursorExecutor.run');
   });
 
@@ -138,7 +139,6 @@ describe('E8: execute.ts source pin do despacho cursor', () => {
     expect(source).toContain('_exhaustive: never');
   });
 });
-
 
 describe('E8: harness-engine mapRuntimeToCostMeta cursor', () => {
   it("harness-engine.ts tem case 'cursor' retornando { costSource: 'calculated', runtimeUsed: 'cursor' }", () => {

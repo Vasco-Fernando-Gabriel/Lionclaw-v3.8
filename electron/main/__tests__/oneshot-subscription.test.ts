@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { OrchestratorSelection } from '../orchestrator-selection';
 
@@ -164,7 +163,7 @@ describe('runSubscriptionPrompt — claude-compat-sdk (Z.ai / MiniMax)', () => {
     expect(opts.strictMcpConfig).toBe(true);
     expect(opts.cwd).toBe('/bg/cwd');
     expect(opts.pathToClaudeCodeExecutable).toBe('/path/to/cli.js');
-    expect(opts.model).toBe('glm-4.7'); // verbatim slug, no rewrite
+    expect(opts.model).toBe('glm-4.7');
     const env = opts.env as Record<string, string>;
     expect(env.ANTHROPIC_BASE_URL).toBe('https://api.z.ai/api/anthropic');
     expect(env.ANTHROPIC_AUTH_TOKEN).toBe('subscription-token');
@@ -228,7 +227,7 @@ describe('runSubscriptionPrompt — cursor-sdk', () => {
     expect(config.settingSources).toEqual([]);
     expect(config.cwd).toBe('/bg/cwd');
     expect(typeof config.storeDir).toBe('string');
-    expect((config.prompt as string)).toContain('hello');
+    expect(config.prompt as string).toContain('hello');
   });
 
   it('falha claro sem CURSOR_API_KEY no Vault', async () => {
@@ -289,9 +288,7 @@ describe('runSubscriptionPromptWithFallback — sem fallback (SPEC 4.1)', () => 
       source: 'settings',
     };
 
-    await expect(
-      runSubscriptionPromptWithFallback(sel, 'p', { maxTokens: 1234 }),
-    ).rejects.toThrow(/codex down/);
+    await expect(runSubscriptionPromptWithFallback(sel, 'p', { maxTokens: 1234 })).rejects.toThrow(/codex down/);
 
     expect(h.runClaudePrompt).not.toHaveBeenCalled();
   });
@@ -300,16 +297,21 @@ describe('runSubscriptionPromptWithFallback — sem fallback (SPEC 4.1)', () => 
 describe('humanizeModelLabel', () => {
   it('resolves Claude, GLM compat, and Codex slugs; falls back to the raw slug', () => {
     expect(
-      humanizeModelLabel({ runtime: 'claude-sdk', provider: 'anthropic', model: 'claude-sonnet-4-6', source: 'settings' }),
+      humanizeModelLabel({
+        runtime: 'claude-sdk',
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        source: 'settings',
+      }),
     ).toBe('Claude Sonnet 4.6');
     expect(
       humanizeModelLabel({ runtime: 'claude-compat-sdk', provider: 'zai', model: 'glm-4.7', source: 'settings' }),
     ).toBe('GLM-4.7');
-    expect(
-      humanizeModelLabel({ runtime: 'codex-sdk', provider: 'codex', model: 'gpt-5.5', source: 'settings' }),
-    ).toBe('Codex GPT-5.5');
-    expect(
-      humanizeModelLabel({ runtime: 'lion-sdk', provider: 'ollama', model: 'qwen3:8b', source: 'settings' }),
-    ).toBe('qwen3:8b');
+    expect(humanizeModelLabel({ runtime: 'codex-sdk', provider: 'codex', model: 'gpt-5.5', source: 'settings' })).toBe(
+      'Codex GPT-5.5',
+    );
+    expect(humanizeModelLabel({ runtime: 'lion-sdk', provider: 'ollama', model: 'qwen3:8b', source: 'settings' })).toBe(
+      'qwen3:8b',
+    );
   });
 });

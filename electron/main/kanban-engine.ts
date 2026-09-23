@@ -13,6 +13,7 @@ import type {
   KanbanAttachment,
   KanbanColumnId,
   KanbanActor,
+  KanbanActorInput,
   KanbanCardCreateInput,
   KanbanCardPatch,
   KanbanQueryFilters,
@@ -22,24 +23,17 @@ import type {
 } from '../../src/types/kanban';
 import { KANBAN_COLUMNS } from '../../src/types/kanban';
 import * as dbApi from './db';
-import type {
-  KanbanCardRowInput,
-  KanbanCardRowPatch,
-  KanbanCardQuery,
-  KanbanEventInput,
-} from './db';
+import type { KanbanCardRowInput, KanbanCardRowPatch, KanbanCardQuery, KanbanEventInput } from './db';
 import type { LocalRepositoryRecord } from './repo-graph/types';
 
 const logger = createLogger('kanban-engine');
 
+function eventActor(actor: KanbanActorInput): { actor: KanbanActor; actorDetail: string | null } {
+  return typeof actor === 'string' ? { actor, actorDetail: null } : { actor: actor.actor, actorDetail: actor.detail };
+}
 
 export interface KanbanEngineDb {
-  insertKanbanBoard: (input: {
-    id: string;
-    repositoryId: string;
-    name: string;
-    prefix: string;
-  }) => KanbanBoard;
+  insertKanbanBoard: (input: { id: string; repositoryId: string; name: string; prefix: string }) => KanbanBoard;
   getKanbanBoard: (id: string) => KanbanBoard | null;
   getKanbanBoardByPrefix: (prefix: string) => KanbanBoard | null;
   getKanbanBoardByRepositoryId: (repositoryId: string) => KanbanBoard | null;
@@ -47,11 +41,7 @@ export interface KanbanEngineDb {
   getKanbanBoardColumnCounts: (boardId: string) => Record<KanbanColumnId, number>;
   deleteKanbanBoard: (id: string) => void;
   insertKanbanCardWithEvent: (input: KanbanCardRowInput, event: KanbanEventInput) => KanbanCard;
-  updateKanbanCardWithEvents: (
-    cardId: number,
-    patch: KanbanCardRowPatch,
-    events: KanbanEventInput[],
-  ) => KanbanCard;
+  updateKanbanCardWithEvents: (cardId: number, patch: KanbanCardRowPatch, events: KanbanEventInput[]) => KanbanCard;
   getKanbanCardByLocalId: (boardId: string, localId: number) => KanbanCard | null;
   deleteKanbanCard: (id: number) => void;
   queryKanbanCards: (query: KanbanCardQuery) => KanbanCard[];
@@ -79,13 +69,8 @@ export interface KanbanEngineOptions {
   resolveGitRemote?: (repoRoot: string) => string | null;
 }
 
-
 function foldEnumKey(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .trim()
-    .toLowerCase();
+  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 }
 
 function buildEnumMap(canonical: readonly string[]): Map<string, string> {
@@ -218,7 +203,6 @@ export class KanbanEngine {
     }
   }
 
-
   createBoard(input: {
     name?: string;
     prefix?: string;
@@ -263,10 +247,15 @@ export class KanbanEngine {
   }
 
   listBoards(): { ok: true; boards: KanbanBoardWithCounts[] } {
-    const boards = this.db.listKanbanBoards().map((board) => ({
-      ...board,
-      columnCounts: this.db.getKanbanBoardColumnCounts(board.id),
-    }));
+    const boards = this.db.listKanbanBoards().map((board) => {
+      const repo = this.db.getLocalRepository(board.repositoryId);
+      return {
+        ...board,
+        repoPath: repo?.rootPath ?? null,
+        repoName: repo?.name ?? null,
+        columnCounts: this.db.getKanbanBoardColumnCounts(board.id),
+      };
+    });
     return { ok: true, boards };
   }
 
@@ -275,16 +264,12 @@ export class KanbanEngine {
     if (!board) return { error: `quadro nao encontrado: ${boardId}` };
     this.db.deleteKanbanBoard(board.id);
     this.removeAttachmentDir(path.join(this.attachmentsRoot, board.id));
-    logger.info(
-      { boardId: board.id, prefix: board.prefix, name: board.name },
-      'quadro kanban deletado (hard, via UI)',
-    );
+    logger.info({ boardId: board.id, prefix: board.prefix, name: board.name }, 'quadro kanban deletado (hard, via UI)');
     this.emitChanged(board.id);
     return { ok: true, warnings: [] };
   }
 
-
-  createCard(input: KanbanCardCreateInput, actor: KanbanActor): KanbanWriteResult<{ card: KanbanCard }> {
+  createCard(input: KanbanCardCreateInput, actor: KanbanActorInput): KanbanWriteResult<{ card: KanbanCard }> {
     const warnings: string[] = [];
     const board = this.findBoard(input.board);
     if (!board) return { error: `quadro nao encontrado: ${input.board}` };
@@ -308,8 +293,7 @@ export class KanbanEngine {
         boardColumn: column,
         type: coerceOptionalEnum(input.type, TYPE_MAP, 'tipo', warnings) ?? null,
         priority: coerceOptionalEnum(input.priority, PRIORITY_MAP, 'prioridade', warnings) ?? null,
-        complexity:
-          coerceOptionalEnum(input.complexity, COMPLEXITY_MAP, 'complexidade', warnings) ?? null,
+        complexity: coerceOptionalEnum(input.complexity, COMPLEXITY_MAP, 'complexidade', warnings) ?? null,
         severity: coerceOptionalEnum(input.severity, SEVERITY_MAP, 'severidade', warnings) ?? null,
         problem: input.problem ?? null,
         acceptanceCriteria: input.acceptanceCriteria ?? null,
@@ -321,7 +305,7 @@ export class KanbanEngine {
         dueDate: input.dueDate ?? null,
         body: input.body ?? null,
       },
-      { event: 'created', toColumn: column, actor },
+      { event: 'created', toColumn: column, ...eventActor(actor) },
     );
     warnings.push(...completenessWarnings(card));
     this.emitChanged(board.id);
@@ -354,10 +338,8 @@ export class KanbanEngine {
       else warnings.push(`coluna "${filters.column}" nao reconhecida; filtro ignorado`);
     }
     query.type = coerceOptionalEnum(filters.type, TYPE_MAP, 'tipo', warnings) ?? undefined;
-    query.priority =
-      coerceOptionalEnum(filters.priority, PRIORITY_MAP, 'prioridade', warnings) ?? undefined;
-    query.severity =
-      coerceOptionalEnum(filters.severity, SEVERITY_MAP, 'severidade', warnings) ?? undefined;
+    query.priority = coerceOptionalEnum(filters.priority, PRIORITY_MAP, 'prioridade', warnings) ?? undefined;
+    query.severity = coerceOptionalEnum(filters.severity, SEVERITY_MAP, 'severidade', warnings) ?? undefined;
     if (filters.text !== undefined && filters.text.trim() !== '') {
       const text = filters.text.trim();
       query.text = text;
@@ -377,7 +359,7 @@ export class KanbanEngine {
     boardRef: string,
     localId: number,
     patch: KanbanCardPatch,
-    actor: KanbanActor,
+    actor: KanbanActorInput,
   ): KanbanWriteResult<{ card: KanbanCard }> {
     const found = this.findCard(boardRef, localId);
     if ('error' in found) return found;
@@ -393,16 +375,13 @@ export class KanbanEngine {
       rowPatch.type = coerceOptionalEnum(patch.type, TYPE_MAP, 'tipo', warnings) ?? null;
     }
     if (patch.priority !== undefined) {
-      rowPatch.priority =
-        coerceOptionalEnum(patch.priority, PRIORITY_MAP, 'prioridade', warnings) ?? null;
+      rowPatch.priority = coerceOptionalEnum(patch.priority, PRIORITY_MAP, 'prioridade', warnings) ?? null;
     }
     if (patch.complexity !== undefined) {
-      rowPatch.complexity =
-        coerceOptionalEnum(patch.complexity, COMPLEXITY_MAP, 'complexidade', warnings) ?? null;
+      rowPatch.complexity = coerceOptionalEnum(patch.complexity, COMPLEXITY_MAP, 'complexidade', warnings) ?? null;
     }
     if (patch.severity !== undefined) {
-      rowPatch.severity =
-        coerceOptionalEnum(patch.severity, SEVERITY_MAP, 'severidade', warnings) ?? null;
+      rowPatch.severity = coerceOptionalEnum(patch.severity, SEVERITY_MAP, 'severidade', warnings) ?? null;
     }
     for (const key of [
       'problem',
@@ -421,11 +400,15 @@ export class KanbanEngine {
     const events: KanbanEventInput[] = [];
     const editedFields = Object.keys(rowPatch);
     if (editedFields.length > 0) {
-      events.push({ event: 'edited', reason: `campos: ${editedFields.join(', ')}`, actor });
+      events.push({
+        event: 'edited',
+        reason: `campos: ${editedFields.join(', ')}`,
+        ...eventActor(actor),
+      });
     }
     if (patch.archived !== undefined && patch.archived !== before.archived) {
       rowPatch.archived = patch.archived;
-      events.push({ event: patch.archived ? 'archived' : 'unarchived', actor });
+      events.push({ event: patch.archived ? 'archived' : 'unarchived', ...eventActor(actor) });
     }
     if (editedFields.length === 0 && rowPatch.archived === undefined) {
       warnings.push('nenhum campo para atualizar');
@@ -443,7 +426,7 @@ export class KanbanEngine {
     localId: number,
     toColumnRaw: string,
     reason: string | null | undefined,
-    actor: KanbanActor,
+    actor: KanbanActorInput,
   ): KanbanWriteResult<{ card: KanbanCard }> {
     const found = this.findCard(boardRef, localId);
     if ('error' in found) return found;
@@ -477,7 +460,7 @@ export class KanbanEngine {
       fromColumn: before.boardColumn,
       toColumn,
       reason: reason?.trim() || null,
-      actor,
+      ...eventActor(actor),
     };
     const card = this.db.updateKanbanCardWithEvents(before.id, rowPatch, [event]);
     this.emitChanged(card.boardId);
@@ -489,7 +472,7 @@ export class KanbanEngine {
     localId: number,
     commit: string | null | undefined,
     toColumnRaw: string | null | undefined,
-    actor: KanbanActor,
+    actor: KanbanActorInput,
   ): KanbanWriteResult<{ card: KanbanCard }> {
     const found = this.findCard(boardRef, localId);
     if ('error' in found) return found;
@@ -516,22 +499,18 @@ export class KanbanEngine {
       fromColumn: before.boardColumn,
       toColumn,
       reason: commitUrl,
-      actor,
+      ...eventActor(actor),
     };
     const card = this.db.updateKanbanCardWithEvents(before.id, rowPatch, [event]);
     this.emitChanged(card.boardId);
     return { ok: true, card, warnings };
   }
 
-  archiveCard(boardRef: string, localId: number, actor: KanbanActor): KanbanWriteResult<{ card: KanbanCard }> {
+  archiveCard(boardRef: string, localId: number, actor: KanbanActorInput): KanbanWriteResult<{ card: KanbanCard }> {
     return this.setArchived(boardRef, localId, true, actor);
   }
 
-  unarchiveCard(
-    boardRef: string,
-    localId: number,
-    actor: KanbanActor,
-  ): KanbanWriteResult<{ card: KanbanCard }> {
+  unarchiveCard(boardRef: string, localId: number, actor: KanbanActorInput): KanbanWriteResult<{ card: KanbanCard }> {
     return this.setArchived(boardRef, localId, false, actor);
   }
 
@@ -539,7 +518,7 @@ export class KanbanEngine {
     boardRef: string,
     localId: number,
     hard: boolean,
-    actor: KanbanActor,
+    actor: KanbanActorInput,
   ): KanbanWriteResult<{ card: KanbanCard | null }> {
     if (!hard) {
       const archived = this.setArchived(boardRef, localId, true, actor);
@@ -559,12 +538,11 @@ export class KanbanEngine {
     return { ok: true, card: null, warnings: [] };
   }
 
-
   attachFile(
     boardRef: string,
     localId: number,
     filePath: string,
-    actor: KanbanActor,
+    actor: KanbanActorInput,
   ): KanbanWriteResult<{ attachment: KanbanAttachment }> {
     const found = this.findCard(boardRef, localId);
     if ('error' in found) return found;
@@ -589,10 +567,7 @@ export class KanbanEngine {
       warnings.push(`anexo com ${(sizeBytes / (1024 * 1024)).toFixed(1)}MB (acima de 25MB)`);
     }
     const filename = path.basename(destPath);
-    const storedPath = path
-      .relative(this.attachmentsRoot, destPath)
-      .split(path.sep)
-      .join('/');
+    const storedPath = path.relative(this.attachmentsRoot, destPath).split(path.sep).join('/');
     try {
       const attachment = this.db.insertKanbanCardAttachmentWithEvent(
         {
@@ -603,7 +578,7 @@ export class KanbanEngine {
           mime: MIME_BY_EXT[path.extname(filename).toLowerCase()] ?? null,
           sizeBytes,
         },
-        { event: 'attachment-added', reason: filename, actor },
+        { event: 'attachment-added', reason: filename, ...eventActor(actor) },
       );
       this.emitChanged(card.boardId);
       return { ok: true, attachment, warnings };
@@ -634,14 +609,14 @@ export class KanbanEngine {
     return { ok: true, attachment, absolutePath };
   }
 
-  removeAttachment(attachmentId: string, actor: KanbanActor): KanbanAck {
+  removeAttachment(attachmentId: string, actor: KanbanActorInput): KanbanAck {
     const attachment = this.db.getKanbanCardAttachment(attachmentId);
     if (!attachment) return { error: `anexo nao encontrado: ${attachmentId}` };
     const card = this.cardOfAttachment(attachment);
     this.db.deleteKanbanCardAttachmentWithEvent(attachmentId, {
       event: 'attachment-removed',
       reason: attachment.filename,
-      actor,
+      ...eventActor(actor),
     });
     const absolutePath = path.join(this.attachmentsRoot, ...attachment.storedPath.split('/'));
     try {
@@ -653,18 +628,12 @@ export class KanbanEngine {
     return { ok: true, warnings: [] };
   }
 
-
   private findBoard(ref: string): KanbanBoard | null {
     const trimmed = ref.trim();
-    return (
-      this.db.getKanbanBoardByPrefix(trimmed.toUpperCase()) ?? this.db.getKanbanBoard(trimmed)
-    );
+    return this.db.getKanbanBoardByPrefix(trimmed.toUpperCase()) ?? this.db.getKanbanBoard(trimmed);
   }
 
-  private findCard(
-    boardRef: string,
-    localId: number,
-  ): { card: KanbanCard } | { error: string } {
+  private findCard(boardRef: string, localId: number): { card: KanbanCard } | { error: string } {
     const board = this.findBoard(boardRef);
     if (!board) return { error: `quadro nao encontrado: ${boardRef}` };
     const card = this.db.getKanbanCardByLocalId(board.id, localId);
@@ -676,7 +645,7 @@ export class KanbanEngine {
     boardRef: string,
     localId: number,
     archived: boolean,
-    actor: KanbanActor,
+    actor: KanbanActorInput,
   ): KanbanWriteResult<{ card: KanbanCard }> {
     const found = this.findCard(boardRef, localId);
     if ('error' in found) return found;
@@ -689,7 +658,7 @@ export class KanbanEngine {
       };
     }
     const card = this.db.updateKanbanCardWithEvents(before.id, { archived }, [
-      { event: archived ? 'archived' : 'unarchived', actor },
+      { event: archived ? 'archived' : 'unarchived', ...eventActor(actor) },
     ]);
     this.emitChanged(card.boardId);
     return { ok: true, card, warnings: [] };
@@ -706,9 +675,7 @@ export class KanbanEngine {
         this.db
           .listLocalRepositories()
           .find(
-            (repo) =>
-              path.resolve(repo.canonicalRootPath) === resolved ||
-              path.resolve(repo.rootPath) === resolved,
+            (repo) => path.resolve(repo.canonicalRootPath) === resolved || path.resolve(repo.rootPath) === resolved,
           ) ?? null
       );
     }
@@ -756,7 +723,6 @@ export class KanbanEngine {
     }
   }
 }
-
 
 let engineSingleton: KanbanEngine | null = null;
 

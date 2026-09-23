@@ -1,7 +1,4 @@
-
-export type ToolScriptTransport =
-  | { kind: 'unix'; socketPath: string }
-  | { kind: 'tcp'; host: string; port: number };
+export type ToolScriptTransport = { kind: 'unix'; socketPath: string } | { kind: 'tcp'; host: string; port: number };
 
 export interface PythonStubOptions {
   transport: ToolScriptTransport;
@@ -22,23 +19,14 @@ const TOOL_POSITIONAL_ARGS: Readonly<Record<string, readonly string[]>> = {
 
 const PYTHON_IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-const RESERVED_STUB_NAMES = new Set([
-  'json_parse',
-  'shell_quote',
-  'retry',
-  'ToolError',
-]);
+const RESERVED_STUB_NAMES = new Set(['json_parse', 'shell_quote', 'retry', 'ToolError']);
 
 export function assertValidStubToolName(name: string): void {
   if (!PYTHON_IDENTIFIER_RE.test(name)) {
-    throw new Error(
-      `nome de tool invalido para o stub Python: "${name}" (precisa ser identificador Python)`,
-    );
+    throw new Error(`nome de tool invalido para o stub Python: "${name}" (precisa ser identificador Python)`);
   }
   if (name.startsWith('_') || RESERVED_STUB_NAMES.has(name)) {
-    throw new Error(
-      `nome de tool "${name}" colide com built-in/interno do stub Python`,
-    );
+    throw new Error(`nome de tool "${name}" colide com built-in/interno do stub Python`);
   }
 }
 
@@ -170,9 +158,7 @@ export function generateLionclawToolsStub(opts: PythonStubOptions): string {
     '',
   ].join('\n');
 
-  const toolFunctions = opts.enabledTools
-    .map((name) => generateToolFunction(name))
-    .join('\n\n\n');
+  const toolFunctions = opts.enabledTools.map((name) => generateToolFunction(name)).join('\n\n\n');
 
   const builtins = [
     'def json_parse(text):',

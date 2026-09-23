@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const runToolScriptMock = vi.hoisted(() => vi.fn());
@@ -71,17 +70,13 @@ vi.mock('../tool-script/tool-script-env', () => ({
   buildToolScriptEnv: buildEnvMock,
 }));
 
-import {
-  dispatch,
-  handleRunToolScript,
-  type JsonRpcContext,
-} from '../local-ipc/jsonrpc-methods';
+import { dispatch, handleRunToolScript, type JsonRpcContext } from '../local-ipc/jsonrpc-methods';
 import {
   registerChatCapabilityTurn,
   setActiveChatTurn,
   __resetChatCapabilityContextForTests,
 } from '../chat-capability-context';
-import { desktopLane } from '../sdk-lane';
+import { getDesktopLane } from '../desktop-lanes';
 import { ToolScriptError } from '../tool-script/tool-script-types';
 
 const AUTHED_CTX: JsonRpcContext = {
@@ -91,6 +86,7 @@ const AUTHED_CTX: JsonRpcContext = {
 const ANON_CTX: JsonRpcContext = { getWindow: () => null };
 
 const SESSION_ID = 'sess-1';
+const desktopLane = getDesktopLane(SESSION_ID);
 const TURN_ID = 'turn-1';
 
 const OK_RESULT = {
@@ -126,28 +122,28 @@ beforeEach(() => {
   runToolScriptMock.mockResolvedValue(OK_RESULT);
 });
 
-
 describe('handleRunToolScript — fail-closed em cada degrau', () => {
   it('conexao anonima -> { error, code: unauthenticated-connection }, runToolScript NAO chamado', async () => {
     seedActiveTurn();
     desktopLane.currentAbortController = new AbortController();
-    const res = await handleRunToolScript(ANON_CTX, { code: 'print(1)' });
+    const res = await handleRunToolScript(ANON_CTX, { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
     expect(res).toMatchObject({ code: 'unauthenticated-connection' });
     expect((res as { error?: string }).error).toContain('fail-closed');
     expect(runToolScriptMock).not.toHaveBeenCalled();
   });
 
-  it('sem turno desktop ativo -> { code: no-active-desktop-turn }', async () => {
+  it('sem turno desktop ativo -> { code: turn_binding_required } (no-active-desktop-turn)', async () => {
     desktopLane.currentAbortController = new AbortController();
-    const res = await handleRunToolScript(AUTHED_CTX, { code: 'print(1)' });
-    expect(res).toMatchObject({ code: 'no-active-desktop-turn' });
+    const res = await handleRunToolScript(AUTHED_CTX, { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
+    expect(res).toMatchObject({ code: 'turn_binding_required' });
+    expect((res as { error?: string }).error).toContain('no-active-desktop-turn');
     expect(runToolScriptMock).not.toHaveBeenCalled();
   });
 
   it('turno ativo SEM turn-context vivo -> { code: turn-context-missing }', async () => {
     setActiveChatTurn({ sessionId: SESSION_ID, lane: 'desktop', turnId: TURN_ID });
     desktopLane.currentAbortController = new AbortController();
-    const res = await handleRunToolScript(AUTHED_CTX, { code: 'print(1)' });
+    const res = await handleRunToolScript(AUTHED_CTX, { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
     expect(res).toMatchObject({ code: 'turn-context-missing' });
     expect(runToolScriptMock).not.toHaveBeenCalled();
   });
@@ -155,7 +151,7 @@ describe('handleRunToolScript — fail-closed em cada degrau', () => {
   it('code vazio -> erro de argumento, runToolScript NAO chamado', async () => {
     seedActiveTurn();
     desktopLane.currentAbortController = new AbortController();
-    const res = await handleRunToolScript(AUTHED_CTX, { code: '   ' });
+    const res = await handleRunToolScript(AUTHED_CTX, { code: '   ', sessionId: SESSION_ID, turnId: TURN_ID });
     expect((res as { error?: string }).error).toContain('"code"');
     expect(runToolScriptMock).not.toHaveBeenCalled();
   });
@@ -163,7 +159,7 @@ describe('handleRunToolScript — fail-closed em cada degrau', () => {
   it('sem controller de abort (turno sem execucao em voo) -> { code: turn-aborted }', async () => {
     seedActiveTurn();
     desktopLane.currentAbortController = null;
-    const res = await handleRunToolScript(AUTHED_CTX, { code: 'print(1)' });
+    const res = await handleRunToolScript(AUTHED_CTX, { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
     expect(res).toMatchObject({ code: 'turn-aborted' });
     expect(runToolScriptMock).not.toHaveBeenCalled();
   });
@@ -173,12 +169,11 @@ describe('handleRunToolScript — fail-closed em cada degrau', () => {
     const controller = new AbortController();
     controller.abort();
     desktopLane.currentAbortController = controller;
-    const res = await handleRunToolScript(AUTHED_CTX, { code: 'print(1)' });
+    const res = await handleRunToolScript(AUTHED_CTX, { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
     expect(res).toMatchObject({ code: 'turn-aborted' });
     expect(runToolScriptMock).not.toHaveBeenCalled();
   });
 });
-
 
 describe('handleRunToolScript — composicao e fio do turno', () => {
   it('resolve sessionId/turnId pelo MAIN e passa o MESMO abortSignal do desktopLane ao motor E ao dispatcher', async () => {
@@ -186,7 +181,7 @@ describe('handleRunToolScript — composicao e fio do turno', () => {
     const controller = new AbortController();
     desktopLane.currentAbortController = controller;
 
-    const res = await handleRunToolScript(AUTHED_CTX, { code: 'print(1)' });
+    const res = await handleRunToolScript(AUTHED_CTX, { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
 
     expect(runToolScriptMock).toHaveBeenCalledTimes(1);
     const [input, deps] = runToolScriptMock.mock.calls[0];
@@ -212,21 +207,19 @@ describe('handleRunToolScript — composicao e fio do turno', () => {
   it('ToolScriptError do motor -> { error, code } estruturado', async () => {
     seedActiveTurn();
     desktopLane.currentAbortController = new AbortController();
-    runToolScriptMock.mockRejectedValueOnce(
-      new ToolScriptError('python-unavailable', 'sem python3'),
-    );
-    const res = await handleRunToolScript(AUTHED_CTX, { code: 'print(1)' });
+    runToolScriptMock.mockRejectedValueOnce(new ToolScriptError('python-unavailable', 'sem python3'));
+    const res = await handleRunToolScript(AUTHED_CTX, { code: 'print(1)', sessionId: SESSION_ID, turnId: TURN_ID });
     expect(res).toEqual({ error: 'sem python3', code: 'python-unavailable' });
   });
 
-  it('via dispatch(run_tool_script): case wired no dispatcher, retorna { jsonrpc, id, result }', async () => {
+  it('via dispatch(run_tool_script, params: { sessionId: SESSION_ID, turnId: TURN_ID } ): case wired no dispatcher, retorna { jsonrpc, id, result }', async () => {
     seedActiveTurn();
     desktopLane.currentAbortController = new AbortController();
     const res = await dispatch(AUTHED_CTX, {
       jsonrpc: '2.0',
       id: 42,
       method: 'run_tool_script',
-      params: { code: 'print(1)' },
+      params: { ...{ sessionId: SESSION_ID, turnId: TURN_ID }, code: 'print(1)' },
     });
     expect(res.error).toBeUndefined();
     expect(res.id).toBe(42);

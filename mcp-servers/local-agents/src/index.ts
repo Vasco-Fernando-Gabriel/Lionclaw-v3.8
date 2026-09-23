@@ -12,10 +12,13 @@ server.tool(
   {
     agentId: z.string().describe('ID do agente local (ex: "writer", "researcher")'),
     prompt: z.string().describe('A tarefa ou pergunta para o agente'),
-    context: z.string().optional().describe(
-      'Contexto adicional: dados de arquivos lidos, resultados de buscas, ou qualquer info relevante. ' +
-      'Use isso para passar ao agente dados que ele precisaria buscar sozinho.'
-    ),
+    context: z
+      .string()
+      .optional()
+      .describe(
+        'Contexto adicional: dados de arquivos lidos, resultados de buscas, ou qualquer info relevante. ' +
+          'Use isso para passar ao agente dados que ele precisaria buscar sozinho.',
+      ),
   },
   async ({ agentId, prompt, context }) => {
     try {
@@ -50,9 +53,10 @@ server.tool(
   {
     agentId: z.string().describe('ID do agente externo (ex: "backend-developer")'),
     prompt: z.string().describe('A tarefa ou pergunta para o agente'),
-    context: z.string().optional().describe(
-      'Contexto adicional: dados de arquivos lidos, resultados de buscas, ou qualquer info relevante.',
-    ),
+    context: z
+      .string()
+      .optional()
+      .describe('Contexto adicional: dados de arquivos lidos, resultados de buscas, ou qualquer info relevante.'),
   },
   async ({ agentId, prompt, context }) => {
     try {
@@ -81,29 +85,26 @@ server.tool(
   },
 );
 
-server.tool(
-  'local_agents_health',
-  'Verifica status do Ollama e lista agentes locais disponiveis',
-  {},
-  async () => {
-    const agents = loadAllLocalAgents();
-    const healthy = await checkOllamaHealth();
-    return {
-      content: [{
+server.tool('local_agents_health', 'Verifica status do Ollama e lista agentes locais disponiveis', {}, async () => {
+  const agents = loadAllLocalAgents();
+  const healthy = await checkOllamaHealth();
+  return {
+    content: [
+      {
         type: 'text' as const,
         text: JSON.stringify({
           healthy,
-          agents: agents.map(a => ({
+          agents: agents.map((a) => ({
             id: a.id,
             name: a.name,
             model: a.localConfig?.model,
             mode: a.localMode || 'simple',
           })),
         }),
-      }],
-    };
-  },
-);
+      },
+    ],
+  };
+});
 
 async function main() {
   const transport = new StdioServerTransport();

@@ -1,5 +1,3 @@
-
-
 export type LlmErrorCode =
   | 'LLM-QUOTA'
   | 'LLM-RATE-429'
@@ -217,7 +215,6 @@ export const LLM_ERROR_TABLE: Record<LlmErrorCode, LlmErrorDescriptor> = {
   },
 };
 
-
 export interface AgentExecutionError {
   code: LlmErrorCode;
   category: LlmErrorCategory;
@@ -261,7 +258,6 @@ export function isEmptyFailedTurn(args: {
   return args.assistantContent === '' && args.outputTokens === 0 && args.artifactCount === 0;
 }
 
-
 export interface TypedProviderErrorOptions {
   message?: string;
   raw?: string;
@@ -279,10 +275,7 @@ export class TypedProviderError extends Error {
 
   constructor(code: LlmErrorCode, options?: TypedProviderErrorOptions) {
     const entry = LLM_ERROR_TABLE[code];
-    super(
-      options?.message ?? entry.userMessage,
-      options?.cause !== undefined ? { cause: options.cause } : undefined,
-    );
+    super(options?.message ?? entry.userMessage, options?.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = 'TypedProviderError';
     this.code = code;
     this.category = entry.category;
@@ -324,7 +317,6 @@ export class EmptyProviderResponseError extends Error {
     this.runtime = runtime;
   }
 }
-
 
 export interface TranslateProviderErrorContext {
   runtime?: string;
@@ -422,11 +414,7 @@ const NET_HINTS = [
   'gateway timeout',
 ];
 
-const CODEX_EXIT_HINTS = [
-  'app-server exited',
-  'app-server transport closed',
-  'codexsession is already closed',
-];
+const CODEX_EXIT_HINTS = ['app-server exited', 'app-server transport closed', 'codexsession is already closed'];
 
 const CODEX_WEDGE_HINTS = ['stalled: no progress', 'codex wedge'];
 
@@ -466,10 +454,7 @@ function codeFromMessage(msg: string, ctx?: TranslateProviderErrorContext): LlmE
   return null;
 }
 
-export function translateProviderError(
-  input: unknown,
-  ctx?: TranslateProviderErrorContext,
-): TypedProviderError {
+export function translateProviderError(input: unknown, ctx?: TranslateProviderErrorContext): TypedProviderError {
   if (input instanceof TypedProviderError) return input;
 
   const raw = rawMessageOf(input);
@@ -496,7 +481,6 @@ export function translateProviderError(
     ...(typeof status === 'number' ? { status } : {}),
   });
 }
-
 
 export function codexTurnFailureError(args: {
   status: 'failed' | 'timeout';

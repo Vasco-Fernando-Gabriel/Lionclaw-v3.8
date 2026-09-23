@@ -1,20 +1,22 @@
-
 import type { ExternalProtocol } from '../types';
 import { VERTEX_DEFAULT_MODEL, VERTEX_MODEL_CATALOG } from '../constants/vertex-gemini-models';
 
-export const PROVIDER_PRESETS: Record<string, {
-  label: string;
-  protocol: ExternalProtocol;
-  baseUrl?: string;
-  modelsEndpoint?: string;
-  testEndpoint?: string;
-  defaultModel: string;
-  requiresApiKey: boolean;
-  extraHeaders?: Record<string, string>;
-  pricingUrl?: string;
-  vaultKey: string;
-  supportsTools: boolean;
-}> = {
+export const PROVIDER_PRESETS: Record<
+  string,
+  {
+    label: string;
+    protocol: ExternalProtocol;
+    baseUrl?: string;
+    modelsEndpoint?: string;
+    testEndpoint?: string;
+    defaultModel: string;
+    requiresApiKey: boolean;
+    extraHeaders?: Record<string, string>;
+    pricingUrl?: string;
+    vaultKey: string;
+    supportsTools: boolean;
+  }
+> = {
   openrouter: {
     label: 'OpenRouter',
     protocol: 'openai-compatible',
@@ -36,7 +38,7 @@ export const PROVIDER_PRESETS: Record<string, {
     protocol: 'openai-compatible',
     baseUrl: 'https://api.openai.com/v1',
     modelsEndpoint: '/models',
-    defaultModel: 'gpt-5.5',
+    defaultModel: 'gpt-6-sol',
     requiresApiKey: true,
     pricingUrl: 'https://openai.com/api/pricing/',
     vaultKey: 'HARNESS_OPENAI_KEY',
@@ -97,7 +99,6 @@ export const PROVIDER_PRESETS: Record<string, {
   },
 };
 
-
 export type ReasoningCapability =
   | { kind: 'none' }
   | { kind: 'openai-effort' }
@@ -118,6 +119,22 @@ export interface CatalogedModel {
 export const MODEL_CATALOG: Record<string, CatalogedModel[]> = {
   openai: [
     {
+      id: 'gpt-6-sol',
+      label: 'GPT-6 Sol CTX 1M',
+      pricingKey: 'gpt-6-sol',
+      supportsTools: true,
+      contextWindow: 1_050_000,
+      notes: 'GPT-6 agentic ($2/$10). Input >272k cobra 2x e output 1.5x.',
+    },
+    {
+      id: 'gpt-6-luna',
+      label: 'GPT-6 Luna CTX 1M',
+      pricingKey: 'gpt-6-luna',
+      supportsTools: true,
+      contextWindow: 1_050_000,
+      notes: 'GPT-6 rapido e barato ($0.10/$0.50). Input >272k cobra 2x e output 1.5x.',
+    },
+    {
       id: 'gpt-5.5',
       label: 'GPT-5.5 CTX 1M',
       pricingKey: 'gpt-5.5',
@@ -135,6 +152,30 @@ export const MODEL_CATALOG: Record<string, CatalogedModel[]> = {
     },
   ],
   openrouter: [
+    {
+      id: 'anthropic/claude-opus-5-5',
+      label: 'Claude Opus 5.5 CTX 1M',
+      pricingKey: 'or:anthropic/claude-opus-5-5',
+      supportsTools: true,
+      contextWindow: 1_000_000,
+      notes: 'Opus 5.5 via OpenRouter ($4/$20).',
+    },
+    {
+      id: 'openai/gpt-6-sol',
+      label: 'GPT-6 Sol CTX 1M',
+      pricingKey: 'or:openai/gpt-6-sol',
+      supportsTools: true,
+      contextWindow: 1_050_000,
+      notes: 'GPT-6 agentic via OpenRouter ($2/$10).',
+    },
+    {
+      id: 'openai/gpt-6-luna',
+      label: 'GPT-6 Luna CTX 1M',
+      pricingKey: 'or:openai/gpt-6-luna',
+      supportsTools: true,
+      contextWindow: 1_050_000,
+      notes: 'GPT-6 rapido e barato via OpenRouter ($0.10/$0.50).',
+    },
     {
       id: 'deepseek/deepseek-v4-pro',
       label: 'DeepSeek V4 Pro CTX 1M',
@@ -236,7 +277,6 @@ export const MODEL_CATALOG: Record<string, CatalogedModel[]> = {
     },
   ],
 
-
   kimi: [
     {
       id: 'kimi-k3',
@@ -275,7 +315,8 @@ export const MODEL_CATALOG: Record<string, CatalogedModel[]> = {
       supportsTools: true,
       contextWindow: 1_000_000,
       reasoning: { kind: 'none' },
-      notes: 'V4 Pro. Promo 75% off ativa: input $0.435 (cache miss), $0.003625 (cache hit), output $0.87 por 1M. Max output 384K. Suporta thinking mode.',
+      notes:
+        'V4 Pro. Promo 75% off ativa: input $0.435 (cache miss), $0.003625 (cache hit), output $0.87 por 1M. Max output 384K. Suporta thinking mode.',
     },
     {
       id: 'deepseek-v4-flash',
@@ -393,4 +434,3 @@ export const MODEL_CATALOG: Record<string, CatalogedModel[]> = {
     notes: `${model.stage}. Max output ${model.outputCap} tokens. Pricing nao confirmado; custo nao estimado.`,
   })),
 };
-

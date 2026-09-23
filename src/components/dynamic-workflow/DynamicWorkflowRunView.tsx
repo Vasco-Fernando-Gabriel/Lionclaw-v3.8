@@ -13,10 +13,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
-import {
-  useDynamicWorkflowStore,
-  deriveTouchedFilesFromEvents,
-} from '@/stores/dynamic-workflow-store';
+import { useDynamicWorkflowStore, deriveTouchedFilesFromEvents } from '@/stores/dynamic-workflow-store';
 import { parseSqliteUtc } from '@/lib/sqlite-time';
 import { AbortRunConfirm } from './AbortRunConfirm';
 import { deriveRoundsFromNodeRuns } from './WorkflowProgressBar';
@@ -27,16 +24,11 @@ import { DynamicWorkflowNodeTimeline } from './DynamicWorkflowNodeTimeline';
 import { WorkflowCostTab } from './WorkflowCostTab';
 import { WorkflowOutputsTab } from './WorkflowOutputsTab';
 import { WorkflowHandoffView } from './WorkflowHandoffView';
-import {
-  DynamicWorkflowGateModal,
-  type GateCheckView,
-  type GateFindingView,
-} from './DynamicWorkflowGateModal';
+import { DynamicWorkflowGateModal, type GateCheckView, type GateFindingView } from './DynamicWorkflowGateModal';
 import { RecoveryBanner } from './RecoveryBanner';
 import type { DynamicWorkflowUIStatus } from '@/stores/dynamic-workflow-store';
 
 type RunTab = 'stream' | 'execution' | 'cost' | 'outputs' | 'timeline';
-
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' ? (v as Record<string, unknown>) : null;
@@ -48,8 +40,7 @@ function checkFromEntry(entry: unknown, ok: boolean): GateCheckView | null {
   }
   const r = asRecord(entry);
   if (!r) return null;
-  const id =
-    typeof r.id === 'string' ? r.id : typeof r.label === 'string' ? r.label : null;
+  const id = typeof r.id === 'string' ? r.id : typeof r.label === 'string' ? r.label : null;
   if (!id) return null;
   return {
     id,
@@ -62,12 +53,7 @@ function checkFromEntry(entry: unknown, ok: boolean): GateCheckView | null {
 function findingFromEntry(entry: unknown): GateFindingView | null {
   const r = asRecord(entry);
   if (!r) return null;
-  const problem =
-    typeof r.problem === 'string'
-      ? r.problem
-      : typeof r.detail === 'string'
-        ? r.detail
-        : null;
+  const problem = typeof r.problem === 'string' ? r.problem : typeof r.detail === 'string' ? r.detail : null;
   if (!problem) return null;
   return {
     severity: typeof r.severity === 'string' ? r.severity : 'P2',
@@ -127,7 +113,6 @@ export function findPendingOpenedAtMs(
   return null;
 }
 
-
 export interface DynamicWorkflowRunViewProps {
   runId: string;
 }
@@ -168,9 +153,7 @@ export function DynamicWorkflowRunView({ runId }: DynamicWorkflowRunViewProps) {
   const scheduledResumeAtMap = useDynamicWorkflowStore((s) => s.scheduledResumeAt);
   const stalledByRun = useDynamicWorkflowStore((s) => s.stalledByRun);
   const narrationByRun = useDynamicWorkflowStore((s) => s.narrationByRun);
-  const persistedNarrationByRun = useDynamicWorkflowStore(
-    (s) => s.persistedNarrationByRun,
-  );
+  const persistedNarrationByRun = useDynamicWorkflowStore((s) => s.persistedNarrationByRun);
   const gateDecisionsByRun = useDynamicWorkflowStore((s) => s.gateDecisionsByRun);
 
   const [tab, setTab] = useState<RunTab>('stream');
@@ -186,8 +169,7 @@ export function DynamicWorkflowRunView({ runId }: DynamicWorkflowRunViewProps) {
   const stalled = stalledByRun[runId] ?? null;
   const liveNarration = narrationByRun[runId] ?? null;
   const persistedNarration = persistedNarrationByRun[runId] ?? null;
-  const narrationLines =
-    liveNarration && liveNarration.length > 0 ? liveNarration : persistedNarration;
+  const narrationLines = liveNarration && liveNarration.length > 0 ? liveNarration : persistedNarration;
   const gateDecisions = gateDecisionsByRun[runId] ?? null;
 
   const uiStatus: DynamicWorkflowUIStatus = getUIStatus(runId);
@@ -199,8 +181,7 @@ export function DynamicWorkflowRunView({ runId }: DynamicWorkflowRunViewProps) {
   const isResumable = uiStatus === 'paused' || uiStatus === 'interrupted';
   const isReopenable = uiStatus === 'aborted' || uiStatus === 'failed';
   const isStartable = uiStatus === 'created';
-  const isTerminal =
-    uiStatus === 'completed' || uiStatus === 'failed';
+  const isTerminal = uiStatus === 'completed' || uiStatus === 'failed';
 
   const isClosingPhase = uiStatus === 'delivered' || uiStatus === 'completed';
 
@@ -223,9 +204,7 @@ export function DynamicWorkflowRunView({ runId }: DynamicWorkflowRunViewProps) {
     if (!run?.inputJson) return fallback;
     try {
       const parsed = JSON.parse(run.inputJson) as { name?: unknown };
-      return typeof parsed.name === 'string' && parsed.name.trim()
-        ? parsed.name
-        : fallback;
+      return typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name : fallback;
     } catch {
       return fallback;
     }
@@ -236,17 +215,12 @@ export function DynamicWorkflowRunView({ runId }: DynamicWorkflowRunViewProps) {
   const streamNodes = useMemo(() => {
     const order = new Map(nodes.map((n, i) => [n.nodeId, i]));
     return Object.values(nodeStreams).sort(
-      (a, b) =>
-        (order.get(a.nodeId) ?? Number.MAX_SAFE_INTEGER) -
-        (order.get(b.nodeId) ?? Number.MAX_SAFE_INTEGER),
+      (a, b) => (order.get(a.nodeId) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.nodeId) ?? Number.MAX_SAFE_INTEGER),
     );
   }, [nodeStreams, nodes]);
 
   const liveTouchedFiles = useMemo(() => deriveTouchedFiles(nodeStreams), [nodeStreams]);
-  const durableTouched = useMemo(
-    () => deriveTouchedFilesFromEvents(structuralEvents),
-    [structuralEvents],
-  );
+  const durableTouched = useMemo(() => deriveTouchedFilesFromEvents(structuralEvents), [structuralEvents]);
   const touchedFiles = durableTouched.files.length > 0 ? durableTouched.files : liveTouchedFiles;
 
   const runningNodeIdsWithoutStream = useMemo(() => {
@@ -277,16 +251,13 @@ export function DynamicWorkflowRunView({ runId }: DynamicWorkflowRunViewProps) {
 
   const selectedRoundNodeIds = useMemo(() => {
     if (selectedRoundIndex === null) return null;
-    const round = deriveRoundsFromNodeRuns(nodeRuns).find(
-      (r) => r.index === selectedRoundIndex,
-    );
+    const round = deriveRoundsFromNodeRuns(nodeRuns).find((r) => r.index === selectedRoundIndex);
     return round ? round.nodeIds : null;
   }, [nodeRuns, selectedRoundIndex]);
 
   const rawPendingDecision = snapshot?.pendingDecision ?? null;
   const pendingGate = rawPendingDecision?.type === 'gate' ? rawPendingDecision : null;
-  const pendingInfoBlock =
-    rawPendingDecision && rawPendingDecision.type === 'error' ? rawPendingDecision : null;
+  const pendingInfoBlock = rawPendingDecision && rawPendingDecision.type === 'error' ? rawPendingDecision : null;
   const { gateChecks, gateFindings } = useMemo(
     () => deriveGateViews(structuralEvents, pendingGate?.id ?? null),
     [structuralEvents, pendingGate?.id],
@@ -307,24 +278,17 @@ export function DynamicWorkflowRunView({ runId }: DynamicWorkflowRunViewProps) {
     return null;
   }, [manifest, pendingGate]);
 
-  const gatePrompt =
-    gateKindLabel ?? pendingGate?.prompt ?? undefined;
+  const gatePrompt = gateKindLabel ?? pendingGate?.prompt ?? undefined;
 
   const gateOpenedAtMs = useMemo(
     () =>
       findPendingOpenedAtMs(
         structuralEvents,
-        (t) =>
-          t === 'gate-blocked' ||
-          (t.includes('gate') && (t.includes('pending') || t.includes('awaiting'))),
+        (t) => t === 'gate-blocked' || (t.includes('gate') && (t.includes('pending') || t.includes('awaiting'))),
       ),
     [structuralEvents],
   );
-  const questionOpenedAtMs = useMemo(
-    () => findPendingOpenedAtMs(events, (t) => t.includes('question')),
-    [events],
-  );
-
+  const questionOpenedAtMs = useMemo(() => findPendingOpenedAtMs(events, (t) => t.includes('question')), [events]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -341,19 +305,13 @@ export function DynamicWorkflowRunView({ runId }: DynamicWorkflowRunViewProps) {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-semibold text-zinc-100">
-              {run?.currentPhaseId
-                ? `Workflow - ${run.currentPhaseId}`
-                : `Workflow ${runId.slice(0, 8)}`}
+              {run?.currentPhaseId ? `Workflow - ${run.currentPhaseId}` : `Workflow ${runId.slice(0, 8)}`}
             </span>
             {(isRunning || isStreaming || isPausing) && (
               <Loader2 size={12} className="animate-spin text-amber-400 shrink-0" />
             )}
           </div>
-          {run?.worktreePath && (
-            <p className="truncate font-mono text-[11px] text-zinc-500">
-              {run.worktreePath}
-            </p>
-          )}
+          {run?.worktreePath && <p className="truncate font-mono text-[11px] text-zinc-500">{run.worktreePath}</p>}
         </div>
 
         <div className="ml-auto flex items-center gap-1.5 shrink-0">
@@ -408,15 +366,12 @@ export function DynamicWorkflowRunView({ runId }: DynamicWorkflowRunViewProps) {
               com o contexto do problema injetado (resolve-with-closer). Em
               delivered/completed o closer ja e a tela principal (CloserChatView),
               entao o botao do header so aparece fora da fase de fechamento. */}
-          {(uiStatus === 'blocked' ||
-            uiStatus === 'interrupted' ||
-            uiStatus === 'failed') && (
+          {(uiStatus === 'blocked' || uiStatus === 'interrupted' || uiStatus === 'failed') && (
             <HeaderButton
               onClick={() => {
-                void resolveWithCloser(
-                  runId,
-                  'Estado de friccao: usuario pediu ajuda do agente de fechamento.',
-                ).then(() => setTab('stream'));
+                void resolveWithCloser(runId, 'Estado de friccao: usuario pediu ajuda do agente de fechamento.').then(
+                  () => setTab('stream'),
+                );
               }}
               className="text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
               icon={<LifeBuoy size={12} />}
@@ -462,9 +417,7 @@ export function DynamicWorkflowRunView({ runId }: DynamicWorkflowRunViewProps) {
           <span className="font-semibold">Decisao pendente ({pendingGate.type}):</span>
           <span className="truncate">{gatePrompt}</span>
           <PendingWaitedFor openedAtMs={gateOpenedAtMs} />
-          <span className="ml-auto rounded-md border border-amber-500/40 px-2 py-0.5 text-amber-300">
-            Revisar
-          </span>
+          <span className="ml-auto rounded-md border border-amber-500/40 px-2 py-0.5 text-amber-300">Revisar</span>
         </button>
       )}
 
@@ -476,13 +429,9 @@ export function DynamicWorkflowRunView({ runId }: DynamicWorkflowRunViewProps) {
           data-testid="info-block-banner"
         >
           <PulseDot />
-          <span className="font-semibold">
-            Run bloqueado (infra):
-          </span>
+          <span className="font-semibold">Run bloqueado (infra):</span>
           <span className="truncate">{pendingInfoBlock.prompt}</span>
-          <span className="ml-auto rounded-md border border-sky-500/40 px-2 py-0.5 text-sky-300">
-            Retomar destrava
-          </span>
+          <span className="ml-auto rounded-md border border-sky-500/40 px-2 py-0.5 text-sky-300">Retomar destrava</span>
         </div>
       )}
 
@@ -559,10 +508,9 @@ export function DynamicWorkflowRunView({ runId }: DynamicWorkflowRunViewProps) {
         onScheduleResume={() => void scheduleResume(runId)}
         onAbort={() => setAbortConfirmOpen(true)}
         onResolveWithCloser={() => {
-          void resolveWithCloser(
-            runId,
-            'Estado de friccao: usuario pediu ajuda do agente de fechamento.',
-          ).then(() => setTab('stream'));
+          void resolveWithCloser(runId, 'Estado de friccao: usuario pediu ajuda do agente de fechamento.').then(() =>
+            setTab('stream'),
+          );
         }}
         onSwitchAgent={(nodeId) => {
           setSwitchAgentId('');
@@ -580,8 +528,7 @@ export function DynamicWorkflowRunView({ runId }: DynamicWorkflowRunViewProps) {
       {switchTarget && (
         <div className="flex items-center gap-2 border-b border-amber-500/30 bg-zinc-950/90 px-4 py-2 shrink-0">
           <span className="text-[11px] text-zinc-300">
-            Trocar agente do node{' '}
-            <span className="font-mono text-amber-300">{switchTarget.nodeId ?? '(atual)'}</span>:
+            Trocar agente do node <span className="font-mono text-amber-300">{switchTarget.nodeId ?? '(atual)'}</span>:
           </span>
           <input
             type="text"
@@ -642,166 +589,159 @@ export function DynamicWorkflowRunView({ runId }: DynamicWorkflowRunViewProps) {
         />
       ) : (
         <>
-      {/* Quando o run ja fechou mas o usuario abriu o DETALHE (tela anterior),
+          {/* Quando o run ja fechou mas o usuario abriu o DETALHE (tela anterior),
           um banner permite voltar pra tela de entrega/metricas. */}
-      {isClosingPhase && showRunDetail && (
-        <div className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/5 px-4 py-1.5 shrink-0">
-          <span className="text-[11px] text-amber-300/90">Detalhes do run (encerrado)</span>
-          <button
-            type="button"
-            onClick={() => setShowRunDetail(false)}
-            className="ml-auto flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 transition-colors hover:bg-zinc-800"
-            data-testid="back-to-delivery"
-          >
-            <ArrowLeft size={12} />
-            Voltar à entrega
-          </button>
-        </div>
-      )}
-      {/* Corpo (E6.3): a coluna esquerda do chat do Maestro per-run FOI REMOVIDA.
+          {isClosingPhase && showRunDetail && (
+            <div className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/5 px-4 py-1.5 shrink-0">
+              <span className="text-[11px] text-amber-300/90">Detalhes do run (encerrado)</span>
+              <button
+                type="button"
+                onClick={() => setShowRunDetail(false)}
+                className="ml-auto flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 transition-colors hover:bg-zinc-800"
+                data-testid="back-to-delivery"
+              >
+                <ArrowLeft size={12} />
+                Voltar à entrega
+              </button>
+            </div>
+          )}
+          {/* Corpo (E6.3): a coluna esquerda do chat do Maestro per-run FOI REMOVIDA.
           O orquestrador principal dirige o run pelo chat principal; a RunView e um
           COCKPIT PURO (controle + visibilidade). O cockpit ocupa a tela inteira:
           rail limpo (narracao re-hidratada do DB - E6.1; fase/custo/tempo/tokens;
           decisoes de gate do driver) + abas SECUNDARIAS lazy (stream cru, inspecao,
           linha do tempo). O envio do humano se da pelo reply inline do banner de
           pergunta (E6.2) e pelo chat principal. */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-      <div
-        className="flex flex-1 flex-col min-h-0"
-        data-testid="run-cockpit"
-      >
-        {/* Cabecalho do cockpit: titulo no topo da coluna (mesmo padrao do header
+          <div className="flex flex-1 min-h-0 overflow-hidden">
+            <div className="flex flex-1 flex-col min-h-0" data-testid="run-cockpit">
+              {/* Cabecalho do cockpit: titulo no topo da coluna (mesmo padrao do header
             do ActivityPanel do chat do orquestrador). */}
-        <div className="flex shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-950/80 px-3 py-2">
-          <div className="flex items-center gap-1.5">
-            <LayoutDashboard size={13} className="text-zinc-500" />
-            <span className="text-[11px] font-medium text-zinc-300">Cockpit</span>
-            {isStreaming && (
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
-            )}
-          </div>
-        </div>
-        {/* Rail do cockpit: fase/custo/tempo/tokens + agentes agrupados por fase.
+              <div className="flex shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-950/80 px-3 py-2">
+                <div className="flex items-center gap-1.5">
+                  <LayoutDashboard size={13} className="text-zinc-500" />
+                  <span className="text-[11px] font-medium text-zinc-300">Cockpit</span>
+                  {isStreaming && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />}
+                </div>
+              </div>
+              {/* Rail do cockpit: fase/custo/tempo/tokens + agentes agrupados por fase.
             Ganha mais altura (flex-[1.6]); as abas secundarias lazy ficam no rodape
             (flex-1). */}
-        <div className="flex min-h-0 flex-[1.6] overflow-hidden border-b border-zinc-800">
-          <WorkflowCockpitRail
-            run={run}
-            nodeRuns={nodeRuns}
-            nodes={nodes}
-            manifest={manifest}
-            isStreaming={isStreaming}
-            touchedFiles={touchedFiles}
-            nodeStreams={nodeStreams}
-            gateDecisions={gateDecisions ?? undefined}
-            narration={
-              narrationLines && narrationLines.length > 0 ? (
-                <NarrationFeed lines={narrationLines} />
-              ) : isRunning && run?.currentNodeId ? (
-                <span className="font-mono text-[10px] text-zinc-500">
-                  trabalhando... (no {run.currentNodeId} rodando)
-                </span>
-              ) : undefined
-            }
-          />
-        </div>
-
-        {/* Abas SECUNDARIAS lazy (sec 5.1 / D20-D25): Stream, Execucao (+Ambiente),
-            Custo, Saidas, Linha do tempo. So a aba ativa monta (lazy). */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="flex items-center gap-1 overflow-x-auto border-b border-zinc-800 px-2 shrink-0">
-            {(
-              [
-                ['stream', 'Stream'],
-                ['execution', 'Execucao'],
-                ['cost', 'Custo'],
-                ['outputs', 'Saidas'],
-                ['timeline', 'Linha do tempo'],
-              ] as [RunTab, string][]
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                className={`whitespace-nowrap px-2.5 py-1.5 text-[11px] font-medium transition-colors border-b-2 -mb-px ${
-                  tab === key
-                    ? 'border-amber-500 text-amber-300'
-                    : 'border-transparent text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex flex-1 flex-col overflow-hidden min-h-0">
-            {tab === 'stream' && (
-              <WorkflowStreamView
-                nodes={streamNodes}
-                parallelGroupNodeIds={parallelGroupNodeIds}
-                pendingNodeIds={runningNodeIdsWithoutStream}
-              />
-            )}
-            {tab === 'execution' && (
-              <div className="flex flex-1 flex-col overflow-y-auto min-h-0">
-                <EnvironmentHeader
+              <div className="flex min-h-0 flex-[1.6] overflow-hidden border-b border-zinc-800">
+                <WorkflowCockpitRail
                   run={run}
-                  lastCheckpointAt={snapshot?.lastCheckpointAt ?? null}
-                  nodeRunCount={nodeRuns.length}
-                />
-                {selectedRoundNodeIds && (
-                  <div
-                    className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/5 px-4 py-1.5 text-[11px] text-amber-200 shrink-0"
-                    data-testid="round-filter-banner"
-                  >
-                    <RotateCcw size={11} className="shrink-0" />
-                    <span className="font-semibold">
-                      Rodada {selectedRoundIndex !== null ? selectedRoundIndex + 1 : ''}
-                    </span>
-                    <span className="text-amber-300/70">
-                      {selectedRoundNodeIds.length} nodes
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => selectRound(null)}
-                      className="ml-auto rounded-md border border-amber-500/30 px-2 py-0.5 text-amber-300 transition-colors hover:bg-amber-500/10"
-                    >
-                      Ver todas
-                    </button>
-                  </div>
-                )}
-                <DynamicWorkflowNodeTimeline
-                  manifest={manifest}
-                  nodes={nodes}
                   nodeRuns={nodeRuns}
-                  filterNodeIds={selectedRoundNodeIds}
+                  nodes={nodes}
+                  manifest={manifest}
+                  isStreaming={isStreaming}
+                  touchedFiles={touchedFiles}
+                  nodeStreams={nodeStreams}
+                  gateDecisions={gateDecisions ?? undefined}
+                  narration={
+                    narrationLines && narrationLines.length > 0 ? (
+                      <NarrationFeed lines={narrationLines} />
+                    ) : isRunning && run?.currentNodeId ? (
+                      <span className="font-mono text-[10px] text-zinc-500">
+                        trabalhando... (no {run.currentNodeId} rodando)
+                      </span>
+                    ) : undefined
+                  }
                 />
               </div>
-            )}
-            {tab === 'cost' && (
-              <WorkflowCostTab
-                nodeRuns={nodeRuns}
-                manifest={manifest}
-                totalCostUsd={run?.totalCostUsd ?? 0}
-                totalDurationMs={run?.totalDurationMs ?? 0}
-              />
-            )}
-            {tab === 'outputs' && (
-              <WorkflowOutputsTab
-                runId={runId}
-                run={run}
-                touched={durableTouched}
-                liveTouchedFiles={liveTouchedFiles}
-                artifacts={artifacts}
-              />
-            )}
-            {/* Linha do tempo (eventos + intervencoes, payload projetado, hora
+
+              {/* Abas SECUNDARIAS lazy (sec 5.1 / D20-D25): Stream, Execucao (+Ambiente),
+            Custo, Saidas, Linha do tempo. So a aba ativa monta (lazy). */}
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div className="flex items-center gap-1 overflow-x-auto border-b border-zinc-800 px-2 shrink-0">
+                  {(
+                    [
+                      ['stream', 'Stream'],
+                      ['execution', 'Execucao'],
+                      ['cost', 'Custo'],
+                      ['outputs', 'Saidas'],
+                      ['timeline', 'Linha do tempo'],
+                    ] as [RunTab, string][]
+                  ).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setTab(key)}
+                      className={`whitespace-nowrap px-2.5 py-1.5 text-[11px] font-medium transition-colors border-b-2 -mb-px ${
+                        tab === key
+                          ? 'border-amber-500 text-amber-300'
+                          : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex flex-1 flex-col overflow-hidden min-h-0">
+                  {tab === 'stream' && (
+                    <WorkflowStreamView
+                      nodes={streamNodes}
+                      parallelGroupNodeIds={parallelGroupNodeIds}
+                      pendingNodeIds={runningNodeIdsWithoutStream}
+                    />
+                  )}
+                  {tab === 'execution' && (
+                    <div className="flex flex-1 flex-col overflow-y-auto min-h-0">
+                      <EnvironmentHeader
+                        run={run}
+                        lastCheckpointAt={snapshot?.lastCheckpointAt ?? null}
+                        nodeRunCount={nodeRuns.length}
+                      />
+                      {selectedRoundNodeIds && (
+                        <div
+                          className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/5 px-4 py-1.5 text-[11px] text-amber-200 shrink-0"
+                          data-testid="round-filter-banner"
+                        >
+                          <RotateCcw size={11} className="shrink-0" />
+                          <span className="font-semibold">
+                            Rodada {selectedRoundIndex !== null ? selectedRoundIndex + 1 : ''}
+                          </span>
+                          <span className="text-amber-300/70">{selectedRoundNodeIds.length} nodes</span>
+                          <button
+                            type="button"
+                            onClick={() => selectRound(null)}
+                            className="ml-auto rounded-md border border-amber-500/30 px-2 py-0.5 text-amber-300 transition-colors hover:bg-amber-500/10"
+                          >
+                            Ver todas
+                          </button>
+                        </div>
+                      )}
+                      <DynamicWorkflowNodeTimeline
+                        manifest={manifest}
+                        nodes={nodes}
+                        nodeRuns={nodeRuns}
+                        filterNodeIds={selectedRoundNodeIds}
+                      />
+                    </div>
+                  )}
+                  {tab === 'cost' && (
+                    <WorkflowCostTab
+                      nodeRuns={nodeRuns}
+                      manifest={manifest}
+                      totalCostUsd={run?.totalCostUsd ?? 0}
+                      totalDurationMs={run?.totalDurationMs ?? 0}
+                    />
+                  )}
+                  {tab === 'outputs' && (
+                    <WorkflowOutputsTab
+                      runId={runId}
+                      run={run}
+                      touched={durableTouched}
+                      liveTouchedFiles={liveTouchedFiles}
+                      artifacts={artifacts}
+                    />
+                  )}
+                  {/* Linha do tempo (eventos + intervencoes, payload projetado, hora
                 local), aba lazy (sec 5.1/5.3, D22). */}
-            {tab === 'timeline' && <WorkflowEventTimeline feed={composerFeed} />}
+                  {tab === 'timeline' && <WorkflowEventTimeline feed={composerFeed} />}
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-      </div>
         </>
       )}
 
@@ -844,7 +784,6 @@ export function DynamicWorkflowRunView({ runId }: DynamicWorkflowRunViewProps) {
     </div>
   );
 }
-
 
 function HeaderButton({
   onClick,
@@ -929,9 +868,7 @@ function NarrationFeed({ lines }: { lines: string[] }) {
         <p
           key={`${i}-${line.slice(0, 12)}`}
           className={
-            i === lastIndex
-              ? 'text-[11px] leading-relaxed text-zinc-200'
-              : 'text-[10px] leading-relaxed text-zinc-500'
+            i === lastIndex ? 'text-[11px] leading-relaxed text-zinc-200' : 'text-[10px] leading-relaxed text-zinc-500'
           }
         >
           {line}
@@ -965,9 +902,7 @@ function EnvironmentHeader({
           <ChevronRight size={12} className="shrink-0 text-zinc-500" />
         )}
         Ambiente
-        <span className="ml-1 font-mono text-[10px] text-zinc-500">
-          {run?.workspaceMode ?? '(nao decidido)'}
-        </span>
+        <span className="ml-1 font-mono text-[10px] text-zinc-500">{run?.workspaceMode ?? '(nao decidido)'}</span>
         <span className="ml-auto font-mono text-[10px] text-zinc-500">
           {nodeRunCount} node_run{nodeRunCount === 1 ? '' : 's'}
         </span>
@@ -991,17 +926,7 @@ function EnvironmentHeader({
   );
 }
 
-function Field({
-  label,
-  value,
-  mono,
-  icon,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-  icon?: React.ReactNode;
-}) {
+function Field({ label, value, mono, icon }: { label: string; value: string; mono?: boolean; icon?: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3">
       <span className="w-36 shrink-0 text-zinc-500">{label}</span>

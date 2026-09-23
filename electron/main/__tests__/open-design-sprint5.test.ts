@@ -1,9 +1,7 @@
-
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-
 
 vi.mock('../open-design/config', () => ({
   getOpenDesignConfig: vi.fn(),
@@ -16,7 +14,6 @@ vi.mock('../db', () => ({
 }));
 
 import * as configMod from '../open-design/config';
-
 
 import { storyRequiresUI } from '../open-design/validator';
 
@@ -82,7 +79,6 @@ describe('storyRequiresUI', () => {
   });
 });
 
-
 import type { DesignContract } from '../../../src/types/open-design';
 
 function makeContract(overrides: Partial<DesignContract> = {}): DesignContract {
@@ -94,9 +90,7 @@ function makeContract(overrides: Partial<DesignContract> = {}): DesignContract {
       tokens: { colors: {}, typography: {}, spacing: {}, radii: {} },
     },
     navigation: {
-      primary: [
-        { id: 'nav-home', label: 'Home', targetScreenId: 'screen-home', userStoryIds: ['US-01'] },
-      ],
+      primary: [{ id: 'nav-home', label: 'Home', targetScreenId: 'screen-home', userStoryIds: ['US-01'] }],
     },
     screens: [
       {
@@ -149,7 +143,6 @@ function setupTempProject(contract: DesignContract | null, htmlContent?: string)
   return { tmpDir, runDir, snapshotDir, htmlPath, contractPath };
 }
 
-
 import { validateLock } from '../open-design/validator';
 
 describe('validateLock — 13 rules', () => {
@@ -186,10 +179,7 @@ describe('validateLock — 13 rules', () => {
   });
 
   it('rule 10.2.2 — fails when no valid contract in HTML', async () => {
-    const { tmpDir, runDir, snapshotDir } = setupTempProject(
-      null,
-      '<html><body>no contract here</body></html>',
-    );
+    const { tmpDir, runDir, snapshotDir } = setupTempProject(null, '<html><body>no contract here</body></html>');
     const contractPath = path.join(snapshotDir, 'design-contract.json');
     if (fs.existsSync(contractPath)) fs.unlinkSync(contractPath);
     try {
@@ -216,11 +206,9 @@ describe('validateLock — 13 rules', () => {
     try {
       const result = await runValidator(runDir, contract);
       expect(result.ok).toBe(false);
-      expect(
-        result.problems.some(
-          (p) => p.rule === '10.2.2' && p.hint.includes('apiExpectations[0].actionIds'),
-        ),
-      ).toBe(true);
+      expect(result.problems.some((p) => p.rule === '10.2.2' && p.hint.includes('apiExpectations[0].actionIds'))).toBe(
+        true,
+      );
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -602,7 +590,6 @@ describe('validateLock — 13 rules', () => {
   });
 });
 
-
 import {
   DEVELOPMENT_V2_RESETABLE_PHASES_BEFORE_LOCK,
   DEVELOPMENT_V2_RESETABLE_PHASES_AFTER_LOCK,
@@ -631,8 +618,6 @@ describe('getResetablePhases — locked=true disables design phases, enables 7-1
   });
 
   it('DEVELOPMENT_V2_RESETABLE_PHASES_AFTER_LOCK has exactly {7..15}', () => {
-    expect(DEVELOPMENT_V2_RESETABLE_PHASES_AFTER_LOCK).toEqual(
-      new Set([7, 8, 9, 10, 11, 12, 13, 14, 15]),
-    );
+    expect(DEVELOPMENT_V2_RESETABLE_PHASES_AFTER_LOCK).toEqual(new Set([7, 8, 9, 10, 11, 12, 13, 14, 15]));
   });
 });

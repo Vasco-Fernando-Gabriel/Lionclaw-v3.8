@@ -1,4 +1,3 @@
-
 import { createLogger } from '../logger';
 import type {
   DynamicWorkflowSnapshot,
@@ -7,12 +6,7 @@ import type {
   DynamicWorkflowEvent,
   DynamicWorkflowRunCostAggregate,
 } from './types';
-import {
-  computeSinceStats,
-  deriveOutcomesSince,
-  eventsSince,
-  findWindowStartSeq,
-} from './workflow-outcome';
+import { computeSinceStats, deriveOutcomesSince, eventsSince, findWindowStartSeq } from './workflow-outcome';
 import { toLocalShort } from './local-time';
 
 const logger = createLogger('dynamic-workflow-snapshot');
@@ -44,25 +38,13 @@ export interface SnapshotDeps {
 export const SNAPSHOT_LAST_OUTCOMES_MAX = 12;
 
 const PENDING_DECISION_TYPES: ReadonlySet<DynamicWorkflowPendingDecisionType> =
-  new Set<DynamicWorkflowPendingDecisionType>([
-    'gate',
-    'question',
-    'error',
-    'provider',
-  ]);
+  new Set<DynamicWorkflowPendingDecisionType>(['gate', 'question', 'error', 'provider']);
 
-function isPendingDecisionType(
-  value: unknown,
-): value is DynamicWorkflowPendingDecisionType {
-  return (
-    typeof value === 'string' &&
-    PENDING_DECISION_TYPES.has(value as DynamicWorkflowPendingDecisionType)
-  );
+function isPendingDecisionType(value: unknown): value is DynamicWorkflowPendingDecisionType {
+  return typeof value === 'string' && PENDING_DECISION_TYPES.has(value as DynamicWorkflowPendingDecisionType);
 }
 
-export function derivePendingDecision(
-  run: DynamicWorkflowRun,
-): DynamicWorkflowPendingDecisionState | undefined {
+export function derivePendingDecision(run: DynamicWorkflowRun): DynamicWorkflowPendingDecisionState | undefined {
   const isBlocking = run.status === 'blocked' || run.status === 'failed';
   if (!isBlocking) return undefined;
 
@@ -79,10 +61,7 @@ export function derivePendingDecision(
     return {
       type: pd.type,
       id: typeof pd.id === 'string' && pd.id.length > 0 ? pd.id : run.id,
-      prompt:
-        typeof pd.prompt === 'string' && pd.prompt.length > 0
-          ? pd.prompt
-          : defaultPromptFor(pd.type, run),
+      prompt: typeof pd.prompt === 'string' && pd.prompt.length > 0 ? pd.prompt : defaultPromptFor(pd.type, run),
     };
   }
 
@@ -101,10 +80,7 @@ export function derivePendingDecision(
   };
 }
 
-function defaultPromptFor(
-  type: DynamicWorkflowPendingDecisionType,
-  run: DynamicWorkflowRun,
-): string {
+function defaultPromptFor(type: DynamicWorkflowPendingDecisionType, run: DynamicWorkflowRun): string {
   switch (type) {
     case 'gate':
       return 'gate aguardando aprovacao';
@@ -133,8 +109,7 @@ function summarizeEvent(event: DynamicWorkflowEvent): {
       pickString(payload['nodeId']) ??
       pickString(payload['decision']);
     if (candidate) summary = `${event.type}: ${candidate}`;
-  } catch {
-  }
+  } catch {}
   const atLocal = toLocalShort(event.createdAt);
   return { type: event.type, summary, at: event.createdAt, ...(atLocal ? { atLocal } : {}) };
 }

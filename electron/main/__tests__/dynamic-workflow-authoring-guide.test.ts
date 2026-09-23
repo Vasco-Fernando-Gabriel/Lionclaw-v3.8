@@ -144,7 +144,9 @@ describe('guia de autoria: o .js de referencia e compilavel e valido', () => {
     expect(example).not.toMatch(/\bgate\s*\(/);
     expect(example).not.toMatch(/materializeSprintPlan|validateSprintPlan/);
     expect(example).not.toMatch(/sprintIndex/);
-    expect(example).toMatch(/const textOf = \(r\) => \(typeof r === "string" \? r : \(r && typeof r\.output === "string" \? r\.output : JSON\.stringify\(r\)\)\)/);
+    expect(example).toMatch(
+      /const textOf = \(r\) => \(typeof r === "string" \? r : \(r && typeof r\.output === "string" \? r\.output : JSON\.stringify\(r\)\)\)/,
+    );
     expect(example).toMatch(/const t = textOf\(r\);/);
     expect(example).not.toMatch(/String\(texto\)|String\(saida\)|String\(fix\)/);
   });
@@ -331,7 +333,9 @@ describe('guia de autoria: o .js de referencia executa a doutrina (vm com stubs 
     expect(semIds.phases).toContain('Sprint s0');
     expect(labelsOf(semIds.calls)).toContain('u-s0-s0-f0-a0');
 
-    const invalido = await runExample({ plan: { sprints: [{ id: 's0', features: [{ id: 'F1', acceptanceCriteria: [] }] }] } });
+    const invalido = await runExample({
+      plan: { sprints: [{ id: 's0', features: [{ id: 'F1', acceptanceCriteria: [] }] }] },
+    });
     expect(invalido.result).toMatchObject({ ok: false, motivo: 'plano-invalido' });
     expect(labelsOf(invalido.calls).some((l) => l.startsWith('u-'))).toBe(false);
     expect(invalido.logs.some((l) => l.startsWith('PLANO INVALIDO'))).toBe(true);
@@ -429,7 +433,9 @@ describe('guia de autoria: o .js de referencia executa a doutrina (vm com stubs 
     expect(nulo.result).toMatchObject({ ok: false, sprint: 's0' });
     expect(nulo.calls.some((c) => c.opts.label === 'dod')).toBe(false);
 
-    const foraDoEnum = await runExample({ recheck: { where: 'src/b.ts', problem: 'zz quebrado', verdict: 'resolvido', evidencia: 'x' } });
+    const foraDoEnum = await runExample({
+      recheck: { where: 'src/b.ts', problem: 'zz quebrado', verdict: 'resolvido', evidencia: 'x' },
+    });
     expect(foraDoEnum.logs.some((l) => l.startsWith('SPRINT-VERDICT: RED'))).toBe(true);
   });
 

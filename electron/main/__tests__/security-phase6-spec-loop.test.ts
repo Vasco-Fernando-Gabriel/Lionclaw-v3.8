@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
 
@@ -15,10 +14,12 @@ const capturedEvents: Array<{ channel: string; data: unknown }> = [];
 
 vi.mock('electron', () => ({
   BrowserWindow: {
-    getAllWindows: vi.fn(() => [{
-      isDestroyed: () => false,
-      webContents: { send: (channel: string, data: unknown) => capturedEvents.push({ channel, data }) },
-    }]),
+    getAllWindows: vi.fn(() => [
+      {
+        isDestroyed: () => false,
+        webContents: { send: (channel: string, data: unknown) => capturedEvents.push({ channel, data }) },
+      },
+    ]),
   },
   app: { on: vi.fn() },
 }));
@@ -32,14 +33,27 @@ function fsReadFileSync(p: string): string {
   return fsState.specContent;
 }
 vi.mock('fs', () => ({
-  default: { existsSync: vi.fn().mockReturnValue(true), readFileSync: vi.fn((p: string) => fsReadFileSync(p)), writeFileSync: vi.fn(), readdirSync: vi.fn(() => []) },
+  default: {
+    existsSync: vi.fn().mockReturnValue(true),
+    readFileSync: vi.fn((p: string) => fsReadFileSync(p)),
+    writeFileSync: vi.fn(),
+    readdirSync: vi.fn(() => []),
+  },
   existsSync: vi.fn().mockReturnValue(true),
   readFileSync: vi.fn((p: string) => fsReadFileSync(p)),
   writeFileSync: vi.fn(),
   readdirSync: vi.fn(() => []),
 }));
-vi.mock('path', () => ({ default: { join: (...args: string[]) => args.join('/'), basename: (p: string) => p.split('/').pop() ?? p }, join: (...args: string[]) => args.join('/'), basename: (p: string) => p.split('/').pop() ?? p }));
-vi.mock('os', () => ({ default: { homedir: () => '/home/user', tmpdir: () => '/tmp' }, homedir: () => '/home/user', tmpdir: () => '/tmp' }));
+vi.mock('path', () => ({
+  default: { join: (...args: string[]) => args.join('/'), basename: (p: string) => p.split('/').pop() ?? p },
+  join: (...args: string[]) => args.join('/'),
+  basename: (p: string) => p.split('/').pop() ?? p,
+}));
+vi.mock('os', () => ({
+  default: { homedir: () => '/home/user', tmpdir: () => '/tmp' },
+  homedir: () => '/home/user',
+  tmpdir: () => '/tmp',
+}));
 
 vi.mock('../db', () => ({
   getHarnessProject: vi.fn(),
@@ -111,7 +125,6 @@ interface PhaseStateLike {
   currentSprintIndex: number;
 }
 
-
 function makeEngine() {
   const harnessInstance = new HarnessEngine({} as never);
   return new PipelineEngine(() => null, harnessInstance as never);
@@ -121,8 +134,14 @@ function makeSpawnResult() {
   return {
     output: 'ok',
     metrics: {
-      inputTokens: 10, outputTokens: 5, cacheReadTokens: 0, cacheCreationTokens: 0,
-      toolUses: 0, apiRequests: 1, costUsd: 0.0001, durationMs: 10,
+      inputTokens: 10,
+      outputTokens: 5,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      toolUses: 0,
+      apiRequests: 1,
+      costUsd: 0.0001,
+      durationMs: 10,
     },
     model: 'claude-sonnet-4-6',
     runtime: 'cloud' as const,
@@ -169,22 +188,19 @@ const LOOP_BUILDER_MARKERS = ['Gere um SPEC completo', 'Corrija o SPEC de correc
 const LOOP_VALIDATOR_MARKER = 'Valide o SPEC de correcoes de seguranca contra o relatorio';
 
 function loopBuilderCalls(calls: SpawnCall[]): SpawnCall[] {
-  return calls.filter(
-    (c) => c.agentId === SPEC_BUILDER_ID && LOOP_BUILDER_MARKERS.some((m) => c.prompt.includes(m)),
-  );
+  return calls.filter((c) => c.agentId === SPEC_BUILDER_ID && LOOP_BUILDER_MARKERS.some((m) => c.prompt.includes(m)));
 }
 function loopValidatorCalls(calls: SpawnCall[]): SpawnCall[] {
-  return calls.filter(
-    (c) => c.agentId === SECURITY_SPEC_VALIDATOR_ID && c.prompt.includes(LOOP_VALIDATOR_MARKER),
-  );
+  return calls.filter((c) => c.agentId === SECURITY_SPEC_VALIDATOR_ID && c.prompt.includes(LOOP_VALIDATOR_MARKER));
 }
 
 async function runPhase6(engine: PipelineEngine, project: unknown, state: PhaseStateLike) {
-  await (engine as unknown as {
-    runSecurityPhase6: (id: string, p: unknown, s: unknown) => Promise<void>;
-  }).runSecurityPhase6('proj-sec', project, state);
+  await (
+    engine as unknown as {
+      runSecurityPhase6: (id: string, p: unknown, s: unknown) => Promise<void>;
+    }
+  ).runSecurityPhase6('proj-sec', project, state);
 }
-
 
 describe('SPEC-loop-fix security phase 6: runSecurityPhase6 (auto loop)', () => {
   beforeEach(() => {
@@ -264,8 +280,7 @@ describe('SPEC-loop-fix security phase 6: runSecurityPhase6 (auto loop)', () => 
       calls.push({ agentId, prompt });
       if (agentId === SECURITY_SPEC_VALIDATOR_ID && prompt.includes(LOOP_VALIDATOR_MARKER)) {
         loopValidatorSpawns += 1;
-        fsState.validationReportContent =
-          loopValidatorSpawns >= 2 ? '## Status: PASS\n' : '## Status: FAIL\n';
+        fsState.validationReportContent = loopValidatorSpawns >= 2 ? '## Status: PASS\n' : '## Status: FAIL\n';
       }
       return makeSpawnResult();
     });
@@ -344,7 +359,6 @@ describe('SPEC-loop-fix security phase 6: runSecurityPhase6 (auto loop)', () => 
   });
 });
 
-
 describe('SPEC-loop-fix security phase 6: approval advances to phase 7', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -356,7 +370,7 @@ describe('SPEC-loop-fix security phase 6: approval advances to phase 7', () => {
 
     const engine = makeEngine();
     const advanceSpy = vi.fn(async (_id: string, s: PhaseStateLike) => {
-      s.currentPhase = s.currentPhase + 1; // mirror the real +1 to assert -> 7
+      s.currentPhase = s.currentPhase + 1;
     });
     (engine as unknown as { advanceToNextPhase: Mock }).advanceToNextPhase = advanceSpy as unknown as Mock;
 

@@ -1,4 +1,3 @@
-
 import path from 'path';
 import { createLogger } from '../logger';
 import { getPipelineDocsContext } from '../pipeline-paths';
@@ -22,16 +21,12 @@ export function buildDesignLockPathsBlock(project: ProjectLockPathsInput): strin
   const snapshotDir = od.snapshotDir ?? null;
   const fallbackBase = snapshotDir;
 
-  const resolvedContract = od.contractPath
-    ?? (fallbackBase ? path.join(fallbackBase, 'design-contract.json') : null);
-  const resolvedBrief = od.briefPath
-    ?? (fallbackBase ? path.join(fallbackBase, 'design-brief.md') : null);
-  const resolvedReport = od.lockReportPath
-    ?? (fallbackBase ? path.join(fallbackBase, 'design-lock-report.md') : null);
-  const resolvedArtifact = od.artifactHtmlPath
-    ?? (fallbackBase ? path.join(fallbackBase, 'artifact', 'index.html') : null);
-  const resolvedManifest = od.manifestPath
-    ?? (fallbackBase ? path.join(fallbackBase, 'manifest.json') : null);
+  const resolvedContract = od.contractPath ?? (fallbackBase ? path.join(fallbackBase, 'design-contract.json') : null);
+  const resolvedBrief = od.briefPath ?? (fallbackBase ? path.join(fallbackBase, 'design-brief.md') : null);
+  const resolvedReport = od.lockReportPath ?? (fallbackBase ? path.join(fallbackBase, 'design-lock-report.md') : null);
+  const resolvedArtifact =
+    od.artifactHtmlPath ?? (fallbackBase ? path.join(fallbackBase, 'artifact', 'index.html') : null);
+  const resolvedManifest = od.manifestPath ?? (fallbackBase ? path.join(fallbackBase, 'manifest.json') : null);
   const openDesignProjectId = od.openDesignProjectId;
   const conversationId = od.conversationId;
 
@@ -66,9 +61,7 @@ export function buildDesignLockPathsBlock(project: ProjectLockPathsInput): strin
   const storiesPath = docsCtx
     ? docsCtx.resolveDocPath('stories-requisitos.md')
     : path.join(project.projectPath, 'stories-requisitos.md');
-  const prdPath = docsCtx
-    ? docsCtx.resolveDocPath('PRD.md')
-    : path.join(project.projectPath, 'PRD.md');
+  const prdPath = docsCtx ? docsCtx.resolveDocPath('PRD.md') : path.join(project.projectPath, 'PRD.md');
 
   return [
     '**Inputs explicitos do design lock:**',

@@ -34,11 +34,15 @@ export const VoiceOrb = forwardRef<VoiceOrbHandle, VoiceOrbProps>(function Voice
   const amplitudeRef = useRef(0);
   const targetAmplitudeRef = useRef(0);
 
-  useImperativeHandle(ref, () => ({
-    setAmplitude: (value: number) => {
-      targetAmplitudeRef.current = clamp(value, 0, 1);
-    },
-  }), []);
+  useImperativeHandle(
+    ref,
+    () => ({
+      setAmplitude: (value: number) => {
+        targetAmplitudeRef.current = clamp(value, 0, 1);
+      },
+    }),
+    [],
+  );
 
   useEffect(() => {
     targetAmplitudeRef.current = clamp(amplitude, 0, 1);

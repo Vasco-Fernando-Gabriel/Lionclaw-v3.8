@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
@@ -44,14 +43,7 @@ vi.mock('../../agent-runtime/permission-profiles', () => ({
   PERM_BYPASS_NO_GUARD: { mode: 'bypassPermissions' },
 }));
 
-import {
-  createSessionFsState,
-  lionRead,
-  lionWrite,
-  lionEdit,
-  lionGlob,
-  lionGrep,
-} from '../tools/filesystem';
+import { createSessionFsState, lionRead, lionWrite, lionEdit, lionGlob, lionGrep } from '../tools/filesystem';
 import { lionBash } from '../tools/bash';
 import { LionTodoStore, lionTodoWrite } from '../tools/todo';
 import { lionAskUserQuestion } from '../tools/ask-user';
@@ -60,7 +52,6 @@ import { lionMcpCall, buildPrefixedMcpName } from '../tools/mcp';
 import { lionAgentDispatch } from '../tools/agent';
 import { lionSkillLoad } from '../tools/skill';
 import { LION_TOOL_SCHEMAS, listLionToolNames } from '../tool-registry';
-
 
 let SANDBOX = '';
 let DEMO_FILE = '';
@@ -79,10 +70,8 @@ afterAll(async () => {
   try {
     await fs.rm(SANDBOX, { recursive: true, force: true });
     await fs.rm(DEFAULT_CWD_FILE, { force: true });
-  } catch {
-  }
+  } catch {}
 });
-
 
 describe('SPEC §12.5 registry exposes the 12 tool names', () => {
   it('exposes Read, Write, Edit, Glob, Grep, Bash, TodoWrite, AskUserQuestion, memory_search, mcp_call, Agent, Skill', () => {
@@ -107,7 +96,6 @@ describe('SPEC §12.5 registry exposes the 12 tool names', () => {
     expect(LION_TOOL_SCHEMAS.length).toBe(expected.length);
   });
 });
-
 
 describe('filesystem tools dispatcher path', () => {
   it('Read: returns numbered lines for a real file (happy path)', async () => {
@@ -207,13 +195,13 @@ describe('filesystem tools dispatcher path', () => {
   });
 });
 
-
 describe('Bash dispatcher path', () => {
   it('returns a typed result for a trivial command', async () => {
     const r = await lionBash(
       { command: 'echo hello-from-smoke', cwd: SANDBOX },
       {
         getWindow: () => null,
+        sessionId: 'sess-smoke',
         permissionGuard: async () => ({ behavior: 'allow' }),
         resolveDefaultCwd: () => SANDBOX,
       },
@@ -230,6 +218,7 @@ describe('Bash dispatcher path', () => {
       { command: nodeCmd, cwd: SANDBOX },
       {
         getWindow: () => null,
+        sessionId: 'sess-smoke',
         permissionGuard: async () => ({ behavior: 'allow' }),
         resolveDefaultCwd: () => SANDBOX,
       },
@@ -243,6 +232,7 @@ describe('Bash dispatcher path', () => {
       { command: '' },
       {
         getWindow: () => null,
+        sessionId: 'sess-smoke',
         permissionGuard: async () => ({ behavior: 'allow' }),
         resolveDefaultCwd: () => SANDBOX,
       },
@@ -251,7 +241,6 @@ describe('Bash dispatcher path', () => {
     expect(r.exitCode).toBe(1);
   });
 });
-
 
 describe('TodoWrite dispatcher path', () => {
   it('accepts a valid list and rejects multiple in_progress', () => {
@@ -274,7 +263,6 @@ describe('TodoWrite dispatcher path', () => {
     expect(rejected.error).toMatch(/in_progress/);
   });
 });
-
 
 describe('AskUserQuestion dispatcher path', () => {
   it('forwards through the injected sender and returns answers', async () => {
@@ -304,24 +292,15 @@ describe('AskUserQuestion dispatcher path', () => {
   });
 
   it('rejects empty questions array', async () => {
-    const r = await lionAskUserQuestion(
-      { questions: [] },
-      { getWindow: () => null },
-    );
+    const r = await lionAskUserQuestion({ questions: [] }, { getWindow: () => null });
     expect(r.ok).toBe(false);
   });
 });
 
-
 describe('memory_search dispatcher path', () => {
   it('forwards through the injected search function and shapes the result', async () => {
-    const search = vi.fn(async () => [
-      { content: 'a memory', rrf_score: 0.8, created_at: '2026-01-01T00:00:00Z' },
-    ]);
-    const r = await lionMemorySearch(
-      { query: 'foo' },
-      { search: search as never },
-    );
+    const search = vi.fn(async () => [{ content: 'a memory', rrf_score: 0.8, created_at: '2026-01-01T00:00:00Z' }]);
+    const r = await lionMemorySearch({ query: 'foo' }, { search: search as never });
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.results).toHaveLength(1);
@@ -334,7 +313,6 @@ describe('memory_search dispatcher path', () => {
     expect(r.ok).toBe(false);
   });
 });
-
 
 describe('mcp_call dispatcher path', () => {
   it('rejects when server_id is absent from the session client', async () => {
@@ -349,12 +327,9 @@ describe('mcp_call dispatcher path', () => {
   });
 
   it('builds the prefixed MCP name per SPEC convention', () => {
-    expect(buildPrefixedMcpName('knowledge-base', 'search')).toBe(
-      'mcp__knowledge-base__search',
-    );
+    expect(buildPrefixedMcpName('knowledge-base', 'search')).toBe('mcp__knowledge-base__search');
   });
 });
-
 
 describe('Agent dispatcher path', () => {
   it('rejects unknown agent_id (no executor call)', async () => {
@@ -426,13 +401,14 @@ describe('Agent dispatcher path', () => {
       squad: 'general',
     }));
 
-    await expect(lionAgentDispatch(
-      { agent_id: 'chat-agent', task: 'do the thing' },
-      { executor: executor as never, getAgent: getAgent as never },
-    )).rejects.toBe(authError);
+    await expect(
+      lionAgentDispatch(
+        { agent_id: 'chat-agent', task: 'do the thing' },
+        { executor: executor as never, getAgent: getAgent as never },
+      ),
+    ).rejects.toBe(authError);
   });
 });
-
 
 describe('Skill dispatcher path', () => {
   it('rejects unsafe skill_name characters', async () => {
@@ -444,11 +420,7 @@ describe('Skill dispatcher path', () => {
     const skillsRoot = path.join(os.tmpdir(), 'skills', 'demo-smoke');
     await fs.mkdir(skillsRoot, { recursive: true });
     const skillFile = path.join(skillsRoot, 'SKILL.md');
-    await fs.writeFile(
-      skillFile,
-      '---\nname: demo\nuserInvocable: true\n---\nBody of the skill.',
-      'utf-8',
-    );
+    await fs.writeFile(skillFile, '---\nname: demo\nuserInvocable: true\n---\nBody of the skill.', 'utf-8');
 
     const r = await lionSkillLoad({ skill_name: 'demo-smoke' });
     expect(r.ok).toBe(true);

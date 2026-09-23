@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -10,6 +9,10 @@ const getSessionActiveRepositoryMock = vi.fn();
 const getLocalRepositoryMock = vi.fn();
 const insertRepoGraphTurnUsageMock = vi.fn();
 const getLatestUserTurnIndexMock = vi.fn(() => 7);
+vi.mock('../in-flight-desktop-session', () => ({
+  getInFlightDesktopSession: () => getActiveChatSessionMock()?.id ?? null,
+  setInFlightDesktopSession: () => {},
+}));
 vi.mock('../db', () => ({
   getAllAgents: vi.fn(() => []),
   insertAuditEntry: vi.fn(),
@@ -59,10 +62,7 @@ vi.mock('../ipc/repo-graph', () => ({
 }));
 
 import { dispatch, type JsonRpcContext } from '../local-ipc/jsonrpc-methods';
-import {
-  setRepoGraphTurnSession,
-  clearRepoGraphTurnSession,
-} from '../repo-graph/turn-context';
+import { setRepoGraphTurnSession, clearRepoGraphTurnSession } from '../repo-graph/turn-context';
 import { RepoGraphEngine, type RepoGraphEngineDb, type RepoGraphProvider } from '../repo-graph/engine';
 import type { LocalRepositoryRecord, RepoGraphStatusEvent } from '../repo-graph/types';
 
@@ -109,8 +109,12 @@ beforeEach(() => {
 describe('politica de emissao — 1 chunk por tool USADA, com metrica', () => {
   it('cada chamada usada emite exatamente 1 chunk e 1 linha used=1', async () => {
     setRepoGraphTurnSession('sess-1', 'claude-sdk');
-    await dispatch(ctx, { method: 'repo_graph_search', id: 1, params: { term: 'x' } });
-    await dispatch(ctx, { method: 'repo_graph_node', id: 2, params: { name: 'executeQuery' } });
+    await dispatch(ctx, { method: 'repo_graph_search', id: 1, params: { ...{ sessionId: 'sess-1' }, term: 'x' } });
+    await dispatch(ctx, {
+      method: 'repo_graph_node',
+      id: 2,
+      params: { ...{ sessionId: 'sess-1' }, name: 'executeQuery' },
+    });
     clearRepoGraphTurnSession();
 
     expect(sendSpy).toHaveBeenCalledTimes(2);
@@ -153,7 +157,7 @@ describe('politica de emissao — 1 chunk por tool USADA, com metrica', () => {
     const res = await dispatch(ctx, {
       method: 'repo_graph_search',
       id: 3,
-      params: { term: 'x' },
+      params: { ...{ sessionId: 'sess-1' }, term: 'x' },
     });
     clearRepoGraphTurnSession();
 
@@ -174,16 +178,17 @@ describe('politica de emissao — 1 chunk por tool USADA, com metrica', () => {
     expect(insertRepoGraphTurnUsageMock).not.toHaveBeenCalled();
   });
 
-  it('Z3 — turnIndex OPCIONAL: uso fora de turno (fallback) emite chunk com turnIndex undefined', async () => {
+  it('uso FORA de turno (lanes RM2): erro tipado turn_binding_required, sem chunk e sem linha', async () => {
     getActiveChatSessionMock.mockReturnValue({ id: 'sess-1' });
-    await dispatch(ctx, { method: 'repo_graph_node', id: 4, params: { name: 'executeQuery' } });
+    const res = await dispatch(ctx, {
+      method: 'repo_graph_node',
+      id: 4,
+      params: { ...{ sessionId: 'sess-1' }, name: 'executeQuery' },
+    });
 
-    expect(sendSpy).toHaveBeenCalledTimes(1);
-    const [, chunk] = sendSpy.mock.calls[0];
-    expect(chunk.repoGraph.used).toBe(true);
-    expect(chunk.repoGraph.turnIndex).toBeUndefined();
-    expect(insertRepoGraphTurnUsageMock).toHaveBeenCalledTimes(1);
-    expect(insertRepoGraphTurnUsageMock.mock.calls[0][0].turnIndex).toBe(7);
+    expect(res.result).toEqual({ error: expect.stringContaining('turn_binding_required') });
+    expect(sendSpy).not.toHaveBeenCalled();
+    expect(insertRepoGraphTurnUsageMock).not.toHaveBeenCalled();
   });
 });
 

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -16,10 +15,7 @@ import {
   resolveCompactionThresholdPercent,
   resolveLionContextWindowTokens,
 } from '../chat-context-usage';
-import {
-  setProbedContextWindows,
-  clearProbedContextWindows,
-} from '../agent-runtime/model-context-windows';
+import { setProbedContextWindows, clearProbedContextWindows } from '../agent-runtime/model-context-windows';
 import {
   DEFAULT_CHAT_COMPACTION_TRIGGER_PERCENT,
   CHAT_COMPACTION_TRIGGER_PERCENT_SETTING_KEY,
@@ -99,19 +95,17 @@ describe('AC-A3: payload da barrinha por runtime (contextTokens / getContextWind
   });
 
   it('AC-A3: threshold vem do setting orchestrator_compaction_threshold_percent (clamp 50-95)', () => {
-    h.getSetting.mockImplementation((key) =>
-      key === 'orchestrator_compaction_threshold_percent' ? '85' : undefined,
-    );
+    h.getSetting.mockImplementation((key) => (key === 'orchestrator_compaction_threshold_percent' ? '85' : undefined));
     expect(resolveCompactionThresholdPercent()).toBe(85);
 
     h.getSetting.mockImplementation(() => '30');
-    expect(resolveCompactionThresholdPercent()).toBe(50); // clamp inferior
+    expect(resolveCompactionThresholdPercent()).toBe(50);
 
     h.getSetting.mockImplementation(() => '99');
-    expect(resolveCompactionThresholdPercent()).toBe(95); // clamp superior
+    expect(resolveCompactionThresholdPercent()).toBe(95);
 
     h.getSetting.mockImplementation(() => 'lixo');
-    expect(resolveCompactionThresholdPercent()).toBe(80); // UX-CTX (fix 3): default unificado (v129)
+    expect(resolveCompactionThresholdPercent()).toBe(80);
   });
 });
 
@@ -153,12 +147,8 @@ describe('AC-A4: janela undefined -> sem barrinha (D5), sem crash', () => {
   });
 
   it('AC-A4: contextTokens invalido (NaN / negativo) -> undefined, sem throw', () => {
-    expect(
-      buildChatContextUsage({ model: 'claude-fable-5', contextTokens: NaN, source: 'estimate' }),
-    ).toBeUndefined();
-    expect(
-      buildChatContextUsage({ model: 'claude-fable-5', contextTokens: -1, source: 'estimate' }),
-    ).toBeUndefined();
+    expect(buildChatContextUsage({ model: 'claude-fable-5', contextTokens: NaN, source: 'estimate' })).toBeUndefined();
+    expect(buildChatContextUsage({ model: 'claude-fable-5', contextTokens: -1, source: 'estimate' })).toBeUndefined();
   });
 });
 
@@ -183,8 +173,7 @@ describe('SA-2: lion-sdk resolve a janela pelo resolver (nao pelo setting manual
 });
 
 describe('AC-A3: fiacao — os 4 runtimes que nao emitiam passam a emitir context_usage', () => {
-  const read = (rel: string) =>
-    readFileSync(join(__dirname, '..', rel), 'utf-8');
+  const read = (rel: string) => readFileSync(join(__dirname, '..', rel), 'utf-8');
 
   it.each([
     ['orchestrator.ts (cloud, query() direto)', 'orchestrator.ts'],

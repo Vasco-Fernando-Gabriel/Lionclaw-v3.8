@@ -10,7 +10,6 @@ type HarnessProjectPathInfo = Pick<HarnessProject, 'id' | 'projectPath' | 'pipel
   sprintsJsonPath?: string | null;
 };
 
-
 function findLatestSecurityReportLegacy(projectPath: string): string | null {
   const securityDir = path.join(projectPath, '.lionclaw', 'Security');
   if (!fs.existsSync(securityDir)) return null;
@@ -20,17 +19,12 @@ function findLatestSecurityReportLegacy(projectPath: string): string | null {
   } catch {
     return null;
   }
-  const candidates = entries
-    .filter((name) => /^Security[-_]?\d{8}[-_]\d{4,6}\.md$/.test(name))
-    .sort();
+  const candidates = entries.filter((name) => /^Security[-_]?\d{8}[-_]\d{4,6}\.md$/.test(name)).sort();
   if (candidates.length === 0) return null;
   return path.join(securityDir, candidates[candidates.length - 1]!);
 }
 
-export function findConsolidatedSecurityReport(
-  projectPath: string,
-  pipelineDocsId: string | null,
-): string | null {
+export function findConsolidatedSecurityReport(projectPath: string, pipelineDocsId: string | null): string | null {
   if (pipelineDocsId) {
     const ctx = getPipelineDocsContext(projectPath, pipelineDocsId);
     if (ctx) {
@@ -41,18 +35,9 @@ export function findConsolidatedSecurityReport(
   return findLatestSecurityReportLegacy(projectPath);
 }
 
-const LEGACY_DOCS = [
-  'PRD.md',
-  'SPEC.md',
-  'stories-requisitos.md',
-  'discovery-notes.md',
-  'sprints.json',
-  'SPRINTS.md',
-];
+const LEGACY_DOCS = ['PRD.md', 'SPEC.md', 'stories-requisitos.md', 'discovery-notes.md', 'sprints.json', 'SPRINTS.md'];
 
-const LEGACY_GLOBS = [
-  /^feature-discovery-notes-.*\.md$/,
-];
+const LEGACY_GLOBS = [/^feature-discovery-notes-.*\.md$/];
 
 void LEGACY_DOCS;
 
@@ -71,10 +56,7 @@ export interface PipelineDocsContext {
   resolveDocPath(baseName: string): string;
 }
 
-export function getPipelineDocsContext(
-  projectPath: string,
-  pipelineDocsId: string | null,
-): PipelineDocsContext | null {
+export function getPipelineDocsContext(projectPath: string, pipelineDocsId: string | null): PipelineDocsContext | null {
   if (!pipelineDocsId) return null;
 
   const docsRoot = path.join(projectPath, 'docs');
@@ -93,7 +75,6 @@ export function getPipelineDocsContext(
     },
   };
 }
-
 
 export interface DesignSnapshotPaths {
   snapshotDir: string;
@@ -125,10 +106,7 @@ export function resolveDesignSnapshotPaths(
   };
 }
 
-export function resolveOpenDesignPromptPath(
-  projectPath: string,
-  pipelineDocsId: string | null,
-): string {
+export function resolveOpenDesignPromptPath(projectPath: string, pipelineDocsId: string | null): string {
   if (pipelineDocsId) {
     const ctx = getPipelineDocsContext(projectPath, pipelineDocsId);
     if (ctx) {
@@ -142,7 +120,6 @@ export function resolveOpenDesignPromptPath(
   if (!fs.existsSync(fallbackDir)) fs.mkdirSync(fallbackDir, { recursive: true });
   return path.join(fallbackDir, 'open-design-prompt.md');
 }
-
 
 export function resolveSpecPath(project: Pick<HarnessProject, 'specPath' | 'projectPath'>): string {
   if (project.specPath) return project.specPath;
@@ -160,7 +137,6 @@ export function resolvePrdPath(project: Pick<HarnessProject, 'prdPath'>): string
 export function resolveDiscoveryNotesPath(project: Pick<HarnessProject, 'discoveryNotesPath'>): string | null {
   return project.discoveryNotesPath ?? null;
 }
-
 
 function sanitizePathSegment(value: string): string {
   const sanitized = value.replace(/[\\/]/g, '_').trim();
@@ -183,12 +159,7 @@ export function resolveHarnessProjectDir(project: HarnessProjectPathInfo): strin
 export function getCanonicalHarnessSprintsPath(project: HarnessProjectPathInfo): string {
   const projectPath = path.resolve(project.projectPath);
   return project.pipelineDocsId
-    ? path.join(
-        projectPath,
-        'docs',
-        `Docs${project.pipelineDocsId}`,
-        `sprints${project.pipelineDocsId}.json`,
-      )
+    ? path.join(projectPath, 'docs', `Docs${project.pipelineDocsId}`, `sprints${project.pipelineDocsId}.json`)
     : path.join(projectPath, 'docs', 'sprints.json');
 }
 
@@ -261,11 +232,7 @@ export function resolveHarnessSprintArtifactDir(
   project: HarnessProjectPathInfo,
   sprintJsonIdOrSprintId: string,
 ): string {
-  const dir = path.join(
-    resolveHarnessProjectDir(project),
-    'sprints',
-    sanitizePathSegment(sprintJsonIdOrSprintId),
-  );
+  const dir = path.join(resolveHarnessProjectDir(project), 'sprints', sanitizePathSegment(sprintJsonIdOrSprintId));
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -285,7 +252,6 @@ export function getLegacyHarnessSprintArtifactDir(
     sanitizePathSegment(sprintJsonIdOrSprintId),
   );
 }
-
 
 export function isLegacyHarnessPath(
   project: Pick<HarnessProjectPathInfo, 'id'>,
@@ -332,12 +298,7 @@ export function findLegacyHarnessSprintsPath(
 }
 
 export type HarnessSprintsMigrationStatus =
-  | 'not-legacy'
-  | 'project-missing'
-  | 'source-missing'
-  | 'moved'
-  | 'duplicate-removed'
-  | 'conflict-kept-canonical';
+  'not-legacy' | 'project-missing' | 'source-missing' | 'moved' | 'duplicate-removed' | 'conflict-kept-canonical';
 
 export interface HarnessSprintsMigrationResult {
   status: HarnessSprintsMigrationStatus;
@@ -347,11 +308,7 @@ export interface HarnessSprintsMigrationResult {
 }
 
 export type HarnessDocsSprintsMigrationStatus =
-  | 'source-missing'
-  | 'canonical-existing'
-  | 'moved'
-  | 'duplicate-removed'
-  | 'conflict-kept-source';
+  'source-missing' | 'canonical-existing' | 'moved' | 'duplicate-removed' | 'conflict-kept-source';
 
 export interface HarnessDocsSprintsMigrationResult {
   status: HarnessDocsSprintsMigrationStatus;

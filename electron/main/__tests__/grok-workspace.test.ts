@@ -45,23 +45,19 @@ describe('Grok workspace isolation', () => {
   it('snapshots instructions and protects inert project config files', () => {
     const repo = temporaryRoot();
     fs.writeFileSync(path.join(repo, 'AGENTS.md'), 'trusted instructions');
-    expect(collectGrokProjectSources(repo)).toMatchObject([
-      { content: 'trusted instructions', initial: true },
-    ]);
+    expect(collectGrokProjectSources(repo)).toMatchObject([{ content: 'trusted instructions', initial: true }]);
     fs.mkdirSync(path.join(repo, '.grok'));
     fs.writeFileSync(path.join(repo, '.grok', 'config.toml'), '[mcp]');
-    expect(collectGrokProjectSources(repo)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ content: '[mcp]', initial: false }),
-    ]));
+    expect(collectGrokProjectSources(repo)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ content: '[mcp]', initial: false })]),
+    );
   });
 
   it('protege arquivos de config e rejeita diretorios extensaveis pela mesma varredura do rehash', () => {
     const repo = temporaryRoot();
     fs.mkdirSync(path.join(repo, '.grok'), { recursive: true });
     fs.writeFileSync(path.join(repo, '.grok', 'mcp.json'), '{}');
-    expect(collectGrokProjectSources(repo)).toEqual([
-      expect.objectContaining({ content: '{}', initial: false }),
-    ]);
+    expect(collectGrokProjectSources(repo)).toEqual([expect.objectContaining({ content: '{}', initial: false })]);
 
     fs.rmSync(path.join(repo, '.grok', 'mcp.json'));
     fs.mkdirSync(path.join(repo, '.grok', 'marketplaces'));
@@ -83,15 +79,13 @@ describe('Grok workspace isolation', () => {
     fs.writeFileSync(path.join(repo, 'node_modules', 'dependency', 'AGENTS.md'), 'dependency instructions');
     fs.writeFileSync(path.join(repo, 'node_modules', 'dependency', '.grok', 'config.toml'), '[mcp]');
 
-    expect(collectGrokProjectSources(repo)).toMatchObject([
-      { content: 'root instructions', initial: true },
-    ]);
+    expect(collectGrokProjectSources(repo)).toMatchObject([{ content: 'root instructions', initial: true }]);
 
     fs.mkdirSync(path.join(repo, 'src', '.grok'), { recursive: true });
     fs.writeFileSync(path.join(repo, 'src', '.grok', 'config.toml'), '[mcp]');
-    expect(collectGrokProjectSources(repo)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ content: '[mcp]', initial: false }),
-    ]));
+    expect(collectGrokProjectSources(repo)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ content: '[mcp]', initial: false })]),
+    );
   });
 
   it('protege config Claude existente e ignora worktrees e estado LionClaw opacos', () => {
@@ -124,11 +118,14 @@ describe('Grok workspace isolation', () => {
     const sessionId = 'session-1';
     const sessionDir = path.join(home, 'sessions', encodeURIComponent(grant.sessionCwd), sessionId);
     fs.mkdirSync(sessionDir, { recursive: true });
-    fs.writeFileSync(path.join(sessionDir, 'prompt_context.json'), JSON.stringify({
-      working_directory: grant.sessionCwd,
-      memory_enabled: false,
-      agents_md_files: [{ file_path: sourcePath, content: 'v1' }],
-    }));
+    fs.writeFileSync(
+      path.join(sessionDir, 'prompt_context.json'),
+      JSON.stringify({
+        working_directory: grant.sessionCwd,
+        memory_enabled: false,
+        agents_md_files: [{ file_path: sourcePath, content: 'v1' }],
+      }),
+    );
     expect(() => attestGrokSession(grant, home, sessionId)).not.toThrow();
     expect(ensureGrokSandboxProfile(grant, home)).toMatch(/^lionclaw_/);
     const sandbox = fs.readFileSync(path.join(home, 'sandbox.toml'), 'utf8');
@@ -161,11 +158,14 @@ describe('Grok workspace isolation', () => {
     const sessionId = 'session-physical-alias';
     const sessionDir = path.join(home, 'sessions', encodeURIComponent(grant.sessionCwd), sessionId);
     fs.mkdirSync(sessionDir, { recursive: true });
-    fs.writeFileSync(path.join(sessionDir, 'prompt_context.json'), JSON.stringify({
-      working_directory: grant.sessionCwd,
-      memory_enabled: false,
-      agents_md_files: [{ file_path: reportedPath, content: 'trusted instructions' }],
-    }));
+    fs.writeFileSync(
+      path.join(sessionDir, 'prompt_context.json'),
+      JSON.stringify({
+        working_directory: grant.sessionCwd,
+        memory_enabled: false,
+        agents_md_files: [{ file_path: reportedPath, content: 'trusted instructions' }],
+      }),
+    );
 
     expect(() => attestGrokSession(grant, home, sessionId)).not.toThrow();
 
@@ -209,40 +209,76 @@ describe('Grok workspace isolation', () => {
     };
     expect(() => assertGrokInspect(grant, inspected, grokHome)).not.toThrow();
     expect(() => assertGrokInspect(grant, { ...inspected, skills: [] }, grokHome)).not.toThrow();
-    expect(() => assertGrokInspect(grant, {
-      ...inspected,
-      providerConfig: { base_url: 'https://payg.example/v1' },
-    }, grokHome)).toThrow(/backend\/auth custom/);
-    expect(() => assertGrokInspect(grant, {
-      ...inspected,
-      customModels: [{ id: 'grok-4.5', provider: 'third-party' }],
-    }, grokHome)).toThrow(/catalogo custom/);
-    expect(() => assertGrokInspect(grant, {
-      ...inspected,
-      mcpServers: [{
-        name: 'codegraph',
-        disabled: true,
-        compatibilityStatus: 'disabled',
-        source: { type: 'claudeJson', path: '/home/user/.claude.json' },
-      }],
-    }, grokHome)).not.toThrow();
-    expect(() => assertGrokInspect(grant, {
-      ...inspected,
-      mcpServers: [{
-        name: 'codegraph',
-        disabled: false,
-        compatibilityStatus: 'enabled',
-        source: { type: 'claudeJson', path: '/home/user/.claude.json' },
-      }],
-    }, grokHome)).toThrow(/MCP ativo/);
-    expect(() => assertGrokInspect(grant, {
-      ...inspected,
-      mcpServers: [{
-        name: 'codegraph',
-        disabled: true,
-        source: { type: 'claudeJson', path: '/home/user/.claude.json' },
-      }],
-    }, grokHome)).toThrow(/MCP ativo/);
+    expect(() =>
+      assertGrokInspect(
+        grant,
+        {
+          ...inspected,
+          providerConfig: { base_url: 'https://payg.example/v1' },
+        },
+        grokHome,
+      ),
+    ).toThrow(/backend\/auth custom/);
+    expect(() =>
+      assertGrokInspect(
+        grant,
+        {
+          ...inspected,
+          customModels: [{ id: 'grok-4.5', provider: 'third-party' }],
+        },
+        grokHome,
+      ),
+    ).toThrow(/catalogo custom/);
+    expect(() =>
+      assertGrokInspect(
+        grant,
+        {
+          ...inspected,
+          mcpServers: [
+            {
+              name: 'codegraph',
+              disabled: true,
+              compatibilityStatus: 'disabled',
+              source: { type: 'claudeJson', path: '/home/user/.claude.json' },
+            },
+          ],
+        },
+        grokHome,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertGrokInspect(
+        grant,
+        {
+          ...inspected,
+          mcpServers: [
+            {
+              name: 'codegraph',
+              disabled: false,
+              compatibilityStatus: 'enabled',
+              source: { type: 'claudeJson', path: '/home/user/.claude.json' },
+            },
+          ],
+        },
+        grokHome,
+      ),
+    ).toThrow(/MCP ativo/);
+    expect(() =>
+      assertGrokInspect(
+        grant,
+        {
+          ...inspected,
+          mcpServers: [
+            {
+              name: 'codegraph',
+              disabled: true,
+              source: { type: 'claudeJson', path: '/home/user/.claude.json' },
+            },
+          ],
+        },
+        grokHome,
+      ),
+    ).toThrow(/MCP ativo/);
     inspected.skills[0]!.disabled = false;
     expect(() => assertGrokInspect(grant, inspected, grokHome)).toThrow(/skill executavel/);
   });
@@ -278,16 +314,26 @@ describe('Grok workspace isolation', () => {
         source: { type: 'builtin' },
       })),
     };
-    expect(() => assertGrokInspect(grant, {
-      ...base,
-      projectInstructions: [
-        { path: compatInstruction, disabled: true, compatibilityStatus: 'disabled' },
-      ],
-    }, grokHome)).not.toThrow();
-    expect(() => assertGrokInspect(grant, {
-      ...base,
-      projectInstructions: [{ path: compatInstruction }],
-    }, grokHome)).toThrow(/instruction inesperada/);
+    expect(() =>
+      assertGrokInspect(
+        grant,
+        {
+          ...base,
+          projectInstructions: [{ path: compatInstruction, disabled: true, compatibilityStatus: 'disabled' }],
+        },
+        grokHome,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertGrokInspect(
+        grant,
+        {
+          ...base,
+          projectInstructions: [{ path: compatInstruction }],
+        },
+        grokHome,
+      ),
+    ).toThrow(/instruction inesperada/);
   });
 
   it('atesta a carga efetiva do ACP sem aceitar rules de compat desabilitadas', () => {
@@ -313,26 +359,32 @@ describe('Grok workspace isolation', () => {
       { file_path: path.join(repo, 'AGENTS.md'), content: 'raiz' },
       { file_path: path.join(repo, '.grok', 'rules', 'g.md'), content: 'nativa' },
     ];
-    fs.writeFileSync(path.join(sessionDir, 'prompt_context.json'), JSON.stringify({
-      working_directory: grant.sessionCwd,
-      memory_enabled: false,
-      agents_md_files: nativeRows,
-    }));
+    fs.writeFileSync(
+      path.join(sessionDir, 'prompt_context.json'),
+      JSON.stringify({
+        working_directory: grant.sessionCwd,
+        memory_enabled: false,
+        agents_md_files: nativeRows,
+      }),
+    );
     expect(() => attestGrokSession(grant, home, sessionId)).not.toThrow();
-    fs.writeFileSync(path.join(sessionDir, 'prompt_context.json'), JSON.stringify({
-      working_directory: grant.sessionCwd,
-      memory_enabled: false,
-      agents_md_files: [],
-    }));
+    fs.writeFileSync(
+      path.join(sessionDir, 'prompt_context.json'),
+      JSON.stringify({
+        working_directory: grant.sessionCwd,
+        memory_enabled: false,
+        agents_md_files: [],
+      }),
+    );
     expect(() => attestGrokSession(grant, home, sessionId)).not.toThrow();
-    fs.writeFileSync(path.join(sessionDir, 'prompt_context.json'), JSON.stringify({
-      working_directory: grant.sessionCwd,
-      memory_enabled: false,
-      agents_md_files: [
-        ...nativeRows,
-        { file_path: path.join(repo, '.claude', 'rules', 'c.md'), content: 'compat' },
-      ],
-    }));
+    fs.writeFileSync(
+      path.join(sessionDir, 'prompt_context.json'),
+      JSON.stringify({
+        working_directory: grant.sessionCwd,
+        memory_enabled: false,
+        agents_md_files: [...nativeRows, { file_path: path.join(repo, '.claude', 'rules', 'c.md'), content: 'compat' }],
+      }),
+    );
     expect(() => attestGrokSession(grant, home, sessionId)).toThrow(/instruction inesperada/);
   });
 
@@ -345,10 +397,12 @@ describe('Grok workspace isolation', () => {
     const inspected = {
       cwd: grant.sessionCwd,
       projectInstructions: [],
-      hooks: [{
-        event: '(plugin)',
-        source: { type: 'plugin', plugin_name: 'understand-anything' },
-      }],
+      hooks: [
+        {
+          event: '(plugin)',
+          source: { type: 'plugin', plugin_name: 'understand-anything' },
+        },
+      ],
       plugins: [{ name: 'understand-anything', enabled: true }],
       marketplaces: [],
       mcpServers: [],
@@ -373,47 +427,70 @@ describe('Grok workspace isolation', () => {
     const extras = { disabledSkills: ['framer'], disabledPlugins: ['understand-anything'], ignoredSkillPaths: [] };
     expect(() => assertGrokInspect(grant, inspected, grokHome, extras)).not.toThrow();
     expect(() => assertGrokInspect(grant, inspected, grokHome)).toThrow(/plugin fora da politica/);
-    expect(() => assertGrokInspect(grant, {
-      ...inspected,
-      skills: [{ ...inspected.skills[0]!, disabled: false }],
-    }, grokHome, extras)).toThrow(/skill executavel/);
-    expect(() => assertGrokInspect(grant, {
-      ...inspected,
-      hooks: [{ event: 'file', source: { type: 'project' } }],
-    }, grokHome, extras)).toThrow(/hook fora de plugin desabilitado/);
-    expect(() => assertGrokInspect(grant, {
-      ...inspected,
-      skills: [{ name: 'intrusa', disabled: true, source: { type: 'user', path: '/x/SKILL.md' } }],
-    }, grokHome, extras)).toThrow(/skill executavel/);
+    expect(() =>
+      assertGrokInspect(
+        grant,
+        {
+          ...inspected,
+          skills: [{ ...inspected.skills[0]!, disabled: false }],
+        },
+        grokHome,
+        extras,
+      ),
+    ).toThrow(/skill executavel/);
+    expect(() =>
+      assertGrokInspect(
+        grant,
+        {
+          ...inspected,
+          hooks: [{ event: 'file', source: { type: 'project' } }],
+        },
+        grokHome,
+        extras,
+      ),
+    ).toThrow(/hook fora de plugin desabilitado/);
+    expect(() =>
+      assertGrokInspect(
+        grant,
+        {
+          ...inspected,
+          skills: [{ name: 'intrusa', disabled: true, source: { type: 'user', path: '/x/SKILL.md' } }],
+        },
+        grokHome,
+        extras,
+      ),
+    ).toThrow(/skill executavel/);
   });
 
   it('enumera o catalogo externo com nomes atestaveis e rejeita nomes fora do formato', () => {
-    expect(collectGrokExternalCatalog({
-      skills: [
-        { name: 'imagine', disabled: true, source: { type: 'bundled', path: '/gh/skills/imagine/SKILL.md' } },
-        { name: 'build-with-ai', source: { type: 'bundled', path: '/gh/bundled/skills/build-with-ai/SKILL.md' } },
-        { name: 'framer', source: { type: 'user', path: '/h/.agents/skills/framer/SKILL.md' } },
-        { name: 'graphify', source: { type: 'claude', path: '/h/.claude/skills/graphify/SKILL.md' } },
-        { name: 'framer', source: { type: 'user', path: '/h/.agents/skills/framer/SKILL.md' } },
-      ],
-      plugins: [{ name: 'understand-anything' }],
-    })).toEqual({
+    expect(
+      collectGrokExternalCatalog({
+        skills: [
+          { name: 'imagine', disabled: true, source: { type: 'bundled', path: '/gh/skills/imagine/SKILL.md' } },
+          { name: 'build-with-ai', source: { type: 'bundled', path: '/gh/bundled/skills/build-with-ai/SKILL.md' } },
+          { name: 'framer', source: { type: 'user', path: '/h/.agents/skills/framer/SKILL.md' } },
+          { name: 'graphify', source: { type: 'claude', path: '/h/.claude/skills/graphify/SKILL.md' } },
+          { name: 'framer', source: { type: 'user', path: '/h/.agents/skills/framer/SKILL.md' } },
+        ],
+        plugins: [{ name: 'understand-anything' }],
+      }),
+    ).toEqual({
       disabledSkills: ['build-with-ai', 'framer', 'graphify'],
       disabledPlugins: ['understand-anything'],
-      ignoredSkillPaths: [
-        '/gh/bundled/skills/build-with-ai',
-        '/h/.agents/skills/framer',
-        '/h/.claude/skills/graphify',
-      ],
+      ignoredSkillPaths: ['/gh/bundled/skills/build-with-ai', '/h/.agents/skills/framer', '/h/.claude/skills/graphify'],
     });
-    expect(() => collectGrokExternalCatalog({
-      skills: [{ name: 'Nome Invalido"', source: { type: 'user', path: '/x' } }],
-      plugins: [],
-    })).toThrow(/formato atestavel/);
-    expect(() => collectGrokExternalCatalog({
-      skills: [],
-      plugins: [{ name: 'plug"in' }],
-    })).toThrow(/formato atestavel/);
+    expect(() =>
+      collectGrokExternalCatalog({
+        skills: [{ name: 'Nome Invalido"', source: { type: 'user', path: '/x' } }],
+        plugins: [],
+      }),
+    ).toThrow(/formato atestavel/);
+    expect(() =>
+      collectGrokExternalCatalog({
+        skills: [],
+        plugins: [{ name: 'plug"in' }],
+      }),
+    ).toThrow(/formato atestavel/);
   });
 
   it('exige ProfileApplied novo, kernel-enforced e com todos os deny paths', async () => {
@@ -423,44 +500,43 @@ describe('Grok workspace isolation', () => {
     const denied = path.join(workspace, 'AGENTS.md');
     fs.writeFileSync(denied, 'rules');
     const eventsPath = path.join(home, 'sandbox-events.jsonl');
-    fs.writeFileSync(eventsPath, `${JSON.stringify({
-      event_type: 'ApplyFailed',
-      profile: 'old',
-      workspace,
-      enforced: false,
-    })}\n`);
-    const attestation = snapshotGrokSandboxAttestation(
-      home,
-      'lionclaw_test',
-      workspace,
-      [denied],
+    fs.writeFileSync(
+      eventsPath,
+      `${JSON.stringify({
+        event_type: 'ApplyFailed',
+        profile: 'old',
+        workspace,
+        enforced: false,
+      })}\n`,
     );
-    fs.appendFileSync(eventsPath, `${JSON.stringify({
-      event_type: 'ProfileApplied',
-      profile: 'lionclaw_test',
-      workspace,
-      platform: 'linux/landlock',
-      enforced: true,
-      restrict_network: true,
-      deny_paths: [denied],
-    })}\n`);
+    const attestation = snapshotGrokSandboxAttestation(home, 'lionclaw_test', workspace, [denied]);
+    fs.appendFileSync(
+      eventsPath,
+      `${JSON.stringify({
+        event_type: 'ProfileApplied',
+        profile: 'lionclaw_test',
+        workspace,
+        platform: 'linux/landlock',
+        enforced: true,
+        restrict_network: true,
+        deny_paths: [denied],
+      })}\n`,
+    );
     await expect(waitForGrokSandboxApplied(attestation, 100)).resolves.toBeUndefined();
 
-    const missingDeny = snapshotGrokSandboxAttestation(
-      home,
-      'lionclaw_missing',
-      workspace,
-      [denied],
+    const missingDeny = snapshotGrokSandboxAttestation(home, 'lionclaw_missing', workspace, [denied]);
+    fs.appendFileSync(
+      eventsPath,
+      `${JSON.stringify({
+        event_type: 'ProfileApplied',
+        profile: 'lionclaw_missing',
+        workspace,
+        platform: 'linux/landlock',
+        enforced: true,
+        restrict_network: true,
+        deny_paths: [],
+      })}\n`,
     );
-    fs.appendFileSync(eventsPath, `${JSON.stringify({
-      event_type: 'ProfileApplied',
-      profile: 'lionclaw_missing',
-      workspace,
-      platform: 'linux/landlock',
-      enforced: true,
-      restrict_network: true,
-      deny_paths: [],
-    })}\n`);
     await expect(waitForGrokSandboxApplied(missingDeny, 50)).rejects.toThrow(/nao comprovou/);
   });
 });

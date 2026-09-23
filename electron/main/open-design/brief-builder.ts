@@ -72,9 +72,7 @@ export function buildBrief(contract: DesignContract): string {
     for (const screen of contract.screens) {
       lines.push(
         `- **${screen.title}** (\`${screen.id}\`) — rota: \`${screen.route}\`` +
-          (screen.userStoryIds.length > 0
-            ? ` — stories: ${screen.userStoryIds.join(', ')}`
-            : ''),
+          (screen.userStoryIds.length > 0 ? ` — stories: ${screen.userStoryIds.join(', ')}` : ''),
       );
     }
   }
@@ -88,9 +86,7 @@ export function buildBrief(contract: DesignContract): string {
     for (const item of contract.navigation.primary) {
       lines.push(
         `- **${item.label}** (\`${item.id}\`) -> tela \`${item.targetScreenId}\`` +
-          (item.userStoryIds.length > 0
-            ? ` — stories: ${item.userStoryIds.join(', ')}`
-            : ''),
+          (item.userStoryIds.length > 0 ? ` — stories: ${item.userStoryIds.join(', ')}` : ''),
       );
     }
   }
@@ -113,9 +109,7 @@ export function buildBrief(contract: DesignContract): string {
     lines.push('');
     for (const delta of deltas) {
       const badge = delta.requiresRequirementsChange ? ' [REQUER MUDANCA DE REQUISITOS]' : '';
-      lines.push(
-        `- **${delta.type}** (\`${delta.id}\`) — impacto: ${delta.impact}${badge}`,
-      );
+      lines.push(`- **${delta.type}** (\`${delta.id}\`) — impacto: ${delta.impact}${badge}`);
       lines.push(`  ${delta.description}`);
     }
     lines.push('');

@@ -1,6 +1,4 @@
-
 import { describe, it, expect } from 'vitest';
-
 
 const MIGRATION_V44 = `
   ALTER TABLE harness_rounds ADD COLUMN cost_source TEXT;
@@ -8,7 +6,6 @@ const MIGRATION_V44 = `
   ALTER TABLE harness_rounds ADD COLUMN provider_used TEXT;
   ALTER TABLE harness_rounds ADD COLUMN model_used TEXT;
 `;
-
 
 describe('db-migration-v44: analise estrutural do SQL', () => {
   it('MIGRATION_V44 adiciona exatamente 4 colunas', () => {
@@ -52,7 +49,6 @@ describe('db-migration-v44: analise estrutural do SQL', () => {
   });
 });
 
-
 describe('db-migration-v44: valores validos de cost_source (tipo string, sem CHECK)', () => {
   const VALID_COST_SOURCES = ['sdk_anthropic', 'calculated', 'reported', 'fallback_zero'];
 
@@ -71,35 +67,14 @@ describe('db-migration-v44: valores validos de cost_source (tipo string, sem CHE
   });
 });
 
-
 describe('db-migration-v44: execucao em banco in-memory', () => {
-  it.skip(
-    'preserva o numero total de rounds (1000) apos migration',
-    () => {
-    },
-  );
+  it.skip('preserva o numero total de rounds (1000) apos migration', () => {});
 
-  it.skip(
-    'SELECT antigo (sem colunas novas) retorna dados corretos apos migration',
-    () => {
-    },
-  );
+  it.skip('SELECT antigo (sem colunas novas) retorna dados corretos apos migration', () => {});
 
-  it.skip(
-    'as 4 colunas novas existem e sao NULL em rounds pre-existentes',
-    () => {
-    },
-  );
+  it.skip('as 4 colunas novas existem e sao NULL em rounds pre-existentes', () => {});
 
-  it.skip(
-    'pode atualizar cost_source para "reported" em round existente',
-    () => {
-    },
-  );
+  it.skip('pode atualizar cost_source para "reported" em round existente', () => {});
 
-  it.skip(
-    'pode inserir novo round com todas as 4 colunas preenchidas',
-    () => {
-    },
-  );
+  it.skip('pode inserir novo round com todas as 4 colunas preenchidas', () => {});
 });

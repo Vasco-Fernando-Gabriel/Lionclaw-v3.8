@@ -15,7 +15,7 @@ describe('StreamTimeline UI', () => {
       kind: 'tool' as const,
       tool: `Tool${index}`,
       input: {},
-      status: index === 8 ? 'error' as const : index === 9 ? 'running' as const : 'done' as const,
+      status: index === 8 ? ('error' as const) : index === 9 ? ('running' as const) : ('done' as const),
     }));
     const container = document.createElement('div');
     const root = createRoot(container);

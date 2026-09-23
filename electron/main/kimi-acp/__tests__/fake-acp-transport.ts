@@ -1,4 +1,3 @@
-
 import { vi } from 'vitest';
 import type { AcpTransport, AcpSpawnConfig } from '../acp-transport';
 import type { AcpNotification } from '../types';
@@ -30,7 +29,9 @@ export class FakeAcpTransport implements AcpTransport {
       return Promise.resolve(this.responder(method, params)).then((result) => {
         if (
           method === 'session/set_config_option' &&
-          result && typeof result === 'object' && Object.keys(result as object).length === 0
+          result &&
+          typeof result === 'object' &&
+          Object.keys(result as object).length === 0
         ) {
           const input = params as { value?: unknown } | undefined;
           return { currentValue: input?.value };
@@ -55,9 +56,7 @@ export class FakeAcpTransport implements AcpTransport {
     return () => this.notificationHandlers.delete(handler);
   }
 
-  onServerRequest(
-    handler: (id: unknown, method: string, params: Record<string, unknown>) => void,
-  ): () => void {
+  onServerRequest(handler: (id: unknown, method: string, params: Record<string, unknown>) => void): () => void {
     this.serverRequestHandlers.add(handler);
     return () => this.serverRequestHandlers.delete(handler);
   }
@@ -78,7 +77,6 @@ export class FakeAcpTransport implements AcpTransport {
     return Promise.resolve(this.closed);
   }
 
-
   pushNotification(method: string, params: Record<string, unknown>): void {
     const n: AcpNotification = { method, params };
     for (const h of this.notificationHandlers) h(n);
@@ -98,8 +96,6 @@ export class FakeAcpTransport implements AcpTransport {
   }
 }
 
-export function fakeAcpTransportFactory(
-  fake: FakeAcpTransport,
-): (config: AcpSpawnConfig) => Promise<AcpTransport> {
+export function fakeAcpTransportFactory(fake: FakeAcpTransport): (config: AcpSpawnConfig) => Promise<AcpTransport> {
   return async (_config: AcpSpawnConfig) => fake;
 }

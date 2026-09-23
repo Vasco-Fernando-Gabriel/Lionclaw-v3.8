@@ -1,11 +1,8 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: () => {
-    const iter = (async function* () {
-    })();
+    const iter = (async function* () {})();
     return Object.assign(iter, { toggleMcpServer: vi.fn(async () => undefined) });
   },
 }));
@@ -28,6 +25,8 @@ vi.mock('../logger', () => ({
 }));
 
 vi.mock('../db', () => ({
+  threadIdOf: (s: { id: string; sdkSessionId?: string | null }) => s.sdkSessionId ?? s.id,
+  getSessionOrchestrator: () => null,
   getAllAgents: vi.fn(() => [] as unknown[]),
   getAgent: vi.fn(() => undefined),
   insertMessage: vi.fn(() => 1),
@@ -139,28 +138,28 @@ vi.mock('../agent-runtime/codex-session-factory', () => ({
   })),
 }));
 vi.mock('../codex-sdk/stream-translator', () => ({
-  createCodexStreamTranslator: () => ({ callbacks: {}, finalize: vi.fn(), fail: vi.fn() }),
+  createCodexStreamTranslator: () => ({ callbacks: {}, finalize: vi.fn(), fail: vi.fn(), timelineEvents: () => [] }),
 }));
 
-import {
-  executeClaudeCompatSdkQuery,
-  stopClaudeCompatQuery,
-  isClaudeCompatQueryActive,
-} from '../claude-compat-sdk';
-import {
-  executeCodexSdkQuery,
-  stopCodexSdkQuery,
-  isCodexSdkQueryActive,
-} from '../codex-sdk';
+import { executeClaudeCompatSdkQuery, stopClaudeCompatQuery, isClaudeCompatQueryActive } from '../claude-compat-sdk';
+import { executeCodexSdkQuery, stopCodexSdkQuery, isCodexSdkQueryActive } from '../codex-sdk';
 import { stopCurrentQuery, stopTelegramQuery } from '../orchestrator';
-import { type SdkLane, desktopLane } from '../sdk-lane';
+import { type SdkLane } from '../sdk-lane';
+import { getDesktopLane } from '../desktop-lanes';
+
+const desktopLane = getDesktopLane('sess-1');
 import type { OrchestratorSelection } from '../orchestrator-selection';
 import type { QueryOptions } from '../orchestrator';
 
 const noopGetWindow = () => null;
 
 function makeLane(name: string): SdkLane {
-  return { name, sdkActiveSessionId: null, currentAbortController: null };
+  return {
+    name,
+    kind: name === 'telegram' ? 'telegram' : name === 'cron' ? 'cron' : 'desktop',
+    sdkActiveSessionId: null,
+    currentAbortController: null,
+  };
 }
 
 function compatSelection(overrides: Partial<OrchestratorSelection> = {}): OrchestratorSelection {
@@ -191,7 +190,6 @@ beforeEach(() => {
     usage: { totalTokens: 1 },
   });
 });
-
 
 describe('abort por lane (SPEC 3.1): stop escopado nao vaza entre lanes', () => {
   it('stopClaudeCompatQuery(desktop) NAO aborta o turno do telegram (compat)', () => {
@@ -253,8 +251,7 @@ describe('abort por lane (SPEC 3.1): stop escopado nao vaza entre lanes', () => 
       noopGetWindow,
       telegram,
       codexSelection(),
-    ).catch(() => {
-    });
+    ).catch(() => {});
 
     await new Promise((r) => setImmediate(r));
     expect(isCodexSdkQueryActive(telegram)).toBe(true);
@@ -267,7 +264,6 @@ describe('abort por lane (SPEC 3.1): stop escopado nao vaza entre lanes', () => 
     expect(isCodexSdkQueryActive(telegram)).toBe(false);
   });
 });
-
 
 describe('guard de sessionId (SPEC 3.3): fora do desktop, options.sessionId e obrigatorio', () => {
   it('compat na telegram lane SEM sessionId lanca erro claro (nunca cai em getActiveChatSession)', async () => {
@@ -283,7 +279,7 @@ describe('guard de sessionId (SPEC 3.3): fora do desktop, options.sessionId e ob
     ).rejects.toThrow(/telegram.*sessionId explicito|guard de sessao/i);
   });
 
-  it('compat na desktop lane (singleton) SEM sessionId cai em getActiveChatSession (nao lanca)', async () => {
+  it('compat na desktop lane SEM sessionId lanca session_required (lanes RM2: fallback removido)', async () => {
     desktopLane.sdkActiveSessionId = null;
     await expect(
       executeClaudeCompatSdkQuery(
@@ -293,25 +289,18 @@ describe('guard de sessionId (SPEC 3.3): fora do desktop, options.sessionId e ob
         desktopLane,
         compatSelection(),
       ),
-    ).resolves.toBeUndefined();
-    expect(desktopLane.sdkActiveSessionId).not.toBeNull();
+    ).rejects.toThrow(/desktop.*sessionId explicito|guard de sessao/i);
+    expect(desktopLane.sdkActiveSessionId).toBeNull();
     desktopLane.sdkActiveSessionId = null;
   });
 
   it('codex na cron lane SEM sessionId lanca erro claro (nunca cai em getActiveChatSession)', async () => {
     const cron = makeLane('cron');
     await expect(
-      executeCodexSdkQuery(
-        'oi',
-        { sessionId: undefined, silent: true },
-        noopGetWindow,
-        cron,
-        codexSelection(),
-      ),
+      executeCodexSdkQuery('oi', { sessionId: undefined, silent: true }, noopGetWindow, cron, codexSelection()),
     ).rejects.toThrow(/cron.*sessionId explicito|guard de sessao/i);
   });
 });
-
 
 describe('thread do compat por lane (SPEC 3.2): mesmo provider, lanes distintas nao clobbam', () => {
   it('desktop e telegram no MESMO provider produzem sdkActiveSessionId distintos', async () => {
@@ -340,7 +329,6 @@ describe('thread do compat por lane (SPEC 3.2): mesmo provider, lanes distintas 
     expect(desktop.sdkActiveSessionId).not.toBe(telegram.sdkActiveSessionId);
   });
 });
-
 
 describe('stopCurrentQuery/stopTelegramQuery abortam SO a propria lane', () => {
   it('as APIs de stop existem e sao chamaveis sem lancar (smoke de escopo)', () => {

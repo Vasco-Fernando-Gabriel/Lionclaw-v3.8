@@ -1,4 +1,3 @@
-
 import { createLogger } from '../logger';
 import { smokeAudit } from '../smoke-audit';
 import type { OrchestratorSelection } from '../orchestrator-selection';
@@ -12,8 +11,7 @@ import { randomUUID } from 'node:crypto';
 
 const logger = createLogger('oneshot-subscription');
 
-const MINIMAL_SYSTEM_PROMPT =
-  'You are a JSON summarizer. Respond only with the requested output.';
+const MINIMAL_SYSTEM_PROMPT = 'You are a JSON summarizer. Respond only with the requested output.';
 
 function stripFence(raw: string): string {
   let text = raw.trim();
@@ -37,9 +35,10 @@ async function drainAgentSdkQuery(q: AsyncIterable<unknown>): Promise<string> {
     } else if (sdkMessage.type === 'result') {
       if (sdkMessage.is_error === true) {
         const subtype = typeof sdkMessage.subtype === 'string' ? sdkMessage.subtype : 'unknown';
-        const detail = typeof sdkMessage.result === 'string' && sdkMessage.result.trim().length > 0
-          ? sdkMessage.result
-          : 'sem detalhe';
+        const detail =
+          typeof sdkMessage.result === 'string' && sdkMessage.result.trim().length > 0
+            ? sdkMessage.result
+            : 'sem detalhe';
         throw new Error(`one-shot Agent SDK terminou com erro (subtype=${subtype}): ${detail}`);
       }
       break;
@@ -78,13 +77,9 @@ export async function runSubscriptionPrompt(
   }
 }
 
-async function runClaudeSdkOneShot(
-  selection: OrchestratorSelection,
-  prompt: string,
-): Promise<string> {
-  const { ensureAuthForSDK, ensureNodeInPath, getClaudeSdkProcessOptions } = await import(
-    '../pipeline-shared/sdk-bootstrap'
-  );
+async function runClaudeSdkOneShot(selection: OrchestratorSelection, prompt: string): Promise<string> {
+  const { ensureAuthForSDK, ensureNodeInPath, getClaudeSdkProcessOptions } =
+    await import('../pipeline-shared/sdk-bootstrap');
   const { getBackgroundCwd } = await import('../paths');
   await ensureAuthForSDK();
   ensureNodeInPath();
@@ -112,13 +107,8 @@ async function runClaudeSdkOneShot(
   return stripFence(await drainAgentSdkQuery(q));
 }
 
-async function runClaudeCompatOneShot(
-  selection: OrchestratorSelection,
-  prompt: string,
-): Promise<string> {
-  const { ensureNodeInPath, getClaudeSdkProcessOptions } = await import(
-    '../pipeline-shared/sdk-bootstrap'
-  );
+async function runClaudeCompatOneShot(selection: OrchestratorSelection, prompt: string): Promise<string> {
+  const { ensureNodeInPath, getClaudeSdkProcessOptions } = await import('../pipeline-shared/sdk-bootstrap');
   const { getBackgroundCwd } = await import('../paths');
   const { buildCompatEnv } = await import('../claude-compat-sdk');
   const { query } = await import('@anthropic-ai/claude-agent-sdk');
@@ -151,10 +141,7 @@ async function runClaudeCompatOneShot(
   return stripFence(await drainAgentSdkQuery(q));
 }
 
-async function runCodexOneShot(
-  selection: OrchestratorSelection,
-  prompt: string,
-): Promise<string> {
+async function runCodexOneShot(selection: OrchestratorSelection, prompt: string): Promise<string> {
   const { resolveCodexSessionForRun } = await import('../agent-runtime/codex-session-factory');
   const { getBackgroundCwd } = await import('../paths');
 
@@ -186,15 +173,9 @@ async function runCodexOneShot(
   }
 }
 
-async function runKimiSdkOneShot(
-  selection: OrchestratorSelection,
-  prompt: string,
-): Promise<string> {
-  const {
-    isKimiAvailable,
-    resolveKimiBinary,
-    KimiUnavailableError,
-  } = await import('../agent-runtime/kimi-availability');
+async function runKimiSdkOneShot(selection: OrchestratorSelection, prompt: string): Promise<string> {
+  const { isKimiAvailable, resolveKimiBinary, KimiUnavailableError } =
+    await import('../agent-runtime/kimi-availability');
   const { getKimiAcpDriver } = await import('../kimi-acp/acp-driver');
   const { acquireKimiSlot } = await import('../agent-runtime/kimi-concurrency');
   const { PERM_DEFAULT_NO_BYPASS } = await import('../agent-runtime/permission-profiles');
@@ -257,10 +238,7 @@ async function runKimiSdkOneShot(
   }
 }
 
-async function runGrokSdkOneShot(
-  selection: OrchestratorSelection,
-  prompt: string,
-): Promise<string> {
+async function runGrokSdkOneShot(selection: OrchestratorSelection, prompt: string): Promise<string> {
   const {
     buildGrokChildEnv,
     isGrokAvailable,
@@ -284,9 +262,7 @@ async function runGrokSdkOneShot(
   } = await import('../grok-sdk/workspace');
   const availability = await isGrokAvailable();
   if (!availability.usable) {
-    throw new GrokUnavailableError(
-      availability.reason ?? 'Grok Build indisponivel para compactacao one-shot.',
-    );
+    throw new GrokUnavailableError(availability.reason ?? 'Grok Build indisponivel para compactacao one-shot.');
   }
   const binary = await resolveGrokBinary();
   if (!binary) throw new GrokUnavailableError('Grok Build CLI nao encontrado.');
@@ -337,10 +313,7 @@ async function runGrokSdkOneShot(
     } finally {
       releaseSandboxSpawn();
     }
-    const result = await handle.send(
-      `## Instrucoes\n\n${MINIMAL_SYSTEM_PROMPT}\n\n## Tarefa\n\n${prompt}`,
-      {},
-    );
+    const result = await handle.send(`## Instrucoes\n\n${MINIMAL_SYSTEM_PROMPT}\n\n## Tarefa\n\n${prompt}`, {});
     if (result.status !== 'finished') {
       throw new Error(`grok one-shot terminou com status ${result.status}`);
     }
@@ -353,13 +326,8 @@ async function runGrokSdkOneShot(
 
 const CURSOR_ONE_SHOT_TIMEOUT_MS = 90_000;
 
-async function runCursorSdkOneShot(
-  selection: OrchestratorSelection,
-  prompt: string,
-): Promise<string> {
-  const { runCursorSidecarExecution } = await import(
-    '../agent-runtime/cursor-sidecar/sidecar-manager'
-  );
+async function runCursorSdkOneShot(selection: OrchestratorSelection, prompt: string): Promise<string> {
+  const { runCursorSidecarExecution } = await import('../agent-runtime/cursor-sidecar/sidecar-manager');
   const { getSecret } = await import('../secrets-vault');
   const { getBackgroundCwd } = await import('../paths');
   const { tmpdir } = await import('node:os');
@@ -368,9 +336,7 @@ async function runCursorSdkOneShot(
 
   const apiKey = await getSecret('CURSOR_API_KEY');
   if (!apiKey) {
-    throw new Error(
-      'Cursor nao conectado para one-shot (CURSOR_API_KEY ausente do Vault).',
-    );
+    throw new Error('Cursor nao conectado para one-shot (CURSOR_API_KEY ausente do Vault).');
   }
 
   const executionId = `cursor-oneshot-${randomUUID()}`;
@@ -381,10 +347,7 @@ async function runCursorSdkOneShot(
   const timeout = setTimeout(() => abortController.abort(), CURSOR_ONE_SHOT_TIMEOUT_MS);
   timeout.unref?.();
 
-  logger.info(
-    { runtime: 'cursor-sdk', model: selection.model },
-    'runSubscriptionPrompt: cursor one-shot',
-  );
+  logger.info({ runtime: 'cursor-sdk', model: selection.model }, 'runSubscriptionPrompt: cursor one-shot');
 
   try {
     const result = await runCursorSidecarExecution({
@@ -402,15 +365,11 @@ async function runCursorSdkOneShot(
       },
       abortController,
       dispatchTool: async (invocation) => {
-        throw new Error(
-          `one-shot cursor nao expoe tools (invocacao inesperada de ${invocation.toolName})`,
-        );
+        throw new Error(`one-shot cursor nao expoe tools (invocacao inesperada de ${invocation.toolName})`);
       },
     });
     if (result.status === 'cancelled') {
-      throw new Error(
-        `cursor one-shot abortado por timeout (${CURSOR_ONE_SHOT_TIMEOUT_MS}ms sem resposta)`,
-      );
+      throw new Error(`cursor one-shot abortado por timeout (${CURSOR_ONE_SHOT_TIMEOUT_MS}ms sem resposta)`);
     }
     const text = (result.resultText ?? result.finalText ?? '').trim();
     if (text.length === 0) {
@@ -419,11 +378,9 @@ async function runCursorSdkOneShot(
     return stripFence(text);
   } finally {
     clearTimeout(timeout);
-    fs.rm(storeDir, { recursive: true, force: true }, () => {
-    });
+    fs.rm(storeDir, { recursive: true, force: true }, () => {});
   }
 }
-
 
 export interface SubscriptionRunResult {
   text: string;

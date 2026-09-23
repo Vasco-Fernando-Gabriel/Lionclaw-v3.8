@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const ORCHESTRATOR_DEFAULTS: ReadonlyArray<readonly [string, string]> = [
   ['orchestrator_runtime', 'claude-sdk'],
   ['orchestrator_provider', 'anthropic'],

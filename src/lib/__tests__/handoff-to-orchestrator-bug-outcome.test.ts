@@ -1,10 +1,5 @@
-
 import { describe, it, expect } from 'vitest';
-import {
-  buildHandoffPrompt,
-  type GraphHint,
-  type PipelineHandoffRequest,
-} from '../handoff-to-orchestrator';
+import { buildHandoffPrompt, type GraphHint, type PipelineHandoffRequest } from '../handoff-to-orchestrator';
 
 const GRAPH: GraphHint = { state: 'ready' };
 
@@ -24,10 +19,7 @@ function bugRequest(over: Partial<PipelineHandoffRequest> = {}): PipelineHandoff
 
 describe('O14 — handoff do Bug Pipe por desfecho', () => {
   it('outcome no-bug: NAO anuncia entrega e aponta o plano de correcao', () => {
-    const prompt = buildHandoffPrompt(
-      bugRequest({ bugOutcome: 'no-bug', bugRunId: '20260727_101010-a1b2c3' }),
-      GRAPH,
-    );
+    const prompt = buildHandoffPrompt(bugRequest({ bugOutcome: 'no-bug', bugRunId: '20260727_101010-a1b2c3' }), GRAPH);
     expect(prompt).not.toContain(DELIVERY_CLAIM);
     expect(prompt).not.toContain('a entrega esta pronta');
     expect(prompt).toContain('ENCERRADO SEM CORRECAO');
@@ -45,10 +37,7 @@ describe('O14 — handoff do Bug Pipe por desfecho', () => {
   });
 
   it('outcome fix: pede validacao da correcao e testes de REGRESSAO', () => {
-    const prompt = buildHandoffPrompt(
-      bugRequest({ bugOutcome: 'fix', bugRunId: '20260727_101010-a1b2c3' }),
-      GRAPH,
-    );
+    const prompt = buildHandoffPrompt(bugRequest({ bugOutcome: 'fix', bugRunId: '20260727_101010-a1b2c3' }), GRAPH);
     expect(prompt).not.toContain(DELIVERY_CLAIM);
     expect(prompt).toContain('CORRECAO aplicada');
     expect(prompt).toContain('REGRESSAO');
@@ -63,10 +52,7 @@ describe('O14 — handoff do Bug Pipe por desfecho', () => {
   });
 
   it('bug sem projectPath cai no fallback que PEDE a pasta (nao no runProjectPrompt)', () => {
-    const prompt = buildHandoffPrompt(
-      bugRequest({ projectPath: null, bugOutcome: 'no-bug' }),
-      GRAPH,
-    );
+    const prompt = buildHandoffPrompt(bugRequest({ projectPath: null, bugOutcome: 'no-bug' }), GRAPH);
     expect(prompt).toContain('nao tenho uma pasta de projeto resolvida');
     expect(prompt).not.toContain(DELIVERY_CLAIM);
   });
@@ -80,8 +66,6 @@ describe('O14 — handoff do Bug Pipe por desfecho', () => {
     expect(buildHandoffPrompt({ ...base, pipelineType: 'security' }, GRAPH)).toContain(
       'relatorio consolidado de seguranca',
     );
-    expect(
-      buildHandoffPrompt({ ...base, pipelineType: 'architecture-review' }, GRAPH),
-    ).not.toContain(DELIVERY_CLAIM);
+    expect(buildHandoffPrompt({ ...base, pipelineType: 'architecture-review' }, GRAPH)).not.toContain(DELIVERY_CLAIM);
   });
 });

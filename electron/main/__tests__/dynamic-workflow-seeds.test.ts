@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   ALL_SEED_AGENTS,
@@ -124,7 +123,6 @@ describe('papeis read-only vs writers (spec 6.4, 7.4, 7.5)', () => {
     expect(prompt).toContain('NAO proponha criar/editar arquivo fora do writeSet');
     expect(prompt).toContain('BLOQUEIO');
   });
-
 });
 
 describe('writers continuation-aware + disciplina de git (spec 10.4, 8.6.1)', () => {
@@ -167,12 +165,8 @@ describe('validadores adversariais em eixos ortogonais (spec 7.5)', () => {
   });
 
   it('cada validador declara um eixo distinto (correcao / regressao / testes)', () => {
-    expect(seedById(DYNAMIC_WORKFLOW_VALIDATOR_SPEC_ID).systemPrompt).toContain(
-      'criterios de aceite',
-    );
-    expect(seedById(DYNAMIC_WORKFLOW_VALIDATOR_REGRESSION_ID).systemPrompt).toContain(
-      'regressao',
-    );
+    expect(seedById(DYNAMIC_WORKFLOW_VALIDATOR_SPEC_ID).systemPrompt).toContain('criterios de aceite');
+    expect(seedById(DYNAMIC_WORKFLOW_VALIDATOR_REGRESSION_ID).systemPrompt).toContain('regressao');
     const tests = seedById(DYNAMIC_WORKFLOW_VALIDATOR_TESTS_ID).systemPrompt;
     expect(tests).toContain('Cobertura e qualidade de testes');
     expect(tests).toContain('enforcement do writeSet foi desligado');
@@ -237,28 +231,19 @@ describe('agentes do plano (redesign por sprints, sec 4.1)', () => {
     'dynamic-workflow-plan-validator-criteria',
   ];
 
-  it.each(PLAN_VALIDATOR_IDS)(
-    '%s retorna PLAN_FINDINGS_SCHEMA (verdict + findings + severity) e nao corrige',
-    (id) => {
-      const prompt = seedById(id).systemPrompt;
-      expect(prompt).toContain('PLAN_FINDINGS_SCHEMA');
-      expect(prompt).toContain('verdict');
-      expect(prompt).toContain('findings');
-      expect(prompt).toContain('severity');
-      expect(prompt).toContain('NAO corrige nada');
-    },
-  );
+  it.each(PLAN_VALIDATOR_IDS)('%s retorna PLAN_FINDINGS_SCHEMA (verdict + findings + severity) e nao corrige', (id) => {
+    const prompt = seedById(id).systemPrompt;
+    expect(prompt).toContain('PLAN_FINDINGS_SCHEMA');
+    expect(prompt).toContain('verdict');
+    expect(prompt).toContain('findings');
+    expect(prompt).toContain('severity');
+    expect(prompt).toContain('NAO corrige nada');
+  });
 
   it('cada validador de plano declara um eixo distinto (cobertura/topologia/criterios)', () => {
-    expect(
-      seedById('dynamic-workflow-plan-validator-coverage').systemPrompt,
-    ).toContain('COBERTURA');
-    expect(
-      seedById('dynamic-workflow-plan-validator-topology').systemPrompt,
-    ).toContain('TOPOLOGIA');
-    expect(
-      seedById('dynamic-workflow-plan-validator-criteria').systemPrompt,
-    ).toContain('CRITERIOS');
+    expect(seedById('dynamic-workflow-plan-validator-coverage').systemPrompt).toContain('COBERTURA');
+    expect(seedById('dynamic-workflow-plan-validator-topology').systemPrompt).toContain('TOPOLOGIA');
+    expect(seedById('dynamic-workflow-plan-validator-criteria').systemPrompt).toContain('CRITERIOS');
   });
 });
 
@@ -305,18 +290,15 @@ describe('calibragem de severidade dos plan-validators (SM5-CONV: convergencia)'
     'dynamic-workflow-plan-validator-criteria',
   ];
 
-  it.each(PLAN_VALIDATOR_IDS)(
-    '%s tem o bloco de severidade DURO (lista fechada de P1, default P3)',
-    (id) => {
-      const prompt = seedById(id).systemPrompt;
-      expect(prompt).toContain('regra DURISSIMA - calibragem SM5-R3');
-      expect(prompt).toContain('lista FECHADA');
-      expect(prompt).toContain('NUNCA e P1');
-      expect(prompt).toContain('Default = P3');
-      expect(prompt).toContain('ADVISORY');
-      expect(prompt).toContain('NAO travam o plano');
-    },
-  );
+  it.each(PLAN_VALIDATOR_IDS)('%s tem o bloco de severidade DURO (lista fechada de P1, default P3)', (id) => {
+    const prompt = seedById(id).systemPrompt;
+    expect(prompt).toContain('regra DURISSIMA - calibragem SM5-R3');
+    expect(prompt).toContain('lista FECHADA');
+    expect(prompt).toContain('NUNCA e P1');
+    expect(prompt).toContain('Default = P3');
+    expect(prompt).toContain('ADVISORY');
+    expect(prompt).toContain('NAO travam o plano');
+  });
 
   it.each(PLAN_VALIDATOR_IDS)(
     '%s NAO carrega mais o marcador de calibragem antigo do V94 (OLD_MARKER da V96)',
@@ -360,10 +342,7 @@ describe('higiene dos textos', () => {
       for (const otherId of EXPECTED_IDS) {
         if (otherId === seed.id) continue;
         if (allowed.includes(otherId)) continue;
-        expect(
-          seed.systemPrompt.includes(otherId),
-          `${seed.id} menciona ${otherId} (regra de isolamento)`,
-        ).toBe(false);
+        expect(seed.systemPrompt.includes(otherId), `${seed.id} menciona ${otherId} (regra de isolamento)`).toBe(false);
       }
     }
   });
@@ -413,7 +392,6 @@ describe('categoria de UI (spec 6.4)', () => {
   });
 });
 
-
 describe('seed security-spec-validator - registry guardrail (SPEC-loop-fix §3 fix B)', () => {
   it('esta em ALL_SEED_AGENTS exatamente uma vez (id unico)', () => {
     const matches = ALL_SEED_AGENTS.filter((a) => a.id === SECURITY_SPEC_VALIDATOR_ID);
@@ -447,15 +425,12 @@ describe('seed security-spec-validator - registry guardrail (SPEC-loop-fix §3 f
   });
 });
 
-
 describe('seed dynamic-workflow-doc-writer - registry (fechamento S1)', () => {
   it('esta em ALL_SEED_AGENTS exatamente uma vez, via DYNAMIC_WORKFLOW_AUTHORED_SEED_AGENTS', () => {
     const matches = ALL_SEED_AGENTS.filter((a) => a.id === DYNAMIC_WORKFLOW_DOC_WRITER_ID);
     expect(matches).toHaveLength(1);
     expect(DYNAMIC_WORKFLOW_DOC_WRITER_ID).toBe('dynamic-workflow-doc-writer');
-    expect(
-      DYNAMIC_WORKFLOW_AUTHORED_SEED_AGENTS.some((a) => a.id === DYNAMIC_WORKFLOW_DOC_WRITER_ID),
-    ).toBe(true);
+    expect(DYNAMIC_WORKFLOW_AUTHORED_SEED_AGENTS.some((a) => a.id === DYNAMIC_WORKFLOW_DOC_WRITER_ID)).toBe(true);
     expect([...DYNAMIC_WORKFLOW_AGENT_IDS]).not.toContain(DYNAMIC_WORKFLOW_DOC_WRITER_ID);
   });
 
@@ -495,7 +470,6 @@ describe('seed dynamic-workflow-doc-writer - registry (fechamento S1)', () => {
     }
   });
 });
-
 
 describe('L1.5: CODE_WRITER_AGENT_IDS cruza com os seeds writers de codigo', () => {
   it('coder, coder-codex, coder-glm e fixer estao na lista; doc-writer nao', () => {

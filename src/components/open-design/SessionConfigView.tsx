@@ -5,7 +5,6 @@ import { CODEX_DEFAULT_MODEL, CODEX_MODELS } from '@/constants/codex-models';
 import { VERTEX_DEFAULT_MODEL, VERTEX_MODEL_CATALOG } from '@/constants/vertex-gemini-models';
 import type { OpenDesignSessionConfig } from '@/types/open-design';
 
-
 const CUSTOM_MODEL_VALUE = '__custom__';
 
 interface OpenDesignModelOption {
@@ -133,9 +132,7 @@ export function SessionConfigView({ projectId, onSaved }: SessionConfigViewProps
           <PenTool size={22} className="text-amber-400 shrink-0" />
           <div>
             <h2 className="text-base font-semibold text-zinc-100">Sessao de Design</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Escolha o runtime e depois um modelo compativel com ele.
-            </p>
+            <p className="text-xs text-zinc-500 mt-0.5">Escolha o runtime e depois um modelo compativel com ele.</p>
           </div>
         </div>
 
@@ -225,13 +222,12 @@ export function SessionConfigView({ projectId, onSaved }: SessionConfigViewProps
         </div>
 
         <div className="text-[10px] text-zinc-600">
-          Locale: <span className="font-mono">pt-BR</span> — o agente vai responder em portugues brasileiro por padrao. Credenciais ficam no Vault do LionClaw ou no onboarding do LionDesign; nada de tokens neste formulario.
+          Locale: <span className="font-mono">pt-BR</span> — o agente vai responder em portugues brasileiro por padrao.
+          Credenciais ficam no Vault do LionClaw ou no onboarding do LionDesign; nada de tokens neste formulario.
         </div>
 
         {error && (
-          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-300">
-            {error}
-          </div>
+          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-300">{error}</div>
         )}
 
         <button

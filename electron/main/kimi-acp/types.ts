@@ -1,20 +1,19 @@
-
 import type { CliRunOptions } from '../agent-runtime/cli-agentic/contract';
 import type { AgentPermissionProfile } from '../agent-runtime/types';
 import type { KimiEffectiveThinking } from '../../../src/constants/kimi-models';
 
 export interface AcpNotification {
-  method: string; // e.g. "session/update"
+  method: string;
   params: Record<string, unknown>;
 }
 
 export interface AcpSessionUpdate {
-  sessionUpdate: string; // agent_message_chunk | agent_thought_chunk | tool_call | tool_call_update | ...
+  sessionUpdate: string;
   content?: { type?: string; text?: string };
   toolCallId?: string;
   title?: string;
   kind?: string;
-  status?: string; // pending | in_progress | completed
+  status?: string;
   rawInput?: unknown;
   rawOutput?: unknown;
 }
@@ -22,7 +21,7 @@ export interface AcpSessionUpdate {
 export interface KimiAcpRunSessionKey {
   surface: 'pipeline' | 'chat' | 'agent' | 'oneshot';
   ownerKind: 'pipeline' | 'chat' | 'agent' | 'oneshot';
-  runId: string; // REQUIRED on every key
+  runId: string;
   projectId?: string;
   agentId?: string;
   ownerId?: string;
@@ -44,12 +43,14 @@ export interface KimiAcpMcpServerEntry {
   name: string;
   type: 'http' | 'sse';
   url: string;
-  headers: Array<{ name: string; value: string }>; // observed-empty `[]` accepted by the wire
-  env: Array<{ name: string; value: string }>; // observed-empty `[]` accepted by the wire
+  headers: Array<{ name: string; value: string }>;
+  env: Array<{ name: string; value: string }>;
 }
 
 export interface KimiAcpRunOptions extends CliRunOptions {
   permission?: AgentPermissionProfile;
+  swarmSupervised?: boolean;
+  swarmOwnerDirectory?: string;
   effectiveThinking?: KimiEffectiveThinking;
   profile?: KimiAcpProfile;
   surface?: KimiAcpRunSessionKey['surface'];

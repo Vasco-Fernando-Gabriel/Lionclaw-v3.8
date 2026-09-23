@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
 import type { DriveState } from '../../../src/types';
@@ -49,7 +48,28 @@ function fakeSetDriveState(projectId: string, patch: Partial<DriveState>): Drive
 vi.mock('../db', () => ({
   getHarnessProject: vi.fn((id: string) => projects.get(id)),
   listHarnessProjects: vi.fn(() => [...projects.values()]),
+  listHarnessProjectsBySession: vi.fn((sessionId: string) =>
+    [...projects.values()].filter((p) => p.config.drive?.sessionId === sessionId),
+  ),
+  findEngagedDriveBySession: vi.fn(
+    (sessionId: string) =>
+      [...projects.values()].find(
+        (p) =>
+          p.config.drive?.sessionId === sessionId &&
+          p.config.drive.driver === 'orchestrator' &&
+          p.config.drive.status !== 'stopped',
+      ) ?? null,
+  ),
   getDriveState: vi.fn((id: string) => projects.get(id)?.config.drive ?? null),
+  getDriveSessionId: vi.fn((id: string) => projects.get(id)?.config.drive?.sessionId ?? null),
+  isDriveEngaged: vi.fn((id: string) => {
+    const drive = projects.get(id)?.config.drive;
+    return !!drive && drive.driver === 'orchestrator' && drive.status !== 'stopped';
+  }),
+  getOpenLaneSessionById: vi.fn((id: string) =>
+    id ? { id, laneBadge: Number(id.replace(/\D/g, '')) || 1, title: id } : null,
+  ),
+  getSession: vi.fn((id: string) => ({ id })),
   setDriveState: vi.fn((id: string, patch: Partial<DriveState>) => fakeSetDriveState(id, patch)),
   getLatestUserTurnIndex: vi.fn(() => 0),
   getPipelinePhaseMessagesAsChatHistory: vi.fn(() => []),
@@ -80,15 +100,11 @@ import { pipelineEventBus } from '../pipeline-event-bus';
 import { _resetDriveLockForTesting } from '../drive-lock';
 import { _resetDriveUsageSinkForTesting } from '../drive-usage-sink';
 import { PipelineDriveCoordinator } from '../pipeline-drive-coordinator';
-import {
-  registerPipelineEngineRef,
-  _resetPipelineEngineRefForTesting,
-} from '../pipeline-engine-ref';
+import { registerPipelineEngineRef, _resetPipelineEngineRefForTesting } from '../pipeline-engine-ref';
 import { pipelineReplyCore } from '../pipeline-control-core';
 
 const emitIPCMock = emitIPC as Mock;
 const autostartMock = maybeAutostartDesignSession as Mock;
-
 
 function seedProject(over: Partial<FakeProject> = {}): FakeProject {
   const p: FakeProject = {
@@ -128,7 +144,6 @@ beforeEach(() => {
   _resetPipelineEngineRefForTesting();
 });
 
-
 describe('I1: pipelineReplyCore emite pipeline:messages-updated', () => {
   it('emite { projectId, phase } logo apos o engine.sendMessage retornar (I1-AC1)', async () => {
     seedProject({ pipelineCurrentPhase: 3 });
@@ -137,12 +152,10 @@ describe('I1: pipelineReplyCore emite pipeline:messages-updated', () => {
     registerPipelineEngineRef((() => ({ sendMessage, getCurrentPhase })) as never);
 
     const replyPromise = pipelineReplyCore('proj_a', 'vamos de opcao B');
-    await flushAsync(); // o send e dispatchado apos o listener armar (A6)
+    await flushAsync();
 
     expect(sendMessage).toHaveBeenCalledWith('proj_a', 'vamos de opcao B', []);
-    expect(messagesUpdatedCalls()).toEqual([
-      ['pipeline:messages-updated', { projectId: 'proj_a', phase: 3 }],
-    ]);
+    expect(messagesUpdatedCalls()).toEqual([['pipeline:messages-updated', { projectId: 'proj_a', phase: 3 }]]);
 
     pipelineEventBus.emit('pipeline:stream', { projectId: 'proj_a', phase: 3, type: 'done' });
     const res = await replyPromise;
@@ -162,19 +175,16 @@ describe('I1: pipelineReplyCore emite pipeline:messages-updated', () => {
   });
 });
 
-
 describe('I1: coordenador re-emite no pipeline:stream done (drive ativo)', () => {
   it('drive ativo: done da fase emite pipeline:messages-updated { projectId, phase }', () => {
-    seedProject({ pipelineCurrentPhase: 1 }); // development fase 1 = Discovery (conversation)
+    seedProject({ pipelineCurrentPhase: 1 });
     const coord = makeCoordinator();
     coord.startDrive('proj_a', 'sess_1', 'semi');
     emitIPCMock.mockClear();
 
     pipelineEventBus.emit('pipeline:stream', { projectId: 'proj_a', phase: 1, type: 'done' });
 
-    expect(messagesUpdatedCalls()).toEqual([
-      ['pipeline:messages-updated', { projectId: 'proj_a', phase: 1 }],
-    ]);
+    expect(messagesUpdatedCalls()).toEqual([['pipeline:messages-updated', { projectId: 'proj_a', phase: 1 }]]);
   });
 
   it('REGRESSAO (I1-AC2): projeto SEM drive nao gera o evento (fluxo humano intocado)', () => {
@@ -186,7 +196,6 @@ describe('I1: coordenador re-emite no pipeline:stream done (drive ativo)', () =>
     expect(messagesUpdatedCalls()).toHaveLength(0);
   });
 });
-
 
 describe('I5 (C-03): coordenador NAO faz autostart do Open Design', () => {
   it('drive ativo + dev-v2 + transicao para a fase do open-design-studio -> autostart NAO dispara (C-03)', async () => {
@@ -201,7 +210,7 @@ describe('I5 (C-03): coordenador NAO faz autostart do Open Design', () => {
       status: 'started',
       awaitingUser: false,
     });
-    await flushAsync(); // cobre qualquer fire-and-forget remanescente
+    await flushAsync();
 
     expect(autostartMock).not.toHaveBeenCalled();
   });

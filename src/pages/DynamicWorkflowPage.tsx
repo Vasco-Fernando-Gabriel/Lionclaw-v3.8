@@ -57,8 +57,8 @@ export function DynamicWorkflowPage() {
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2.5">
           <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-400" />
           <p className="text-xs text-amber-200/90">
-            Funcionalidade em <span className="font-semibold">Beta experimental</span>. Use com
-            cuidado: cada workflow coordena varios subagents e pode consumir muitos tokens.
+            Funcionalidade em <span className="font-semibold">Beta experimental</span>. Use com cuidado: cada workflow
+            coordena varios subagents e pode consumir muitos tokens.
           </p>
         </div>
 
@@ -78,9 +78,7 @@ export function DynamicWorkflowPage() {
         ) : runs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center text-zinc-500">
             <Workflow size={28} className="mb-2 text-zinc-600" />
-            <p className="text-sm text-zinc-400">
-              Nenhum workflow ainda. Peca ao orquestrador no chat para criar um.
-            </p>
+            <p className="text-sm text-zinc-400">Nenhum workflow ainda. Peca ao orquestrador no chat para criar um.</p>
           </div>
         ) : (
           <div className="grid max-w-3xl grid-cols-1 gap-3">
@@ -127,7 +125,6 @@ export function DynamicWorkflowPage() {
   );
 }
 
-
 function DeleteWorkflowConfirm({
   runId,
   deleting,
@@ -156,14 +153,10 @@ function DeleteWorkflowConfirm({
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-zinc-100">Deletar workflow</h2>
             <p className="mt-1 text-xs text-zinc-400">
-              Isto apaga o run{' '}
-              <span className="font-mono text-zinc-300">{runId.slice(0, 8)}</span> e
-              TODO o conteudo dele (plano, sprints, codigo gerado, chat e historico).
-              A acao e irreversivel e nao pode ser desfeita.
+              Isto apaga o run <span className="font-mono text-zinc-300">{runId.slice(0, 8)}</span> e TODO o conteudo
+              dele (plano, sprints, codigo gerado, chat e historico). A acao e irreversivel e nao pode ser desfeita.
             </p>
-            <p className="mt-2 text-xs text-zinc-500">
-              Para apenas parar a execucao sem perder nada, use Abortar.
-            </p>
+            <p className="mt-2 text-xs text-zinc-500">Para apenas parar a execucao sem perder nada, use Abortar.</p>
           </div>
         </div>
         <div className="mt-5 flex justify-end gap-2">

@@ -1,3 +1,4 @@
+import { persistSwarmChatMessage } from './chat-persist';
 
 import {
   insertEnrichMessage as dbInsertEnrichMessage,
@@ -6,10 +7,7 @@ import {
   savePipelineMessage as dbSavePipelineMessage,
   updateHarnessRound as dbUpdateHarnessRound,
 } from '../db';
-import type {
-  HarnessEvaluatorPipelineMessage,
-  HarnessEvaluatorRoundCompletion,
-} from '../db';
+import type { HarnessEvaluatorPipelineMessage, HarnessEvaluatorRoundCompletion } from '../db';
 import { createLogger } from '../logger';
 import { textProbe } from './text-probe';
 import { brandLionDesignText } from '../liondesign-branding';
@@ -19,6 +17,13 @@ import { consumePipelineTimeline } from '../pipeline-engine/timeline-collector';
 const logger = createLogger('pipeline-persist');
 
 export type PersistMessageTarget =
+  | {
+      kind: 'chat';
+      sessionId: string;
+      swarmDelivery: { runId: string; terminalRevision: number; claimId: string };
+      messageKind: 'event' | 'response';
+      serializedMetadata?: string;
+    }
   | {
       kind: 'pipeline';
       projectId: string;
@@ -39,24 +44,24 @@ export interface PersistMessageMetadata {
 
 export function persistMessage(
   target: PersistMessageTarget,
-  role: 'user' | 'assistant',
+  role: 'user' | 'assistant' | 'system',
   content: string,
   metadata?: PersistMessageMetadata,
 ): void {
+  if (target.kind === 'chat') {
+    if (role !== (target.messageKind === 'event' ? 'system' : 'assistant'))
+      throw new Error('Papel incompatível com mensagem Swarm.');
+    persistSwarmChatMessage(target, role as 'system' | 'assistant', content);
+    return;
+  }
+  if (role === 'system') throw new Error('Evento de sistema só é válido no domínio chat.');
   const presentedContent = brandLionDesignText(content);
-  logger.debug(
-    { kind: target.kind, role, probe: textProbe(presentedContent) },
-    '(F8) persistMessage entrada',
-  );
+  logger.debug({ kind: target.kind, role, probe: textProbe(presentedContent) }, '(F8) persistMessage entrada');
   if (target.kind === 'pipeline') {
-    const toolCalls = role === 'assistant'
-      ? consumePipelineTimeline(
-        target.projectId,
-        target.phaseNumber,
-        metadata?.toolCalls,
-        presentedContent,
-      )
-      : metadata?.toolCalls;
+    const toolCalls =
+      role === 'assistant'
+        ? consumePipelineTimeline(target.projectId, target.phaseNumber, metadata?.toolCalls, presentedContent)
+        : metadata?.toolCalls;
     dbSavePipelineMessage({
       projectId: target.projectId,
       phaseNumber: target.phaseNumber,
@@ -75,13 +80,7 @@ export function persistMessage(
       tool: tc.tool,
       input: tc.input,
     }));
-    dbInsertEnrichMessage(
-      target.sessionId,
-      target.phase,
-      role,
-      presentedContent,
-      enrichToolCalls,
-    );
+    dbInsertEnrichMessage(target.sessionId, target.phase, role, presentedContent, enrichToolCalls);
     return;
   }
 

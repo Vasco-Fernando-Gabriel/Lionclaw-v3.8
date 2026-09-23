@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Mock } from 'vitest';
 import type { DriveState } from '../../../src/types';
@@ -58,10 +57,35 @@ function fakeSetDriveState(projectId: string, patch: Partial<DriveState>): Drive
   return merged;
 }
 
+function fakeGetDriveSessionId(projectId: string): string | null {
+  return projects.get(projectId)?.config.drive?.sessionId ?? null;
+}
+function fakeIsDriveEngaged(projectId: string): boolean {
+  const drive = fakeGetDriveState(projectId);
+  return !!drive && drive.driver === 'orchestrator' && drive.status !== 'stopped';
+}
+function fakeListHarnessProjectsBySession(sessionId: string): FakeProject[] {
+  return [...projects.values()].filter((p) => p.config.drive?.sessionId === sessionId);
+}
+function fakeFindEngagedDriveBySession(sessionId: string): FakeProject | null {
+  return fakeListHarnessProjectsBySession(sessionId).find((p) => fakeIsDriveEngaged(p.id)) ?? null;
+}
+function fakeGetOpenLaneSessionById(id: string): { id: string; laneBadge: number; title: string } | null {
+  if (!id || closedLanes.has(id)) return null;
+  return { id, laneBadge: Number(id.replace(/\D/g, '')) || 1, title: id };
+}
+const closedLanes = new Set<string>();
+
 vi.mock('../db', () => ({
   getHarnessProject: vi.fn((id: string) => fakeGetHarnessProject(id)),
   listHarnessProjects: vi.fn(() => fakeListHarnessProjects()),
+  listHarnessProjectsBySession: vi.fn((id: string) => fakeListHarnessProjectsBySession(id)),
+  findEngagedDriveBySession: vi.fn((id: string) => fakeFindEngagedDriveBySession(id)),
   getDriveState: vi.fn((id: string) => fakeGetDriveState(id)),
+  getDriveSessionId: vi.fn((id: string) => fakeGetDriveSessionId(id)),
+  isDriveEngaged: vi.fn((id: string) => fakeIsDriveEngaged(id)),
+  getOpenLaneSessionById: vi.fn((id: string) => fakeGetOpenLaneSessionById(id)),
+  getSession: vi.fn((id: string) => ({ id })),
   setDriveState: vi.fn((id: string, patch: Partial<DriveState>) => fakeSetDriveState(id, patch)),
   getLatestUserTurnIndex: vi.fn(() => 0),
 }));
@@ -92,15 +116,8 @@ import { pushAssistantMessage } from '../chat-push';
 import { submitMessage } from '../orchestrator';
 import { pipelineEventBus } from '../pipeline-event-bus';
 import { _resetDriveLockForTesting } from '../drive-lock';
-import {
-  PipelineDriveCoordinator,
-  GREETING_DONE_TIMEOUT_MS,
-} from '../pipeline-drive-coordinator';
-import {
-  reportDriveTurnComplete,
-  _resetDriveUsageSinkForTesting,
-} from '../drive-usage-sink';
-
+import { PipelineDriveCoordinator, GREETING_DONE_TIMEOUT_MS } from '../pipeline-drive-coordinator';
+import { reportDriveTurnComplete, _resetDriveUsageSinkForTesting } from '../drive-usage-sink';
 
 function seedProject(over: Partial<FakeProject> = {}): FakeProject {
   const p: FakeProject = {
@@ -151,10 +168,9 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     vi.useRealTimers();
   });
 
-
   it('B-AC1: started/awaitingUser de fase conversacional -> fireOrchestratorTurn SO apos o stream done do greeting (ordem assertada, exatamente 1 turno)', () => {
     vi.useFakeTimers();
-    seedProject({ pipelineType: 'development', pipelineCurrentPhase: 2 }); // fase 2 = PRD Generator (auto)
+    seedProject({ pipelineType: 'development', pipelineCurrentPhase: 2 });
     const coord = makeCoordinator();
     coord.startDrive('proj_a', 'sess_1', 'semi');
     vi.advanceTimersByTime(1);
@@ -174,7 +190,7 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
       const calls = submitMock.mock.calls;
       return (calls[calls.length - 1][1] as { driveTurnId?: string }).driveTurnId ?? '';
     }
-    vi.advanceTimersByTime(1); // libera a trava reentrante do turno
+    vi.advanceTimersByTime(1);
     reportDriveTurnComplete('proj_a', latestTurnId());
     vi.advanceTimersByTime(1);
     project.pipelineCurrentPhase = 4;
@@ -187,7 +203,6 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     vi.advanceTimersByTime(1);
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
-
 
   it('B-AC2: done atrasado -> nenhum reply/turno corre antes do done (zero erro "no active threadId" simulado)', () => {
     vi.useFakeTimers();
@@ -213,7 +228,6 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     emitGreetingDone('proj_a', 3);
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
-
 
   it('B-AC3: greeting que nunca fecha -> timeout ESCALA (pushAssistantMessage + drive awaiting-human) e NUNCA dispara turno', () => {
     vi.useFakeTimers();
@@ -287,7 +301,6 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     expect(msg).toContain('fase 1');
   });
 
-
   it('B-AC4: fase auto/loop nao arma o gate e nao atrasa nada', () => {
     vi.useFakeTimers();
     seedProject({ pipelineType: 'development', pipelineCurrentPhase: 1 });
@@ -310,7 +323,6 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     expect(submitMock).not.toHaveBeenCalled();
   });
 
-
   it('B-AC5: re-entrada pos-greeting na mesma fase dispara normal (gate nao rearma apos done)', () => {
     vi.useFakeTimers();
     seedProject({ pipelineType: 'development', pipelineCurrentPhase: 2 });
@@ -325,7 +337,7 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     expect(submitMock).not.toHaveBeenCalled();
     emitGreetingDone('proj_a', 3);
     expect(submitMock).toHaveBeenCalledTimes(1);
-    vi.advanceTimersByTime(1); // libera a trava reentrante do turno
+    vi.advanceTimersByTime(1);
 
     function latestTurnId(): string {
       const calls = submitMock.mock.calls;
@@ -343,7 +355,6 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
 
-
   it('B-AC6: fluxo humano (pipeline:send, sem drive) intocado pelo gate', () => {
     vi.useFakeTimers();
     seedProject({ id: 'proj_humano', pipelineType: 'development', pipelineCurrentPhase: 1 });
@@ -359,7 +370,6 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     expect(pushMock).not.toHaveBeenCalled();
     expect(submitMock).not.toHaveBeenCalled();
   });
-
 
   it('B-AC7: resumeDrive numa fase conversacional fresca tambem serializa (evaluateNow :760 bloqueado ate o done)', () => {
     vi.useFakeTimers();
@@ -390,12 +400,11 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
 
-
   it('B-AC8: follow-up coalescido (releaseTurnGate :1130) respeita o greeting-gate', () => {
     vi.useFakeTimers();
     seedProject({ pipelineType: 'development', pipelineCurrentPhase: 1 });
     const coord = makeCoordinator();
-    coord.startDrive('proj_a', 'sess_1', 'semi'); // 1o turno (gate one-in-flight fechado)
+    coord.startDrive('proj_a', 'sess_1', 'semi');
     vi.advanceTimersByTime(1);
     expect(submitMock).toHaveBeenCalledTimes(1);
 
@@ -416,7 +425,6 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     emitGreetingDone('proj_a', 3);
     expect(submitMock).toHaveBeenCalledTimes(2);
   });
-
 
   it('B-AC9: containment dos 5 caminhos (startDrive/resumeDrive/onStream/releaseTurnGate/onPhaseChanged) - NENHUM dispara fireOrchestratorTurn com o gate armado', () => {
     vi.useFakeTimers();
@@ -443,16 +451,15 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     expect(fakeGetDriveState('proj_a')?.status).toBe('driving');
 
     const project = projects.get('proj_a')!;
-    project.pipelineCurrentPhase = 2; // fase auto: sem greeting-gate
+    project.pipelineCurrentPhase = 2;
     pipelineEventBus.emit('pipeline:phase-changed', {
       projectId: 'proj_a',
       phase: 2,
       status: 'running',
       awaitingUser: true,
     });
-    expect(submitMock).toHaveBeenCalledTimes(1); // turno em voo na fase 2
-    const inflightTurnId =
-      (submitMock.mock.calls.at(-1)?.[1] as { driveTurnId?: string }).driveTurnId ?? '';
+    expect(submitMock).toHaveBeenCalledTimes(1);
+    const inflightTurnId = (submitMock.mock.calls.at(-1)?.[1] as { driveTurnId?: string }).driveTurnId ?? '';
     pipelineEventBus.emit('pipeline:phase-changed', {
       projectId: 'proj_a',
       phase: 2,
@@ -472,7 +479,6 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     emitGreetingDone('proj_a', 3);
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
-
 
   it('B-AC10: fase OD (open-design-studio) NAO arma o greeting-gate; faixa silenciosa nao trava nem escala (C-03)', () => {
     vi.useFakeTimers();
@@ -519,7 +525,6 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     expect(pushMock).not.toHaveBeenCalled();
     expect(fakeGetDriveState('proj_a')?.status).toBe('driving');
   });
-
 
   it('C-05: started (awaitingUser:false) da fase 12 dev-v2 (loop) NAO arma o gate -> timeout NAO escala (mutante !isSpecLoopActive morre)', () => {
     vi.useFakeTimers();
@@ -568,7 +573,6 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     expect(submitMock).not.toHaveBeenCalled();
     expect(fakeGetDriveState('proj_a')?.status).toBe('driving');
   });
-
 
   it('C-05 feature fase 9 (spec-builder, loop): started awaitingUser:false NAO arma o gate -> timeout NAO escala', () => {
     vi.useFakeTimers();
@@ -666,7 +670,6 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     expect(fakeGetDriveState('proj_a')?.status).toBe('driving');
   });
 
-
   it('B-AC11 (P1-1): emitir started e SO DEPOIS chamar startDrive (engate tardio) -> turno SO apos o done (zero fireOrchestratorTurn antes)', () => {
     vi.useFakeTimers();
     seedProject({ pipelineType: 'development', pipelineCurrentPhase: 1 });
@@ -679,8 +682,6 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     emitGreetingDone('proj_a', 1);
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
-
-
 
   it('B-AC13 (rev8 P1): re-entrada FRESCA da mesma fase via novo started (reset/avanco-e-volta) REARMA o gate -> turno espera o NOVO done', () => {
     vi.useFakeTimers();
@@ -741,7 +742,7 @@ describe('greeting-gate (SPRINT-B / BUG-1)', () => {
     vi.useFakeTimers();
     seedProject({ pipelineType: 'development', pipelineCurrentPhase: 1 });
     const coord = makeCoordinator();
-    coord.startDrive('proj_a', 'sess_1', 'semi'); // 1o turno em voo (gate one-in-flight fechado)
+    coord.startDrive('proj_a', 'sess_1', 'semi');
     vi.advanceTimersByTime(1);
     expect(submitMock).toHaveBeenCalledTimes(1);
 

@@ -1,13 +1,5 @@
 import { useState, useEffect } from 'react';
-import {
-  CheckCircle,
-  XCircle,
-  Terminal,
-  RefreshCw,
-  ChevronDown,
-  ChevronUp,
-  ArrowRight,
-} from 'lucide-react';
+import { CheckCircle, XCircle, Terminal, RefreshCw, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
 import { CODEX_DEFAULT_MODEL } from '@/constants/codex-models';
 import type { SdkCompleteHandler } from '@/types';
 
@@ -60,8 +52,7 @@ export function CodexConfigPanel({ onComplete }: CodexConfigPanelProps) {
   const handleOpenLogin = async () => {
     try {
       await window.lionclaw.codex.openLogin();
-    } catch {
-    }
+    } catch {}
   };
 
   const handleTest = async () => {
@@ -171,12 +162,9 @@ export function CodexConfigPanel({ onComplete }: CodexConfigPanelProps) {
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-4">
         {/* Explanation */}
         <p className="text-xs text-zinc-500 leading-relaxed">
-          O Codex e cobrado pela sua assinatura ChatGPT Plus. Autentique via CLI
-          com{' '}
-          <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">
-            codex login
-          </code>{' '}
-          antes de continuar. Instale com{' '}
+          O Codex e cobrado pela sua assinatura ChatGPT Plus. Autentique via CLI com{' '}
+          <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">codex login</code> antes de
+          continuar. Instale com{' '}
           <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">
             npm install -g @openai/codex
           </code>
@@ -188,8 +176,7 @@ export function CodexConfigPanel({ onComplete }: CodexConfigPanelProps) {
           {statusBadge()}
           {status?.version && (
             <span className="text-xs text-zinc-500">
-              versao:{' '}
-              <span className="text-zinc-400 font-mono">{status.version}</span>
+              versao: <span className="text-zinc-400 font-mono">{status.version}</span>
             </span>
           )}
           <button
@@ -287,9 +274,7 @@ export function CodexConfigPanel({ onComplete }: CodexConfigPanelProps) {
       </div>
 
       {/* Submit error */}
-      {submitError && (
-        <p className="text-xs text-red-400">{submitError}</p>
-      )}
+      {submitError && <p className="text-xs text-red-400">{submitError}</p>}
 
       {/* Continuar — gated on testPassed */}
       <button

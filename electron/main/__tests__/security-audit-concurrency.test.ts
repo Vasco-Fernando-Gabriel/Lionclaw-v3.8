@@ -48,9 +48,7 @@ describe('security audit concurrency pause', () => {
 
     expect(resume.queue.map((agent) => agent.agentId)).toEqual(['running', 'pending', 'new']);
     expect(resume.interruptedAgentIds).toEqual(['running']);
-    expect(resume.failed).toEqual([
-      { agentId: 'failed', name: 'Failed', error: 'falhou antes' },
-    ]);
+    expect(resume.failed).toEqual([{ agentId: 'failed', name: 'Failed', error: 'falhou antes' }]);
   });
 
   it('aborta a fila, aguarda siblings ativos e propaga o PipelinePausedError original', async () => {
@@ -73,10 +71,14 @@ describe('security audit concurrency pause', () => {
         if (item === 1) throw pauseError;
 
         await new Promise<void>((resolve) => {
-          controller.signal.addEventListener('abort', () => {
-            siblingObservedAbort = true;
-            resolve();
-          }, { once: true });
+          controller.signal.addEventListener(
+            'abort',
+            () => {
+              siblingObservedAbort = true;
+              resolve();
+            },
+            { once: true },
+          );
         });
         await siblingGate;
         siblingSettled = true;
@@ -103,15 +105,17 @@ describe('security audit concurrency pause', () => {
     const controller = new AbortController();
     const completed: number[] = [];
 
-    await expect(runWithConcurrencyLimit(
-      [1, 2, 3],
-      2,
-      async (item) => {
-        if (item === 1) throw new Error('falha ordinaria');
-        completed.push(item);
-      },
-      controller,
-    )).resolves.toBeUndefined();
+    await expect(
+      runWithConcurrencyLimit(
+        [1, 2, 3],
+        2,
+        async (item) => {
+          if (item === 1) throw new Error('falha ordinaria');
+          completed.push(item);
+        },
+        controller,
+      ),
+    ).resolves.toBeUndefined();
 
     expect(completed).toEqual([2, 3]);
     expect(controller.signal.aborted).toBe(false);

@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const OLD_SPEC_BUILDER_PROMPT = `Voce e o Spec Builder do LionClaw BuildPlan workflow.
 
 ## Seu papel
@@ -721,17 +720,20 @@ Responda SEMPRE em portugues do Brasil. Toda saida (analises, relatorios, mensag
 em portugues, exceto quando o conteudo for codigo-fonte ou nomes tecnicos consagrados em ingles.`;
 
 export function applyMigrationV50(db: Database.Database): void {
-  db.prepare(
-    `UPDATE agents SET system_prompt = ? WHERE id = 'spec-builder' AND system_prompt = ?`,
-  ).run(NEW_SPEC_BUILDER_PROMPT, OLD_SPEC_BUILDER_PROMPT);
+  db.prepare(`UPDATE agents SET system_prompt = ? WHERE id = 'spec-builder' AND system_prompt = ?`).run(
+    NEW_SPEC_BUILDER_PROMPT,
+    OLD_SPEC_BUILDER_PROMPT,
+  );
 
-  db.prepare(
-    `UPDATE agents SET system_prompt = ? WHERE id = 'spec-validator' AND system_prompt = ?`,
-  ).run(NEW_SPEC_VALIDATOR_PROMPT, OLD_SPEC_VALIDATOR_PROMPT);
+  db.prepare(`UPDATE agents SET system_prompt = ? WHERE id = 'spec-validator' AND system_prompt = ?`).run(
+    NEW_SPEC_VALIDATOR_PROMPT,
+    OLD_SPEC_VALIDATOR_PROMPT,
+  );
 
-  db.prepare(
-    `UPDATE agents SET system_prompt = ? WHERE id = 'security-skeptic-security' AND system_prompt = ?`,
-  ).run(NEW_SECURITY_SKEPTIC_SECURITY_PROMPT, OLD_SECURITY_SKEPTIC_SECURITY_PROMPT);
+  db.prepare(`UPDATE agents SET system_prompt = ? WHERE id = 'security-skeptic-security' AND system_prompt = ?`).run(
+    NEW_SECURITY_SKEPTIC_SECURITY_PROMPT,
+    OLD_SECURITY_SKEPTIC_SECURITY_PROMPT,
+  );
 }
 
 export const __V50_INTERNAL = {

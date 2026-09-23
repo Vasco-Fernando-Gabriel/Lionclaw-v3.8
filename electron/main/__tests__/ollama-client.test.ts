@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
 
 vi.mock('../logger', () => ({
   createLogger: () => ({
@@ -20,7 +18,6 @@ vi.mock('../mcp-tool-bridge', () => ({
   setupMCPsForSession: vi.fn().mockResolvedValue({ client: { connections: [] }, tools: [] }),
   teardownMCPsForSession: vi.fn().mockResolvedValue(undefined),
 }));
-
 
 function makeNonStreamingResponse(options: {
   content?: string;
@@ -97,7 +94,6 @@ function sseChunk(data: Record<string, unknown>): string {
   return `data: ${JSON.stringify(data)}\n\n`;
 }
 
-
 import { ollamaChatWithTools } from '../ollama-client';
 import type { OllamaToolSchema } from '../ollama-client';
 
@@ -110,14 +106,15 @@ const SIMPLE_TOOL: OllamaToolSchema = {
   },
 };
 
-
 describe('ollama-client: authHeaders', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      makeNonStreamingResponse({ content: 'Final answer', usage: { prompt_tokens: 100, completion_tokens: 50 } }),
-    );
+    fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        makeNonStreamingResponse({ content: 'Final answer', usage: { prompt_tokens: 100, completion_tokens: 50 } }),
+      );
   });
 
   afterEach(() => {
@@ -145,16 +142,9 @@ describe('ollama-client: authHeaders', () => {
   });
 
   it('nao inclui Authorization quando authHeaders nao e passado', async () => {
-    await ollamaChatWithTools(
-      'http://localhost:11434',
-      'llama3.1',
-      'You are a coder.',
-      'Write hello world',
-      [],
-      {
-        provider: 'ollama',
-      },
-    );
+    await ollamaChatWithTools('http://localhost:11434', 'llama3.1', 'You are a coder.', 'Write hello world', [], {
+      provider: 'ollama',
+    });
 
     expect(fetchSpy).toHaveBeenCalled();
     const [, initArg] = fetchSpy.mock.calls[0];
@@ -162,7 +152,6 @@ describe('ollama-client: authHeaders', () => {
     expect(headers?.['Authorization']).toBeUndefined();
   });
 });
-
 
 describe('ollama-client: maxTokens', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
@@ -182,28 +171,20 @@ describe('ollama-client: maxTokens', () => {
   });
 
   it('injeta max_tokens para provider nao-Ollama', async () => {
-    await ollamaChatWithTools(
-      'https://openrouter.ai/api/v1',
-      'deepseek/deepseek-v4-pro',
-      '',
-      'Hello',
-      [],
-      { provider: 'openai-compatible', maxTokens: 4096 },
-    );
+    await ollamaChatWithTools('https://openrouter.ai/api/v1', 'deepseek/deepseek-v4-pro', '', 'Hello', [], {
+      provider: 'openai-compatible',
+      maxTokens: 4096,
+    });
 
     expect(capturedBody.max_tokens).toBe(4096);
     expect((capturedBody.options as Record<string, unknown> | undefined)?.num_predict).toBeUndefined();
   });
 
   it('injeta num_predict para provider Ollama', async () => {
-    await ollamaChatWithTools(
-      'http://localhost:11434',
-      'llama3.1',
-      '',
-      'Hello',
-      [],
-      { provider: 'ollama', maxTokens: 2048 },
-    );
+    await ollamaChatWithTools('http://localhost:11434', 'llama3.1', '', 'Hello', [], {
+      provider: 'ollama',
+      maxTokens: 2048,
+    });
 
     const opts = capturedBody.options as Record<string, unknown> | undefined;
     expect(opts?.num_predict).toBe(2048);
@@ -211,19 +192,13 @@ describe('ollama-client: maxTokens', () => {
   });
 
   it('nao injeta max_tokens quando maxTokens nao e passado', async () => {
-    await ollamaChatWithTools(
-      'https://openrouter.ai/api/v1',
-      'gpt-5.5',
-      '',
-      'Hello',
-      [],
-      { provider: 'openai-compatible' },
-    );
+    await ollamaChatWithTools('https://openrouter.ai/api/v1', 'gpt-5.5', '', 'Hello', [], {
+      provider: 'openai-compatible',
+    });
 
     expect(capturedBody.max_tokens).toBeUndefined();
   });
 });
-
 
 describe('ollama-client: JSON.parse malformado em tool_call arguments', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
@@ -273,7 +248,6 @@ describe('ollama-client: JSON.parse malformado em tool_call arguments', () => {
     expect(result.content).toBe('Done after malformed args');
   });
 });
-
 
 describe('ollama-client: usage fields (cost, cache)', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
@@ -342,14 +316,9 @@ describe('ollama-client: usage fields (cost, cache)', () => {
       }),
     );
 
-    const result = await ollamaChatWithTools(
-      'https://openrouter.ai/api/v1',
-      'minimax/minimax-m2.7',
-      '',
-      'Hello',
-      [],
-      { provider: 'openai-compatible' },
-    );
+    const result = await ollamaChatWithTools('https://openrouter.ai/api/v1', 'minimax/minimax-m2.7', '', 'Hello', [], {
+      provider: 'openai-compatible',
+    });
 
     expect(result.cacheHitTokens).toBe(600);
   });
@@ -362,19 +331,13 @@ describe('ollama-client: usage fields (cost, cache)', () => {
       }),
     );
 
-    const result = await ollamaChatWithTools(
-      'http://localhost:11434',
-      'llama3.1',
-      '',
-      'Hello',
-      [],
-      { provider: 'ollama' },
-    );
+    const result = await ollamaChatWithTools('http://localhost:11434', 'llama3.1', '', 'Hello', [], {
+      provider: 'ollama',
+    });
 
     expect(result.reportedCostUsd).toBeUndefined();
   });
 });
-
 
 describe('ollama-client: apiRequests por round', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
@@ -384,9 +347,9 @@ describe('ollama-client: apiRequests por round', () => {
   });
 
   it('apiRequests = 1 quando responde diretamente sem tool calls', async () => {
-    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      makeNonStreamingResponse({ content: 'Done in one round' }),
-    );
+    fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(makeNonStreamingResponse({ content: 'Done in one round' }));
 
     const result = await ollamaChatWithTools('http://localhost:11434', 'llama3.1', '', 'Hello', [], {
       provider: 'ollama',
@@ -407,14 +370,9 @@ describe('ollama-client: apiRequests por round', () => {
       return makeNonStreamingResponse({ content: 'Done after tool' });
     });
 
-    const result = await ollamaChatWithTools(
-      'https://api.openai.com/v1',
-      'gpt-5.5',
-      '',
-      'Read /tmp/a',
-      [SIMPLE_TOOL],
-      { provider: 'openai-compatible' },
-    );
+    const result = await ollamaChatWithTools('https://api.openai.com/v1', 'gpt-5.5', '', 'Read /tmp/a', [SIMPLE_TOOL], {
+      provider: 'openai-compatible',
+    });
 
     expect(result.apiRequests).toBe(2);
   });
@@ -431,19 +389,14 @@ describe('ollama-client: apiRequests por round', () => {
       return makeNonStreamingResponse({ content: 'Done' });
     });
 
-    const result = await ollamaChatWithTools(
-      'https://api.openai.com/v1',
-      'gpt-5.5',
-      '',
-      'Read files',
-      [SIMPLE_TOOL],
-      { provider: 'openai-compatible', maxRounds: 10 },
-    );
+    const result = await ollamaChatWithTools('https://api.openai.com/v1', 'gpt-5.5', '', 'Read files', [SIMPLE_TOOL], {
+      provider: 'openai-compatible',
+      maxRounds: 10,
+    });
 
     expect(result.apiRequests).toBe(3);
   });
 });
-
 
 describe('ollama-client: tool_call delta accumulation (streaming)', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
@@ -455,36 +408,48 @@ describe('ollama-client: tool_call delta accumulation (streaming)', () => {
   it('acumula tool_call com nome e arguments fragmentados em multiplos chunks', async () => {
     const sseRound1 = [
       sseChunk({
-        choices: [{
-          delta: {
-            tool_calls: [{
-              index: 0,
-              id: 'call_abc123',
-              type: 'function',
-              function: { name: 'Read', arguments: '' },
-            }],
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: 'call_abc123',
+                  type: 'function',
+                  function: { name: 'Read', arguments: '' },
+                },
+              ],
+            },
           },
-        }],
+        ],
       }),
       sseChunk({
-        choices: [{
-          delta: {
-            tool_calls: [{
-              index: 0,
-              function: { arguments: '{"file_' },
-            }],
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  function: { arguments: '{"file_' },
+                },
+              ],
+            },
           },
-        }],
+        ],
       }),
       sseChunk({
-        choices: [{
-          delta: {
-            tool_calls: [{
-              index: 0,
-              function: { arguments: 'path": "/tmp/test.ts"}' },
-            }],
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  function: { arguments: 'path": "/tmp/test.ts"}' },
+                },
+              ],
+            },
           },
-        }],
+        ],
       }),
       sseChunk({
         choices: [{ delta: {}, finish_reason: 'tool_calls' }],
@@ -497,10 +462,12 @@ describe('ollama-client: tool_call delta accumulation (streaming)', () => {
 
     const sseRound2 = [
       sseChunk({
-        choices: [{
-          delta: { content: 'File read done' },
-          finish_reason: null,
-        }],
+        choices: [
+          {
+            delta: { content: 'File read done' },
+            finish_reason: null,
+          },
+        ],
       }),
       sseChunk({
         choices: [{ delta: {}, finish_reason: 'stop' }],
@@ -556,14 +523,10 @@ describe('ollama-client: tool_call delta accumulation (streaming)', () => {
       return makeStreamingResponse(sseSimple);
     });
 
-    await ollamaChatWithTools(
-      'https://openrouter.ai/api/v1',
-      'deepseek/deepseek-v4-pro',
-      '',
-      'Hello',
-      [],
-      { provider: 'openai-compatible', streaming: true },
-    );
+    await ollamaChatWithTools('https://openrouter.ai/api/v1', 'deepseek/deepseek-v4-pro', '', 'Hello', [], {
+      provider: 'openai-compatible',
+      streaming: true,
+    });
 
     expect(capturedBody.stream).toBe(true);
     expect(capturedBody.stream_options).toBeDefined();
@@ -577,16 +540,20 @@ describe('ollama-client: tool_call delta accumulation (streaming)', () => {
         choices: [{ delta: { reasoning_content: 'Preciso ler o arquivo antes.' } }],
       }),
       sseChunk({
-        choices: [{
-          delta: {
-            tool_calls: [{
-              index: 0,
-              id: 'call_kimi_1',
-              type: 'function',
-              function: { name: 'Read', arguments: '{"file_path":"/tmp/a.ts"}' },
-            }],
+        choices: [
+          {
+            delta: {
+              tool_calls: [
+                {
+                  index: 0,
+                  id: 'call_kimi_1',
+                  type: 'function',
+                  function: { name: 'Read', arguments: '{"file_path":"/tmp/a.ts"}' },
+                },
+              ],
+            },
           },
-        }],
+        ],
       }),
       sseChunk({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] }),
       sseChunk({ usage: { prompt_tokens: 20, completion_tokens: 8 } }),
@@ -605,23 +572,16 @@ describe('ollama-client: tool_call delta accumulation (streaming)', () => {
       return makeStreamingResponse(callCount === 1 ? sseRound1 : sseRound2);
     });
 
-    await ollamaChatWithTools(
-      'https://api.moonshot.ai/v1',
-      'kimi-k2.6',
-      '',
-      'Read file',
-      [SIMPLE_TOOL],
-      { provider: 'kimi', streaming: true },
-    );
+    await ollamaChatWithTools('https://api.moonshot.ai/v1', 'kimi-k2.6', '', 'Read file', [SIMPLE_TOOL], {
+      provider: 'kimi',
+      streaming: true,
+    });
 
     const secondMessages = capturedBodies[1].messages as Array<Record<string, unknown>>;
-    const assistantToolMessage = secondMessages.find(
-      (m) => m.role === 'assistant' && Array.isArray(m.tool_calls),
-    );
+    const assistantToolMessage = secondMessages.find((m) => m.role === 'assistant' && Array.isArray(m.tool_calls));
     expect(assistantToolMessage?.reasoning_content).toBe('Preciso ler o arquivo antes.');
   });
 });
-
 
 describe('ollama-client: onTextDelta e onText callbacks (non-streaming)', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
@@ -631,44 +591,28 @@ describe('ollama-client: onTextDelta e onText callbacks (non-streaming)', () => 
   });
 
   it('onText dispara uma vez com o conteudo final no round sem tool calls (Ollama)', async () => {
-    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      makeOllamaResponse({ content: 'Final response text' }),
-    );
+    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(makeOllamaResponse({ content: 'Final response text' }));
 
     const onTextCalls: string[] = [];
-    await ollamaChatWithTools(
-      'http://localhost:11434',
-      'llama3.1',
-      '',
-      'Hello',
-      [],
-      {
-        provider: 'ollama',
-        onText: (text) => onTextCalls.push(text),
-      },
-    );
+    await ollamaChatWithTools('http://localhost:11434', 'llama3.1', '', 'Hello', [], {
+      provider: 'ollama',
+      onText: (text) => onTextCalls.push(text),
+    });
 
     expect(onTextCalls).toHaveLength(1);
     expect(onTextCalls[0]).toBe('Final response text');
   });
 
   it('onText dispara uma vez com o conteudo final no round sem tool calls (openai-compatible)', async () => {
-    fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      makeNonStreamingResponse({ content: 'Final response text OAI' }),
-    );
+    fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(makeNonStreamingResponse({ content: 'Final response text OAI' }));
 
     const onTextCalls: string[] = [];
-    await ollamaChatWithTools(
-      'https://api.openai.com/v1',
-      'gpt-5.5',
-      '',
-      'Hello',
-      [],
-      {
-        provider: 'openai-compatible',
-        onText: (text) => onTextCalls.push(text),
-      },
-    );
+    await ollamaChatWithTools('https://api.openai.com/v1', 'gpt-5.5', '', 'Hello', [], {
+      provider: 'openai-compatible',
+      onText: (text) => onTextCalls.push(text),
+    });
 
     expect(onTextCalls).toHaveLength(1);
     expect(onTextCalls[0]).toBe('Final response text OAI');
@@ -688,17 +632,10 @@ describe('ollama-client: onTextDelta e onText callbacks (non-streaming)', () => 
     });
 
     const onTextCalls: string[] = [];
-    await ollamaChatWithTools(
-      'https://api.openai.com/v1',
-      'gpt-5.5',
-      '',
-      'Read a file',
-      [SIMPLE_TOOL],
-      {
-        provider: 'openai-compatible',
-        onText: (text) => onTextCalls.push(text),
-      },
-    );
+    await ollamaChatWithTools('https://api.openai.com/v1', 'gpt-5.5', '', 'Read a file', [SIMPLE_TOOL], {
+      provider: 'openai-compatible',
+      onText: (text) => onTextCalls.push(text),
+    });
 
     expect(onTextCalls).toHaveLength(1);
     expect(onTextCalls[0]).toBe('Done');

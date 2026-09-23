@@ -1,11 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { ChevronRight, Plus, TerminalSquare, X } from 'lucide-react';
-import {
-  TERMINAL_MAX_TABS,
-  TERMINAL_MIN_HEIGHT,
-  terminalMaxHeight,
-  useTerminalStore,
-} from '@/stores/terminal-store';
+import { TERMINAL_MAX_TABS, TERMINAL_MIN_HEIGHT, terminalMaxHeight, useTerminalStore } from '@/stores/terminal-store';
 import { XtermView } from './XtermView';
 
 interface TerminalDockProps {
@@ -43,10 +38,7 @@ export function TerminalDock({ visible }: TerminalDockProps) {
     const startHeight = height;
     const onMove = (ev: PointerEvent): void => {
       const max = terminalMaxHeight(window.innerHeight);
-      const next = Math.min(
-        max,
-        Math.max(TERMINAL_MIN_HEIGHT, startHeight + (startY - ev.clientY)),
-      );
+      const next = Math.min(max, Math.max(TERMINAL_MIN_HEIGHT, startHeight + (startY - ev.clientY)));
       setHeight(next);
     };
     const teardown = (): void => {
@@ -68,11 +60,7 @@ export function TerminalDock({ visible }: TerminalDockProps) {
   const atCap = sessions.length >= TERMINAL_MAX_TABS;
 
   return (
-    <div
-      className={`shrink-0 flex flex-col border-t border-zinc-800 bg-zinc-900/60 ${
-        visible ? '' : 'hidden'
-      }`}
-    >
+    <div className={`shrink-0 flex flex-col border-t border-zinc-800 bg-zinc-900/60 ${visible ? '' : 'hidden'}`}>
       {open && (
         <div
           role="separator"
@@ -93,10 +81,7 @@ export function TerminalDock({ visible }: TerminalDockProps) {
           aria-controls="terminal-dock-panel"
           className="inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-zinc-500 transition-colors hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
         >
-          <ChevronRight
-            size={13}
-            className={`transition-transform ${open ? 'rotate-90' : ''}`}
-          />
+          <ChevronRight size={13} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
           <TerminalSquare size={14} />
           Terminal
         </button>
@@ -109,9 +94,7 @@ export function TerminalDock({ visible }: TerminalDockProps) {
                 <span
                   key={session.id}
                   className={`inline-flex flex-none items-center rounded transition-colors ${
-                    isActive
-                      ? 'bg-zinc-800 text-zinc-100'
-                      : 'text-zinc-500 hover:bg-zinc-800/60 hover:text-zinc-200'
+                    isActive ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:bg-zinc-800/60 hover:text-zinc-200'
                   }`}
                 >
                   <button
@@ -154,18 +137,12 @@ export function TerminalDock({ visible }: TerminalDockProps) {
 
       {everOpened && (
         <div id="terminal-dock-panel" className={`px-3 pb-3 ${open ? '' : 'hidden'}`}>
-          <div
-            className="overflow-hidden rounded-md border border-zinc-800 bg-zinc-950"
-            style={{ height }}
-          >
+          <div className="overflow-hidden rounded-md border border-zinc-800 bg-zinc-950" style={{ height }}>
             {sessions.map((session) => {
               const isActive = session.id === activeId;
               return (
                 <div key={session.id} className={`h-full ${isActive ? '' : 'hidden'}`}>
-                  <XtermView
-                    sessionId={session.id}
-                    visible={visible && open && isActive}
-                  />
+                  <XtermView sessionId={session.id} visible={visible && open && isActive} />
                 </div>
               );
             })}

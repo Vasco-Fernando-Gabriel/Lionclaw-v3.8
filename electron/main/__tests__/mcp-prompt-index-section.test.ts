@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const state = vi.hoisted(() => ({
@@ -70,17 +69,11 @@ vi.mock('../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-import {
-  buildSystemPrompt,
-  buildMcpIndexSection,
-  getMcpPromptMode,
-} from '../prompt-builder';
-import {
-  GATEWAY_INVOKE_TOOL_NAME,
-  GATEWAY_SCHEMA_TOOL_NAME,
-} from '../mcp-display';
+import { buildSystemPrompt, buildMcpIndexSection, getMcpPromptMode } from '../prompt-builder';
+import { GATEWAY_INVOKE_TOOL_NAME, GATEWAY_SCHEMA_TOOL_NAME } from '../mcp-display';
 
 const SECTION_HEADER = '## Servidores MCP (indice via gateway)';
+const MODEL_LINE = /^- Modelo: .*\n/m;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -109,9 +102,7 @@ describe('getMcpPromptMode / buildMcpIndexSection', () => {
     expect(section).toContain('send_email');
     expect(section).not.toContain('lionclaw-pipeline-control');
     const tokens = section.match(/mcp__[A-Za-z0-9_-]+__[A-Za-z0-9_-]+/g) ?? [];
-    const offenders = tokens.filter(
-      (t) => t !== GATEWAY_INVOKE_TOOL_NAME && t !== GATEWAY_SCHEMA_TOOL_NAME,
-    );
+    const offenders = tokens.filter((t) => t !== GATEWAY_INVOKE_TOOL_NAME && t !== GATEWAY_SCHEMA_TOOL_NAME);
     expect(offenders).toEqual([]);
   });
 
@@ -149,9 +140,7 @@ describe('buildSystemPrompt — presenca por modo + byte-parity', () => {
     ].join('\n');
     expect(indexPrompt).toContain(indexMemory);
     expect(fullPrompt).toContain(legacyMemory);
-    expect(
-      indexPrompt.replace(`\n\n---\n\n${section}`, '').replace(indexMemory, legacyMemory),
-    ).toBe(fullPrompt);
+    expect(indexPrompt.replace(`\n\n---\n\n${section}`, '').replace(indexMemory, legacyMemory)).toBe(fullPrompt);
   });
 
   it('AC-7: troca do setting entre 2 montagens -> a segunda reflete o modo novo', () => {
@@ -164,14 +153,16 @@ describe('buildSystemPrompt — presenca por modo + byte-parity', () => {
 });
 
 describe('buildSystemPrompt — superficies codex/kimi ficam sem o bloco', () => {
-  it("chatSurface 'codex-sdk': sem bloco em modo index; byte-identico ao prompt sem a secao", () => {
+  it("chatSurface 'codex-sdk': sem bloco em modo index; identico ao prompt sem a secao, exceto a linha do modelo (7.5)", () => {
     const codexPrompt = buildSystemPrompt(undefined, { chatSurface: 'codex-sdk' });
     expect(codexPrompt).not.toContain(SECTION_HEADER);
     expect(codexPrompt).not.toContain(GATEWAY_INVOKE_TOOL_NAME);
+    expect(codexPrompt).not.toMatch(MODEL_LINE);
 
     state.settings.set('mcp_prompt_mode', 'full');
     const claudeFullPrompt = buildSystemPrompt();
-    expect(codexPrompt).toBe(claudeFullPrompt);
+    expect(claudeFullPrompt).toMatch(MODEL_LINE);
+    expect(codexPrompt).toBe(claudeFullPrompt.replace(MODEL_LINE, ''));
   });
 
   it("chatSurface 'kimi-sdk': sem bloco em modo index", () => {

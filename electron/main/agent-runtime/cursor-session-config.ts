@@ -1,16 +1,17 @@
-
 import type { BrowserWindow } from 'electron';
 import type { ChatFeatureToggles } from '../../../src/types';
 import type { SubagentDispatchContext } from './types';
 import type { CursorCustomToolDeclaration } from './cursor-sidecar/protocol';
 import type { CursorToolHandler } from './cursor-sidecar/tool-dispatch';
 import { createMcpInvokeToolHandler } from './cursor-sidecar/tool-dispatch';
+import { chatInvocationContext, type McpInvocationLane } from '../mcp-invocation-context';
 
 export type CursorChatToolProfile = 'chat' | 'remote-chat';
 
 export interface CursorChatMcpScope {
   sessionId: string;
   turnId: string;
+  lane?: McpInvocationLane;
 }
 
 export interface BuildCursorSessionToolsArgs {
@@ -64,10 +65,11 @@ async function readChatCatalog(
   capabilities: ChatFeatureToggles | undefined,
 ): Promise<{ tools: CursorMcpCatalogTool[]; allowedServerIds: string[] }> {
   const { getMCPConfigForAgent, getMcpToolRegistryEntries } = await import('../mcp-manager');
-  const specs = await getMCPConfigForAgent(agentId, {
-    surface: 'cursor-sdk',
-    ...(capabilities ? { capabilities } : {}),
-  }) ?? {};
+  const specs =
+    (await getMCPConfigForAgent(agentId, {
+      surface: 'cursor-sdk',
+      ...(capabilities ? { capabilities } : {}),
+    })) ?? {};
   const allowedServers = new Set(Object.keys(specs));
   const tools = getMcpToolRegistryEntries()
     .filter((entry) => allowedServers.has(entry.mcpId))
@@ -86,14 +88,10 @@ function buildIndexTools(input: {
   handlers: Record<string, CursorToolHandler>;
   index: string;
 } {
-  const allowedPairs = new Set(
-    input.catalog.map((tool) => `${tool.serverId}\0${tool.toolName}`),
-  );
+  const allowedPairs = new Set(input.catalog.map((tool) => `${tool.serverId}\0${tool.toolName}`));
   const assertAllowed = (server: string, tool: string): void => {
     if (!allowedPairs.has(`${server}\0${tool}`)) {
-      throw new Error(
-        `Tool ${server || '(vazio)'}/${tool || '(vazia)'} nao pertence ao escopo MCP desta sessao.`,
-      );
+      throw new Error(`Tool ${server || '(vazio)'}/${tool || '(vazia)'} nao pertence ao escopo MCP desta sessao.`);
     }
   };
 
@@ -102,27 +100,27 @@ function buildIndexTools(input: {
     sessionId: input.scope.sessionId,
     allowedServerIds: input.allowedServerIds,
     getTurnId: () => input.scope.turnId,
-    ...(input.chatSurface ? { context: { surface: 'chat' as const } } : {}),
+    ...(input.chatSurface
+      ? {
+          context: chatInvocationContext(
+            input.scope.lane
+              ? { sessionId: input.scope.sessionId, turnId: input.scope.turnId, lane: input.scope.lane }
+              : undefined,
+          ),
+        }
+      : {}),
   });
 
   const invokeHandler: CursorToolHandler = async (invocation, ctx) => {
-    const server = typeof invocation.args['server'] === 'string'
-      ? (invocation.args['server'] as string).trim()
-      : '';
-    const tool = typeof invocation.args['tool'] === 'string'
-      ? (invocation.args['tool'] as string).trim()
-      : '';
+    const server = typeof invocation.args['server'] === 'string' ? (invocation.args['server'] as string).trim() : '';
+    const tool = typeof invocation.args['tool'] === 'string' ? (invocation.args['tool'] as string).trim() : '';
     assertAllowed(server, tool);
     return innerInvoke(invocation, ctx);
   };
 
   const schemaHandler: CursorToolHandler = async (invocation) => {
-    const server = typeof invocation.args['server'] === 'string'
-      ? (invocation.args['server'] as string).trim()
-      : '';
-    const tool = typeof invocation.args['tool'] === 'string'
-      ? (invocation.args['tool'] as string).trim()
-      : '';
+    const server = typeof invocation.args['server'] === 'string' ? (invocation.args['server'] as string).trim() : '';
+    const tool = typeof invocation.args['tool'] === 'string' ? (invocation.args['tool'] as string).trim() : '';
     assertAllowed(server, tool);
     const { getMcpToolSchema } = await import('../mcp-invoke');
     const result = getMcpToolSchema(server, tool);
@@ -158,12 +156,15 @@ function buildIndexTools(input: {
   ];
 
   const serverIdsWithTools = [...new Set(input.catalog.map((tool) => tool.serverId))];
-  const index = serverIdsWithTools.length === 0
-    ? 'Nenhum servidor MCP esta materializado neste turno.'
-    : serverIdsWithTools.map((server) => {
-      const tools = input.catalog.filter((tool) => tool.serverId === server);
-      return `- ${server}: ${tools.map((tool) => tool.toolName).join(', ') || '(sem tools descobertas)'}`;
-    }).join('\n');
+  const index =
+    serverIdsWithTools.length === 0
+      ? 'Nenhum servidor MCP esta materializado neste turno.'
+      : serverIdsWithTools
+          .map((server) => {
+            const tools = input.catalog.filter((tool) => tool.serverId === server);
+            return `- ${server}: ${tools.map((tool) => tool.toolName).join(', ') || '(sem tools descobertas)'}`;
+          })
+          .join('\n');
 
   return {
     declarations,
@@ -192,26 +193,23 @@ function buildSubagentTool(host: SubagentDispatchContext): {
       },
     },
     handler: async (invocation, ctx) => {
-      const agentId = typeof invocation.args['agentId'] === 'string'
-        ? (invocation.args['agentId'] as string)
-        : '';
-      const prompt = typeof invocation.args['prompt'] === 'string'
-        ? (invocation.args['prompt'] as string)
-        : '';
-      const context = typeof invocation.args['context'] === 'string'
-        ? (invocation.args['context'] as string)
-        : '';
+      const agentId = typeof invocation.args['agentId'] === 'string' ? (invocation.args['agentId'] as string) : '';
+      const prompt = typeof invocation.args['prompt'] === 'string' ? (invocation.args['prompt'] as string) : '';
+      const context = typeof invocation.args['context'] === 'string' ? (invocation.args['context'] as string) : '';
       if (!agentId || !prompt) throw new Error('agentId e prompt sao obrigatorios.');
       const { dispatchLionSubagent } = await import('./subagent-dispatch');
       const callHost: SubagentDispatchContext = {
         ...host,
         parentAbortSignal: AbortSignal.any([host.parentAbortSignal, ctx.signal]),
       };
-      const result = await dispatchLionSubagent({
-        agentId,
-        prompt,
-        ...(context ? { context } : {}),
-      }, callHost);
+      const result = await dispatchLionSubagent(
+        {
+          agentId,
+          prompt,
+          ...(context ? { context } : {}),
+        },
+        callHost,
+      );
       if (!result.ok) throw new Error(result.error ?? `Subagent ${agentId} falhou.`);
       return result.output ?? '';
     },
@@ -221,6 +219,7 @@ function buildSubagentTool(host: SubagentDispatchContext): {
 function buildAskUserTool(
   getWindow: () => BrowserWindow | null,
   sessionAbortSignal: AbortSignal,
+  sessionId: string,
 ): { declaration: CursorCustomToolDeclaration; handler: CursorToolHandler } {
   return {
     declaration: {
@@ -234,15 +233,15 @@ function buildAskUserTool(
       },
     },
     handler: async (invocation, ctx) => {
-      const question = typeof invocation.args['question'] === 'string'
-        ? (invocation.args['question'] as string)
-        : '';
+      const question = typeof invocation.args['question'] === 'string' ? (invocation.args['question'] as string) : '';
       if (!question) throw new Error('question e obrigatoria.');
       const { sendAskQuestion } = await import('../ask-question');
       const response = await sendAskQuestion(
         getWindow,
         [{ question, header: 'Pergunta', options: [] }],
         AbortSignal.any([sessionAbortSignal, ctx.signal]),
+        undefined,
+        { sessionId },
       );
       const answer = response.answers?.[question];
       return Array.isArray(answer) ? answer.join(', ') : String(answer ?? '');
@@ -250,10 +249,7 @@ function buildAskUserTool(
   };
 }
 
-export function stripUnmaterializedCursorTools(
-  prompt: string,
-  materializedNames: ReadonlySet<string>,
-): string {
+export function stripUnmaterializedCursorTools(prompt: string, materializedNames: ReadonlySet<string>): string {
   return prompt
     .split('\n')
     .filter((line) => {
@@ -265,9 +261,7 @@ export function stripUnmaterializedCursorTools(
     .trim();
 }
 
-export async function buildCursorSessionTools(
-  args: BuildCursorSessionToolsArgs,
-): Promise<CursorSessionTools> {
+export async function buildCursorSessionTools(args: BuildCursorSessionToolsArgs): Promise<CursorSessionTools> {
   const declarations: CursorCustomToolDeclaration[] = [];
   const handlers: Record<string, CursorToolHandler> = {};
   let index = '';
@@ -282,7 +276,7 @@ export async function buildCursorSessionTools(
   switch (args.profile) {
     case 'chat': {
       if (args.allowUserQuestion === true && args.getWindow) {
-        const askUser = buildAskUserTool(args.getWindow, args.abortSignal);
+        const askUser = buildAskUserTool(args.getWindow, args.abortSignal, args.scope.sessionId);
         declarations.push(askUser.declaration);
         handlers[askUser.declaration.name] = askUser.handler;
       }

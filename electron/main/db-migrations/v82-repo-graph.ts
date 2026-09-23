@@ -65,11 +65,6 @@ export function applyMigrationV82(db: Database.Database): void {
 }
 
 export const __V82_INTERNAL = {
-  TABLES: [
-    'local_repositories',
-    'repo_graph_runs',
-    'session_active_repository',
-    'repo_graph_turn_usage',
-  ],
+  TABLES: ['local_repositories', 'repo_graph_runs', 'session_active_repository', 'repo_graph_turn_usage'],
   INDEXES: ['idx_rgtu_session_turn'],
 };

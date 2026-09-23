@@ -1,26 +1,21 @@
 import { ipcMain, BrowserWindow, shell, dialog } from 'electron';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
-import crypto from 'crypto';
+import { fileURLToPath } from 'url';
 import { createLogger, getSystemLogFilePath } from '../logger';
-import {
-  getSystemLogEntries,
-  getSystemLogModules,
-  subscribeSystemLog,
-} from '../system-log-buffer';
+import { getSystemLogEntries, getSystemLogModules, subscribeSystemLog } from '../system-log-buffer';
 import { getLionClawHome } from '../paths';
+import { readArtifactState, writeArtifactState } from '../html-artifact';
 import { resolveOnboardingCompletedFromState } from '../onboarding';
 import type { IpcContext } from './context';
 import { getLionClawPath } from './_shared/lionclaw-path';
 import { clearSDKSessionFiles } from './_shared/chat-compaction';
 import { resetSdkSessionState } from '../orchestrator';
-import { runCompaction, searchSemanticMemories } from '../memory-pipeline';
+import { searchSemanticMemories } from '../memory-pipeline';
 import {
   queryAuditLog,
   getDailySummaries,
-  getActiveChatSession,
-  updateSessionStatus,
-  createSession,
   getToolSettings,
   setToolEnabled,
   getEnabledTools,
@@ -32,15 +27,17 @@ import {
   createAuthRow,
   seedDefaultAgents,
   setSetting,
-  clearAllSessions,
+  getAllSessionIds,
+  clearNonSessionResetTables,
 } from '../db';
+import { deleteSessionsWithTimeline } from '../session-timeline';
 import * as auth from '../auth';
 import { loadSoul, saveSoul, loadUser, saveUser } from '../prompt-builder';
 import type { LogFilters, SystemLogFilters } from '../../../src/types';
 
 const logger = createLogger('ipc');
 
-function factoryResetOnboarding(): void {
+async function factoryResetOnboarding(): Promise<void> {
   const lionclawPath = getLionClawHome();
 
   setSetting('onboarding_completed', 'false');
@@ -53,17 +50,6 @@ function factoryResetOnboarding(): void {
   fs.writeFileSync(path.join(lionclawPath, 'USER.md'), cleanUser, 'utf-8');
   fs.writeFileSync(path.join(lionclawPath, 'MEMORY.md'), cleanMemory, 'utf-8');
 
-  const sessionsDir = path.join(lionclawPath, 'data', 'sessions');
-  if (fs.existsSync(sessionsDir)) {
-    for (const file of fs.readdirSync(sessionsDir)) {
-      const filePath = path.join(sessionsDir, file);
-      if (fs.statSync(filePath).isFile()) {
-        fs.unlinkSync(filePath);
-      }
-    }
-  }
-
-  const os = require('os');
   const homedir = os.homedir();
   const possibleCwds = [process.cwd(), getLionClawHome(), homedir];
   for (const cwd of possibleCwds) {
@@ -81,7 +67,9 @@ function factoryResetOnboarding(): void {
   clearSDKSessionFiles();
   resetSdkSessionState();
 
-  clearAllSessions();
+  const sessionIds = getAllSessionIds();
+  await deleteSessionsWithTimeline(sessionIds);
+  clearNonSessionResetTables();
 
   logger.info('Factory reset completed - ready for fresh onboarding');
 }
@@ -167,33 +155,12 @@ export function registerSystemHandlers(_ctx: IpcContext): void {
     fs.writeFileSync(filePath, content, 'utf-8');
   });
 
-  ipcMain.handle(
-    'memory:search-semantic',
-    async (_event, query: string, limit?: number) => {
-      return searchSemanticMemories(query, limit);
-    },
-  );
+  ipcMain.handle('memory:search-semantic', async (_event, query: string, limit?: number) => {
+    return searchSemanticMemories(query, limit);
+  });
 
-  ipcMain.handle(
-    'memory:get-summaries',
-    (_event, from?: string, to?: string) => {
-      return getDailySummaries(from, to);
-    },
-  );
-
-  ipcMain.handle('memory:trigger-compaction', async () => {
-    const activeSession = getActiveChatSession();
-    if (!activeSession) return;
-
-    await runCompaction(
-      new Date(activeSession.createdAt),
-      new Date(),
-      activeSession.id,
-    );
-    updateSessionStatus(activeSession.id, 'compacted');
-
-    const newSessionId = crypto.randomUUID();
-    createSession(newSessionId, '');
+  ipcMain.handle('memory:get-summaries', (_event, from?: string, to?: string) => {
+    return getDailySummaries(from, to);
   });
 
   const toolsGetSettings = () => getToolSettings();
@@ -214,22 +181,19 @@ export function registerSystemHandlers(_ctx: IpcContext): void {
   };
 
   ipcMain.handle('tools:get-settings', toolsGetSettings);
-  ipcMain.handle('tools:getSettings', toolsGetSettings); // DEPRECATED — remove in vNext
+  ipcMain.handle('tools:getSettings', toolsGetSettings);
   ipcMain.handle('tools:set-enabled', toolsSetEnabled);
-  ipcMain.handle('tools:setEnabled', toolsSetEnabled); // DEPRECATED — remove in vNext
+  ipcMain.handle('tools:setEnabled', toolsSetEnabled);
   ipcMain.handle('tools:get-enabled', toolsGetEnabled);
   ipcMain.handle('tools:get-bypass', toolsGetBypass);
   ipcMain.handle('tools:set-bypass', toolsSetBypass);
   ipcMain.handle('tools:get-telegram-armed', toolsGetTelegramArmed);
   ipcMain.handle('tools:set-telegram-armed', toolsSetTelegramArmed);
-  ipcMain.handle('tools:getEnabled', toolsGetEnabled); // DEPRECATED — remove in vNext
+  ipcMain.handle('tools:getEnabled', toolsGetEnabled);
 
-  ipcMain.handle(
-    'auth:login',
-    async (_event, password: string, totpCode?: string) => {
-      return auth.login(password, totpCode);
-    },
-  );
+  ipcMain.handle('auth:login', async (_event, password: string, totpCode?: string) => {
+    return auth.login(password, totpCode);
+  });
 
   ipcMain.handle('auth:logout', () => {
     auth.logout();
@@ -247,8 +211,8 @@ export function registerSystemHandlers(_ctx: IpcContext): void {
     const passwordHash = await auth.setupPassword(password);
     getDb().transaction(() => {
       createAuthRow(passwordHash);
-      seedDefaultAgents();                             // preserve: creates default agents
-      setSetting('orchestrator_setup_completed', ''); // seed: marks wizard in progress
+      seedDefaultAgents();
+      setSetting('orchestrator_setup_completed', '');
     })();
   });
 
@@ -294,12 +258,7 @@ export function registerSystemHandlers(_ctx: IpcContext): void {
   });
 
   ipcMain.handle('rules:get-agent', (_event, agentId: string) => {
-    const filePath = path.join(
-      getLionClawPath(),
-      'agents',
-      agentId,
-      'RULES.md',
-    );
+    const filePath = path.join(getLionClawPath(), 'agents', agentId, 'RULES.md');
     try {
       return fs.readFileSync(filePath, 'utf-8');
     } catch {
@@ -307,14 +266,11 @@ export function registerSystemHandlers(_ctx: IpcContext): void {
     }
   });
 
-  ipcMain.handle(
-    'rules:update-agent',
-    (_event, agentId: string, content: string) => {
-      const dirPath = path.join(getLionClawPath(), 'agents', agentId);
-      fs.mkdirSync(dirPath, { recursive: true });
-      fs.writeFileSync(path.join(dirPath, 'RULES.md'), content, 'utf-8');
-    },
-  );
+  ipcMain.handle('rules:update-agent', (_event, agentId: string, content: string) => {
+    const dirPath = path.join(getLionClawPath(), 'agents', agentId);
+    fs.mkdirSync(dirPath, { recursive: true });
+    fs.writeFileSync(path.join(dirPath, 'RULES.md'), content, 'utf-8');
+  });
 
   ipcMain.handle('onboarding:is-completed', () => {
     return resolveOnboardingCompletedFromState();
@@ -324,10 +280,9 @@ export function registerSystemHandlers(_ctx: IpcContext): void {
     setSetting('onboarding_completed', 'true');
   });
 
-  ipcMain.handle('onboarding:reset', () => {
-    factoryResetOnboarding();
+  ipcMain.handle('onboarding:reset', async () => {
+    await factoryResetOnboarding();
   });
-
 
   ipcMain.handle('shell:show-in-folder', async (_event, filePath: string) => {
     const resolved = path.resolve(filePath);
@@ -352,24 +307,76 @@ export function registerSystemHandlers(_ctx: IpcContext): void {
     return { ok: true as const };
   });
 
+  ipcMain.handle('shell:open-file', async (_event, rawTarget: string) => {
+    if (typeof rawTarget !== 'string' || rawTarget.trim().length === 0) {
+      return { error: 'Caminho vazio' };
+    }
+    let candidate = rawTarget.trim();
+    if (/^file:/i.test(candidate)) {
+      try {
+        candidate = fileURLToPath(candidate);
+      } catch {
+        return { error: 'URL file:// invalida' };
+      }
+    } else {
+      try {
+        candidate = decodeURIComponent(candidate);
+      } catch {
+        return { error: 'Caminho com codificacao invalida' };
+      }
+    }
+    if (!path.isAbsolute(candidate)) {
+      return { error: 'O caminho precisa ser absoluto' };
+    }
+    let realTarget: string;
+    let realHome: string;
+    try {
+      realTarget = fs.realpathSync(candidate);
+      realHome = fs.realpathSync(os.homedir());
+    } catch {
+      return { error: 'Arquivo nao encontrado' };
+    }
+    if (!fs.statSync(realTarget).isFile()) {
+      return { error: 'O caminho nao e um arquivo' };
+    }
+    if (realTarget !== realHome && !realTarget.startsWith(realHome + path.sep)) {
+      return { error: 'Arquivo fora da pasta do usuario' };
+    }
+    const openError = await shell.openPath(realTarget);
+    if (openError) {
+      logger.warn({ target: realTarget, openError }, 'shell:open-file: openPath falhou');
+      return { error: openError };
+    }
+    return { ok: true as const };
+  });
+
+  ipcMain.handle('artifact:get-state', async (_event, storageKey: string) => {
+    try {
+      return readArtifactState(storageKey);
+    } catch (err) {
+      logger.warn({ storageKey, err }, 'artifact:get-state falhou');
+      return { error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle('artifact:set-state', async (_event, storageKey: string, state: unknown) => {
+    try {
+      return writeArtifactState(storageKey, state);
+    } catch (err) {
+      logger.warn({ storageKey, err }, 'artifact:set-state falhou');
+      return { error: (err as Error).message };
+    }
+  });
 
   ipcMain.handle(
     'dialog:open-file',
-    async (
-      _event,
-      args: { filters?: Array<{ name: string; extensions: string[] }> },
-    ) => {
+    async (_event, args: { filters?: Array<{ name: string; extensions: string[] }> }) => {
       const win = BrowserWindow.getFocusedWindow();
-      const filters = args?.filters ?? [
-        { name: 'Documents', extensions: ['md', 'json', 'txt'] },
-      ];
-      const result = await dialog.showOpenDialog(
-        win ?? BrowserWindow.getAllWindows()[0],
-        {
-          properties: ['openFile'],
-          filters,
-        },
-      );
+      const filters = args?.filters ?? [{ name: 'Documents', extensions: ['md', 'json', 'txt'] }];
+      const result = await dialog.showOpenDialog(win ?? BrowserWindow.getAllWindows()[0], {
+        properties: ['openFile'],
+        filters,
+      });
       if (result.canceled || result.filePaths.length === 0) {
         return null;
       }
@@ -379,13 +386,10 @@ export function registerSystemHandlers(_ctx: IpcContext): void {
 
   ipcMain.handle('dialog:open-directory', async () => {
     const win = BrowserWindow.getFocusedWindow();
-    const result = await dialog.showOpenDialog(
-      win ?? BrowserWindow.getAllWindows()[0],
-      {
-        properties: ['openDirectory', 'createDirectory'],
-        title: 'Selecionar pasta do projeto',
-      },
-    );
+    const result = await dialog.showOpenDialog(win ?? BrowserWindow.getAllWindows()[0], {
+      properties: ['openDirectory', 'createDirectory'],
+      title: 'Selecionar pasta do projeto',
+    });
     if (result.canceled || result.filePaths.length === 0) {
       return null;
     }

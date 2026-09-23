@@ -1,4 +1,3 @@
-
 import type { BrowserWindow } from 'electron';
 import { recordActivity } from '../activity-log';
 import { getDynamicWorkflowRun, getLatestUserTurnIndex } from '../db';
@@ -90,11 +89,23 @@ export function mapWorkflowEventToActivities(
       return out;
     }
     case 'run-failed': {
-      out.push({ ...rootBase, phase: 'end', status: 'error', summary: strFrom(payload, 'message') ?? 'workflow falhou', endedAt: event.createdAt });
+      out.push({
+        ...rootBase,
+        phase: 'end',
+        status: 'error',
+        summary: strFrom(payload, 'message') ?? 'workflow falhou',
+        endedAt: event.createdAt,
+      });
       return out;
     }
     case 'run-aborted': {
-      out.push({ ...rootBase, phase: 'end', status: 'stopped', summary: 'workflow abortado', endedAt: event.createdAt });
+      out.push({
+        ...rootBase,
+        phase: 'end',
+        status: 'stopped',
+        summary: 'workflow abortado',
+        endedAt: event.createdAt,
+      });
       return out;
     }
     case 'run-paused':
@@ -108,7 +119,12 @@ export function mapWorkflowEventToActivities(
     }
     case 'phase-changed': {
       const phaseId = event.phaseId ?? strFrom(payload, 'phase');
-      out.push({ ...rootBase, description: phaseId ? `Fase ${phaseId}${run.currentNodeId ? ` - node ${run.currentNodeId}` : ''}` : rootBase.description });
+      out.push({
+        ...rootBase,
+        description: phaseId
+          ? `Fase ${phaseId}${run.currentNodeId ? ` - node ${run.currentNodeId}` : ''}`
+          : rootBase.description,
+      });
       return out;
     }
     case 'node-started': {
@@ -270,16 +286,10 @@ export function mapWorkflowEventToActivities(
   }
 }
 
-
 export interface WorkflowActivityDeps {
   getRun: (runId: string) => DynamicWorkflowRun | null;
   getTurnIndex: (sessionId: string) => number;
-  record: (
-    sessionId: string,
-    turnIndex: number,
-    ev: LiveActivityEvent,
-    send: (chunk: StreamChunk) => void,
-  ) => void;
+  record: (sessionId: string, turnIndex: number, ev: LiveActivityEvent, send: (chunk: StreamChunk) => void) => void;
   getWindow: () => BrowserWindow | null;
   bus?: WorkflowEventBusHandle;
 }

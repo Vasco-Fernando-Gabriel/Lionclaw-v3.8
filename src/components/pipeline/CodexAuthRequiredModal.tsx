@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useCallback } from 'react';
 import type { HarnessProject } from '@/types';
 
@@ -13,19 +12,14 @@ interface AuthRequiredPayload {
   roundId?: string;
 }
 
-export function authRequiredPayloadFromProject(
-  project: HarnessProject,
-): AuthRequiredPayload | null {
+export function authRequiredPayloadFromProject(project: HarnessProject): AuthRequiredPayload | null {
   const checkpoint = project.config.providerAuthCheckpoint;
   if (!checkpoint) return null;
-  const isRecoverable = project.status === 'paused'
-    || (project.status === 'running' && checkpoint.claimState === 'claimed');
+  const isRecoverable =
+    project.status === 'paused' || (project.status === 'running' && checkpoint.claimState === 'claimed');
   if (!isRecoverable) return null;
-  const providerLabel = checkpoint.provider === 'grok'
-    ? 'Grok Build'
-    : checkpoint.provider === 'kimi'
-      ? 'Kimi'
-      : 'Codex';
+  const providerLabel =
+    checkpoint.provider === 'grok' ? 'Grok Build' : checkpoint.provider === 'kimi' ? 'Kimi' : 'Codex';
   return {
     projectId: project.id,
     phaseNumber: checkpoint.phaseNumber,
@@ -53,14 +47,16 @@ export function CodexAuthRequiredModal() {
       setTestMessage(null);
     });
     let cancelled = false;
-    void window.lionclaw.harness.listProjects().then((projects) => {
-      if (cancelled) return;
-      const recovered = projects
-        .map(authRequiredPayloadFromProject)
-        .find((candidate): candidate is AuthRequiredPayload => candidate !== null);
-      if (recovered) setPayload((current) => current ?? recovered);
-    }).catch(() => {
-    });
+    void window.lionclaw.harness
+      .listProjects()
+      .then((projects) => {
+        if (cancelled) return;
+        const recovered = projects
+          .map(authRequiredPayloadFromProject)
+          .find((candidate): candidate is AuthRequiredPayload => candidate !== null);
+        if (recovered) setPayload((current) => current ?? recovered);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
       unsub();
@@ -77,14 +73,15 @@ export function CodexAuthRequiredModal() {
     setTesting(true);
     setTestMessage(null);
     try {
-      const result = payload?.provider === 'grok'
-        ? await window.lionclaw.grok.test()
-        : payload?.provider === 'kimi'
-          ? await window.lionclaw.kimi.status().then((status) => ({
-              ok: status.usable,
-              message: status.reason ?? (status.usable ? 'Kimi autenticado.' : 'Kimi ainda nao autenticado.'),
-            }))
-          : await window.lionclaw.codex.test() as { ok: boolean; message: string };
+      const result =
+        payload?.provider === 'grok'
+          ? await window.lionclaw.grok.test()
+          : payload?.provider === 'kimi'
+            ? await window.lionclaw.kimi.status().then((status) => ({
+                ok: status.usable,
+                message: status.reason ?? (status.usable ? 'Kimi autenticado.' : 'Kimi ainda nao autenticado.'),
+              }))
+            : ((await window.lionclaw.codex.test()) as { ok: boolean; message: string });
       if (result.ok) {
         setAuthVerified(true);
         setTestMessage('Autenticado com sucesso.');
@@ -104,18 +101,19 @@ export function CodexAuthRequiredModal() {
     if (!payload || !authVerified) return;
     setResuming(true);
     try {
-      const result = payload.ownerKind === 'harness'
-        ? await window.lionclaw.harness.resumeAfterAuth(payload.projectId, payload.provider)
-        : payload.ownerKind === 'enrich'
-          ? await window.lionclaw.enrich.resumeAfterAuth(payload.projectId, payload.provider)
-          : await window.lionclaw.pipeline.resumeAfterAuth(payload.projectId, payload.provider);
-      if (!result || !('error' in result) && 'ok' in result && result.ok) {
+      const result =
+        payload.ownerKind === 'harness'
+          ? await window.lionclaw.harness.resumeAfterAuth(payload.projectId, payload.provider)
+          : payload.ownerKind === 'enrich'
+            ? await window.lionclaw.enrich.resumeAfterAuth(payload.projectId, payload.provider)
+            : await window.lionclaw.pipeline.resumeAfterAuth(payload.projectId, payload.provider);
+      if (!result || (!('error' in result) && 'ok' in result && result.ok)) {
         setPayload(null);
       } else {
         setTestMessage(
           'message' in result
             ? result.message
-            : result.error ?? 'Nao foi possivel retomar. Tente verificar novamente.',
+            : (result.error ?? 'Nao foi possivel retomar. Tente verificar novamente.'),
         );
         setAuthVerified(false);
       }
@@ -144,11 +142,8 @@ export function CodexAuthRequiredModal() {
   const isKimi = payload.provider === 'kimi';
   const providerLabel = isGrok ? 'Grok Build' : isKimi ? 'Kimi' : 'Codex';
   const loginCommand = isGrok ? 'grok login --device-auth' : isKimi ? 'kimi acp --login' : 'codex login';
-  const executionLabel = payload.ownerKind === 'harness'
-    ? 'harness'
-    : payload.ownerKind === 'enrich'
-      ? 'enrich'
-      : 'pipeline';
+  const executionLabel =
+    payload.ownerKind === 'harness' ? 'harness' : payload.ownerKind === 'enrich' ? 'enrich' : 'pipeline';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
@@ -156,12 +151,11 @@ export function CodexAuthRequiredModal() {
         <h2 className="text-lg font-semibold text-white mb-2">{providerLabel} desconectado</h2>
 
         <p className="text-sm text-zinc-300 mb-1">
-          O {executionLabel} foi pausado porque o {providerLabel} perdeu a autenticacao por assinatura durante a execucao da fase {payload.phaseNumber}.
+          O {executionLabel} foi pausado porque o {providerLabel} perdeu a autenticacao por assinatura durante a
+          execucao da fase {payload.phaseNumber}.
         </p>
 
-        <p className="text-xs text-zinc-500 mb-4 font-mono bg-zinc-800 rounded p-2 break-words">
-          {payload.message}
-        </p>
+        <p className="text-xs text-zinc-500 mb-4 font-mono bg-zinc-800 rounded p-2 break-words">{payload.message}</p>
 
         <p className="text-sm text-zinc-300 mb-4">
           Clique em <span className="font-medium text-amber-400">Reconectar</span> para abrir o terminal com{' '}

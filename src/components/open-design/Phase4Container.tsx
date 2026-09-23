@@ -12,22 +12,15 @@ import { BootstrappingView } from './BootstrappingView';
 import { StudioView } from './StudioView';
 import { resolvePhase4StartAction } from './phase4-start-gate';
 
-
 interface Phase4ContainerProps {
   projectId: string;
 }
 
-type BootstrapState =
-  | 'idle'
-  | 'running'
-  | 'done'
-  | 'error';
+type BootstrapState = 'idle' | 'running' | 'done' | 'error';
 
 export function Phase4Container({ projectId }: Phase4ContainerProps) {
   const openProject = usePipelineStore((s) => s.openProject);
-  const currentPhase = usePipelineStore(
-    (s) => s.projectStates.get(projectId)?.currentPhase ?? null,
-  );
+  const currentPhase = usePipelineStore((s) => s.projectStates.get(projectId)?.currentPhase ?? null);
   const [bootInstallStatus, setBootInstallStatus] = useState<BootInstallStatus | null>(null);
   const [sessionConfig, setSessionConfig] = useState<OpenDesignSessionConfig | null>(null);
   const [bootstrapState, setBootstrapState] = useState<BootstrapState>('idle');
@@ -56,16 +49,14 @@ export function Phase4Container({ projectId }: Phase4ContainerProps) {
       try {
         const status = await window.lionclaw.openDesign.bootInstallStatus();
         if (!cancelled) setBootInstallStatus(status);
-      } catch {
-      }
+      } catch {}
     })();
     const unsubscribe = window.lionclaw.openDesign.onBootInstallStream(() => {
       void (async () => {
         try {
           const s = await window.lionclaw.openDesign.bootInstallStatus();
           if (!cancelled) setBootInstallStatus(s);
-        } catch {
-        }
+        } catch {}
       })();
     });
     return () => {
@@ -169,11 +160,9 @@ export function Phase4Container({ projectId }: Phase4ContainerProps) {
       try {
         const s = await window.lionclaw.openDesign.bootInstallStatus();
         setBootInstallStatus(s);
-      } catch {
-      }
+      } catch {}
     }
   }, []);
-
 
   if (!phaseReady || bootInstallStatus === null) {
     return (
@@ -189,9 +178,7 @@ export function Phase4Container({ projectId }: Phase4ContainerProps) {
       <div className="flex flex-col items-center justify-center flex-1 px-6">
         <div className="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-900/60 p-5 text-center">
           <AlertTriangle size={24} className="mx-auto text-amber-400" />
-          <h2 className="mt-3 text-sm font-medium text-zinc-100">
-            LionDesign fora da fase atual
-          </h2>
+          <h2 className="mt-3 text-sm font-medium text-zinc-100">LionDesign fora da fase atual</h2>
           <p className="mt-2 text-xs leading-5 text-zinc-400">
             Este projeto nao esta mais na fase 5. Volte ao pipeline para aprovar ou revisar a fase atual.
           </p>
@@ -207,7 +194,8 @@ export function Phase4Container({ projectId }: Phase4ContainerProps) {
           <Loader2 size={28} className="animate-spin text-amber-400" />
           <h2 className="text-sm font-medium">Preparando LionDesign (primeira execucao)</h2>
           <p className="text-[11px] text-zinc-500 text-center">
-            O motor de design esta sendo instalado em background. Voce pode acompanhar o progresso na sidebar; esta tela continua quando estiver pronto.
+            O motor de design esta sendo instalado em background. Voce pode acompanhar o progresso na sidebar; esta tela
+            continua quando estiver pronto.
           </p>
         </div>
       </div>
@@ -245,9 +233,8 @@ export function Phase4Container({ projectId }: Phase4ContainerProps) {
         <div className="w-full max-w-md flex flex-col items-center gap-4 text-zinc-300">
           <h2 className="text-sm font-medium">Sessao de design pronta para iniciar</h2>
           <p className="text-[11px] text-zinc-500 text-center leading-5">
-            O orquestrador esta dirigindo este pipeline. Inicie a sessao de design
-            quando quiser; o orquestrador tambem pode dar o GO e a tela avanca
-            sozinha.
+            O orquestrador esta dirigindo este pipeline. Inicie a sessao de design quando quiser; o orquestrador tambem
+            pode dar o GO e a tela avanca sozinha.
           </p>
           <button
             onClick={() => void triggerEnsureSession()}

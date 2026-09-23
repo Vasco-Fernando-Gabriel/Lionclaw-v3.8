@@ -8,10 +8,7 @@ import { assertValidSessionConfig, getSessionConfig } from './session-config';
 import { getBootInstallStatus } from './boot-installer';
 import * as manager from './manager';
 import { createAdapter } from './adapter-http';
-import {
-  getPipelineDocsContext,
-  resolveOpenDesignPromptPath,
-} from '../pipeline-paths';
+import { getPipelineDocsContext, resolveOpenDesignPromptPath } from '../pipeline-paths';
 import type { Adapter } from './adapter-http';
 import { emitIPC } from '../pipeline-shared/ipc-emitter';
 import { persistMessage } from '../pipeline-shared/persist';
@@ -24,11 +21,9 @@ import type {
   OpenDesignSessionConfig,
 } from '../../../src/types/open-design';
 
-
 const logger = createLogger('open-design-bootstrap');
 
 const inFlightByProject = new Map<string, Promise<BootstrapResult | { error: string }>>();
-
 
 function emitBootstrapProgress(
   projectId: string,
@@ -74,10 +69,7 @@ export function persistOpenDesignPromptOutput(
   project: { projectPath: string; pipelineDocsId?: string | null },
   promptText: string,
 ): string {
-  const promptPath = resolveOpenDesignPromptPath(
-    project.projectPath,
-    project.pipelineDocsId ?? null,
-  );
+  const promptPath = resolveOpenDesignPromptPath(project.projectPath, project.pipelineDocsId ?? null);
   fs.writeFileSync(promptPath, promptText, 'utf8');
   emitIPC('pipeline:document-updated', {
     projectId,
@@ -93,11 +85,7 @@ export function persistOpenDesignPromptOutput(
   return promptPath;
 }
 
-export function persistOpenDesignPromptMessage(
-  projectId: string,
-  promptText: string,
-  promptPath: string,
-): void {
+export function persistOpenDesignPromptMessage(projectId: string, promptText: string, promptPath: string): void {
   const content = [
     '# Prompt enviado ao LionDesign',
     '',
@@ -105,11 +93,7 @@ export function persistOpenDesignPromptMessage(
     '',
     promptText,
   ].join('\n');
-  persistMessage(
-    { kind: 'pipeline', projectId, phaseNumber: 4 },
-    'assistant',
-    content,
-  );
+  persistMessage({ kind: 'pipeline', projectId, phaseNumber: 4 }, 'assistant', content);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -187,10 +171,12 @@ async function assertPromptDelivered(
     return;
   }
 
-  const runs = await adapter.callRaw(
-    'GET',
-    `/api/runs?projectId=${encodeURIComponent(openDesignProjectId)}&conversationId=${encodeURIComponent(conversationId)}`,
-  ).catch(() => null);
+  const runs = await adapter
+    .callRaw(
+      'GET',
+      `/api/runs?projectId=${encodeURIComponent(openDesignProjectId)}&conversationId=${encodeURIComponent(conversationId)}`,
+    )
+    .catch(() => null);
   const active = hasActiveRun(runs);
   throw new Error(
     active
@@ -268,7 +254,6 @@ function isConversationNotFoundError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   return /404\b/i.test(message) && /conversation not found/i.test(message);
 }
-
 
 function tryReadFile(p: string | null | undefined): string | null {
   if (!p) return null;
@@ -384,7 +369,9 @@ function buildStoryCoverageMap(stories: string | null): string {
       return `- ${story.id}: ${renderStorySummaryLine(story)}`;
     });
     if (storyBlocks.length > MAX_STORY_SUMMARIES) {
-      lines.push(`- (${storyBlocks.length - MAX_STORY_SUMMARIES} stories adicionais omitidas do mapa compacto; ainda devem ser cobertas se aparecerem nas fontes.)`);
+      lines.push(
+        `- (${storyBlocks.length - MAX_STORY_SUMMARIES} stories adicionais omitidas do mapa compacto; ainda devem ser cobertas se aparecerem nas fontes.)`,
+      );
     }
     return lines.join('\n');
   }
@@ -394,7 +381,9 @@ function buildStoryCoverageMap(stories: string | null): string {
   const foundEntries = Array.from(found.entries());
   for (const [entryIndex, [id, info]] of foundEntries.entries()) {
     if (count >= MAX_STORY_SUMMARIES) {
-      lines.push(`- (${found.size - MAX_STORY_SUMMARIES} stories adicionais omitidas do mapa compacto; ainda devem ser cobertas ou registradas como delta se aparecerem nas fontes.)`);
+      lines.push(
+        `- (${found.size - MAX_STORY_SUMMARIES} stories adicionais omitidas do mapa compacto; ainda devem ser cobertas ou registradas como delta se aparecerem nas fontes.)`,
+      );
       break;
     }
     const start = info.index;
@@ -444,12 +433,9 @@ function buildProductInterfaceBlueprint(inputs: {
   stories: string | null;
   storyCoverageMap: string;
 }): string {
-  const haystack = [
-    inputs.projectName,
-    inputs.discovery ?? '',
-    inputs.stories ?? '',
-    inputs.storyCoverageMap,
-  ].join('\n').toLowerCase();
+  const haystack = [inputs.projectName, inputs.discovery ?? '', inputs.stories ?? '', inputs.storyCoverageMap]
+    .join('\n')
+    .toLowerCase();
 
   if (
     haystack.includes('cron') &&
@@ -510,7 +496,8 @@ interface InitialPromptInputs {
 }
 
 function renderInitialPrompt(inputs: InitialPromptInputs): string {
-  const { projectName, discovery, stories, prdValidatorNotes, sessionConfig, designSystemId, designPlanPromptBlock } = inputs;
+  const { projectName, discovery, stories, prdValidatorNotes, sessionConfig, designSystemId, designPlanPromptBlock } =
+    inputs;
   const locale = sessionConfig?.locale ?? 'pt-BR';
   const storyCoverageMap = buildStoryCoverageMap(stories);
   const discoveryExcerpt = truncateSourceExcerpt(discovery, 'discovery');
@@ -520,11 +507,11 @@ function renderInitialPrompt(inputs: InitialPromptInputs): string {
   const productInterfaceBlueprint = designPlanPromptBlock
     ? null
     : buildProductInterfaceBlueprint({
-      projectName,
-      discovery,
-      stories,
-      storyCoverageMap,
-    });
+        projectName,
+        discovery,
+        stories,
+        storyCoverageMap,
+      });
 
   const safeSessionConfig = {
     agentId: sessionConfig?.agentId ?? 'configured-in-open-design-studio',
@@ -782,7 +769,6 @@ export async function buildInitialPrompt(
   return prompt;
 }
 
-
 async function doEnsureSession(projectId: string): Promise<BootstrapResult | { error: string }> {
   const bootStatus = getBootInstallStatus();
   if (bootStatus.kind !== 'ready') {
@@ -818,10 +804,7 @@ async function doEnsureSession(projectId: string): Promise<BootstrapResult | { e
   emitBootstrapProgress(projectId, 'run-dir', 'done', 'Pasta da sessao pronta', cfg.runDir);
 
   emitBootstrapProgress(projectId, 'prompt', 'running', 'Lendo prompt LionDesign da fase 4');
-  const promptOutputPath = resolveOpenDesignPromptPath(
-    project.projectPath,
-    project.pipelineDocsId ?? null,
-  );
+  const promptOutputPath = resolveOpenDesignPromptPath(project.projectPath, project.pipelineDocsId ?? null);
   if (!fs.existsSync(promptOutputPath)) {
     return {
       error:
@@ -848,17 +831,13 @@ async function doEnsureSession(projectId: string): Promise<BootstrapResult | { e
   emitBootstrapProgress(projectId, 'od-config', 'done', 'Agente e modelo sincronizados');
 
   const currentSessionHash = hashSessionConfig(sessionConfig);
-  const sessionChanged =
-    cfg.sessionConfigHash !== undefined && cfg.sessionConfigHash !== currentSessionHash;
+  const sessionChanged = cfg.sessionConfigHash !== undefined && cfg.sessionConfigHash !== currentSessionHash;
 
   let openDesignProjectId = cfg.openDesignProjectId;
   let conversationFromCreate: string | null = null;
 
   if (!openDesignProjectId) {
-    const runIdRaw =
-      project.config?.openDesign?.runId ??
-      cfg.runId ??
-      `${Date.now().toString(36)}-${shortUuid()}`;
+    const runIdRaw = project.config?.openDesign?.runId ?? cfg.runId ?? `${Date.now().toString(36)}-${shortUuid()}`;
     const runIdSanitized = sanitizeId(runIdRaw);
     openDesignProjectId = `lionclaw-${runIdSanitized}`;
     emitBootstrapProgress(projectId, 'od-project', 'running', 'Criando projeto no LionDesign', openDesignProjectId);

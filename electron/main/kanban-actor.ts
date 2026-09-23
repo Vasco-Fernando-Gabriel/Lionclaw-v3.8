@@ -1,37 +1,43 @@
+import { resolveTurnBinding, type ChatLane, type TurnBindingResolution } from './chat-capability-context';
+import type { KanbanActor, KanbanActorRef } from '../../src/types/kanban';
+import type { KanbanExternalClientId } from '../../mcp-servers/_shared/kanban-protocol';
 
-import { getActiveChatTurnByLane, type ChatLane } from './chat-capability-context';
-import { createLogger } from './logger';
-import type { KanbanActor } from '../../src/types/kanban';
+export interface KanbanExternalClient {
+  id: KanbanExternalClientId;
+  detail: string | null;
+}
 
-const logger = createLogger('kanban-mcp');
+export class KanbanTurnBindingError extends Error {
+  readonly code = 'turn_binding_required' as const;
 
-const CHAT_LANES: readonly ChatLane[] = ['desktop', 'telegram', 'cron'];
-
-export function actorForActiveLanes(activeLanes: readonly ChatLane[]): {
-  actor: KanbanActor;
-  ambiguous: boolean;
-} {
-  if (activeLanes.length === 1) {
-    return {
-      actor: activeLanes[0] === 'cron' ? 'scheduler' : 'orchestrator',
-      ambiguous: false,
-    };
+  constructor(reason: string) {
+    super(
+      `turn_binding_required: acao do Kanban sem binding de turno valido (${reason}); ` +
+        'a chamada precisa trazer sessionId (e turnId) de um turno de chat ativo ' +
+        '(clientes externos, como o LionCode, precisam do handshake com `client`).',
+    );
+    this.name = 'KanbanTurnBindingError';
   }
-  return { actor: 'orchestrator', ambiguous: true };
+}
+
+export function actorForLane(lane: ChatLane): KanbanActor {
+  return lane === 'cron' ? 'scheduler' : 'orchestrator';
 }
 
 export function resolveKanbanActor(
-  getTurnByLane: (
-    lane: ChatLane,
-  ) => { sessionId: string; turnId: string } | undefined = getActiveChatTurnByLane,
+  binding: { lane: ChatLane; sessionId?: string; turnId?: string },
+  resolve: typeof resolveTurnBinding = resolveTurnBinding,
 ): KanbanActor {
-  const activeLanes = CHAT_LANES.filter((lane) => getTurnByLane(lane) !== undefined);
-  const { actor, ambiguous } = actorForActiveLanes(activeLanes);
-  if (ambiguous) {
-    logger.warn(
-      { activeLanes, actor, ambiguous: true },
-      'actor kanban ambiguo (nenhuma ou mais de uma lane com turno ativo); fallback orchestrator',
-    );
-  }
-  return actor;
+  const resolution: TurnBindingResolution = resolve(binding);
+  if (!resolution.ok) throw new KanbanTurnBindingError(resolution.reason);
+  return actorForLane(binding.lane);
+}
+
+export function resolveKanbanActorRef(
+  binding: { lane: ChatLane; sessionId?: string; turnId?: string },
+  externalClient: KanbanExternalClient | null | undefined,
+  resolve: typeof resolveTurnBinding = resolveTurnBinding,
+): KanbanActorRef {
+  if (externalClient) return { actor: externalClient.id, detail: externalClient.detail };
+  return { actor: resolveKanbanActor(binding, resolve), detail: null };
 }

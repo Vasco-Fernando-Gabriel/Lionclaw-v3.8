@@ -1,4 +1,3 @@
-
 export interface WorkflowCompileSuccess {
   ok: true;
   meta: WorkflowMeta;
@@ -33,7 +32,6 @@ export interface WorkflowMeta {
   [key: string]: unknown;
 }
 
-
 const FORBIDDEN_IDENTIFIERS = [
   'require',
   'process',
@@ -63,8 +61,20 @@ const FORBIDDEN_PATTERNS: ForbiddenPattern[] = [
   { code: 'forbidden-api', re: /\bnew\s+Function\b/, label: 'new Function(...)' },
 ];
 
-const NODE_MODULE_HINTS = ['fs', 'child_process', 'net', 'http', 'https', 'os', 'path', 'vm', 'worker_threads', 'dns', 'tls', 'cluster'];
-
+const NODE_MODULE_HINTS = [
+  'fs',
+  'child_process',
+  'net',
+  'http',
+  'https',
+  'os',
+  'path',
+  'vm',
+  'worker_threads',
+  'dns',
+  'tls',
+  'cluster',
+];
 
 export function stripStringsAndComments(source: string): string {
   const out: string[] = [];
@@ -161,20 +171,23 @@ export function stripStringsAndComments(source: string): string {
   return out.join('');
 }
 
-
 function hasBareNewDate(code: string): boolean {
   const re = /\bnew\s+Date\s*\(/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(code)) !== null) {
     let j = m.index + m[0].length;
     while (j < code.length && /\s/.test(code[j])) j += 1;
-    if (code[j] === ')') return true; // new Date() puro = nao deterministico
+    if (code[j] === ')') return true;
   }
   return false;
 }
 
-
-function extractBalanced(source: string, openIndex: number, open: string, close: string): { text: string; end: number } | null {
+function extractBalanced(
+  source: string,
+  openIndex: number,
+  open: string,
+  close: string,
+): { text: string; end: number } | null {
   if (source[openIndex] !== open) return null;
   let depth = 0;
   for (let i = openIndex; i < source.length; i++) {
@@ -187,7 +200,6 @@ function extractBalanced(source: string, openIndex: number, open: string, close:
   }
   return null;
 }
-
 
 function metaLiteralToJson(literal: string): string {
   let s = literal.trim();
@@ -212,11 +224,10 @@ function isPureLiteral(literal: string): boolean {
     let k = m.index + w.length;
     while (k < stripped.length && /\s/.test(stripped[k])) k += 1;
     if (stripped[k] === ':') continue;
-    return false; // identificador/variavel solto no literal
+    return false;
   }
   return true;
 }
-
 
 export function extractWorkflowMeta(
   source: string,
@@ -226,13 +237,16 @@ export function extractWorkflowMeta(
   if (!metaDecl) {
     return { ok: false, error: { code: 'missing-meta', message: 'export const meta literal ausente' } };
   }
-  const braceIndex = metaDecl.index + metaDecl[0].length - 1; // posicao do '{'
+  const braceIndex = metaDecl.index + metaDecl[0].length - 1;
   const block = extractBalanced(source, braceIndex, '{', '}');
   if (!block) {
     return { ok: false, error: { code: 'invalid-meta', message: 'literal de meta nao balanceado' } };
   }
   if (!isPureLiteral(block.text)) {
-    return { ok: false, error: { code: 'invalid-meta', message: 'meta deve ser literal puro (sem variaveis, calls ou interpolacao)' } };
+    return {
+      ok: false,
+      error: { code: 'invalid-meta', message: 'meta deve ser literal puro (sem variaveis, calls ou interpolacao)' },
+    };
   }
   let parsed: unknown;
   try {
@@ -249,11 +263,17 @@ export function extractWorkflowMeta(
   }
 
   if (typeof obj.description !== 'string' || obj.description.length === 0) {
-    return { ok: false, error: { code: 'invalid-meta', message: 'meta.description ausente ou vazio (modo claude-code)' } };
+    return {
+      ok: false,
+      error: { code: 'invalid-meta', message: 'meta.description ausente ou vazio (modo claude-code)' },
+    };
   }
   if (obj.phases !== undefined) {
     if (!Array.isArray(obj.phases) || !obj.phases.every((p) => typeof p === 'string')) {
-      return { ok: false, error: { code: 'invalid-meta', message: 'meta.phases (se presente) deve ser array de strings' } };
+      return {
+        ok: false,
+        error: { code: 'invalid-meta', message: 'meta.phases (se presente) deve ser array de strings' },
+      };
     }
   } else {
     obj.phases = [];
@@ -355,7 +375,7 @@ function transformClaudeCodeToVmSource(source: string): string {
   const code = stripStringsAndComments(source);
   const metaDecl = /export\s+const\s+meta\s*=\s*\{/.exec(code);
   if (metaDecl) {
-    const braceIndex = metaDecl.index + metaDecl[0].length - 1; // posicao do '{'
+    const braceIndex = metaDecl.index + metaDecl[0].length - 1;
     const block = extractBalanced(source, braceIndex, '{', '}');
     if (block) {
       let end = block.end + 1;

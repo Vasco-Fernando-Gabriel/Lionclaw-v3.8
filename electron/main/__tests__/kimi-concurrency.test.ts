@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -68,7 +67,7 @@ describe('queue is FIFO, not a hard fail (SPEC-011 §6.8)', () => {
     _resetKimiPoolForTests(1);
     const order: number[] = [];
 
-    const r0 = await acquireKimiSlot(); // granted
+    const r0 = await acquireKimiSlot();
     const p1 = acquireKimiSlot().then((rel) => {
       order.push(1);
       return rel;
@@ -79,13 +78,13 @@ describe('queue is FIFO, not a hard fail (SPEC-011 §6.8)', () => {
     });
 
     await tick();
-    expect(order).toEqual([]); // both queued, neither rejected
+    expect(order).toEqual([]);
 
-    r0(); // free -> p1 granted (FIFO head)
+    r0();
     const rel1 = await p1;
     expect(order).toEqual([1]);
 
-    rel1(); // free -> p2 granted
+    rel1();
     const rel2 = await p2;
     expect(order).toEqual([1, 2]);
 
@@ -98,21 +97,33 @@ describe('admissao reentrante de subagentes Kimi', () => {
   it('reserva capacidade para filho em vez de admitir todos os pais tool-bearing', async () => {
     _resetKimiPoolForTests(3);
     const parentA = await acquireKimiSlot({
-      role: 'parent', toolBearing: true, rootExecutionId: 'root-a', executionDepth: 0,
+      role: 'parent',
+      toolBearing: true,
+      rootExecutionId: 'root-a',
+      executionDepth: 0,
     });
     const parentB = await acquireKimiSlot({
-      role: 'parent', toolBearing: true, rootExecutionId: 'root-b', executionDepth: 0,
+      role: 'parent',
+      toolBearing: true,
+      rootExecutionId: 'root-b',
+      executionDepth: 0,
     });
     const parentC = acquireKimiSlot({
-      role: 'parent', toolBearing: true, rootExecutionId: 'root-c', executionDepth: 0,
+      role: 'parent',
+      toolBearing: true,
+      rootExecutionId: 'root-c',
+      executionDepth: 0,
     });
 
     await tick();
     expect(_kimiPoolStateForTests()).toEqual({ active: 2, queued: 1, cap: 3, activeToolParents: 2 });
 
     const childA = await acquireKimiSlot({
-      role: 'child', toolBearing: false, parentExecutionId: 'parent-a',
-      rootExecutionId: 'root-a', executionDepth: 1,
+      role: 'child',
+      toolBearing: false,
+      parentExecutionId: 'parent-a',
+      rootExecutionId: 'root-a',
+      executionDepth: 1,
     });
     expect(_kimiPoolStateForTests().active).toBe(3);
 
@@ -129,15 +140,26 @@ describe('admissao reentrante de subagentes Kimi', () => {
   it('falha antes da fila quando a propria ancestry tool-bearing satura o pool', async () => {
     _resetKimiPoolForTests(2);
     const parent = await acquireKimiSlot({
-      role: 'parent', toolBearing: true, rootExecutionId: 'same-root', executionDepth: 0,
+      role: 'parent',
+      toolBearing: true,
+      rootExecutionId: 'same-root',
+      executionDepth: 0,
     });
     const child = await acquireKimiSlot({
-      role: 'child', toolBearing: true, rootExecutionId: 'same-root', executionDepth: 1,
+      role: 'child',
+      toolBearing: true,
+      rootExecutionId: 'same-root',
+      executionDepth: 1,
     });
 
-    await expect(acquireKimiSlot({
-      role: 'child', toolBearing: false, rootExecutionId: 'same-root', executionDepth: 2,
-    })).rejects.toThrow(/own tool-bearing ancestry saturates/);
+    await expect(
+      acquireKimiSlot({
+        role: 'child',
+        toolBearing: false,
+        rootExecutionId: 'same-root',
+        executionDepth: 2,
+      }),
+    ).rejects.toThrow(/own tool-bearing ancestry saturates/);
     expect(_kimiPoolStateForTests().queued).toBe(0);
 
     child();
@@ -147,15 +169,24 @@ describe('admissao reentrante de subagentes Kimi', () => {
   it('cap 1 admite filho cross-runtime e rejeita somente ancestry Kimi ativa', async () => {
     _resetKimiPoolForTests(1);
     const crossRuntimeChild = await acquireKimiSlot({
-      role: 'child', rootExecutionId: 'claude-root', executionDepth: 1,
+      role: 'child',
+      rootExecutionId: 'claude-root',
+      executionDepth: 1,
     });
     crossRuntimeChild();
     const parent = await acquireKimiSlot({
-      role: 'parent', toolBearing: true, rootExecutionId: 'kimi-root', executionDepth: 0,
+      role: 'parent',
+      toolBearing: true,
+      rootExecutionId: 'kimi-root',
+      executionDepth: 0,
     });
-    await expect(acquireKimiSlot({
-      role: 'child', rootExecutionId: 'kimi-root', executionDepth: 1,
-    })).rejects.toBeInstanceOf(KimiConcurrencyError);
+    await expect(
+      acquireKimiSlot({
+        role: 'child',
+        rootExecutionId: 'kimi-root',
+        executionDepth: 1,
+      }),
+    ).rejects.toBeInstanceOf(KimiConcurrencyError);
     parent();
     expect(_kimiPoolStateForTests().queued).toBe(0);
   });
@@ -167,7 +198,7 @@ describe('slot always released (T13 release-on-throw/cancel)', () => {
     const rel = await acquireKimiSlot();
     expect(_kimiPoolStateForTests().active).toBe(1);
     rel();
-    rel(); // no-op
+    rel();
     expect(_kimiPoolStateForTests().active).toBe(0);
 
     const a = await acquireKimiSlot();
@@ -195,7 +226,7 @@ describe('slot always released (T13 release-on-throw/cancel)', () => {
 describe('abort while queued (T13 cancel semantics)', () => {
   it('aborting a queued waiter rejects the wait, removes the entry, never consumes a slot later', async () => {
     _resetKimiPoolForTests(1);
-    const rel = await acquireKimiSlot(); // hold the only slot
+    const rel = await acquireKimiSlot();
 
     const controller = new AbortController();
     const queued = acquireKimiSlot(controller.signal);

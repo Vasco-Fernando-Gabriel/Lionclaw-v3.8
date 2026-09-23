@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi } from 'vitest';
-
 
 vi.mock('../logger', () => ({
   createLogger: () => ({
@@ -44,7 +42,6 @@ vi.mock('../paths', () => ({
   getLionClawHome: vi.fn().mockReturnValue('/tmp/lionclaw'),
 }));
 
-
 type ExternalProvider = 'openrouter' | 'openai' | 'openai-compatible';
 
 interface ExternalConfigLike {
@@ -67,8 +64,7 @@ async function resolveExternalAuth(
   const apiKey = await getSecretFn(config.apiKeyRef);
   if (!apiKey) {
     throw new Error(
-      `API key nao encontrada no Vault para provider "${config.apiKeyRef}". ` +
-      `Configure em Configuracoes > Vault.`,
+      `API key nao encontrada no Vault para provider "${config.apiKeyRef}". ` + `Configure em Configuracoes > Vault.`,
     );
   }
   return {
@@ -104,12 +100,13 @@ function mapReasoningParams(
 }
 
 function isContextLengthError(errorMessage: string): boolean {
-  return /context.*(length|limit|exceed|too long)/i.test(errorMessage)
-    || /maximum.*tokens/i.test(errorMessage)
-    || /token.*limit.*exceeded/i.test(errorMessage)
-    || errorMessage.includes('context_length_exceeded');
+  return (
+    /context.*(length|limit|exceed|too long)/i.test(errorMessage) ||
+    /maximum.*tokens/i.test(errorMessage) ||
+    /token.*limit.*exceeded/i.test(errorMessage) ||
+    errorMessage.includes('context_length_exceeded')
+  );
 }
-
 
 describe('harness-engine: computePricingKey', () => {
   it('retorna "or:<model>" para provider openrouter', () => {
@@ -163,7 +160,6 @@ describe('harness-engine: computePricingKey', () => {
     }
   });
 });
-
 
 describe('harness-engine: resolveExternalAuth', () => {
   it('retorna Authorization header com a key do vault', async () => {
@@ -238,7 +234,6 @@ describe('harness-engine: resolveExternalAuth', () => {
   });
 });
 
-
 describe('harness-engine: mapReasoningParams', () => {
   it('retorna { reasoning_effort: "high" } para gpt-5.5 com effort = "high"', () => {
     const params = mapReasoningParams('high', 'enabled', undefined, 'openai', 'gpt-5.5');
@@ -296,7 +291,6 @@ describe('harness-engine: mapReasoningParams', () => {
   });
 });
 
-
 describe('harness-engine: isContextLengthError', () => {
   const POSITIVE_CASES = [
     'context length exceeded',
@@ -333,15 +327,12 @@ describe('harness-engine: isContextLengthError', () => {
   }
 });
 
-
 describe('harness-engine: costUsd = reportedCostUsd ?? calculateCost', () => {
   it('usa reportedCostUsd quando presente e > 0', () => {
     const reportedCostUsd = 0.00435;
     const calculateCostResult = 0.001;
 
-    const costUsd = (reportedCostUsd !== undefined && reportedCostUsd > 0)
-      ? reportedCostUsd
-      : calculateCostResult;
+    const costUsd = reportedCostUsd !== undefined && reportedCostUsd > 0 ? reportedCostUsd : calculateCostResult;
 
     expect(costUsd).toBeCloseTo(0.00435, 6);
   });
@@ -350,9 +341,7 @@ describe('harness-engine: costUsd = reportedCostUsd ?? calculateCost', () => {
     const reportedCostUsd: number | undefined = undefined;
     const calculateCostResult = 0.001;
 
-    const costUsd = (reportedCostUsd !== undefined && reportedCostUsd > 0)
-      ? reportedCostUsd
-      : calculateCostResult;
+    const costUsd = reportedCostUsd !== undefined && reportedCostUsd > 0 ? reportedCostUsd : calculateCostResult;
 
     expect(costUsd).toBeCloseTo(0.001, 6);
   });
@@ -361,9 +350,7 @@ describe('harness-engine: costUsd = reportedCostUsd ?? calculateCost', () => {
     const reportedCostUsd = 0;
     const calculateCostResult = 0.0005;
 
-    const costUsd = (reportedCostUsd !== undefined && reportedCostUsd > 0)
-      ? reportedCostUsd
-      : calculateCostResult;
+    const costUsd = reportedCostUsd !== undefined && reportedCostUsd > 0 ? reportedCostUsd : calculateCostResult;
 
     expect(costUsd).toBeCloseTo(0.0005, 6);
   });

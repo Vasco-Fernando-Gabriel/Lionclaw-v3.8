@@ -1,30 +1,31 @@
 import { create } from 'zustand';
 import type { ChatAttachment, ChatFeatureToggles, MCPServerConfig } from '@/types';
 
-
 export type ChatCapabilityKey = keyof ChatFeatureToggles;
 
 export const CHAT_CAPABILITY_LABELS: Record<ChatCapabilityKey, string> = {
+  swarm: 'Swarm',
   pipelineControl: 'Pipeline',
   dynamicWorkflows: 'Workflows',
 };
 
 const CAPABILITY_ERROR_CODES: Record<string, ChatCapabilityKey> = {
+  chat_capability_swarm_disabled: 'swarm',
   chat_capability_pipeline_disabled: 'pipelineControl',
   chat_capability_workflows_disabled: 'dynamicWorkflows',
 };
 
 export function capabilityForServerId(id: string): ChatCapabilityKey | undefined {
   const norm = id.trim().toLowerCase();
+  if (norm === 'lionclaw-swarm' || norm === 'swarm') return 'swarm';
   if (norm === 'lionclaw-pipeline-control' || norm === 'pipeline-control') return 'pipelineControl';
   if (norm === 'lionclaw-dynamic-workflows' || norm === 'dynamic-workflows') return 'dynamicWorkflows';
   return undefined;
 }
 
-export function computeMcpAvailability(
-  servers: MCPServerConfig[],
-): Record<ChatCapabilityKey, boolean> {
+export function computeMcpAvailability(servers: MCPServerConfig[]): Record<ChatCapabilityKey, boolean> {
   const available: Record<ChatCapabilityKey, boolean> = {
+    swarm: false,
     pipelineControl: false,
     dynamicWorkflows: false,
   };
@@ -42,126 +43,170 @@ interface LastSentPayload {
   attachments?: ChatAttachment[];
 }
 
-interface ChatFeatureTogglesState {
-  sessionId: string | null;
+export interface ChatFeatureTogglesSlot {
   toggles: ChatFeatureToggles | null;
   loading: boolean;
   pending: Record<ChatCapabilityKey, boolean>;
-  mcpAvailable: Record<ChatCapabilityKey, boolean>;
   actionError: string | null;
   capabilityError: { capability: ChatCapabilityKey; message: string } | null;
   lastSent: LastSentPayload | null;
+  hydrationSeq: number;
+}
+
+interface ChatFeatureTogglesState {
+  sessions: Record<string, ChatFeatureTogglesSlot>;
+  mcpAvailable: Record<ChatCapabilityKey, boolean>;
 
   hydrate: (sessionId: string) => Promise<void>;
-  setFeatureToggle: (capability: ChatCapabilityKey, value: boolean) => Promise<boolean>;
+  setFeatureToggle: (sessionId: string, capability: ChatCapabilityKey, value: boolean) => Promise<boolean>;
   snapshotForSend: (sessionId: string | null) => ChatFeatureToggles | undefined;
   recordSend: (payload: LastSentPayload) => void;
-  handleCapabilityError: (code: string | undefined, message: string | undefined) => boolean;
-  clearCapabilityError: () => void;
+  handleCapabilityError: (sessionId: string, code: string | undefined, message: string | undefined) => boolean;
+  clearCapabilityError: (sessionId: string) => void;
 }
 
 const PENDING_NONE: Record<ChatCapabilityKey, boolean> = Object.freeze({
   pipelineControl: false,
   dynamicWorkflows: false,
+  swarm: false,
 });
 
-let hydrationSeq = 0;
+export function createFeatureTogglesSlot(over: Partial<ChatFeatureTogglesSlot> = {}): ChatFeatureTogglesSlot {
+  return {
+    toggles: null,
+    loading: false,
+    pending: { ...PENDING_NONE },
+    actionError: null,
+    capabilityError: null,
+    lastSent: null,
+    hydrationSeq: 0,
+    ...over,
+  };
+}
 
-export const useChatFeatureTogglesStore = create<ChatFeatureTogglesState>((set, get) => ({
-  sessionId: null,
-  toggles: null,
-  loading: false,
-  pending: { ...PENDING_NONE },
-  mcpAvailable: { pipelineControl: true, dynamicWorkflows: true },
-  actionError: null,
-  capabilityError: null,
-  lastSent: null,
+export const EMPTY_FEATURE_TOGGLES_SLOT: ChatFeatureTogglesSlot = createFeatureTogglesSlot();
 
-  hydrate: async (sessionId: string) => {
-    const seq = ++hydrationSeq;
-    set({
-      sessionId,
-      toggles: null,
-      loading: true,
-      pending: { ...PENDING_NONE },
-      actionError: null,
-      capabilityError: null,
+export function selectFeatureToggles(
+  state: Pick<ChatFeatureTogglesState, 'sessions'>,
+  sessionId: string | null | undefined,
+): ChatFeatureTogglesSlot {
+  if (!sessionId) return EMPTY_FEATURE_TOGGLES_SLOT;
+  return state.sessions[sessionId] ?? EMPTY_FEATURE_TOGGLES_SLOT;
+}
+
+export function useFeatureToggles(sessionId: string | null | undefined): ChatFeatureTogglesSlot {
+  return useChatFeatureTogglesStore((state) => selectFeatureToggles(state, sessionId));
+}
+
+let hydrationCounter = 0;
+
+export const useChatFeatureTogglesStore = create<ChatFeatureTogglesState>((set, get) => {
+  const patchSlot = (
+    sessionId: string,
+    patch: Partial<ChatFeatureTogglesSlot> | ((slot: ChatFeatureTogglesSlot) => Partial<ChatFeatureTogglesSlot>),
+  ): void => {
+    set((state) => {
+      const current = state.sessions[sessionId] ?? createFeatureTogglesSlot();
+      const delta = typeof patch === 'function' ? patch(current) : patch;
+      return { sessions: { ...state.sessions, [sessionId]: { ...current, ...delta } } };
     });
+  };
 
-    const [togglesResult, mcpResult] = await Promise.allSettled([
-      window.lionclaw.chat.getFeatureToggles(sessionId),
-      window.lionclaw.mcp.list(),
-    ]);
+  return {
+    sessions: {},
+    mcpAvailable: { pipelineControl: true, dynamicWorkflows: true, swarm: true },
 
-    if (seq !== hydrationSeq || get().sessionId !== sessionId) return;
-
-    const next: Partial<ChatFeatureTogglesState> = { loading: false };
-    if (togglesResult.status === 'fulfilled' && togglesResult.value.ok) {
-      next.toggles = togglesResult.value.toggles;
-    }
-    if (mcpResult.status === 'fulfilled' && Array.isArray(mcpResult.value)) {
-      next.mcpAvailable = computeMcpAvailability(mcpResult.value);
-    }
-    set(next);
-  },
-
-  setFeatureToggle: async (capability, value) => {
-    const { sessionId, pending } = get();
-    if (!sessionId || pending[capability]) return false;
-    set((s) => ({ pending: { ...s.pending, [capability]: true }, actionError: null }));
-    try {
-      const result = await window.lionclaw.chat.setFeatureToggles(sessionId, {
-        [capability]: value,
+    hydrate: async (sessionId: string) => {
+      hydrationCounter += 1;
+      const seq = hydrationCounter;
+      patchSlot(sessionId, {
+        toggles: null,
+        loading: true,
+        pending: { ...PENDING_NONE },
+        actionError: null,
+        capabilityError: null,
+        hydrationSeq: seq,
       });
-      if (get().sessionId !== sessionId) return false;
-      if (result.ok) {
-        set((s) => ({ toggles: result.toggles, pending: { ...s.pending, [capability]: false } }));
-        return true;
+
+      const [togglesResult, mcpResult] = await Promise.allSettled([
+        window.lionclaw.chat.getFeatureToggles(sessionId),
+        window.lionclaw.mcp.list(),
+      ]);
+
+      if (get().sessions[sessionId]?.hydrationSeq !== seq) return;
+
+      const next: Partial<ChatFeatureTogglesSlot> = { loading: false };
+      if (togglesResult.status === 'fulfilled' && togglesResult.value.ok) {
+        next.toggles = { ...togglesResult.value.toggles, swarm: togglesResult.value.toggles.swarm === true };
       }
-      set((s) => ({
-        pending: { ...s.pending, [capability]: false },
-        actionError: result.error,
-      }));
-      return false;
-    } catch (err) {
-      if (get().sessionId === sessionId) {
-        set((s) => ({
+      if (mcpResult.status === 'fulfilled' && Array.isArray(mcpResult.value)) {
+        set({ mcpAvailable: computeMcpAvailability(mcpResult.value) });
+      }
+      patchSlot(sessionId, next);
+    },
+
+    setFeatureToggle: async (sessionId, capability, value) => {
+      const slot = selectFeatureToggles(get(), sessionId);
+      if (slot.pending[capability]) return false;
+      const seq = slot.hydrationSeq;
+      patchSlot(sessionId, (s) => ({ pending: { ...s.pending, [capability]: true }, actionError: null }));
+      try {
+        const result = await window.lionclaw.chat.setFeatureToggles(sessionId, {
+          [capability]: value,
+        });
+        if (get().sessions[sessionId]?.hydrationSeq !== seq) return false;
+        if (result.ok) {
+          patchSlot(sessionId, (s) => ({ toggles: result.toggles, pending: { ...s.pending, [capability]: false } }));
+          return true;
+        }
+        patchSlot(sessionId, (s) => ({
           pending: { ...s.pending, [capability]: false },
-          actionError: `Falha ao salvar o toggle: ${err instanceof Error ? err.message : String(err)}`,
+          actionError: result.error,
         }));
+        return false;
+      } catch (err) {
+        if (get().sessions[sessionId]?.hydrationSeq === seq) {
+          patchSlot(sessionId, (s) => ({
+            pending: { ...s.pending, [capability]: false },
+            actionError: `Falha ao salvar o toggle: ${err instanceof Error ? err.message : String(err)}`,
+          }));
+        }
+        return false;
       }
-      return false;
-    }
-  },
+    },
 
-  snapshotForSend: (sessionId) => {
-    const s = get();
-    if (!sessionId || s.sessionId !== sessionId || s.loading || !s.toggles) return undefined;
-    return {
-      pipelineControl: s.toggles.pipelineControl && s.mcpAvailable.pipelineControl,
-      dynamicWorkflows: s.toggles.dynamicWorkflows && s.mcpAvailable.dynamicWorkflows,
-    };
-  },
+    snapshotForSend: (sessionId) => {
+      if (!sessionId) return undefined;
+      const slot = get().sessions[sessionId];
+      if (!slot || slot.loading || !slot.toggles) return undefined;
+      const { mcpAvailable } = get();
+      return {
+        swarm: slot.toggles.swarm === true && mcpAvailable.swarm,
+        pipelineControl: slot.toggles.pipelineControl && mcpAvailable.pipelineControl,
+        dynamicWorkflows: slot.toggles.dynamicWorkflows && mcpAvailable.dynamicWorkflows,
+      };
+    },
 
-  recordSend: (payload) => {
-    set({ lastSent: payload, capabilityError: null });
-  },
+    recordSend: (payload) => {
+      if (!payload.sessionId) return;
+      patchSlot(payload.sessionId, { lastSent: payload, capabilityError: null });
+    },
 
-  handleCapabilityError: (code, message) => {
-    if (!code) return false;
-    const capability = CAPABILITY_ERROR_CODES[code];
-    if (!capability) return false;
-    const label = CHAT_CAPABILITY_LABELS[capability];
-    set({
-      capabilityError: {
-        capability,
-        message:
-          message
-          || `${label} está desligado para esta sessão. Ligue o chip ${label} no chat e envie novamente.`,
-      },
-    });
-    return true;
-  },
+    handleCapabilityError: (sessionId, code, message) => {
+      if (!code) return false;
+      const capability = CAPABILITY_ERROR_CODES[code];
+      if (!capability) return false;
+      const label = CHAT_CAPABILITY_LABELS[capability];
+      patchSlot(sessionId, {
+        capabilityError: {
+          capability,
+          message:
+            message || `${label} está desligado para esta sessão. Ligue o chip ${label} no chat e envie novamente.`,
+        },
+      });
+      return true;
+    },
 
-  clearCapabilityError: () => set({ capabilityError: null }),
-}));
+    clearCapabilityError: (sessionId) => patchSlot(sessionId, { capabilityError: null }),
+  };
+});

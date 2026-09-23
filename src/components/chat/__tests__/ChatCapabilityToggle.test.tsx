@@ -2,16 +2,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import {
-  ChatCapabilityToggles,
-  ChatCapabilityResendAffordance,
-} from '../ChatCapabilityToggle';
+import { ChatCapabilityToggles, ChatCapabilityResendAffordance } from '../ChatCapabilityToggle';
 import {
   useChatFeatureTogglesStore,
   computeMcpAvailability,
   capabilityForServerId,
 } from '@/stores/chat-feature-toggles-store';
-import { useChatStore } from '@/stores/chat-store';
+import { createThreadState, useChatStore } from '@/stores/chat-store';
 import type { ChatFeatureTogglesResult, ChatSession, MCPServerConfig } from '@/types';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -78,7 +75,7 @@ describe('ChatCapabilityToggles (S7, A.8)', () => {
     }
   }
 
-  function chip(capability: 'pipelineControl' | 'dynamicWorkflows'): HTMLButtonElement {
+  function chip(capability: 'pipelineControl' | 'dynamicWorkflows' | 'swarm'): HTMLButtonElement {
     const el = container.querySelector<HTMLButtonElement>(`[data-capability="${capability}"]`);
     expect(el).not.toBeNull();
     return el!;
@@ -109,24 +106,16 @@ describe('ChatCapabilityToggles (S7, A.8)', () => {
     };
 
     useChatFeatureTogglesStore.setState({
-      sessionId: null,
-      toggles: null,
-      loading: false,
-      pending: { pipelineControl: false, dynamicWorkflows: false },
-      mcpAvailable: { pipelineControl: true, dynamicWorkflows: true },
-      actionError: null,
-      capabilityError: null,
-      lastSent: null,
+      sessions: {},
+      mcpAvailable: { pipelineControl: true, dynamicWorkflows: true, swarm: true },
     });
     useChatStore.setState({
       sessions: [makeSession('s1')],
       telegramSessions: [],
+      openLanes: [],
       currentSessionId: 's1',
-      messages: [],
-      isStreaming: false,
-      streamingContent: '',
-      submittedUserTurnCount: 0,
-      assistantTurnCount: 0,
+      threads: { s1: createThreadState({ hydrated: true }) },
+      streamingSessionIds: new Set(),
     });
   });
 
@@ -189,7 +178,7 @@ describe('ChatCapabilityToggles (S7, A.8)', () => {
     await flush();
 
     const chips = container.querySelectorAll('[data-capability]');
-    expect(chips.length).toBe(2);
+    expect(chips.length).toBe(3);
     for (const el of chips) {
       expect((el as HTMLButtonElement).disabled).toBe(true);
     }
@@ -216,7 +205,7 @@ describe('ChatCapabilityToggles (S7, A.8)', () => {
     expect(chip('dynamicWorkflows').dataset.state).toBe('off');
 
     const snapshot = useChatFeatureTogglesStore.getState().snapshotForSend('s1');
-    expect(snapshot).toEqual({ pipelineControl: false, dynamicWorkflows: false });
+    expect(snapshot).toEqual({ pipelineControl: false, dynamicWorkflows: false, swarm: false });
   });
 
   it('toggle: clique chama chat:set-feature-toggles com o patch e atualiza o chip', async () => {
@@ -258,9 +247,7 @@ describe('ChatCapabilityToggles (S7, A.8)', () => {
   it('reidratacao ao trocar sessao NAO vaza estado da sessao anterior (AC-A13)', async () => {
     const s1 = deferred<ChatFeatureTogglesResult>();
     const s2 = deferred<ChatFeatureTogglesResult>();
-    getFeatureTogglesMock.mockImplementation((sessionId: string) =>
-      sessionId === 's1' ? s1.promise : s2.promise,
-    );
+    getFeatureTogglesMock.mockImplementation((sessionId: string) => (sessionId === 's1' ? s1.promise : s2.promise));
 
     mount(<ChatCapabilityToggles sessionId="s1" />);
     await act(async () => {
@@ -272,7 +259,11 @@ describe('ChatCapabilityToggles (S7, A.8)', () => {
     expect(chip('pipelineControl').dataset.state).toBe('loading');
     expect(chip('dynamicWorkflows').dataset.state).toBe('loading');
     expect(useChatFeatureTogglesStore.getState().snapshotForSend('s2')).toBeUndefined();
-    expect(useChatFeatureTogglesStore.getState().snapshotForSend('s1')).toBeUndefined();
+    expect(useChatFeatureTogglesStore.getState().snapshotForSend('s1')).toEqual({
+      pipelineControl: true,
+      dynamicWorkflows: true,
+      swarm: false,
+    });
 
     await act(async () => {
       s2.resolve(okResult(false, false));
@@ -281,15 +272,14 @@ describe('ChatCapabilityToggles (S7, A.8)', () => {
     expect(useChatFeatureTogglesStore.getState().snapshotForSend('s2')).toEqual({
       pipelineControl: false,
       dynamicWorkflows: false,
+      swarm: false,
     });
   });
 
   it('resposta ATRASADA da sessao antiga chegando depois e descartada (race)', async () => {
     const s1 = deferred<ChatFeatureTogglesResult>();
     const s2 = deferred<ChatFeatureTogglesResult>();
-    getFeatureTogglesMock.mockImplementation((sessionId: string) =>
-      sessionId === 's1' ? s1.promise : s2.promise,
-    );
+    getFeatureTogglesMock.mockImplementation((sessionId: string) => (sessionId === 's1' ? s1.promise : s2.promise));
 
     mount(<ChatCapabilityToggles sessionId="s1" />);
     mount(<ChatCapabilityToggles sessionId="s2" />);
@@ -303,9 +293,15 @@ describe('ChatCapabilityToggles (S7, A.8)', () => {
       s1.resolve(okResult(true, true));
     });
     expect(chip('pipelineControl').dataset.state).toBe('off');
-    expect(useChatFeatureTogglesStore.getState().toggles).toEqual({
+    expect(useChatFeatureTogglesStore.getState().sessions.s2.toggles).toEqual({
       pipelineControl: false,
       dynamicWorkflows: false,
+      swarm: false,
+    });
+    expect(useChatFeatureTogglesStore.getState().sessions.s1.toggles).toEqual({
+      pipelineControl: true,
+      dynamicWorkflows: true,
+      swarm: false,
     });
   });
 
@@ -318,13 +314,38 @@ describe('ChatCapabilityToggles (S7, A.8)', () => {
     await act(async () => {
       await useChatFeatureTogglesStore.getState().hydrate('s1');
     });
-    useChatStore.setState({ isStreaming: false });
+    useChatStore.setState({ threads: { s1: createThreadState({ hydrated: true }) }, streamingSessionIds: new Set() });
     await useChatStore.getState().sendMessage('segunda');
     expect(sendMock).toHaveBeenCalledTimes(2);
     expect(sendMock.mock.calls[1][1].featureToggles).toEqual({
       pipelineControl: true,
       dynamicWorkflows: false,
+      swarm: false,
     });
+  });
+
+  it('Swarm aceita revisão baixa de run nova após run anterior concluída', async () => {
+    let emit: (event: { runId: string; chatSessionId: string; revision: number }) => void = () => {};
+    const api = window.lionclaw as unknown as Record<string, unknown>;
+    api.swarm = {
+      listRuns: async () => ({ runs: [{ runId: 'old' }], nextCursor: null }),
+      getRunState: async (_sessionId: string, runId: string) => ({
+        runId,
+        revision: runId === 'old' ? 30 : 1,
+        status: runId === 'old' ? 'done' : 'running',
+        items: [{ status: 'running' }],
+      }),
+      onStream: (callback: typeof emit) => {
+        emit = callback;
+        return () => {};
+      },
+    };
+    mount(<ChatCapabilityToggles sessionId="s1" />);
+    await flush();
+    await act(async () => {
+      emit({ runId: 'new', chatSessionId: 's1', revision: 1 });
+    });
+    expect(chip('swarm').textContent).toContain('0/1');
   });
 
   it('chips NUNCA mostram nome/fase de execucao — so o rotulo do toggle (AC-A14/A15)', async () => {
@@ -371,24 +392,16 @@ describe('ChatCapabilityResendAffordance (S7, AC-A21)', () => {
     };
 
     useChatFeatureTogglesStore.setState({
-      sessionId: null,
-      toggles: null,
-      loading: false,
-      pending: { pipelineControl: false, dynamicWorkflows: false },
-      mcpAvailable: { pipelineControl: true, dynamicWorkflows: true },
-      actionError: null,
-      capabilityError: null,
-      lastSent: null,
+      sessions: {},
+      mcpAvailable: { pipelineControl: true, dynamicWorkflows: true, swarm: true },
     });
     useChatStore.setState({
       sessions: [makeSession('s1')],
       telegramSessions: [],
+      openLanes: [],
       currentSessionId: 's1',
-      messages: [],
-      isStreaming: false,
-      streamingContent: '',
-      submittedUserTurnCount: 0,
-      assistantTurnCount: 0,
+      threads: { s1: createThreadState({ hydrated: true }) },
+      streamingSessionIds: new Set(),
     });
   });
 
@@ -409,12 +422,13 @@ describe('ChatCapabilityResendAffordance (S7, AC-A21)', () => {
     expect(container.innerHTML).toBe('');
 
     act(() => {
-      useChatStore.getState().handleStreamChunk({ type: 'error', error: 'boom' });
+      useChatStore.getState().handleStreamChunk({ type: 'error', sessionId: 's1', error: 'boom' });
     });
     expect(container.innerHTML).toBe('');
     act(() => {
       useChatStore.getState().handleStreamChunk({
         type: 'error',
+        sessionId: 's1',
         error: 'x',
         code: 'orchestrator_unconfigured',
       });
@@ -433,11 +447,13 @@ describe('ChatCapabilityResendAffordance (S7, AC-A21)', () => {
     expect(sendMock.mock.calls[0][1].featureToggles).toEqual({
       pipelineControl: false,
       dynamicWorkflows: false,
+      swarm: false,
     });
 
     act(() => {
       useChatStore.getState().handleStreamChunk({
         type: 'error',
+        sessionId: 's1',
         error: 'Pipeline está desligado para esta sessão. Ligue o chip Pipeline no chat e envie novamente.',
         code: 'chat_capability_pipeline_disabled',
       });
@@ -445,13 +461,13 @@ describe('ChatCapabilityResendAffordance (S7, AC-A21)', () => {
 
     mount(<ChatCapabilityResendAffordance />);
     expect(container.textContent).toContain('Pipeline está desligado para esta sessão');
-    const button = Array.from(container.querySelectorAll('button')).find((b) =>
-      b.textContent === 'Ligar Pipeline e reenviar',
+    const button = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Ligar Pipeline e reenviar',
     );
     expect(button).not.toBeUndefined();
     expect(setFeatureTogglesMock).not.toHaveBeenCalled();
 
-    useChatStore.setState({ isStreaming: false });
+    useChatStore.setState({ threads: { s1: createThreadState({ hydrated: true }) }, streamingSessionIds: new Set() });
     await act(async () => {
       button!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -462,6 +478,7 @@ describe('ChatCapabilityResendAffordance (S7, AC-A21)', () => {
     expect(sendMock.mock.calls[1][1].featureToggles).toEqual({
       pipelineControl: true,
       dynamicWorkflows: false,
+      swarm: false,
     });
     expect(container.textContent).not.toContain('Ligar Pipeline e reenviar');
   });
@@ -478,18 +495,19 @@ describe('ChatCapabilityResendAffordance (S7, AC-A21)', () => {
     act(() => {
       useChatStore.getState().handleStreamChunk({
         type: 'error',
+        sessionId: 's1',
         error: 'Workflows está desligado para esta sessão. Ligue o chip Workflows no chat e envie novamente.',
         code: 'chat_capability_workflows_disabled',
       });
     });
 
     mount(<ChatCapabilityResendAffordance />);
-    const button = Array.from(container.querySelectorAll('button')).find((b) =>
-      b.textContent === 'Ligar Workflows e reenviar',
+    const button = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent === 'Ligar Workflows e reenviar',
     );
     expect(button).not.toBeUndefined();
 
-    useChatStore.setState({ isStreaming: false });
+    useChatStore.setState({ threads: { s1: createThreadState({ hydrated: true }) }, streamingSessionIds: new Set() });
     await act(async () => {
       button!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -497,6 +515,7 @@ describe('ChatCapabilityResendAffordance (S7, AC-A21)', () => {
     expect(sendMock.mock.calls[1][1].featureToggles).toEqual({
       pipelineControl: false,
       dynamicWorkflows: true,
+      swarm: false,
     });
   });
 
@@ -508,6 +527,7 @@ describe('ChatCapabilityResendAffordance (S7, AC-A21)', () => {
       useChatFeatureTogglesStore.getState().recordSend({ sessionId: 's1', message: 'antiga' });
       useChatStore.getState().handleStreamChunk({
         type: 'error',
+        sessionId: 's1',
         error: 'Pipeline está desligado para esta sessão.',
         code: 'chat_capability_pipeline_disabled',
       });
@@ -524,9 +544,7 @@ describe('ChatCapabilityResendAffordance (S7, AC-A21)', () => {
   it('dispensar fecha a affordance sem ligar nada', async () => {
     act(() => {
       useChatFeatureTogglesStore.getState().recordSend({ sessionId: 's1', message: 'm' });
-      useChatFeatureTogglesStore
-        .getState()
-        .handleCapabilityError('chat_capability_pipeline_disabled', undefined);
+      useChatFeatureTogglesStore.getState().handleCapabilityError('s1', 'chat_capability_pipeline_disabled', undefined);
     });
     mount(<ChatCapabilityResendAffordance />);
     expect(container.textContent).toContain('Pipeline está desligado para esta sessão');
@@ -556,6 +574,7 @@ describe('helpers puros do chat-feature-toggles-store', () => {
     expect(computeMcpAvailability([])).toEqual({
       pipelineControl: false,
       dynamicWorkflows: false,
+      swarm: false,
     });
     expect(
       computeMcpAvailability([
@@ -563,6 +582,6 @@ describe('helpers puros do chat-feature-toggles-store', () => {
         mcpServer('lionclaw-dynamic-workflows', false),
         mcpServer('lionclaw-agents', true),
       ]),
-    ).toEqual({ pipelineControl: true, dynamicWorkflows: false });
+    ).toEqual({ pipelineControl: true, dynamicWorkflows: false, swarm: false });
   });
 });

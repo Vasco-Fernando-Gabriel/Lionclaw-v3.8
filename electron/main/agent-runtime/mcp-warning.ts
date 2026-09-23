@@ -1,4 +1,3 @@
-
 import { createLogger } from '../logger';
 
 const logger = createLogger('mcp-warning');
@@ -29,11 +28,7 @@ export function warnMcpToolsDroppedOnce(args: {
   );
 }
 
-export function warnOncePerAgent(
-  agentId: string,
-  reasonKey: string,
-  payload: Record<string, unknown>,
-): void {
+export function warnOncePerAgent(agentId: string, reasonKey: string, payload: Record<string, unknown>): void {
   const key = `${reasonKey}:${agentId}`;
   if (warnedAgents.has(key)) return;
   warnedAgents.add(key);

@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  translateEvent,
-  createAccumulator,
-  finalizeResponse,
-  type AppServerEvent,
-} from '../official-event-translator';
+import { translateEvent, createAccumulator, finalizeResponse, type AppServerEvent } from '../official-event-translator';
 import {
   normalizeUsage,
   canonicalPromptTokens,
@@ -25,8 +20,20 @@ const AGENTIC_EVENTS: AppServerEvent[] = [
       threadId: THREAD,
       turnId: TURN,
       tokenUsage: {
-        total: { totalTokens: 2185096, inputTokens: 2178844, cachedInputTokens: 1200000, outputTokens: 6252, reasoningOutputTokens: 3000 },
-        last: { totalTokens: 152300, inputTokens: 150000, cachedInputTokens: 90000, outputTokens: 2300, reasoningOutputTokens: 800 },
+        total: {
+          totalTokens: 2185096,
+          inputTokens: 2178844,
+          cachedInputTokens: 1200000,
+          outputTokens: 6252,
+          reasoningOutputTokens: 3000,
+        },
+        last: {
+          totalTokens: 152300,
+          inputTokens: 150000,
+          cachedInputTokens: 90000,
+          outputTokens: 2300,
+          reasoningOutputTokens: 800,
+        },
         modelContextWindow: 1050000,
       },
     },
@@ -66,7 +73,7 @@ describe('CTX-FINAL codex — captura tokenUsage.last (nao o odometro .total)', 
 
     const estimate = estimateRequestTokens({ messageTexts: ['New user message: oi', 'pronto'] });
     const lastCanonical = normalizeUsage(res.lastUsage, 'codex');
-    const realPrompt = canonicalPromptTokens(lastCanonical); // 150000 (60k uncached + 90k cache)
+    const realPrompt = canonicalPromptTokens(lastCanonical);
     const active = reconcileActiveContext(realPrompt, lastCanonical.outputTokens, estimate);
 
     expect(realPrompt).toBe(150000);
@@ -94,6 +101,6 @@ describe('CTX-FINAL codex — captura tokenUsage.last (nao o odometro .total)', 
     const lastCanonical = res.lastUsage ? normalizeUsage(res.lastUsage, 'codex') : null;
     const realPrompt = lastCanonical ? canonicalPromptTokens(lastCanonical) : 0;
     const active = reconcileActiveContext(realPrompt, 0, estimate);
-    expect(active).toBe(estimate); // fallback ao piso
+    expect(active).toBe(estimate);
   });
 });

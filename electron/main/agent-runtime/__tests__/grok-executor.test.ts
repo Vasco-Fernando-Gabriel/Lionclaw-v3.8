@@ -32,7 +32,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('../../db', () => ({
-  getSetting: vi.fn((key: string) => key === 'grok_max_concurrency' ? state.maxConcurrency : ''),
+  getSetting: vi.fn((key: string) => (key === 'grok_max_concurrency' ? state.maxConcurrency : '')),
 }));
 
 vi.mock('../../grok-acp/acp-driver', () => ({
@@ -60,8 +60,10 @@ vi.mock('../grok-session-config', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../grok-session-config')>();
   return {
     ...actual,
-    buildGrokSessionTools: vi.fn(async (...args: Parameters<typeof actual.buildGrokSessionTools>) =>
-      state.sessionTools ?? actual.buildGrokSessionTools(...args)),
+    buildGrokSessionTools: vi.fn(
+      async (...args: Parameters<typeof actual.buildGrokSessionTools>) =>
+        state.sessionTools ?? actual.buildGrokSessionTools(...args),
+    ),
   };
 });
 
@@ -192,15 +194,17 @@ describe('grokExecutor', () => {
         },
       },
     });
-    expect(state.createRun).toHaveBeenCalledWith(expect.objectContaining({
-      model: 'grok-4.5',
-      effort: 'medium',
-      nativeToolArgs: ['--tools', '', '--disable-web-search'],
-      processCwd: '/tmp/grok-neutral',
-      sandbox: 'strict',
-      attestSession: expect.any(Function),
-      assertWorkspaceUnchanged: expect.any(Function),
-    }));
+    expect(state.createRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'grok-4.5',
+        effort: 'medium',
+        nativeToolArgs: ['--tools', '', '--disable-web-search'],
+        processCwd: '/tmp/grok-neutral',
+        sandbox: 'strict',
+        attestSession: expect.any(Function),
+        assertWorkspaceUnchanged: expect.any(Function),
+      }),
+    );
     expect(state.close).toHaveBeenCalledOnce();
   });
 
@@ -232,18 +236,23 @@ describe('grokExecutor', () => {
       status: 'finished',
     } as CliAgenticResponse);
 
-    const result = await grokExecutor.run({
-      ...request(),
-      projectId: 'project-1',
-    }, config);
+    const result = await grokExecutor.run(
+      {
+        ...request(),
+        projectId: 'project-1',
+      },
+      config,
+    );
 
     expect(result).toMatchObject({ output: 'pipeline ok', runtime: 'grok', provider: 'grok' });
-    expect(state.createRun).toHaveBeenCalledWith(expect.objectContaining({
-      surface: 'pipeline',
-      ownerKind: 'pipeline',
-      projectId: 'project-1',
-      mcpServers: [],
-    }));
+    expect(state.createRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        surface: 'pipeline',
+        ownerKind: 'pipeline',
+        projectId: 'project-1',
+        mcpServers: [],
+      }),
+    );
     expect(state.close).toHaveBeenCalledOnce();
   });
 
@@ -262,8 +271,9 @@ describe('grokExecutor', () => {
       reason: 'cached_token authentication failed',
     });
 
-    await expect(grokExecutor.run({ ...request(), projectId: 'project-auth' }, config))
-      .rejects.toBeInstanceOf(GrokAuthError);
+    await expect(grokExecutor.run({ ...request(), projectId: 'project-auth' }, config)).rejects.toBeInstanceOf(
+      GrokAuthError,
+    );
     expect(state.createRun).not.toHaveBeenCalled();
   });
 
@@ -381,10 +391,8 @@ describe('grokExecutor', () => {
   });
 
   it('zera custo e tokens quando o wire veta usage positiva explicitamente', async () => {
-    state.send.mockResolvedValue(finalizeGrokResponse(
-      createGrokAccumulator(),
-      'completed',
-      {
+    state.send.mockResolvedValue(
+      finalizeGrokResponse(createGrokAccumulator(), 'completed', {
         _meta: {
           usage: {
             reported: false,
@@ -394,8 +402,8 @@ describe('grokExecutor', () => {
             costUsdTicks: 1_250_000_000,
           },
         },
-      },
-    ));
+      }),
+    );
 
     const result = await grokExecutor.run(request(), config);
 
@@ -410,19 +418,19 @@ describe('grokExecutor', () => {
       apiRequests: 0,
     });
     expect(result.metadata?.costSource).toBeUndefined();
-    expect(result.metadata?.grok?.rawUsage).toEqual(expect.objectContaining({
-      inputTokens: 100,
-      outputTokens: 20,
-      cacheReadTokens: 10,
-      costUsdTicks: 1_250_000_000,
-    }));
+    expect(result.metadata?.grok?.rawUsage).toEqual(
+      expect.objectContaining({
+        inputTokens: 100,
+        outputTokens: 20,
+        cacheReadTokens: 10,
+        costUsdTicks: 1_250_000_000,
+      }),
+    );
   });
 
   it('nao aceita tokens nem ticks de envelope com cache creation', async () => {
-    state.send.mockResolvedValue(finalizeGrokResponse(
-      createGrokAccumulator(),
-      'completed',
-      {
+    state.send.mockResolvedValue(
+      finalizeGrokResponse(createGrokAccumulator(), 'completed', {
         _meta: {
           usage: {
             reported: true,
@@ -433,8 +441,8 @@ describe('grokExecutor', () => {
             costUsdTicks: 1_250_000_000,
           },
         },
-      },
-    ));
+      }),
+    );
 
     const result = await grokExecutor.run(request(), config);
 
@@ -477,13 +485,15 @@ describe('grokExecutor', () => {
       apiRequests: 0,
     });
     expect(result.metadata?.modelUsage).toBeUndefined();
-    expect(result.metadata?.grok?.rawUsage).toEqual(expect.objectContaining({
-      inputTokens: 100,
-      outputTokens: 0,
-      cacheReadTokens: 10,
-      cacheCreationTokens: 0,
-      costUsdTicks: 1_250_000_000,
-    }));
+    expect(result.metadata?.grok?.rawUsage).toEqual(
+      expect.objectContaining({
+        inputTokens: 100,
+        outputTokens: 0,
+        cacheReadTokens: 10,
+        cacheCreationTokens: 0,
+        costUsdTicks: 1_250_000_000,
+      }),
+    );
   });
 
   it('rejeita breakdown que nao reconcilia com usage agregado', async () => {
@@ -521,12 +531,14 @@ describe('grokExecutor', () => {
     const handler = vi.fn(async () => ({ output: 'ok', message: 'ok' }));
     state.sessionTools = {
       systemPrompt: 'Regras',
-      externalTools: [{
-        name: 'mcp__fake__echo',
-        description: 'echo',
-        parameters: { type: 'object' },
-        handler,
-      }],
+      externalTools: [
+        {
+          name: 'mcp__fake__echo',
+          description: 'echo',
+          parameters: { type: 'object' },
+          handler,
+        },
+      ],
     };
     state.send.mockResolvedValue({
       content: 'ok',
@@ -547,13 +559,7 @@ describe('grokExecutor', () => {
       allowedTools: ['mcp__fake__echo'],
     });
     expect(state.bridgeTools).toHaveLength(1);
-    await state.bridgeTools[0]!.handler(
-      { text: 'ola' },
-      { toolUseId: 'tool-executor-42' },
-    );
-    expect(handler).toHaveBeenCalledWith(
-      { text: 'ola' },
-      { toolUseId: 'tool-executor-42' },
-    );
+    await state.bridgeTools[0]!.handler({ text: 'ola' }, { toolUseId: 'tool-executor-42' });
+    expect(handler).toHaveBeenCalledWith({ text: 'ola' }, { toolUseId: 'tool-executor-42' });
   });
 });

@@ -15,7 +15,7 @@ vi.mock('electron', () => ({
 }));
 
 vi.mock('../db', () => ({
-  getSetting: vi.fn((key: string) => key === 'grok_binary_path' ? '/opt/grok/bin/grok' : ''),
+  getSetting: vi.fn((key: string) => (key === 'grok_binary_path' ? '/opt/grok/bin/grok' : '')),
   setSetting: vi.fn(),
 }));
 
@@ -135,15 +135,22 @@ describe('grok IPC', () => {
   });
 
   it('mantem argv POSIX sem shell e sem variaveis ausentes', () => {
-    expect(buildPosixGrokLoginArgv('grok', { HOME: '/tmp/home', SECRET_CANARY: undefined }))
-      .toEqual(['env', '-i', 'HOME=/tmp/home', 'grok', 'login', '--device-auth']);
+    expect(buildPosixGrokLoginArgv('grok', { HOME: '/tmp/home', SECRET_CANARY: undefined })).toEqual([
+      'env',
+      '-i',
+      'HOME=/tmp/home',
+      'grok',
+      'login',
+      '--device-auth',
+    ]);
   });
 
   it('retorna erro controlado quando nenhum terminal Linux abre', async () => {
     const spawnProcess = createSpawn(['error', 'error', 'error', 'error']);
 
-    await expect(launchLinuxGrokLoginTerminal('grok', {}, spawnProcess))
-      .rejects.toThrow('Nenhum emulador de terminal conseguiu abrir o login do Grok');
+    await expect(launchLinuxGrokLoginTerminal('grok', {}, spawnProcess)).rejects.toThrow(
+      'Nenhum emulador de terminal conseguiu abrir o login do Grok',
+    );
     expect(spawnProcess).toHaveBeenCalledTimes(4);
   });
 
@@ -160,10 +167,12 @@ describe('grok IPC', () => {
     const handler = ipcState.handlers.get('grok:test');
     if (!handler) throw new Error('handler grok:test nao registrado');
 
-    await expect(handler()).resolves.toEqual(expect.objectContaining({
-      ok: true,
-      message: expect.stringMatching(/conectado e pronto para uso/i),
-    }));
+    await expect(handler()).resolves.toEqual(
+      expect.objectContaining({
+        ok: true,
+        message: expect.stringMatching(/conectado e pronto para uso/i),
+      }),
+    );
   });
 
   it('persiste path e invalida o cache de availability', async () => {

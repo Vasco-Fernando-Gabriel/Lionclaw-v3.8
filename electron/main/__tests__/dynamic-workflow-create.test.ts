@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -84,9 +83,7 @@ function makeDeps(captured: Captured): CreateWorkflowDeps {
   };
 }
 
-function stubDefinition(
-  input: DynamicWorkflowDefinitionCreateInput,
-): DynamicWorkflowDefinition {
+function stubDefinition(input: DynamicWorkflowDefinitionCreateInput): DynamicWorkflowDefinition {
   return {
     id: input.id,
     name: input.name,
@@ -193,7 +190,7 @@ describe('workflow-create: criacao claude-code (o .js E o workflow)', () => {
     expect(manifest.description).toBe('Workflow claude-code de teste');
     expect(manifest.nodes).toEqual([]);
     expect(manifest.gates).toEqual([]);
-    expect(manifest.phases).toEqual([]); // meta sem phases -> phases vazias
+    expect(manifest.phases).toEqual([]);
     expect(manifest.parallelism.maxConcurrentAgents).toBe(8);
     expect(manifest.estimate.maxUsd).toBe(30);
 
@@ -235,16 +232,11 @@ await agent({ agentType: 'dynamic-workflow-scout', prompt: 'x' });
 return 'ok';
 `;
     const captured: Captured = { definitions: [], runs: [] };
-    const result = await createWorkflow(
-      baseInput({ workflowSource: jsWithPhases }),
-      makeDeps(captured),
-    );
+    const result = await createWorkflow(baseInput({ workflowSource: jsWithPhases }), makeDeps(captured));
     expect(result.ok).toBe(true);
-    const manifest = JSON.parse(
-      captured.definitions[0]!.manifestJson,
-    ) as DynamicWorkflowManifest;
+    const manifest = JSON.parse(captured.definitions[0]!.manifestJson) as DynamicWorkflowManifest;
     expect(manifest.phases.map((p) => p.id)).toEqual(['scout', 'build']);
-    expect(manifest.nodes).toEqual([]); // nodes ainda vazios (implicitos)
+    expect(manifest.nodes).toEqual([]);
   });
 
   it('falha com motivo REAL quando o .js claude-code nao compila', async () => {
@@ -257,10 +249,7 @@ const home = process.env.HOME;
 return home;
 `;
     const captured: Captured = { definitions: [], runs: [] };
-    const result = await createWorkflow(
-      baseInput({ workflowSource: badJs }),
-      makeDeps(captured),
-    );
+    const result = await createWorkflow(baseInput({ workflowSource: badJs }), makeDeps(captured));
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/nao compila/);
@@ -281,10 +270,7 @@ export default async function run(ctx) {
 }
 `;
     const captured: Captured = { definitions: [], runs: [] };
-    const result = await createWorkflow(
-      baseInput({ workflowSource: legacyJs }),
-      makeDeps(captured),
-    );
+    const result = await createWorkflow(baseInput({ workflowSource: legacyJs }), makeDeps(captured));
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/nao compila/);
@@ -294,17 +280,13 @@ export default async function run(ctx) {
 
   it('falha quando nem workflowSource nem workflowPath foram fornecidos', async () => {
     const captured: Captured = { definitions: [], runs: [] };
-    const result = await createWorkflow(
-      { projectPath: projectDir, origin: 'manual' },
-      makeDeps(captured),
-    );
+    const result = await createWorkflow({ projectPath: projectDir, origin: 'manual' }, makeDeps(captured));
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/workflow\.js obrigatorio/);
     expect(captured.runs).toHaveLength(0);
   });
 });
-
 
 describe('workflow-create: D-F4a enforcement no create', () => {
   const AUTHORED_CATALOG: Record<string, { access: string; squad: string }> = {
@@ -328,10 +310,7 @@ const out = await agent({ agentType: 'security-auditor', prompt: 'audite' });
 return out;
 `;
     const captured: Captured = { definitions: [], runs: [] };
-    const result = await createWorkflow(
-      baseInput({ workflowSource: jsWrongSquad }),
-      makeDepsWithGetAgent(captured),
-    );
+    const result = await createWorkflow(baseInput({ workflowSource: jsWrongSquad }), makeDepsWithGetAgent(captured));
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/squad "security"/);
@@ -349,10 +328,7 @@ return out;
 return await agent({ agentType: 'dynamic-workflow-builder', prompt: 'gere um pacote' });
 `;
     const captured: Captured = { definitions: [], runs: [] };
-    const result = await createWorkflow(
-      baseInput({ workflowSource: jsBuilder }),
-      makeDepsWithGetAgent(captured),
-    );
+    const result = await createWorkflow(baseInput({ workflowSource: jsBuilder }), makeDepsWithGetAgent(captured));
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/denylist/);
@@ -395,10 +371,7 @@ const doc = await agent({ agentType: 'dynamic-workflow-doc-writer', prompt: 'esc
 return { impl, doc };
 `;
     const captured: Captured = { definitions: [], runs: [] };
-    const result = await createWorkflow(
-      baseInput({ workflowSource: jsWriters }),
-      makeDepsWithGetAgent(captured),
-    );
+    const result = await createWorkflow(baseInput({ workflowSource: jsWriters }), makeDepsWithGetAgent(captured));
     expect(result.ok).toBe(true);
     expect(captured.definitions).toHaveLength(1);
     expect(captured.runs).toHaveLength(1);
@@ -427,10 +400,7 @@ describe('workflow-create: vinculo chat-bound (R4-F1)', () => {
 describe('workflow-create: pendingStart + autonomia (input_json)', () => {
   it('marca pendingStart em input_json quando pedido (start real e da S11)', async () => {
     const captured: Captured = { definitions: [], runs: [] };
-    const result = await createWorkflow(
-      baseInput({ pendingStart: true }),
-      makeDeps(captured),
-    );
+    const result = await createWorkflow(baseInput({ pendingStart: true }), makeDeps(captured));
     expect(result.ok).toBe(true);
     const inputJson = JSON.parse(captured.runs[0]!.inputJson ?? '{}');
     expect(inputJson.pendingStart).toBe(true);

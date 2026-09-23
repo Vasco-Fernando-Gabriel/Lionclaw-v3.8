@@ -141,28 +141,56 @@ export async function executeExternalAgent(
   }
 
   return executeSmartExternal(
-    agentId, baseUrl, model, fullPrompt, systemPrompt,
-    agent.allowedTools, temperature, maxTokens,
-    agent.maxToolRounds || 5, authHeaders,
+    agentId,
+    baseUrl,
+    model,
+    fullPrompt,
+    systemPrompt,
+    agent.allowedTools,
+    temperature,
+    maxTokens,
+    agent.maxToolRounds || 5,
+    authHeaders,
   );
 }
 
 async function executeSimpleExternal(
-  baseUrl: string, model: string, prompt: string, systemPrompt: string,
-  temperature?: number, maxTokens?: number, authHeaders?: Record<string, string>,
+  baseUrl: string,
+  model: string,
+  prompt: string,
+  systemPrompt: string,
+  temperature?: number,
+  maxTokens?: number,
+  authHeaders?: Record<string, string>,
 ): Promise<LocalExecutionResult> {
   const messages: OllamaChatMessage[] = [];
   if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
   messages.push({ role: 'user', content: prompt });
 
-  const result = await callOllama(baseUrl, model, messages, undefined, temperature, maxTokens, 'openai-compatible', authHeaders);
+  const result = await callOllama(
+    baseUrl,
+    model,
+    messages,
+    undefined,
+    temperature,
+    maxTokens,
+    'openai-compatible',
+    authHeaders,
+  );
   return { content: result.content, model: result.model, tokensUsed: result.tokensUsed || 0, toolCalls: [] };
 }
 
 async function executeSmartExternal(
-  agentId: string, baseUrl: string, model: string, prompt: string, systemPrompt: string,
-  allowedTools: string[], temperature?: number, maxTokens?: number,
-  maxRounds?: number, authHeaders?: Record<string, string>,
+  agentId: string,
+  baseUrl: string,
+  model: string,
+  prompt: string,
+  systemPrompt: string,
+  allowedTools: string[],
+  temperature?: number,
+  maxTokens?: number,
+  maxRounds?: number,
+  authHeaders?: Record<string, string>,
 ): Promise<LocalExecutionResult> {
   const toolSchemas = loadLocalTools(allowedTools);
   const toolCallLog: Array<{ tool: string; input: string; output: string }> = [];
@@ -174,7 +202,14 @@ async function executeSmartExternal(
 
   for (let round = 0; round < (maxRounds || 5); round++) {
     const result = await callOllama(
-      baseUrl, model, messages, toolSchemas, temperature, maxTokens, 'openai-compatible', authHeaders,
+      baseUrl,
+      model,
+      messages,
+      toolSchemas,
+      temperature,
+      maxTokens,
+      'openai-compatible',
+      authHeaders,
     );
     totalTokens += result.tokensUsed || 0;
 
@@ -206,7 +241,13 @@ async function executeSmartExternal(
     }
   }
 
-  return { content: '[Limite de rounds de tools atingido]', model, tokensUsed: totalTokens, toolCalls: toolCallLog, error: 'max_tool_rounds_reached' };
+  return {
+    content: '[Limite de rounds de tools atingido]',
+    model,
+    tokensUsed: totalTokens,
+    toolCalls: toolCallLog,
+    error: 'max_tool_rounds_reached',
+  };
 }
 
 async function executeSimple(
@@ -253,9 +294,7 @@ async function executeSmart(
   messages.push({ role: 'user', content: prompt });
 
   for (let round = 0; round < (maxRounds || 5); round++) {
-    const result = await callOllama(
-      baseUrl, model, messages, toolSchemas, temperature, maxTokens, provider,
-    );
+    const result = await callOllama(baseUrl, model, messages, toolSchemas, temperature, maxTokens, provider);
     totalTokens += result.tokensUsed || 0;
 
     if (!result.toolCalls || result.toolCalls.length === 0) {
@@ -355,7 +394,7 @@ async function callOllama(
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 min timeout
+  const timer = setTimeout(() => controller.abort(), 5 * 60 * 1000);
 
   logger.info({ url, model, messageCount: messages.length, hasTools: !!tools }, 'Calling LLM');
 
@@ -374,7 +413,7 @@ async function callOllama(
       throw new Error(`${isOllama ? 'Ollama' : 'API'} error ${res.status}: ${text}`);
     }
 
-    const data = await res.json() as Record<string, unknown>;
+    const data = (await res.json()) as Record<string, unknown>;
 
     if (isOllama) {
       const msg = data.message as { content?: string; tool_calls?: OllamaToolCall[] } | undefined;
@@ -385,9 +424,11 @@ async function callOllama(
         toolCalls: msg?.tool_calls,
       };
     } else {
-      const choices = data.choices as Array<{
-        message: { content?: string; tool_calls?: OllamaToolCall[] }
-      }> | undefined;
+      const choices = data.choices as
+        | Array<{
+            message: { content?: string; tool_calls?: OllamaToolCall[] };
+          }>
+        | undefined;
       const usage = data.usage as { total_tokens?: number } | undefined;
       return {
         content: choices?.[0]?.message?.content || '',

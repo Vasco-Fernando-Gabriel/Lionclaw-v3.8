@@ -1,4 +1,3 @@
-
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
@@ -52,12 +51,7 @@ export class WorkflowGitError extends Error {
 }
 
 function authorEnvArgs(): string[] {
-  return [
-    '-c',
-    `user.name=${WORKFLOW_GIT_AUTHOR_NAME}`,
-    '-c',
-    `user.email=${WORKFLOW_GIT_AUTHOR_EMAIL}`,
-  ];
+  return ['-c', `user.name=${WORKFLOW_GIT_AUTHOR_NAME}`, '-c', `user.email=${WORKFLOW_GIT_AUTHOR_EMAIL}`];
 }
 
 export function nodeCommitMessage(runId: string, nodeId: string, attempt: number): string {
@@ -75,7 +69,6 @@ export function failedWipCommitMessage(nodeId: string, attempt: number): string 
 export function squashCommitMessage(name: string, deliverySummary: string, runId: string): string {
   return `wf(${name}): ${deliverySummary} (run ${runId})`;
 }
-
 
 export interface NodeCommitInput {
   runId: string;
@@ -170,7 +163,6 @@ export async function revParseHead(cwd: string, git: GitRunner = runGit): Promis
   return res.stdout.trim();
 }
 
-
 export interface TouchedFilesReport {
   runId: string;
   nodeId: string;
@@ -214,9 +206,9 @@ export async function buildTouchedFilesReport(
   },
   git: GitRunner = runGit,
 ): Promise<TouchedFilesReport> {
-  const nonInternal = (
-    await computeTouchedFiles(params.cwd, params.fromSha, params.toSha, git)
-  ).filter((f) => !isInternalWorkflowFile(f) && !isBuildArtifact(f));
+  const nonInternal = (await computeTouchedFiles(params.cwd, params.fromSha, params.toSha, git)).filter(
+    (f) => !isInternalWorkflowFile(f) && !isBuildArtifact(f),
+  );
   const files = await filterGitIgnoredFiles(params.cwd, nonInternal, git);
   const outsideWriteSet = files.filter((f) => !matchWriteSet(f, params.writeSet));
   if (outsideWriteSet.length > 0) {
@@ -237,17 +229,10 @@ export async function buildTouchedFilesReport(
 }
 
 const INTERNAL_WORKFLOW_PATH_PREFIXES = ['.lionclaw/', '.lionclaw\\'];
-const INTERNAL_WORKFLOW_FILES = new Set([
-  WORKFLOW_RUN_LOCK_FILE,
-  '.verify.mjs',
-  '.tmp-verify.mjs',
-]);
+const INTERNAL_WORKFLOW_FILES = new Set([WORKFLOW_RUN_LOCK_FILE, '.verify.mjs', '.tmp-verify.mjs']);
 function isInternalWorkflowFile(file: string): boolean {
   const f = file.replace(/^\.\//, '');
-  return (
-    INTERNAL_WORKFLOW_FILES.has(f) ||
-    INTERNAL_WORKFLOW_PATH_PREFIXES.some((prefix) => f.startsWith(prefix))
-  );
+  return INTERNAL_WORKFLOW_FILES.has(f) || INTERNAL_WORKFLOW_PATH_PREFIXES.some((prefix) => f.startsWith(prefix));
 }
 
 const BUILD_ARTIFACT_DIR_SEGMENTS = new Set([
@@ -271,16 +256,12 @@ function isBuildArtifact(file: string): boolean {
   return dirSegments.some((seg) => BUILD_ARTIFACT_DIR_SEGMENTS.has(seg));
 }
 
-async function filterGitIgnoredFiles(
-  cwd: string,
-  files: string[],
-  git: GitRunner,
-): Promise<string[]> {
+async function filterGitIgnoredFiles(cwd: string, files: string[], git: GitRunner): Promise<string[]> {
   if (files.length === 0) return files;
   try {
     const res = await git(['check-ignore', '--no-index', '--', ...files], cwd);
-    if (res.code !== 0 && res.code !== 1) return files; // erro do git -> estrito
-    if (res.code === 1) return files; // nenhum ignorado
+    if (res.code !== 0 && res.code !== 1) return files;
+    if (res.code === 1) return files;
     const ignored = new Set(
       res.stdout
         .split('\n')
@@ -290,7 +271,7 @@ async function filterGitIgnoredFiles(
     if (ignored.size === 0) return files;
     return files.filter((f) => !ignored.has(f.replace(/^\.\//, '')));
   } catch {
-    return files; // fail-safe estrito
+    return files;
   }
 }
 
@@ -340,14 +321,12 @@ function globMatch(pattern: string, value: string): boolean {
   return new RegExp(re).test(value);
 }
 
-
 export async function resetToCommit(cwd: string, sha: string, git: GitRunner = runGit): Promise<void> {
   const res = await git(['reset', '--hard', sha], cwd);
   if (res.code !== 0) {
     throw new WorkflowGitError(`falha em git reset --hard ${sha}`, res.stderr);
   }
 }
-
 
 export type MergeOutcome =
   | {
@@ -371,17 +350,11 @@ export interface SquashMergeInput {
   transientPaths?: string[];
 }
 
-export async function squashMergePostGate(
-  input: SquashMergeInput,
-  git: GitRunner = runGit,
-): Promise<MergeOutcome> {
+export async function squashMergePostGate(input: SquashMergeInput, git: GitRunner = runGit): Promise<MergeOutcome> {
   const currentBase = await branchTipSha(input.cwd, input.baseBranch, git);
   const baseAdvanced = currentBase !== null && currentBase !== input.baseCommitSha;
 
-  const ahead = await git(
-    ['rev-list', '--count', `${input.baseBranch}..${input.runBranch}`],
-    input.cwd,
-  );
+  const ahead = await git(['rev-list', '--count', `${input.baseBranch}..${input.runBranch}`], input.cwd);
   if (ahead.code === 0 && ahead.stdout.trim() === '0') {
     return {
       kind: 'squashed',
@@ -490,7 +463,7 @@ async function dropTransientsFromDelivery(
     return;
   }
   for (const p of paths) {
-    if (!stagedByMerge.has(p)) continue; // pre-existente do usuario: nao tocar.
+    if (!stagedByMerge.has(p)) continue;
     const inBase = await git(['cat-file', '-e', `HEAD:${p}`], cwd);
     if (inBase.code === 0) {
       await git(['checkout', '-q', 'HEAD', '--', p], cwd);
@@ -516,7 +489,6 @@ export async function finalizeStagedMerge(
   const mergeSha = await revParseHead(params.cwd, git);
   return { mergeSha };
 }
-
 
 export async function branchTipSha(cwd: string, branch: string, git: GitRunner = runGit): Promise<string | null> {
   const res = await git(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], cwd);
@@ -551,7 +523,6 @@ export async function unmergedPaths(cwd: string, git: GitRunner = runGit): Promi
     .sort();
 }
 
-
 export function sanitizeBranchSegment(segment: string): string {
   return segment
     .replace(/[^A-Za-z0-9._/-]/g, '-')
@@ -582,7 +553,7 @@ export function isGitLockError(res: GitRunResult): boolean {
   const text = `${res.stderr}\n${res.stdout}`.toLowerCase();
   return (
     text.includes('index.lock') ||
-    text.includes('unable to create') && text.includes('.lock') ||
+    (text.includes('unable to create') && text.includes('.lock')) ||
     text.includes('cannot lock ref') ||
     text.includes('could not lock') ||
     text.includes('another git process') ||

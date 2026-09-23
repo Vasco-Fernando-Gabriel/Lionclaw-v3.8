@@ -35,13 +35,8 @@ export function ProjectCard({ project }: { project: HarnessProject }) {
   const [deleting, setDeleting] = useState(false);
 
   const completedSprints =
-    project.currentSprintIndex >= 0
-      ? Math.min(project.currentSprintIndex + 1, project.totalSprints)
-      : 0;
-  const progress =
-    project.totalSprints > 0
-      ? Math.round((completedSprints / project.totalSprints) * 100)
-      : 0;
+    project.currentSprintIndex >= 0 ? Math.min(project.currentSprintIndex + 1, project.totalSprints) : 0;
+  const progress = project.totalSprints > 0 ? Math.round((completedSprints / project.totalSprints) * 100) : 0;
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -71,14 +66,10 @@ export function ProjectCard({ project }: { project: HarnessProject }) {
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-zinc-100">{project.name}</h3>
-          {project.description && (
-            <p className="text-xs text-zinc-500 mt-0.5">{project.description}</p>
-          )}
+          {project.description && <p className="text-xs text-zinc-500 mt-0.5">{project.description}</p>}
         </div>
         <div className="flex items-center gap-2 ml-2 shrink-0">
-          <span
-            className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${STATUS_COLORS[project.status]}`}
-          >
+          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${STATUS_COLORS[project.status]}`}>
             {STATUS_LABELS[project.status]}
           </span>
           {confirmDelete ? (
@@ -120,11 +111,7 @@ export function ProjectCard({ project }: { project: HarnessProject }) {
         <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all duration-500 ${
-              project.status === 'done'
-                ? 'bg-green-500'
-                : project.status === 'failed'
-                  ? 'bg-red-500'
-                  : 'bg-amber-500'
+              project.status === 'done' ? 'bg-green-500' : project.status === 'failed' ? 'bg-red-500' : 'bg-amber-500'
             }`}
             style={{ width: `${progress}%` }}
           />

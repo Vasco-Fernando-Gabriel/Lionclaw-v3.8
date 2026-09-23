@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   resolveGateChecks,
@@ -62,7 +61,7 @@ describe('resolveGateChecks: command (a)', () => {
     const c = resolved[0] as unknown as Record<string, unknown>;
     expect(c.command).toBe('npm');
     expect(c.args).toEqual(['run', 'test']);
-    expect(c.maxErrors).toBe(63); // do baseline join
+    expect(c.maxErrors).toBe(63);
   });
 
   it('NAO da falso-positivo: comando resolvido roda o bin certo e o veredito reflete erros reais', () => {
@@ -134,14 +133,11 @@ describe('resolveGateChecks: schema (c)', () => {
     );
     expect(resolved).toHaveLength(2);
     const run = runGateChecks(resolved, 'auto');
-    expect(run.ok).toBe(true); // ambos os outputs tem verdict+findings
+    expect(run.ok).toBe(true);
   });
 
   it('node sem output -> value undefined -> reprova (veredito CORRETO, nao falso-positivo)', () => {
-    const resolved = resolveGateChecks(
-      [{ kind: 'schema', nodeIds: ['nao-existe'] } as unknown as GateCheckSpec],
-      RC,
-    );
+    const resolved = resolveGateChecks([{ kind: 'schema', nodeIds: ['nao-existe'] } as unknown as GateCheckSpec], RC);
     const run = runGateChecks(resolved, 'auto');
     expect(run.ok).toBe(false);
   });

@@ -1,13 +1,8 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CodexTokenUsage } from '../codex-runtime/types';
-import {
-  ZERO_CODEX_USAGE,
-  codexUsageDelta,
-  settleChatCodexBilling,
-} from '../codex-sdk/chat-billing';
+import { ZERO_CODEX_USAGE, codexUsageDelta, settleChatCodexBilling } from '../codex-sdk/chat-billing';
 
 const usage = (partial: Partial<CodexTokenUsage>): CodexTokenUsage => ({
   ...ZERO_CODEX_USAGE,
@@ -20,9 +15,7 @@ describe('chat-billing — codexUsageDelta', () => {
       usage({ inputTokens: 1200, cachedInputTokens: 300, outputTokens: 80, totalTokens: 1580 }),
       usage({ inputTokens: 1000, cachedInputTokens: 250, outputTokens: 50, totalTokens: 1300 }),
     );
-    expect(d).toEqual(
-      usage({ inputTokens: 200, cachedInputTokens: 50, outputTokens: 30, totalTokens: 280 }),
-    );
+    expect(d).toEqual(usage({ inputTokens: 200, cachedInputTokens: 50, outputTokens: 30, totalTokens: 280 }));
   });
 
   it('clampa negativo em 0 (odometro regredido nunca vira delta negativo)', () => {
@@ -88,7 +81,6 @@ describe('chat-billing — F1 boundary: baseline MONOTONICO', () => {
   });
 });
 
-
 const codexSrc = readFileSync(join(__dirname, '..', 'codex-sdk', 'index.ts'), 'utf-8');
 
 describe('codex-sdk wiring — thread persistente (F1/F2/F3/F7)', () => {
@@ -102,13 +94,15 @@ describe('codex-sdk wiring — thread persistente (F1/F2/F3/F7)', () => {
   });
 
   it('F2a: cache persistente EXCLUSIVO da lane desktop (cron/telegram = create+close por turno)', () => {
-    expect(codexSrc).toContain('const persistentChatThread = lane.name === "desktop";');
+    expect(codexSrc).toContain("const persistentChatThread = lane.kind === 'desktop';");
   });
 
   it('F2b: cap LRU no cache, com eviction fechando o processo', () => {
-    expect(codexSrc).toContain('CHAT_CODEX_SESSION_CACHE_MAX = 4');
-    expect(codexSrc).toMatch(/while \(chatCodexSessionCache\.size > CHAT_CODEX_SESSION_CACHE_MAX\)/);
-    expect(codexSrc).toContain('"lru-evicted"');
+    expect(codexSrc).toMatch(
+      /CHAT_CODEX_SESSION_CACHE_MAX =\s+MAX_DESKTOP_LANES \+ DRIVE_PARALLEL_TURNS_MAX \+ 1 \+ 1;/,
+    );
+    expect(codexSrc).toContain("chatCodexSessionSlots.enforceCap('lru-evicted')");
+    expect(codexSrc).toContain("'lru-evicted'");
   });
 
   it('F3: reset fecha SO as threads da lane que esta resetando', () => {
@@ -123,9 +117,7 @@ describe('codex-sdk wiring — thread persistente (F1/F2/F3/F7)', () => {
   });
 
   it('repo baseline entra 1x por thread: pulado no REUSE, presente na criacao e na recovery SC-1', () => {
-    expect(codexSrc).toContain(
-      'const skipRepoBaselineOnReuse = persistentChatThread && reuseLiveThread;',
-    );
+    expect(codexSrc).toContain('const skipRepoBaselineOnReuse = persistentChatThread && reuseLiveThread;');
     expect(codexSrc).toContain('if (repoCtx && !skipRepoBaselineOnReuse)');
     expect(codexSrc).toContain('let recoveryBaseline = repoBaseline;');
     expect(codexSrc).toContain('if (!recoveryBaseline && repoCtx)');

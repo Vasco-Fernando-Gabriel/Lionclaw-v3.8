@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   WorkflowRunner,
@@ -7,14 +6,8 @@ import {
   type WorkflowRunnerCrud,
 } from '../dynamic-workflows/workflow-runner';
 import { digestCoordinatorValue, COORDINATOR_VALUE_DIGEST_MAX_CHARS } from '../dynamic-workflows/workflow-runner';
-import type {
-  SandboxProcessFactory,
-  SandboxProcessHandle,
-} from '../dynamic-workflows/workflow-sandbox';
-import type {
-  SandboxParentMessage,
-  SandboxChildMessage,
-} from '../dynamic-workflows/sandbox-protocol';
+import type { SandboxProcessFactory, SandboxProcessHandle } from '../dynamic-workflows/workflow-sandbox';
+import type { SandboxParentMessage, SandboxChildMessage } from '../dynamic-workflows/sandbox-protocol';
 import type {
   DynamicWorkflowRun,
   DynamicWorkflowDefinition,
@@ -31,7 +24,6 @@ import type { NodeRunResult, RunNodeAgentInput } from '../dynamic-workflows/work
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
 
 interface CoordinatorCtx {
   phase: (name: string) => Promise<unknown>;
@@ -127,7 +119,6 @@ function makeFakeSandboxFactory(coordinator: Coordinator): SandboxProcessFactory
   };
 }
 
-
 interface Harness {
   deps: WorkflowRunnerDeps;
   crud: WorkflowRunnerCrud;
@@ -177,11 +168,19 @@ function ccManifest(): DynamicWorkflowManifest {
   return {
     version: 1,
     name: 'cc-wf',
-    phases: [
-      { id: 'Implementar', name: 'Implementar', order: 0 },
-    ],
+    phases: [{ id: 'Implementar', name: 'Implementar', order: 0 }],
     nodes: [
-      { id: 'coder', type: 'agent', phaseId: 'Implementar', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], canResume: true, produces: ['impl'], consumes: [] },
+      {
+        id: 'coder',
+        type: 'agent',
+        phaseId: 'Implementar',
+        agentId: 'a-coder',
+        access: 'workspace-write',
+        writeSet: ['src/**'],
+        canResume: true,
+        produces: ['impl'],
+        consumes: [],
+      },
     ],
     parallelism: { maxConcurrentAgents: 3, parallelWritersAllowed: false },
     gates: [],
@@ -195,7 +194,16 @@ function ccReadOnlyManifest(): DynamicWorkflowManifest {
     name: 'cc-wf-ro',
     phases: [{ id: 'Scout', name: 'Scout', order: 0 }],
     nodes: [
-      { id: 'scout', type: 'agent', phaseId: 'Scout', agentId: 'a-scout', access: 'read-only', canResume: true, produces: ['scout'], consumes: [] },
+      {
+        id: 'scout',
+        type: 'agent',
+        phaseId: 'Scout',
+        agentId: 'a-scout',
+        access: 'read-only',
+        canResume: true,
+        produces: ['scout'],
+        consumes: [],
+      },
     ],
     parallelism: { maxConcurrentAgents: 3, parallelWritersAllowed: false },
     gates: [],
@@ -359,11 +367,15 @@ function makeHarness(opts: {
       const nr = state.nodeRuns.get(id);
       if (nr) Object.assign(nr, patch);
     },
-    listNodeRuns: (runId) =>
-      [...new Set([...state.nodeRuns.values()])].filter((n) => n.runId === runId),
+    listNodeRuns: (runId) => [...new Set([...state.nodeRuns.values()])].filter((n) => n.runId === runId),
     insertEvent: (input) => {
       const id = state.events.length + 1;
-      state.events.push({ type: input.type, runId: input.runId, payload: input.payloadJson, nodeId: input.nodeId ?? null });
+      state.events.push({
+        type: input.type,
+        runId: input.runId,
+        payload: input.payloadJson,
+        nodeId: input.nodeId ?? null,
+      });
       return {
         id,
         runId: input.runId,
@@ -534,8 +546,6 @@ const readOnlyCoordinator: Coordinator = async (ctx) => {
   return { ok: true };
 };
 
-
-
 function wireListEventsSince(h: Harness): void {
   h.crud.listEventsSince = (runId, afterSeq) =>
     h.state.events
@@ -570,7 +580,12 @@ describe('orquestrador-driver S1: coordinator-finished + gate de fronteira do fi
 
   it('janela SEM VEREDITO (writer sem green-check) abre boundary:coordinator-finished ANTES do cc-delivery; approve segue para a entrega', async () => {
     const closerTurn = vi.fn(async () => ({ ok: true, output: 'walkthrough', costUsd: 0 }));
-    const h = makeHarness({ coordinator: writingCoordinator, projectPath: tmpRoot, closerTurn, run: { inputJson: '{}' } });
+    const h = makeHarness({
+      coordinator: writingCoordinator,
+      projectPath: tmpRoot,
+      closerTurn,
+      run: { inputJson: '{}' },
+    });
     wireListEventsSince(h);
     const runner = new WorkflowRunner(h.deps);
     await runner.start('run-1');
@@ -582,7 +597,11 @@ describe('orquestrador-driver S1: coordinator-finished + gate de fronteira do fi
     const gb = h.state.events.filter((e) => e.type === 'gate-blocked');
     expect(gb).toHaveLength(1);
     const gbPayload = JSON.parse(String(gb[0]!.payload));
-    expect(gbPayload).toMatchObject({ gateId: 'boundary:coordinator-finished', mode: 'orchestrator', semaphore: 'SEM VEREDITO' });
+    expect(gbPayload).toMatchObject({
+      gateId: 'boundary:coordinator-finished',
+      mode: 'orchestrator',
+      semaphore: 'SEM VEREDITO',
+    });
     expect(h.state.events.some((e) => e.type === 'coordinator-finished')).toBe(true);
     expect(h.state.events.some((e) => e.type === 'merge-squashed')).toBe(false);
 
@@ -591,8 +610,12 @@ describe('orquestrador-driver S1: coordinator-finished + gate de fronteira do fi
       const pd = JSON.parse(h.crud.getRun('run-1')!.inputJson || '{}').pendingDecision;
       expect(pd?.id).toBe('cc-delivery');
     });
-    expect(h.state.gateDecisions.some((d) => d.gateId === 'boundary:coordinator-finished' && d.decision === 'approved')).toBe(true);
-    const approved = h.state.events.filter((e) => e.type === 'gate-approved').map((e) => JSON.parse(String(e.payload)).gateId);
+    expect(
+      h.state.gateDecisions.some((d) => d.gateId === 'boundary:coordinator-finished' && d.decision === 'approved'),
+    ).toBe(true);
+    const approved = h.state.events
+      .filter((e) => e.type === 'gate-approved')
+      .map((e) => JSON.parse(String(e.payload)).gateId);
     expect(approved).toContain('boundary:coordinator-finished');
 
     await runner.approveGate('run-1', 'cc-delivery', { decision: 'approve' });
@@ -607,7 +630,12 @@ describe('orquestrador-driver S1: coordinator-finished + gate de fronteira do fi
     const runner = new WorkflowRunner(h.deps);
     await runner.start('run-1');
     await waitForRunStatus(h.crud, 'run-1', 'blocked');
-    await runner.approveGate('run-1', 'boundary:coordinator-finished', { decision: 'reject', reason: 'rode o green-check' }, 'orchestrator');
+    await runner.approveGate(
+      'run-1',
+      'boundary:coordinator-finished',
+      { decision: 'reject', reason: 'rode o green-check' },
+      'orchestrator',
+    );
     expect(await waitForRunStatus(h.crud, 'run-1', 'paused')).toBe('paused');
     expect(h.state.events.some((e) => e.type === 'gate-rejected')).toBe(true);
     expect(h.state.events.some((e) => e.type === 'run-paused')).toBe(true);
@@ -619,7 +647,13 @@ describe('orquestrador-driver S1: coordinator-finished + gate de fronteira do fi
   it('reject de boundary:<fase> MID-RUN = run paused E input_json SEM pendingDecision (nada de gate fantasma)', async () => {
     const midRunCoordinator: Coordinator = async (ctx) => {
       await ctx.phase('Implementar');
-      await ctx.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'impl' });
+      await ctx.agent({
+        id: 'coder',
+        agentId: 'a-coder',
+        access: 'workspace-write',
+        writeSet: ['src/**'],
+        prompt: 'impl',
+      });
       await ctx.phase('Validar');
       await ctx.agent({ id: 'scout', agentId: 'a-scout', access: 'read-only', prompt: 's' });
       return { ok: true };
@@ -632,7 +666,12 @@ describe('orquestrador-driver S1: coordinator-finished + gate de fronteira do fi
     const pending = JSON.parse(h.crud.getRun('run-1')!.inputJson || '{}').pendingDecision;
     expect(pending).toMatchObject({ type: 'gate', id: 'boundary:Validar' });
 
-    await runner.approveGate('run-1', 'boundary:Validar', { decision: 'reject', reason: 'rode o green-check' }, 'orchestrator');
+    await runner.approveGate(
+      'run-1',
+      'boundary:Validar',
+      { decision: 'reject', reason: 'rode o green-check' },
+      'orchestrator',
+    );
     expect(await waitForRunStatus(h.crud, 'run-1', 'paused')).toBe('paused');
     expect(h.state.events.some((e) => e.type === 'gate-rejected')).toBe(true);
     expect(h.state.events.some((e) => e.type === 'run-paused')).toBe(true);
@@ -647,9 +686,18 @@ describe('orquestrador-driver S1: coordinator-finished + gate de fronteira do fi
     const runner = new WorkflowRunner(h.deps);
     await runner.start('run-1');
     await waitForRunStatus(h.crud, 'run-1', 'blocked');
-    await runner.approveGate('run-1', 'boundary:coordinator-finished', { decision: 'reject', reason: 'rode o green-check' }, 'orchestrator');
+    await runner.approveGate(
+      'run-1',
+      'boundary:coordinator-finished',
+      { decision: 'reject', reason: 'rode o green-check' },
+      'orchestrator',
+    );
     expect(await waitForRunStatus(h.crud, 'run-1', 'paused')).toBe('paused');
-    h.crud.insertEvent({ runId: 'run-1', type: 'wake-completed', payloadJson: JSON.stringify({ driveTurnId: 'run-1:1', outcome: 'executed' }) });
+    h.crud.insertEvent({
+      runId: 'run-1',
+      type: 'wake-completed',
+      payloadJson: JSON.stringify({ driveTurnId: 'run-1:1', outcome: 'executed' }),
+    });
 
     const r1 = await runner.resume('run-1');
     expect('error' in r1).toBe(false);
@@ -677,7 +725,11 @@ describe('orquestrador-driver S1: coordinator-finished + gate de fronteira do fi
     await runner.start('run-1');
     await waitForRunStatus(h.crud, 'run-1', 'blocked');
     const finished = h.state.events.find((e) => e.type === 'coordinator-finished')!;
-    expect(JSON.parse(String(finished.payload))).toEqual({ value: '{"ok":true}', valueTruncated: false, valueChars: 11 });
+    expect(JSON.parse(String(finished.payload))).toEqual({
+      value: '{"ok":true}',
+      valueTruncated: false,
+      valueChars: 11,
+    });
 
     const big = digestCoordinatorValue({ texto: 'x'.repeat(5_000) });
     expect(big.value!.length).toBe(COORDINATOR_VALUE_DIGEST_MAX_CHARS);
@@ -717,8 +769,8 @@ describe('cc-delivery (1/2) a invariante "merge nunca sem OK"', () => {
     expect(pending?.id).toBe('cc-delivery');
     const gb = h.state.events.find((e) => e.type === 'gate-blocked');
     expect(gb).toBeTruthy();
-    const blockedMode = (gb?.payload as { mode?: string } | undefined)?.mode
-      ?? JSON.parse(String(gb?.payload ?? '{}')).mode;
+    const blockedMode =
+      (gb?.payload as { mode?: string } | undefined)?.mode ?? JSON.parse(String(gb?.payload ?? '{}')).mode;
     expect(blockedMode).toBe('orchestrator');
 
     await runner.approveGate('run-1', 'cc-delivery', { decision: 'approve' });
@@ -740,7 +792,6 @@ describe('cc-delivery (1/2) a invariante "merge nunca sem OK"', () => {
     cleanup();
   });
 });
-
 
 describe('cc-delivery (3) read-only nao bloqueia', () => {
   it('claude-code SEM escrita completa direto (delivered->completed), SEM gate', async () => {
@@ -764,7 +815,6 @@ describe('cc-delivery (3) read-only nao bloqueia', () => {
   });
 });
 
-
 describe('cc-delivery (4) gate de entrega bloqueia em mode orchestrator (sandbox nao auto-mergeia)', () => {
   it('o sandbox NAO auto-mergeia: o gate pausa em mode orchestrator esperando o OK do orquestrador', async () => {
     const closerTurn = vi.fn(async () => ({ ok: true, output: 'walkthrough', costUsd: 0 }));
@@ -782,8 +832,7 @@ describe('cc-delivery (4) gate de entrega bloqueia em mode orchestrator (sandbox
     expect(blocked).toBe('blocked');
 
     const gb = h.state.events.find((e) => e.type === 'gate-blocked');
-    const mode = (gb?.payload as { mode?: string } | undefined)?.mode
-      ?? JSON.parse(String(gb?.payload ?? '{}')).mode;
+    const mode = (gb?.payload as { mode?: string } | undefined)?.mode ?? JSON.parse(String(gb?.payload ?? '{}')).mode;
     expect(mode).toBe('orchestrator');
 
     expect(h.state.events.some((e) => e.type === 'merge-squashed')).toBe(false);
@@ -802,7 +851,6 @@ describe('cc-delivery (4) gate de entrega bloqueia em mode orchestrator (sandbox
     cleanup();
   });
 });
-
 
 describe('cc-delivery (5) resume idempotente apos approve', () => {
   it('run completed NAO re-bloqueia nem re-mergeia ao re-disparar', async () => {
@@ -869,14 +917,18 @@ describe('cc-delivery (5) resume idempotente apos approve', () => {
   });
 });
 
-
-
 describe('cc-delivery (7) o .js nao decide o mode do gate', () => {
   it('o return do .js carrega mode:auto/skip; o host IGNORA e injeta o gate em mode orchestrator', async () => {
     const closerTurn = vi.fn(async () => ({ ok: true, output: 'walkthrough', costUsd: 0 }));
     const sneaky: Coordinator = async (ctx) => {
       await ctx.phase('Implementar');
-      await ctx.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'impl' });
+      await ctx.agent({
+        id: 'coder',
+        agentId: 'a-coder',
+        access: 'workspace-write',
+        writeSet: ['src/**'],
+        prompt: 'impl',
+      });
       return { ok: true, gateMode: 'auto', skipGate: true, mode: 'auto' };
     };
     const h = makeHarness({
@@ -892,8 +944,7 @@ describe('cc-delivery (7) o .js nao decide o mode do gate', () => {
     const blocked = await waitForRunStatus(h.crud, 'run-1', 'blocked');
     expect(blocked).toBe('blocked');
     const gb = h.state.events.find((e) => e.type === 'gate-blocked');
-    const mode = (gb?.payload as { mode?: string } | undefined)?.mode
-      ?? JSON.parse(String(gb?.payload ?? '{}')).mode;
+    const mode = (gb?.payload as { mode?: string } | undefined)?.mode ?? JSON.parse(String(gb?.payload ?? '{}')).mode;
     expect(mode).toBe('orchestrator');
     expect(mode).not.toBe('auto');
 

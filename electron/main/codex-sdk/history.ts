@@ -1,8 +1,11 @@
 import type { ChatMessage } from '../../../src/types';
+import { attachToolsBlocks, type MessageWithToolsBlock } from '../session-timeline';
 
 export const CODEX_HISTORY_MAX_TURNS = 8;
 export const CODEX_HISTORY_MAX_CHARS = 12000;
 export const CODEX_HISTORY_MESSAGE_MAX_CHARS = 3000;
+
+const EMPTY_TOOLS_BY_ANCHOR: ReadonlyMap<number, string> = new Map();
 
 function roleLabel(role: ChatMessage['role']): string {
   switch (role) {
@@ -15,24 +18,29 @@ function roleLabel(role: ChatMessage['role']): string {
   }
 }
 
-function formatHistoryMessage(message: ChatMessage): string {
+function formatHistoryMessage(entry: MessageWithToolsBlock): string {
+  const { message, toolsBlock } = entry;
   const prefix = roleLabel(message.role);
-  const content = message.content.length > CODEX_HISTORY_MESSAGE_MAX_CHARS
-    ? `${message.content.slice(0, CODEX_HISTORY_MESSAGE_MAX_CHARS)}\n[...message truncated...]`
-    : message.content;
-  return `${prefix}: ${content}`;
+  const content =
+    message.content.length > CODEX_HISTORY_MESSAGE_MAX_CHARS
+      ? `${message.content.slice(0, CODEX_HISTORY_MESSAGE_MAX_CHARS)}\n[...message truncated...]`
+      : message.content;
+  const tools = toolsBlock === undefined ? '' : `\n\n${toolsBlock}`;
+  return `${prefix}: ${content}${tools}`;
 }
 
 export function buildCodexHistoryPreamble(
   messages: ChatMessage[],
   opts?: {
     dropLast?: boolean;
+    toolsByAnchor?: Map<number, string>;
   },
 ): string {
   const base = (opts?.dropLast ?? true) ? messages.slice(0, -1) : messages;
-  const priorTurns = base
-    .filter((message) => message.role === 'user' || message.role === 'assistant')
-    .slice(-CODEX_HISTORY_MAX_TURNS);
+  const priorTurns = attachToolsBlocks(
+    base.filter((message) => message.role === 'user' || message.role === 'assistant'),
+    opts?.toolsByAnchor ?? EMPTY_TOOLS_BY_ANCHOR,
+  ).slice(-CODEX_HISTORY_MAX_TURNS);
 
   const selected: string[] = [];
   let usedChars = 0;

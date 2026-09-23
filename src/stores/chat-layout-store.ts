@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { CHAT_WIDTH_MODES, type ChatWidthMode } from '@/types';
 
-
 export { CHAT_WIDTH_MODES };
 export type { ChatWidthMode };
 
@@ -44,8 +43,7 @@ export const useChatLayoutStore = create<ChatLayoutState>((set, get) => ({
       const settings = await window.lionclaw.settings.get();
       const stored = (settings as { chatWidthMode?: unknown }).chatWidthMode;
       if (isChatWidthMode(stored)) set({ width: stored });
-    } catch {
-    }
+    } catch {}
   },
   setWidth: (mode) => {
     if (!isChatWidthMode(mode) || get().width === mode) return;

@@ -1,6 +1,4 @@
-
 import {
-  getActiveChatSession,
   getDynamicWorkflowRun,
   listDynamicWorkflowRunsByStatus,
   listDynamicWorkflowNodeRuns,
@@ -14,10 +12,7 @@ import {
 } from '../db';
 import { createHash } from 'node:crypto';
 import { validateAuthoredAgentTypes } from './authored-agent-validation';
-import {
-  createWorkflow,
-  type CreateWorkflowDeps,
-} from './workflow-create';
+import { createWorkflow, type CreateWorkflowDeps } from './workflow-create';
 import type {
   DynamicWorkflowAgentSummary,
   DynamicWorkflowAutonomyMode,
@@ -40,10 +35,7 @@ import { createLogger } from '../logger';
 
 const logger = createLogger('dynamic-workflow-control-core');
 
-
-export type WorkflowControlResult =
-  | { ok: true; value: unknown }
-  | { ok: false; error: string };
+export type WorkflowControlResult = { ok: true; value: unknown } | { ok: false; error: string };
 
 function fail(error: string): WorkflowControlResult {
   return { ok: false, error };
@@ -52,7 +44,6 @@ function fail(error: string): WorkflowControlResult {
 function done(value: unknown): WorkflowControlResult {
   return { ok: true, value };
 }
-
 
 export const DYNAMIC_WORKFLOW_WRITE_ACTIONS = new Set<string>([
   'dynamic_workflow_start',
@@ -68,18 +59,11 @@ export function isDynamicWorkflowWriteAction(action: string): boolean {
   return DYNAMIC_WORKFLOW_WRITE_ACTIONS.has(action);
 }
 
-
 const TERMINAL_STATUSES = new Set<string>(['completed', 'aborted', 'failed']);
 
 const ALREADY_RUNNING_STATUSES = new Set<string>(['running']);
 
-
-const IN_PROGRESS_RUN_STATUSES: readonly DynamicWorkflowRunStatus[] = [
-  'running',
-  'blocked',
-  'paused',
-  'interrupted',
-];
+const IN_PROGRESS_RUN_STATUSES: readonly DynamicWorkflowRunStatus[] = ['running', 'blocked', 'paused', 'interrupted'];
 
 export function assertNoOtherActiveRun(selfRunId: string): string | null {
   for (const status of IN_PROGRESS_RUN_STATUSES) {
@@ -95,13 +79,11 @@ export function assertNoOtherActiveRun(selfRunId: string): string | null {
   return null;
 }
 
-
 const inFlight = new Set<string>();
 
 const conductCount = new Map<string, number>();
 
 export const MAX_CONDUCT_CALLS_PER_RUN = 200;
-
 
 const authorCallTimestamps = new Map<string, number[]>();
 
@@ -130,9 +112,7 @@ function bumpAuthorRateLimitOrReject(chatSessionId: string | undefined, nowMs: n
 
 export function _resetWorkflowControlStateForTesting(): void {
   if (process.env['NODE_ENV'] !== 'test' && !process.env['VITEST']) {
-    throw new Error(
-      '_resetWorkflowControlStateForTesting so pode ser chamado em ambiente de teste',
-    );
+    throw new Error('_resetWorkflowControlStateForTesting so pode ser chamado em ambiente de teste');
   }
   inFlight.clear();
   conductCount.clear();
@@ -151,10 +131,7 @@ function bumpConductOrEscalate(runId: string): string | null {
   return null;
 }
 
-async function withInFlight(
-  runId: string,
-  work: () => Promise<WorkflowControlResult>,
-): Promise<WorkflowControlResult> {
+async function withInFlight(runId: string, work: () => Promise<WorkflowControlResult>): Promise<WorkflowControlResult> {
   if (inFlight.has(runId)) {
     return fail(
       `one-in-flight: ja ha uma acao de conducao em voo para o run "${runId}". ` +
@@ -168,7 +145,6 @@ async function withInFlight(
     inFlight.delete(runId);
   }
 }
-
 
 type RunnerLike = {
   start(runId: string): Promise<{ ok: true } | { error: string }>;
@@ -191,8 +167,7 @@ type RunnerLike = {
     input: { workflowJsSource: string; reason: string },
     source: 'human' | 'orchestrator' | 'workflow-orchestrator-agent',
   ): Promise<
-    | { ok: true; newDefinitionId: string; revisionId: string; manifestHash: string }
-    | { ok: false; error: string }
+    { ok: true; newDefinitionId: string; revisionId: string; manifestHash: string } | { ok: false; error: string }
   >;
   switchAgent(
     runId: string,
@@ -249,7 +224,6 @@ export async function recoverWorkflowRunsOnBoot(): Promise<{ recovered: number }
   return recoverInterruptedRuns();
 }
 
-
 async function snapshotOf(runId: string): Promise<DynamicWorkflowSnapshot | null> {
   try {
     const runner = await ensureWorkflowRunner();
@@ -260,17 +234,12 @@ async function snapshotOf(runId: string): Promise<DynamicWorkflowSnapshot | null
   }
 }
 
-
-function resolveChatSessionId(): string | undefined {
-  return getActiveChatSession()?.id;
-}
-
-
 export interface DynamicWorkflowAuthorInput {
   projectPath: string;
   name?: string;
   workflowJsSource: string;
   start?: boolean;
+  chatSessionId?: string;
 }
 
 function emitAuthorAuditEvent(input: {
@@ -303,9 +272,7 @@ function emitAuthorAuditEvent(input: {
   }
 }
 
-export async function dynamicWorkflowAuthorCore(
-  input: DynamicWorkflowAuthorInput,
-): Promise<WorkflowControlResult> {
+export async function dynamicWorkflowAuthorCore(input: DynamicWorkflowAuthorInput): Promise<WorkflowControlResult> {
   try {
     if (!input || !input.projectPath) {
       return fail('Erro: projectPath obrigatorio');
@@ -313,7 +280,7 @@ export async function dynamicWorkflowAuthorCore(
     if (typeof input.workflowJsSource !== 'string' || input.workflowJsSource.trim().length === 0) {
       return fail('Erro: workflowJsSource obrigatorio (o workflow.js claude-code que o orquestrador escreveu)');
     }
-    const chatSessionId = resolveChatSessionId();
+    const chatSessionId = input.chatSessionId;
 
     const rateError = bumpAuthorRateLimitOrReject(chatSessionId, Date.now());
     if (rateError) return fail(rateError);
@@ -323,7 +290,7 @@ export async function dynamicWorkflowAuthorCore(
       return fail(secVerdict.error);
     }
 
-    const start = input.start !== false; // default true
+    const start = input.start !== false;
 
     if (start) {
       const otherActiveAuthor = assertNoOtherActiveRun('');
@@ -475,9 +442,7 @@ export async function dynamicWorkflowReplyCore(
   const run = getDynamicWorkflowRun(runId);
   if (!run) return fail(`Erro: run "${runId}" nao encontrado`);
   if (TERMINAL_STATUSES.has(run.status)) {
-    return fail(
-      `dynamic_workflow_reply: o run "${runId}" esta "${run.status}" (encerrado) - nada para responder.`,
-    );
+    return fail(`dynamic_workflow_reply: o run "${runId}" esta "${run.status}" (encerrado) - nada para responder.`);
   }
   const escalate = bumpConductOrEscalate(runId);
   if (escalate) return fail(escalate);
@@ -550,19 +515,10 @@ export async function dynamicWorkflowInterveneCore(
   }
 
   if (intervention.type === 'switch-agent') {
-    return dynamicWorkflowSwitchAgentCore(
-      runId,
-      intervention.nodeId,
-      intervention.newAgentId,
-      intervention.reason,
-    );
+    return dynamicWorkflowSwitchAgentCore(runId, intervention.nodeId, intervention.newAgentId, intervention.reason);
   }
 
-  if (
-    TERMINAL_STATUSES.has(run.status) &&
-    intervention.type !== 'resume' &&
-    intervention.type !== 'rerun-node'
-  ) {
+  if (TERMINAL_STATUSES.has(run.status) && intervention.type !== 'resume' && intervention.type !== 'rerun-node') {
     return fail(
       `dynamic_workflow_intervene: o run "${runId}" esta "${run.status}" (encerrado) - intervencao nao se aplica.`,
     );
@@ -595,9 +551,7 @@ export async function dynamicWorkflowInterveneCore(
     }
   }
 
-  return withInFlight(runId, async () =>
-    interveneViaRunner(runId, intervention, interventionNote(intervention)),
-  );
+  return withInFlight(runId, async () => interveneViaRunner(runId, intervention, interventionNote(intervention)));
 }
 
 function interventionNote(intervention: DynamicWorkflowIntervention): string | undefined {
@@ -663,7 +617,10 @@ export async function dynamicWorkflowSwitchAgentCore(
       const { resolveAgentQueryConfig } = await import('../agent-config-resolver');
       const verdict = await resolveSwitchAgentVerdict(node, newAgentId, {
         resolveAgent: resolveAgentQueryConfig,
-        loadActiveAgentIds: () => getAllAgents().filter((a) => a.isActive).map((a) => a.id),
+        loadActiveAgentIds: () =>
+          getAllAgents()
+            .filter((a) => a.isActive)
+            .map((a) => a.id),
       });
 
       const runner = await ensureWorkflowRunner();
@@ -793,11 +750,7 @@ export async function dynamicWorkflowEditCoordinatorCore(
   });
 }
 
-
-function resolveGate(
-  run: DynamicWorkflowRun,
-  gateId: string,
-): DynamicWorkflowManifestGate | undefined {
+function resolveGate(run: DynamicWorkflowRun, gateId: string): DynamicWorkflowManifestGate | undefined {
   const def = getDynamicWorkflowDefinition(run.definitionId);
   if (!def) return undefined;
   let manifest: DynamicWorkflowManifest;
@@ -814,10 +767,7 @@ function resolveGate(
   return gates.find((g) => g.id === gateId);
 }
 
-function resolveManifestNode(
-  run: DynamicWorkflowRun,
-  nodeId: string,
-): DynamicWorkflowManifestNode | undefined {
+function resolveManifestNode(run: DynamicWorkflowRun, nodeId: string): DynamicWorkflowManifestNode | undefined {
   const def = getDynamicWorkflowDefinition(run.definitionId);
   if (!def) return undefined;
   let manifest: DynamicWorkflowManifest;
@@ -834,10 +784,7 @@ function resolveManifestNode(
   return nodes.find((n) => n.id === nodeId);
 }
 
-async function assertNotStaleNode(
-  runId: string,
-  targetNodeId: string,
-): Promise<WorkflowControlResult | null> {
+async function assertNotStaleNode(runId: string, targetNodeId: string): Promise<WorkflowControlResult | null> {
   const snapshot = await snapshotOf(runId);
   const current = snapshot?.currentNodeId;
   if (!current) return null;
@@ -850,15 +797,15 @@ async function assertNotStaleNode(
   return null;
 }
 
-async function assertNotStartedNode(
-  runId: string,
-  targetNodeId: string,
-): Promise<WorkflowControlResult | null> {
+async function assertNotStartedNode(runId: string, targetNodeId: string): Promise<WorkflowControlResult | null> {
   let runs: Array<{ nodeId: string; status: string }>;
   try {
     runs = listDynamicWorkflowNodeRuns(runId);
   } catch (err) {
-    logger.warn({ runId, targetNodeId, error: (err as Error).message }, 'assertNotStartedNode: leitura de node_runs falhou (aceita)');
+    logger.warn(
+      { runId, targetNodeId, error: (err as Error).message },
+      'assertNotStartedNode: leitura de node_runs falhou (aceita)',
+    );
     return null;
   }
   const hit = runs.find((nr) => nr.nodeId === targetNodeId);

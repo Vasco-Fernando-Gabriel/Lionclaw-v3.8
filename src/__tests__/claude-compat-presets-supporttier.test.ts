@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 
 import { CLAUDE_COMPAT_PRESETS } from '../constants/claude-compat-presets';

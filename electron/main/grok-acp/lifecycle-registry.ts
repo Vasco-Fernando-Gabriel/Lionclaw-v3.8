@@ -1,14 +1,7 @@
 import type { GrokAcpRegistrableHandle, GrokAcpRunSessionKey } from './types';
 
 function storageKey(key: GrokAcpRunSessionKey): string {
-  return [
-    key.surface,
-    key.ownerKind,
-    key.runId,
-    key.projectId ?? '',
-    key.agentId ?? '',
-    key.ownerId ?? '',
-  ].join('|');
+  return [key.surface, key.ownerKind, key.runId, key.projectId ?? '', key.agentId ?? '', key.ownerId ?? ''].join('|');
 }
 
 function matches(key: GrokAcpRunSessionKey, scope: Partial<GrokAcpRunSessionKey>): boolean {

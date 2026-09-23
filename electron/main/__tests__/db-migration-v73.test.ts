@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi } from 'vitest';
-
 
 import { applyMigrationV73 } from '../db-migrations/v73-minimax-tp-agent-runtime';
 
@@ -9,7 +7,6 @@ describe('applyMigrationV73 - structural', () => {
     expect(typeof applyMigrationV73).toBe('function');
   });
 });
-
 
 describe('applyMigrationV73 - SQL content', () => {
   function captureSql(): string {
@@ -48,12 +45,30 @@ describe('applyMigrationV73 - SQL content', () => {
     expect(sql).toMatch(/SELECT/i);
     expect(sql).toMatch(/FROM agents/i);
     const expectedCols = [
-      'id', 'name', 'description', 'system_prompt', 'model',
-      'allowed_tools', 'mcp_servers', 'is_active', 'sort_order',
-      'effort', 'thinking', 'thinking_budget', 'max_turns',
-      'skills', 'kb_enabled', 'runtime', 'local_config',
-      'external_config', 'codex_config', 'local_mode', 'max_tool_rounds',
-      'squad', 'created_at', 'updated_at',
+      'id',
+      'name',
+      'description',
+      'system_prompt',
+      'model',
+      'allowed_tools',
+      'mcp_servers',
+      'is_active',
+      'sort_order',
+      'effort',
+      'thinking',
+      'thinking_budget',
+      'max_turns',
+      'skills',
+      'kb_enabled',
+      'runtime',
+      'local_config',
+      'external_config',
+      'codex_config',
+      'local_mode',
+      'max_tool_rounds',
+      'squad',
+      'created_at',
+      'updated_at',
     ];
     for (const col of expectedCols) {
       expect(sql).toContain(col);
@@ -77,7 +92,6 @@ describe('applyMigrationV73 - SQL content', () => {
     expect(mockExec).toHaveBeenCalledTimes(1);
   });
 });
-
 
 describe('applyMigrationV73 - mock DB (normal execution)', () => {
   it('does not throw on a clean mock db', () => {

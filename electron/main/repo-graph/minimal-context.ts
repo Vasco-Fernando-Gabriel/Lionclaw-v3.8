@@ -1,4 +1,3 @@
-
 import path from 'path';
 import { createLogger } from '../logger';
 import type {
@@ -19,7 +18,6 @@ const logger = createLogger('repo-graph-minimal-context');
 export const MINIMAL_CONTEXT_MAX_FILES = 10;
 export const MINIMAL_CONTEXT_MAX_SYMBOLS = 20;
 export const MINIMAL_CONTEXT_MAX_MARKDOWN_BYTES = 10 * 1024;
-
 
 export interface MinimalContextSources {
   search(input: RepoGraphSearchInput): Promise<RepoGraphSearchResult>;
@@ -101,9 +99,7 @@ export async function composeMinimalContext(
   if (fileReasons.size < MINIMAL_CONTEXT_MAX_FILES) {
     try {
       const all = await sources.files({ rootPath: input.rootPath });
-      const byConnection = [...all.files].sort(
-        (a, b) => (b.nodeCount ?? 0) - (a.nodeCount ?? 0),
-      );
+      const byConnection = [...all.files].sort((a, b) => (b.nodeCount ?? 0) - (a.nodeCount ?? 0));
       for (const f of byConnection) {
         if (fileReasons.size >= MINIMAL_CONTEXT_MAX_FILES) break;
         if (!fileReasons.has(f.path)) {
@@ -115,12 +111,10 @@ export async function composeMinimalContext(
     }
   }
 
-  const files = [...fileReasons.entries()]
-    .slice(0, MINIMAL_CONTEXT_MAX_FILES)
-    .map(([p, reason]) => ({
-      path: path.isAbsolute(p) ? p : path.join(input.rootPath, p),
-      reason,
-    }));
+  const files = [...fileReasons.entries()].slice(0, MINIMAL_CONTEXT_MAX_FILES).map(([p, reason]) => ({
+    path: path.isAbsolute(p) ? p : path.join(input.rootPath, p),
+    reason,
+  }));
 
   const contextSymbols = symbols.map((s) => ({
     name: s.name,
@@ -147,8 +141,8 @@ export async function composeMinimalContext(
   };
 }
 
-
 export interface RepoGraphPrefetchDeps {
+  sessionId: string;
   getReader?: () => Promise<RepoGraphReader>;
   emitChunk?: (chunk: StreamChunk) => void;
 }
@@ -167,7 +161,7 @@ async function emitChunkToActiveWindow(chunk: StreamChunk): Promise<void> {
 
 export async function prefetchRepoGraphTurnContext(
   task: string,
-  deps: RepoGraphPrefetchDeps = {},
+  deps: RepoGraphPrefetchDeps,
 ): Promise<RepoGraphContext | null> {
   let turnContext: typeof import('./turn-context');
   try {
@@ -177,11 +171,11 @@ export async function prefetchRepoGraphTurnContext(
     return null;
   }
 
-  const ctx = turnContext.getRepoGraphTurnContext();
-  const sessionId = turnContext.getRepoGraphTurnSession();
-  if (!ctx || !sessionId) return null;
+  const sessionId = deps.sessionId;
+  const ctx = turnContext.getRepoGraphTurnContext(sessionId);
+  if (!ctx) return null;
 
-  const runtime = turnContext.getRepoGraphTurnRuntime();
+  const runtime = turnContext.getRepoGraphTurnRuntime(sessionId);
   const emitChunk = deps.emitChunk ?? ((chunk: StreamChunk) => void emitChunkToActiveWindow(chunk));
   const startedMs = Date.now();
 
@@ -258,7 +252,7 @@ export async function prefetchRepoGraphTurnContext(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.warn({ err, sessionId }, 'prefetch do repo-graph falhou (turno segue sem baseline)');
-    if (turnContext.shouldEmitRuntimeLimited()) {
+    if (turnContext.shouldEmitRuntimeLimited(sessionId)) {
       await record({
         source: 'runtime-limited',
         used: false,

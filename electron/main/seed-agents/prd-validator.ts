@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const PRD_VALIDATOR_ID = 'prd-validator';

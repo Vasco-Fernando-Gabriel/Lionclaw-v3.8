@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
@@ -23,20 +22,19 @@ describe('SPEC-001 Sprint 5: Claude SDK verbatim extraction guardrail', () => {
 
     it('executeClaudeSdkQuery accepts (message, options, getWindow, lane?)', async () => {
       const mod = await import('../orchestrator');
-      expect(mod.executeClaudeSdkQuery.length).toBe(3);
+      expect(mod.executeClaudeSdkQuery.length).toBe(5);
     });
 
     it('executeQuery accepts (message, options, getWindow, lane?)', async () => {
       const mod = await import('../orchestrator');
-      expect(mod.executeQuery.length).toBe(3);
+      expect(mod.executeQuery.length).toBe(4);
     });
 
     it('signature return types are Promise-shaped', async () => {
       const mod = await import('../orchestrator');
       expect(mod.executeClaudeSdkQuery.name).toBe('executeClaudeSdkQuery');
       expect(mod.executeQuery.name).toBe('executeQuery');
-      const _claudeSig: typeof ExecuteClaudeSdkQueryType =
-        mod.executeClaudeSdkQuery;
+      const _claudeSig: typeof ExecuteClaudeSdkQueryType = mod.executeClaudeSdkQuery;
       const _routerSig: typeof ExecuteQueryType = mod.executeQuery;
       expect(typeof _claudeSig).toBe('function');
       expect(typeof _routerSig).toBe('function');
@@ -61,7 +59,7 @@ describe('SPEC-001 Sprint 5: Claude SDK verbatim extraction guardrail', () => {
       ['disallowedTools: [...SDK_DISALLOWED_TOOLS]'],
       ["import { SDK_DISALLOWED_TOOLS, toSdkToolNames } from './agent-runtime/sdk-tool-names'"],
     ])('contains sentinel %p', (sentinel: string) => {
-      expect(src).toContain(sentinel);
+      expect(src.replace(/\s+/g, '')).toContain(sentinel.replace(/\s+/g, ''));
     });
 
     it('disallowedTools aparece nos DOIS ramos do query() (onboarding e normal)', () => {
@@ -75,14 +73,12 @@ describe('SPEC-001 Sprint 5: Claude SDK verbatim extraction guardrail', () => {
     });
 
     it('contains exactly one declaration of executeClaudeSdkQuery', () => {
-      const matches =
-        src.match(/export async function executeClaudeSdkQuery\s*\(/g) ?? [];
+      const matches = src.match(/export async function executeClaudeSdkQuery\s*\(/g) ?? [];
       expect(matches.length).toBe(1);
     });
 
     it('contains exactly one declaration of executeQuery (the router)', () => {
-      const matches =
-        src.match(/export async function executeQuery\s*\(/g) ?? [];
+      const matches = src.match(/export async function executeQuery\s*\(/g) ?? [];
       expect(matches.length).toBe(1);
     });
 
@@ -96,9 +92,7 @@ describe('SPEC-001 Sprint 5: Claude SDK verbatim extraction guardrail', () => {
     });
 
     it('router NO LONGER bypasses non-desktop lanes nor gates non-claude runtimes (SPEC orquestrador-fonte-unica 2.1 + 3)', () => {
-      expect(src).not.toContain(
-        'return executeClaudeSdkQuery(message, options, getWindow, lane);',
-      );
+      expect(src).not.toContain('return executeClaudeSdkQuery(message, options, getWindow, lane);');
       expect(src).not.toContain("selection.runtime !== 'claude-sdk'");
       expect(src).toContain('executeClaudeCompatSdkQuery(message, options, getWindow, lane, selection)');
       expect(src).toContain('executeCodexSdkQuery(message, options, getWindow, lane, selection)');

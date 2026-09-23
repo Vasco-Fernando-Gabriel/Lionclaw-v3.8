@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -49,7 +48,6 @@ afterAll(() => {
   if (baseDir) fs.rmSync(baseDir, { recursive: true, force: true });
 });
 
-
 describe('hasParentTraversal', () => {
   it('detecta ../ em qualquer posicao', () => {
     expect(hasParentTraversal('/a/../b')).toBe(true);
@@ -63,7 +61,6 @@ describe('hasParentTraversal', () => {
     expect(hasParentTraversal('/a/.hidden/c')).toBe(false);
   });
 });
-
 
 describe('validateRepoRootPath (13.2)', () => {
   it('rejeita path vazio e relativo', () => {
@@ -124,7 +121,6 @@ describe('validateRepoRootPath (13.2)', () => {
   });
 });
 
-
 describe('validateRepoRootAgainstCanonical (13.2 — igualdade, nao prefixo)', () => {
   it('aceita o proprio canonical', () => {
     const canonical = fs.realpathSync(plainDir);
@@ -159,11 +155,7 @@ describe('validateRepoRootAgainstCanonical (13.2 — igualdade, nao prefixo)', (
 
   it('rejeita pasta inexistente e canonical inexistente', () => {
     const canonical = fs.realpathSync(plainDir);
-    expect(
-      validateRepoRootAgainstCanonical(path.join(baseDir, 'nada'), canonical),
-    ).toHaveProperty('error');
-    expect(
-      validateRepoRootAgainstCanonical(plainDir, path.join(baseDir, 'nada')),
-    ).toHaveProperty('error');
+    expect(validateRepoRootAgainstCanonical(path.join(baseDir, 'nada'), canonical)).toHaveProperty('error');
+    expect(validateRepoRootAgainstCanonical(plainDir, path.join(baseDir, 'nada'))).toHaveProperty('error');
   });
 });

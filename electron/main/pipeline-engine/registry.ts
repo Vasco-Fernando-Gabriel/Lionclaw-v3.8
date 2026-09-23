@@ -1,4 +1,3 @@
-
 import type { PhaseDefinition } from '../../../src/types/pipeline';
 import {
   SECURITY_PIPELINE_PHASES,
@@ -27,10 +26,8 @@ import {
   TECH_SECURITY_ID,
 } from '../seed-agents/index';
 
-
 export type PhaseArtifactMapEntry = { files: string[]; fromPhase: number; wipeSprints: boolean };
 type PhaseArtifactMap = Record<number, PhaseArtifactMapEntry>;
-
 
 export const SECURITY_PHASE_NAMES: Record<number, string> = Object.fromEntries(
   SECURITY_PIPELINE_PHASES.map((p) => [p.number, p.name]),
@@ -49,7 +46,6 @@ const SECURITY_PHASE_ARTIFACT_MAP: PhaseArtifactMap = {
   9: { files: [], fromPhase: 9, wipeSprints: false },
 };
 
-
 const FEATURE_PHASE_NAMES: Record<number, string> = Object.fromEntries(
   FEATURE_PIPELINE_PHASES.map((p) => [p.number, p.name]),
 );
@@ -67,7 +63,6 @@ const FEATURE_PHASE_ARTIFACT_MAP: PhaseArtifactMap = {
   12: { files: [], fromPhase: 12, wipeSprints: false },
 };
 
-
 export const ARCHITECTURE_PHASE_NAMES: Record<number, string> = Object.fromEntries(
   ARCHITECTURE_REVIEW_PIPELINE_PHASES.map((p) => [p.number, p.name]),
 );
@@ -77,15 +72,18 @@ const ARCHITECTURE_PHASE_AGENT_IDS: Record<number, string> = Object.fromEntries(
 );
 
 const ARCHITECTURE_PHASE_ARTIFACT_MAP: PhaseArtifactMap = {
-  1: { files: ['*'],                                                                                                  fromPhase: 1, wipeSprints: true  },
-  2: { files: ['ArchitectureCandidates', 'ArchitectureDiagnosis', 'ArchitectureDecisions', 'SPEC', 'sprints'],         fromPhase: 2, wipeSprints: true  },
-  3: { files: ['ArchitectureDiagnosis', 'ArchitectureDecisions', 'SPEC', 'sprints'],                                   fromPhase: 3, wipeSprints: true  },
-  4: { files: ['ArchitectureDecisions', 'SPEC', 'sprints'],                                                            fromPhase: 4, wipeSprints: true  },
-  5: { files: ['SPEC', 'sprints'],                                                                                     fromPhase: 5, wipeSprints: true  },
-  8: { files: ['sprints'],                                                                                             fromPhase: 8, wipeSprints: true  },
-  9: { files: [],                                                                                                      fromPhase: 9, wipeSprints: false },
+  1: { files: ['*'], fromPhase: 1, wipeSprints: true },
+  2: {
+    files: ['ArchitectureCandidates', 'ArchitectureDiagnosis', 'ArchitectureDecisions', 'SPEC', 'sprints'],
+    fromPhase: 2,
+    wipeSprints: true,
+  },
+  3: { files: ['ArchitectureDiagnosis', 'ArchitectureDecisions', 'SPEC', 'sprints'], fromPhase: 3, wipeSprints: true },
+  4: { files: ['ArchitectureDecisions', 'SPEC', 'sprints'], fromPhase: 4, wipeSprints: true },
+  5: { files: ['SPEC', 'sprints'], fromPhase: 5, wipeSprints: true },
+  8: { files: ['sprints'], fromPhase: 8, wipeSprints: true },
+  9: { files: [], fromPhase: 9, wipeSprints: false },
 };
-
 
 const DEV_V2_PHASE_NAMES: Record<number, string> = Object.fromEntries(
   DEVELOPMENT_V2_PIPELINE_PHASES.map((p) => [p.number, p.name]),
@@ -96,23 +94,22 @@ const DEV_V2_PHASE_AGENT_IDS: Record<number, string> = Object.fromEntries(
 );
 
 const DEV_V2_PHASE_ARTIFACT_MAP: PhaseArtifactMap = {
-  1:  { files: [], fromPhase: 1,  wipeSprints: true  },
-  2:  { files: [], fromPhase: 2,  wipeSprints: true  },
-  3:  { files: [], fromPhase: 3,  wipeSprints: true  },
-  4:  { files: [], fromPhase: 4,  wipeSprints: true  },
-  5:  { files: [], fromPhase: 5,  wipeSprints: true  },
-  6:  { files: [], fromPhase: 5,  wipeSprints: true  },
-  7:  { files: [], fromPhase: 7,  wipeSprints: true  },
-  8:  { files: [], fromPhase: 8,  wipeSprints: false },
-  9:  { files: [], fromPhase: 9,  wipeSprints: false },
+  1: { files: [], fromPhase: 1, wipeSprints: true },
+  2: { files: [], fromPhase: 2, wipeSprints: true },
+  3: { files: [], fromPhase: 3, wipeSprints: true },
+  4: { files: [], fromPhase: 4, wipeSprints: true },
+  5: { files: [], fromPhase: 5, wipeSprints: true },
+  6: { files: [], fromPhase: 5, wipeSprints: true },
+  7: { files: [], fromPhase: 7, wipeSprints: true },
+  8: { files: [], fromPhase: 8, wipeSprints: false },
+  9: { files: [], fromPhase: 9, wipeSprints: false },
   10: { files: [], fromPhase: 10, wipeSprints: false },
   11: { files: [], fromPhase: 11, wipeSprints: false },
-  12: { files: [], fromPhase: 12, wipeSprints: true  },
+  12: { files: [], fromPhase: 12, wipeSprints: true },
   13: { files: [], fromPhase: 13, wipeSprints: false },
-  14: { files: [], fromPhase: 14, wipeSprints: true  },
+  14: { files: [], fromPhase: 14, wipeSprints: true },
   15: { files: [], fromPhase: 15, wipeSprints: false },
 };
-
 
 export const BUG_PHASE_NAMES: Record<number, string> = Object.fromEntries(
   BUG_PIPELINE_PHASES.map((p) => [p.number, p.name]),
@@ -123,14 +120,24 @@ const BUG_PHASE_AGENT_IDS: Record<number, string> = Object.fromEntries(
 );
 
 const BUG_PHASE_ARTIFACT_MAP: PhaseArtifactMap = {
-  1: { files: ['*'],                                                                                                             fromPhase: 1, wipeSprints: true  },
-  2: { files: ['analise-01-root-cause', 'analise-02-historian', 'analise-03-refuter', 'plano-de-correcao', 'SPEC', 'sprints'],    fromPhase: 2, wipeSprints: true  },
-  3: { files: ['plano-de-correcao', 'SPEC', 'sprints'],                                                                          fromPhase: 3, wipeSprints: true  },
-  4: { files: ['SPEC', 'sprints'],                                                                                               fromPhase: 4, wipeSprints: true  },
-  6: { files: ['sprints'],                                                                                                       fromPhase: 6, wipeSprints: true  },
-  7: { files: [],                                                                                                                fromPhase: 7, wipeSprints: false },
+  1: { files: ['*'], fromPhase: 1, wipeSprints: true },
+  2: {
+    files: [
+      'analise-01-root-cause',
+      'analise-02-historian',
+      'analise-03-refuter',
+      'plano-de-correcao',
+      'SPEC',
+      'sprints',
+    ],
+    fromPhase: 2,
+    wipeSprints: true,
+  },
+  3: { files: ['plano-de-correcao', 'SPEC', 'sprints'], fromPhase: 3, wipeSprints: true },
+  4: { files: ['SPEC', 'sprints'], fromPhase: 4, wipeSprints: true },
+  6: { files: ['sprints'], fromPhase: 6, wipeSprints: true },
+  7: { files: [], fromPhase: 7, wipeSprints: false },
 };
-
 
 const PHASE_ARTIFACT_MAP: PhaseArtifactMap = {
   1: {
@@ -203,7 +210,6 @@ const PHASE_AGENT_IDS: Record<number, string> = {
 
 export { PHASE_NAMES, PHASE_AGENT_IDS };
 
-
 export function getPhasesForProject(project: { pipelineType?: string }): readonly PhaseDefinition[] {
   if (project.pipelineType === 'security') return SECURITY_PIPELINE_PHASES;
   if (project.pipelineType === 'feature') return FEATURE_PIPELINE_PHASES;
@@ -221,9 +227,10 @@ export function getLoopPhases(project: { pipelineType?: string }): Set<number> {
   return loopPhasesOf(project.pipelineType);
 }
 
-export function getResetablePhases(
-  project: { pipelineType?: string; config?: { openDesign?: { locked?: boolean } } },
-): Set<number> {
+export function getResetablePhases(project: {
+  pipelineType?: string;
+  config?: { openDesign?: { locked?: boolean } };
+}): Set<number> {
   return resetablePhasesOf(project.pipelineType, project.config?.openDesign?.locked === true);
 }
 
@@ -237,10 +244,7 @@ export function getPhaseName(phaseNumber: number, project: { pipelineType?: stri
   return PHASE_NAMES[phaseNumber];
 }
 
-export function getPhaseNumberForAgent(
-  project: { pipelineType?: string },
-  agentId: string,
-): number | undefined {
+export function getPhaseNumberForAgent(project: { pipelineType?: string }, agentId: string): number | undefined {
   return getPhaseNumberForAgentByType(project.pipelineType, agentId);
 }
 

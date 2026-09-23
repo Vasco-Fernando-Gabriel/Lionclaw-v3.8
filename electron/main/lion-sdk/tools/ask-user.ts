@@ -1,4 +1,3 @@
-
 import type { BrowserWindow } from 'electron';
 import { sendAskQuestion } from '../../ask-question';
 import type { AskQuestion, AskQuestionResponse } from '../../../../src/types';
@@ -19,10 +18,7 @@ export interface AskUserDeps {
   sender?: typeof sendAskQuestion;
 }
 
-export async function lionAskUserQuestion(
-  input: AskUserInput,
-  deps: AskUserDeps,
-): Promise<AskUserToolResult> {
+export async function lionAskUserQuestion(input: AskUserInput, deps: AskUserDeps): Promise<AskUserToolResult> {
   if (!input || !Array.isArray(input.questions) || input.questions.length === 0) {
     return { ok: false, error: 'AskUserQuestion: questions vazio.' };
   }

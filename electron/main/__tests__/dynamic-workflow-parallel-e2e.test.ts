@@ -1,16 +1,10 @@
-
 import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {
-  runWorkflowSandbox,
-  createNodeForkFactory,
-} from '../dynamic-workflows/workflow-sandbox';
+import { runWorkflowSandbox, createNodeForkFactory } from '../dynamic-workflows/workflow-sandbox';
 import { PROXIED_PRIMITIVES } from '../dynamic-workflows/sandbox-protocol';
 import { createAgentSemaphore } from '../dynamic-workflows/workflow-host-api';
-
-
 
 const tmpDirs: string[] = [];
 function writeTmpChild(name: string, contents: string): string {
@@ -26,14 +20,13 @@ afterEach(() => {
     const d = tmpDirs.pop();
     try {
       if (d) fs.rmSync(d, { recursive: true, force: true });
-    } catch {
-    }
+    } catch {}
   }
 });
 
-
 function childRuntimeSource(buildExtra: string, appendix = ''): string {
-  return (`
+  return (
+    `
 const vm = require('node:vm');
 const PROXIED = ${JSON.stringify([...PROXIED_PRIMITIVES])};
 let nextCallId = 1;
@@ -89,7 +82,8 @@ process.on('message', (msg) => {
 const hb = setInterval(() => send({ t: 'heartbeat', uptimeMs: 1 }), 200);
 if (hb.unref) hb.unref();
 send({ t: 'hello', protocol: 1 });
-` + appendix);
+` + appendix
+  );
 }
 
 const NEW_DESIGN_GLOBALS = `
@@ -318,7 +312,6 @@ globalThis.__run = async function run(ctx) {
 };
 `;
 
-
 function makeAgentStub() {
   const calls: Array<{ id: unknown; agentId: unknown; axis?: unknown; item?: unknown }> = [];
   const handler = async (arg: unknown) => {
@@ -328,7 +321,6 @@ function makeAgentStub() {
   };
   return { calls, handler };
 }
-
 
 describe('DEFECT-1 e2e (fork REAL): parallel/pipeline rodam local no child e disparam agent() no pai', () => {
   it('parallel([()=>agent(a),()=>agent(b),()=>agent(c)]) chega como 3 calls agent() no pai, em ordem', async () => {
@@ -382,7 +374,6 @@ describe('DEFECT-1 e2e (fork REAL): parallel/pipeline rodam local no child e dis
     }
   });
 });
-
 
 function makeFatalAgentStub(fatalId: string) {
   const calls: unknown[] = [];
@@ -465,7 +456,6 @@ describe('DEFECT-1 Finding 2 e2e (fork REAL): fatal dentro de parallel() cancela
   });
 });
 
-
 function makeCeilingAgentStub(maxConcurrentAgents: number, holdMs: number) {
   const sem = createAgentSemaphore(maxConcurrentAgents);
   let active = 0;
@@ -484,7 +474,13 @@ function makeCeilingAgentStub(maxConcurrentAgents: number, holdMs: number) {
     }
   };
   const handler = (arg: unknown) => sem.run(() => raw(arg));
-  return { handler, calls, get maxActive() { return maxActive; } };
+  return {
+    handler,
+    calls,
+    get maxActive() {
+      return maxActive;
+    },
+  };
 }
 
 describe('DEFECT-1 Finding 1 e2e (fork REAL): semaforo do pai segura o teto no caminho do filho', () => {
@@ -528,10 +524,12 @@ describe('DEFECT-1 Finding 1 e2e (fork REAL): semaforo do pai segura o teto no c
   });
 });
 
-
 describe('DEFECT-1 Finding 2 caso 1 e2e (fork REAL): failFast nao dispara os thunks pendentes', () => {
   it('parallel({maxConcurrency:1, failFast:true}) com 1o thunk soft-fail => so o 1o chega ao pai; os pendentes NAO viram agent()', async () => {
-    const childFile = writeTmpChild('child-failfast.cjs', childRuntimeSource(NEW_DESIGN_GLOBALS_FATAL, FATAL_PRIMERR_OVERRIDE));
+    const childFile = writeTmpChild(
+      'child-failfast.cjs',
+      childRuntimeSource(NEW_DESIGN_GLOBALS_FATAL, FATAL_PRIMERR_OVERRIDE),
+    );
     const factory = createNodeForkFactory(childFile);
     const stub = makeSoftFailAgentStub('boom-soft');
 
@@ -550,20 +548,19 @@ describe('DEFECT-1 Finding 2 caso 1 e2e (fork REAL): failFast nao dispara os thu
     if (result.status === 'completed') {
       const value = result.value as { results: Array<unknown> };
       expect(value.results.length).toBe(3);
-      expect(value.results[0]).toBeNull(); // soft-fail
+      expect(value.results[0]).toBeNull();
       expect(value.results[1] ?? null).toBeNull();
       expect(value.results[2] ?? null).toBeNull();
     }
   });
 });
 
-
 function makePipelineOrderStub(slowMs: number) {
   const enterOrder: string[] = [];
   const handler = async (arg: unknown) => {
     const a = (arg ?? {}) as { id?: unknown; item?: unknown; stage?: unknown };
     const id = String(a.id);
-    enterOrder.push(id); // ordem em que a stage foi ALCANCADA (entrada da call)
+    enterOrder.push(id);
     if (id === 's1-x') {
       await new Promise((r) => setTimeout(r, slowMs));
     }
@@ -588,8 +585,8 @@ describe('DEFECT-1 Finding 2 caso 2 e2e (fork REAL): pipeline avanca stages sem 
 
     expect(result.status).toBe('completed');
     expect(stub.enterOrder.length).toBe(4);
-    const iS1x = stub.enterOrder.indexOf('s1-x'); // item 0, stage 1 (lenta)
-    const iS2y = stub.enterOrder.indexOf('s2-y'); // item 1, stage 2
+    const iS1x = stub.enterOrder.indexOf('s1-x');
+    const iS2y = stub.enterOrder.indexOf('s2-y');
     expect(iS1x).toBeGreaterThanOrEqual(0);
     expect(iS2y).toBeGreaterThanOrEqual(0);
     expect(iS1x).toBeLessThan(iS2y);
@@ -598,7 +595,6 @@ describe('DEFECT-1 Finding 2 caso 2 e2e (fork REAL): pipeline avanca stages sem 
     expect(iS2y).toBeLessThan(iS2x);
   });
 });
-
 
 describe('DEFECT-1 e2e: o harness PEGA o bug (design antigo = parallel proxied)', () => {
   it('com parallel embrulhado como proxy, o structured clone descarta os thunks: 0 agent() e parallel vira []', async () => {
@@ -624,7 +620,6 @@ describe('DEFECT-1 e2e: o harness PEGA o bug (design antigo = parallel proxied)'
     }
   });
 });
-
 
 describe('DEFECT-1: guard estrutural do child real (anti-drift)', () => {
   const childSrcPath = path.join(__dirname, '..', 'dynamic-workflows', 'workflow-sandbox-child.ts');

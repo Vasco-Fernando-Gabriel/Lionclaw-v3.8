@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 vi.mock('../../logger', () => ({
@@ -13,9 +12,7 @@ const bridge = vi.hoisted(() => ({
     appServerSupported: true,
     binaryPath: '/usr/local/bin/codex',
   }),
-  isCodexAvailable: vi
-    .fn()
-    .mockResolvedValue({ installed: true, version: '0.140.0', authenticated: true }),
+  isCodexAvailable: vi.fn().mockResolvedValue({ installed: true, version: '0.140.0', authenticated: true }),
   CodexUnavailableError: class CodexUnavailableError extends Error {
     constructor(m: string) {
       super(m);
@@ -82,8 +79,7 @@ class FakeTransport implements AppServerTransport {
     return {};
   }
 
-  notify(): void {
-  }
+  notify(): void {}
 
   onNotification(handler: (e: AppServerEvent) => void): () => void {
     this.notificationHandlers.add(handler);
@@ -172,7 +168,7 @@ describe('OfficialAppServerDriver KI-2 cap wiring', () => {
     const killedBefore = transports[0].killed.length;
 
     await driver.createRun(makeOpts({ runId: 'r-over', projectId: 'p-over' }));
-    await new Promise((r) => setTimeout(r, 0)); // let the fire-and-forget close() run
+    await new Promise((r) => setTimeout(r, 0));
 
     expect(transports[0].killed.length).toBeGreaterThan(killedBefore);
     expect(driver.hasActiveRun({ projectId: 'p-over' })).toBe(true);
@@ -183,7 +179,7 @@ describe('OfficialAppServerDriver KI-2 cap wiring', () => {
     const { driver, transports } = recordingDriver();
     const h0 = await driver.createRun(makeOpts({ runId: 'r-run', projectId: 'p-run' }));
     transports[0].turnScript = [{ method: 'turn/started', params: { turnId: 'turn-fake-1' } }];
-    const inflight = h0.send('long'); // do NOT await: stays running
+    const inflight = h0.send('long');
     await Promise.resolve();
     expect(h0.status).toBe('running');
 
@@ -249,7 +245,7 @@ describe('OfficialAppServerDriver KI-2 reap-on-register same scope', () => {
     expect(a.status).toBe('idle');
 
     const b = await driver.createRun(makeOpts({ runId: 'r-b', projectId: 'p1' }));
-    await new Promise((r) => setTimeout(r, 0)); // let any fire-and-forget close() run
+    await new Promise((r) => setTimeout(r, 0));
 
     expect(aTransport.killed.length).toBe(aKillsBefore);
     expect(a.status).toBe('idle');
@@ -292,9 +288,11 @@ describe('OfficialAppServerDriver KI-2 idle reaper timer lifecycle', () => {
     const idleTransport = transports[0];
     const killsBefore = idleTransport.killed.length;
 
-    const reg = (driver as unknown as {
-      registry: import('../lifecycle-registry').CodexLifecycleRegistry;
-    }).registry;
+    const reg = (
+      driver as unknown as {
+        registry: import('../lifecycle-registry').CodexLifecycleRegistry;
+      }
+    ).registry;
     const reaped = reg.reapIdle(120_000, Date.now() + 200_000);
     for (const h of reaped) await (h as { close: () => Promise<void> }).close();
 

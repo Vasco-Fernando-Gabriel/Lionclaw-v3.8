@@ -1,4 +1,3 @@
-
 import type { GateCheckSpec } from './workflow-gates';
 
 export interface GateCheckResolutionContext {
@@ -28,17 +27,13 @@ function isConcreteCommand(check: Record<string, unknown>): boolean {
   return hasArgs && !command.includes(' ') && !baselineSymbolic;
 }
 
-function resolveCommand(
-  check: Record<string, unknown>,
-  rc: GateCheckResolutionContext,
-): GateCheckSpec {
+function resolveCommand(check: Record<string, unknown>, rc: GateCheckResolutionContext): GateCheckSpec {
   if (isConcreteCommand(check)) return check as unknown as GateCheckSpec;
 
   const rawCommand = typeof check.command === 'string' ? check.command : '';
   const { bin, args } = splitCommand(rawCommand);
 
-  let maxErrors: number | undefined =
-    typeof check.maxErrors === 'number' ? check.maxErrors : undefined;
+  let maxErrors: number | undefined = typeof check.maxErrors === 'number' ? check.maxErrors : undefined;
   if (maxErrors === undefined && typeof check.baselineRef === 'string') {
     const fromBaseline = rc.baselineMaxErrorsByCommand?.[rawCommand];
     if (typeof fromBaseline === 'number') maxErrors = fromBaseline;
@@ -53,27 +48,17 @@ function resolveCommand(
   };
   if (maxErrors !== undefined) resolved.maxErrors = maxErrors;
   if (typeof check.errorPattern === 'string') resolved.errorPattern = check.errorPattern;
-  const timeoutMs =
-    typeof check.timeoutMs === 'number' ? check.timeoutMs : rc.commandTimeoutMs;
+  const timeoutMs = typeof check.timeoutMs === 'number' ? check.timeoutMs : rc.commandTimeoutMs;
   if (typeof timeoutMs === 'number') resolved.timeoutMs = timeoutMs;
   return resolved as unknown as GateCheckSpec;
 }
 
-function resolveContainment(
-  check: Record<string, unknown>,
-  rc: GateCheckResolutionContext,
-): GateCheckSpec {
+function resolveContainment(check: Record<string, unknown>, rc: GateCheckResolutionContext): GateCheckSpec {
   const protectedPaths = Array.isArray(check.protectedPaths)
     ? (check.protectedPaths as string[])
-    : rc.protectedPaths ?? [];
-  const touchedFiles = Array.isArray(check.touchedFiles)
-    ? (check.touchedFiles as string[])
-    : rc.touchedFiles ?? [];
-  const baseDir =
-    typeof check.baseDir === 'string'
-      ? check.baseDir
-      : // touched-files vem relativo ao repo; resolve contra repoRoot pro match.
-        rc.repoRoot;
+    : (rc.protectedPaths ?? []);
+  const touchedFiles = Array.isArray(check.touchedFiles) ? (check.touchedFiles as string[]) : (rc.touchedFiles ?? []);
+  const baseDir = typeof check.baseDir === 'string' ? check.baseDir : rc.repoRoot;
   return {
     kind: 'containment',
     id: typeof check.id === 'string' ? check.id : 'containment',
@@ -83,10 +68,7 @@ function resolveContainment(
   } as unknown as GateCheckSpec;
 }
 
-function resolveSchema(
-  check: Record<string, unknown>,
-  rc: GateCheckResolutionContext,
-): GateCheckSpec[] {
+function resolveSchema(check: Record<string, unknown>, rc: GateCheckResolutionContext): GateCheckSpec[] {
   if ('value' in check && check.value !== undefined) {
     return [check as unknown as GateCheckSpec];
   }
@@ -138,4 +120,3 @@ export function resolveGateChecks(
   }
   return out;
 }
-

@@ -9,7 +9,6 @@ import { TasksPage } from '@/pages/TasksPage';
 import { TaskList } from '@/components/scheduler/TaskList';
 import ArtifactRenderer from '@/components/chat/ArtifactRenderer';
 
-
 function CodeBlock({ className, children }: { className?: string; children: React.ReactNode }) {
   const [copied, setCopied] = useState(false);
   const lang = className?.replace('language-', '') || '';
@@ -26,7 +25,10 @@ function CodeBlock({ className, children }: { className?: string; children: Reac
       {lang && (
         <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-800/80 border border-zinc-700/50 rounded-t-lg border-b-0">
           <span className="text-[10px] text-zinc-500 font-mono uppercase">{lang}</span>
-          <button onClick={handleCopy} className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors">
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
             {copied ? <Check size={10} /> : <Copy size={10} />}
             {copied ? 'Copiado' : 'Copiar'}
           </button>
@@ -43,7 +45,11 @@ const markdownComponents: Components = {
   code({ className, children, ...props }) {
     const isInline = !className && typeof children === 'string' && !children.includes('\n');
     if (isInline) {
-      return <code className={className} {...props}>{children}</code>;
+      return (
+        <code className={className} {...props}>
+          {children}
+        </code>
+      );
     }
     return <CodeBlock className={className}>{children}</CodeBlock>;
   },
@@ -56,15 +62,23 @@ function MessageBubble({ role, content, subagent }: { role: string; content: str
   const isUser = role === 'user';
   const rendered = useMemo(() => {
     if (isUser) return null;
-    return <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{content}</ReactMarkdown>;
+    return (
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+        {content}
+      </ReactMarkdown>
+    );
   }, [content, isUser]);
 
   return (
     <div className={`flex gap-3 items-start ${isUser ? 'flex-row-reverse' : ''}`}>
-      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${isUser ? 'bg-zinc-700' : 'bg-amber-500/10'}`}>
+      <div
+        className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${isUser ? 'bg-zinc-700' : 'bg-amber-500/10'}`}
+      >
         {isUser ? <User size={14} className="text-zinc-300" /> : <Bot size={14} className="text-amber-500" />}
       </div>
-      <div className={`rounded-xl px-4 py-3 text-sm max-w-[85%] ${isUser ? 'bg-amber-600 text-white' : 'bg-zinc-900 text-zinc-300 border border-zinc-800'}`}>
+      <div
+        className={`rounded-xl px-4 py-3 text-sm max-w-[85%] ${isUser ? 'bg-amber-600 text-white' : 'bg-zinc-900 text-zinc-300 border border-zinc-800'}`}
+      >
         {subagent && !isUser && (
           <span className="text-[10px] text-amber-500/70 font-medium uppercase block mb-1.5">{subagent}</span>
         )}
@@ -77,7 +91,6 @@ function MessageBubble({ role, content, subagent }: { role: string; content: str
     </div>
   );
 }
-
 
 export function SchedulerPage() {
   const [activeTab, setActiveTab] = useState<'agenda' | 'tasks' | 'personal'>('agenda');
@@ -154,7 +167,12 @@ export function SchedulerPage() {
   };
 
   const formatDateShort = (d: string) => {
-    return new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return new Date(d).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   const getSessionLabel = (session: ChatSession) => {
@@ -234,9 +252,7 @@ export function SchedulerPage() {
                 </button>
                 <div>
                   <span className="text-sm text-zinc-200">Sessao de tarefa</span>
-                  <span className="text-[11px] text-zinc-500 ml-2">
-                    {sessionMessages.length} mensagens
-                  </span>
+                  <span className="text-[11px] text-zinc-500 ml-2">{sessionMessages.length} mensagens</span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -282,11 +298,12 @@ export function SchedulerPage() {
                     return (
                       <div key={msg.id}>
                         <MessageBubble role={msg.role} content={msg.content} subagent={msg.subagent} />
-                        {hasArtifacts && msg.metadata!.artifacts!.map((artifact) => (
-                          <div key={artifact.id} className="mt-3">
-                            <ArtifactRenderer artifact={artifact} />
-                          </div>
-                        ))}
+                        {hasArtifacts &&
+                          msg.metadata!.artifacts!.map((artifact) => (
+                            <div key={artifact.id} className="mt-3">
+                              <ArtifactRenderer artifact={artifact} />
+                            </div>
+                          ))}
                       </div>
                     );
                   })}

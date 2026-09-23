@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { DriveState } from '@/types';
 
-
 vi.mock('zustand/middleware', async () => {
   const actual = await vi.importActual<typeof import('zustand/middleware')>('zustand/middleware');
   return {
@@ -11,9 +10,7 @@ vi.mock('zustand/middleware', async () => {
   };
 });
 
-let driveStateHandler:
-  | ((payload: { projectId: string; drive: DriveState | null }) => void)
-  | null = null;
+let driveStateHandler: ((payload: { projectId: string; drive: DriveState | null }) => void) | null = null;
 
 function noopListener() {
   return () => {};
@@ -53,9 +50,7 @@ beforeEach(() => {
     lionclaw: {
       pipeline: pipelineListeners,
       drive: {
-        onStateChanged: (
-          cb: (payload: { projectId: string; drive: DriveState | null }) => void,
-        ) => {
+        onStateChanged: (cb: (payload: { projectId: string; drive: DriveState | null }) => void) => {
           driveStateHandler = cb;
           return () => {};
         },

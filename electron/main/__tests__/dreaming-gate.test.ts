@@ -1,9 +1,7 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
-
 
 // eslint-disable-next-line no-var
 var TEST_TMP_DIR: string = path.join(os.tmpdir(), `dreaming-gate-test-${process.pid}`);
@@ -26,22 +24,16 @@ vi.mock('../logger', () => ({
 }));
 
 vi.mock('../memory-pipeline', () => ({
-  runStructuredMemoryLlm: vi.fn().mockRejectedValue(
-    new Error('runStructuredMemoryLlm NAO deve ser chamado diretamente nos testes'),
-  ),
+  runStructuredMemoryLlm: vi
+    .fn()
+    .mockRejectedValue(new Error('runStructuredMemoryLlm NAO deve ser chamado diretamente nos testes')),
 }));
 
-import {
-  runDreamingGate,
-  saveDreamingReport,
-  type DreamingGateInput,
-  type GateInputItem,
-} from '../dreaming-gate';
+import { runDreamingGate, saveDreamingReport, type DreamingGateInput, type GateInputItem } from '../dreaming-gate';
 
 const tmpDir = TEST_TMP_DIR;
 const skillDir = path.join(tmpDir, 'skills', 'dreaming');
 const skillPath = path.join(skillDir, 'SKILL.md');
-
 
 const VALID_SKILL_CONTENT = `# Skill: Dreaming
 
@@ -76,7 +68,6 @@ const VALID_LLM_OUTPUT = {
   discarded: [],
 };
 
-
 beforeEach(() => {
   fs.mkdirSync(skillDir, { recursive: true });
   fs.writeFileSync(skillPath, VALID_SKILL_CONTENT, 'utf-8');
@@ -85,7 +76,6 @@ beforeEach(() => {
 afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
-
 
 describe('(a) JSON valido', () => {
   it('retorna apply correto e failSafeTriggered=false quando LLM retorna JSON bem-formado', async () => {
@@ -133,7 +123,6 @@ describe('(a) JSON valido', () => {
   });
 });
 
-
 describe('(b) JSON invalido', () => {
   it('retorna failSafeReason=json_parse_error quando LLM retorna texto nao-JSON', async () => {
     const mockInvoker = vi.fn().mockResolvedValue('not json at all');
@@ -158,7 +147,9 @@ describe('(b) JSON invalido', () => {
   });
 
   it('retorna failSafeReason=json_parse_error quando JSON valido mas schema invalido', async () => {
-    const mockInvoker = vi.fn().mockResolvedValue(JSON.stringify({ apply: { add: null, remove: [] }, quarantine: [], discarded: [] }));
+    const mockInvoker = vi
+      .fn()
+      .mockResolvedValue(JSON.stringify({ apply: { add: null, remove: [] }, quarantine: [], discarded: [] }));
 
     const result = await runDreamingGate(BASE_INPUT, { invoker: mockInvoker });
 
@@ -166,7 +157,6 @@ describe('(b) JSON invalido', () => {
     expect(result.failSafeReason).toBe('json_parse_error');
   });
 });
-
 
 describe('(c) invoker throw', () => {
   it('retorna failSafeReason=llm_error quando o invoker rejeita', async () => {
@@ -197,7 +187,6 @@ describe('(c) invoker throw', () => {
     await expect(runDreamingGate(BASE_INPUT, { invoker: mockInvoker })).resolves.toBeDefined();
   });
 });
-
 
 describe('(d) SKILL.md ausente', () => {
   it('retorna failSafeReason=skill_md_missing quando SKILL.md nao existe', async () => {
@@ -247,12 +236,13 @@ describe('(d) SKILL.md ausente', () => {
   });
 });
 
-
 describe('(e) timeout', () => {
   it('retorna failSafeReason=timeout quando invoker demora mais que timeoutMs', async () => {
-    const slowInvoker = vi.fn().mockImplementation(
-      () => new Promise<string>((resolve) => setTimeout(() => resolve(JSON.stringify(VALID_LLM_OUTPUT)), 2000)),
-    );
+    const slowInvoker = vi
+      .fn()
+      .mockImplementation(
+        () => new Promise<string>((resolve) => setTimeout(() => resolve(JSON.stringify(VALID_LLM_OUTPUT)), 2000)),
+      );
 
     const result = await runDreamingGate(BASE_INPUT, { invoker: slowInvoker, timeoutMs: 50 });
 
@@ -263,9 +253,9 @@ describe('(e) timeout', () => {
   }, 3000);
 
   it('todos os candidatos vao para quarentena em timeout', async () => {
-    const slowInvoker = vi.fn().mockImplementation(
-      () => new Promise<string>((resolve) => setTimeout(() => resolve('{}'), 2000)),
-    );
+    const slowInvoker = vi
+      .fn()
+      .mockImplementation(() => new Promise<string>((resolve) => setTimeout(() => resolve('{}'), 2000)));
 
     const result = await runDreamingGate(BASE_INPUT, { invoker: slowInvoker, timeoutMs: 50 });
 
@@ -285,7 +275,6 @@ describe('(e) timeout', () => {
   });
 });
 
-
 describe('saveDreamingReport', () => {
   it('cria arquivo com nome no formato YYYY-MM-DD_HHmmss_<uuid>_compaction-dreaming-report.md', async () => {
     const mockInvoker = vi.fn().mockResolvedValue(JSON.stringify(VALID_LLM_OUTPUT));
@@ -294,9 +283,7 @@ describe('saveDreamingReport', () => {
     const filePath = await saveDreamingReport(result);
 
     expect(fs.existsSync(filePath)).toBe(true);
-    expect(path.basename(filePath)).toMatch(
-      /^\d{4}-\d{2}-\d{2}_\d{6}_[0-9a-f-]+_compaction-dreaming-report\.md$/,
-    );
+    expect(path.basename(filePath)).toMatch(/^\d{4}-\d{2}-\d{2}_\d{6}_[0-9a-f-]+_compaction-dreaming-report\.md$/);
   });
 
   it('gera nomes unicos em chamadas no mesmo segundo (anti-colisao)', async () => {

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -11,10 +10,7 @@ vi.mock('../logger', () => ({
 }));
 
 import { resolveEffectiveCapabilities } from '../chat-capability-context';
-import {
-  CHAT_CAPABILITIES_DEFAULT_OFF,
-  CHAT_CAPABILITIES_LEGACY_ON,
-} from '../../../src/types';
+import { CHAT_CAPABILITIES_DEFAULT_OFF, CHAT_CAPABILITIES_LEGACY_ON } from '../../../src/types';
 
 describe('resolveEffectiveCapabilities (0.5.2)', () => {
   it('turno de usuario: efetivas = toggles da sessao (identidade)', () => {

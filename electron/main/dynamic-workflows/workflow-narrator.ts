@@ -1,10 +1,5 @@
-
 import { createLogger } from '../logger';
-import type {
-  DynamicWorkflowEvent,
-  DynamicWorkflowStreamChunk,
-  DynamicWorkflowMessageInsertInput,
-} from './types';
+import type { DynamicWorkflowEvent, DynamicWorkflowStreamChunk, DynamicWorkflowMessageInsertInput } from './types';
 
 const logger = createLogger('dynamic-workflow-narrator');
 
@@ -47,11 +42,7 @@ export interface NarrateResult {
   text: string;
 }
 
-export type NarrateFn = (input: {
-  runId: string;
-  prompt: string;
-  abortSignal: AbortSignal;
-}) => Promise<NarrateResult>;
+export type NarrateFn = (input: { runId: string; prompt: string; abortSignal: AbortSignal }) => Promise<NarrateResult>;
 
 export interface WorkflowNarratorDeps {
   narrate?: NarrateFn;

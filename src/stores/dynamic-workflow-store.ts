@@ -17,19 +17,9 @@ import type {
   PersistedTimelineToolCall,
 } from '@/types';
 import { COCKPIT_STRUCTURAL_EVENT_TYPES } from '@/types/dynamic-workflow';
-import type {
-  CockpitNodeRun,
-  TouchedFilesFromEvents,
-  WriterCommitInfo,
-} from '@/types/dynamic-workflow-cockpit';
+import type { CockpitNodeRun, TouchedFilesFromEvents, WriterCommitInfo } from '@/types/dynamic-workflow-cockpit';
 import type { WorkflowNodeStreamState } from '@/components/dynamic-workflow/WorkflowStreamView';
-import {
-  appendTimelineText,
-  appendTimelineTool,
-  finishTimeline,
-  timelineFromPersisted,
-} from '@/lib/stream-timeline';
-
+import { appendTimelineText, appendTimelineTool, finishTimeline, timelineFromPersisted } from '@/lib/stream-timeline';
 
 export interface CloserThreadMessage {
   id: string;
@@ -51,12 +41,7 @@ export interface DynamicWorkflowPendingQuestion {
 
 export const NARRATION_FEED_LIMIT = 6;
 
-
-export type DynamicWorkflowUIStatus =
-  | DynamicWorkflowRunStatus
-  | 'streaming'
-  | 'awaiting-user'
-  | 'pausing';
+export type DynamicWorkflowUIStatus = DynamicWorkflowRunStatus | 'streaming' | 'awaiting-user' | 'pausing';
 
 export function deriveWorkflowUIStatus(
   status: DynamicWorkflowRunStatus,
@@ -70,7 +55,6 @@ export function deriveWorkflowUIStatus(
   if (flags.isStreaming) return 'streaming';
   return status;
 }
-
 
 const NODE_RUN_STATUSES = new Set<DynamicWorkflowNodeStatus>([
   'pending',
@@ -209,10 +193,7 @@ export function nodeRunFromEventPayload(runId: string, payload: unknown): Cockpi
 
 const CACHE_HIT_PATCH_KEYS = ['agentId', 'label'] as const;
 
-export function deriveNodeRunsFromEvents(
-  runId: string,
-  events: DynamicWorkflowEvent[],
-): CockpitNodeRun[] {
+export function deriveNodeRunsFromEvents(runId: string, events: DynamicWorkflowEvent[]): CockpitNodeRun[] {
   const byKey = new Map<string, CockpitNodeRun>();
   const lastAttemptByNode = new Map<string, number>();
   for (const ev of events) {
@@ -220,19 +201,15 @@ export function deriveNodeRunsFromEvents(
     try {
       const parsed = ev.payloadJson ? JSON.parse(ev.payloadJson) : null;
       if (parsed && typeof parsed === 'object') payload = parsed as Record<string, unknown>;
-    } catch {
-    }
+    } catch {}
     const nodeId = typeof payload.nodeId === 'string' ? payload.nodeId : ev.nodeId;
     if (typeof nodeId !== 'string') continue;
-    const rawStatus =
-      typeof payload.status === 'string' ? payload.status : statusFromEventType(ev.type);
+    const rawStatus = typeof payload.status === 'string' ? payload.status : statusFromEventType(ev.type);
     if (rawStatus === null || !NODE_RUN_STATUSES.has(rawStatus as DynamicWorkflowNodeStatus)) {
       continue;
     }
     const status = rawStatus as DynamicWorkflowNodeStatus;
-    const attempt = isNumber(payload.attempt)
-      ? payload.attempt
-      : (lastAttemptByNode.get(nodeId) ?? 1);
+    const attempt = isNumber(payload.attempt) ? payload.attempt : (lastAttemptByNode.get(nodeId) ?? 1);
     lastAttemptByNode.set(nodeId, attempt);
     const phaseId = typeof payload.phaseId === 'string' ? payload.phaseId : (ev.phaseId ?? '');
 
@@ -261,9 +238,7 @@ export function deriveNodeRunsFromEvents(
   );
 }
 
-export function deriveTouchedFilesFromEvents(
-  events: DynamicWorkflowEvent[],
-): TouchedFilesFromEvents {
+export function deriveTouchedFilesFromEvents(events: DynamicWorkflowEvent[]): TouchedFilesFromEvents {
   const files = new Set<string>();
   const writers: WriterCommitInfo[] = [];
   let hidden = 0;
@@ -327,10 +302,7 @@ export async function fetchAllStructuralEvents(
   return pages.flat();
 }
 
-
-export function deriveManifestFromNodes(
-  nodes: DynamicWorkflowNode[],
-): DynamicWorkflowManifest | null {
+export function deriveManifestFromNodes(nodes: DynamicWorkflowNode[]): DynamicWorkflowManifest | null {
   if (nodes.length === 0) return null;
   const seen = new Set<string>();
   const phases: DynamicWorkflowManifest['phases'] = [];
@@ -354,7 +326,6 @@ export function deriveManifestFromNodes(
     estimate: { minUsd: 0, maxUsd: 0, unknownCostNodes: [] },
   };
 }
-
 
 interface DynamicWorkflowState {
   runs: DynamicWorkflowRun[];
@@ -380,9 +351,7 @@ interface DynamicWorkflowState {
   awaitingUserRunIds: Set<string>;
   pausingRunIds: Set<string>;
 
-
   getUIStatus: (runId: string) => DynamicWorkflowUIStatus;
-
 
   loadRuns: () => Promise<void>;
 
@@ -402,17 +371,9 @@ interface DynamicWorkflowState {
 
   deleteWorkflow: (runId: string) => Promise<{ ok: true } | { error: string }>;
 
-  approveGate: (
-    runId: string,
-    gateId: string,
-    decision: DynamicWorkflowGateDecisionInput,
-  ) => Promise<string | null>;
+  approveGate: (runId: string, gateId: string, decision: DynamicWorkflowGateDecisionInput) => Promise<string | null>;
 
-  intervene: (
-    runId: string,
-    intervention: DynamicWorkflowIntervention,
-  ) => Promise<void>;
-
+  intervene: (runId: string, intervention: DynamicWorkflowIntervention) => Promise<void>;
 
   sendMessage: (runId: string, message: string) => Promise<{ ok: true } | { error: string }>;
 
@@ -426,7 +387,6 @@ interface DynamicWorkflowState {
   sendCloserMessage: (runId: string, message: string) => Promise<{ ok: true } | { error: string }>;
 
   finalizeWorkflow: (runId: string) => Promise<{ ok: true } | { error: string }>;
-
 
   switchAgent: (
     runId: string,
@@ -482,17 +442,15 @@ export function accumulateNodeStream(
 ): Record<string, WorkflowNodeStreamState> {
   const nodeId = chunk.nodeId;
   if (!nodeId) return streams;
-  const prev: WorkflowNodeStreamState =
-    streams[nodeId] ??
-    {
-      nodeId,
-      label: nodeId,
-      status: 'running',
-      text: '',
-      toolCalls: [],
-      timeline: [],
-      isStreaming: true,
-    };
+  const prev: WorkflowNodeStreamState = streams[nodeId] ?? {
+    nodeId,
+    label: nodeId,
+    status: 'running',
+    text: '',
+    toolCalls: [],
+    timeline: [],
+    isStreaming: true,
+  };
   const next: WorkflowNodeStreamState = {
     ...prev,
     status: 'running',
@@ -502,10 +460,7 @@ export function accumulateNodeStream(
     next.text = prev.text + chunk.content;
     next.timeline = appendTimelineText(prev.timeline, chunk.content);
   } else if (chunk.type === 'tool_call' && chunk.toolName) {
-    next.toolCalls = [
-      ...prev.toolCalls,
-      { toolName: chunk.toolName, detail: chunk.content },
-    ];
+    next.toolCalls = [...prev.toolCalls, { toolName: chunk.toolName, detail: chunk.content }];
     next.timeline = appendTimelineTool(prev.timeline, {
       tool: chunk.toolName,
       input: chunk.content,
@@ -578,21 +533,14 @@ export function extractStallMessage(payload: unknown): string {
   return 'O node parou de progredir e o watchdog pausou o run.';
 }
 
-export function appendNarrationLine(
-  feed: string[] | undefined,
-  line: string,
-  limit = NARRATION_FEED_LIMIT,
-): string[] {
+export function appendNarrationLine(feed: string[] | undefined, line: string, limit = NARRATION_FEED_LIMIT): string[] {
   const trimmed = line.trim();
   if (trimmed.length === 0) return feed ?? [];
   const next = [...(feed ?? []), trimmed];
   return next.length > limit ? next.slice(next.length - limit) : next;
 }
 
-export function appendMaestroNarratorDelta(
-  thread: MaestroThreadMessage[],
-  delta: string,
-): MaestroThreadMessage[] {
+export function appendMaestroNarratorDelta(thread: MaestroThreadMessage[], delta: string): MaestroThreadMessage[] {
   if (!delta) return thread;
   const last = thread[thread.length - 1];
   if (last && last.role === 'maestro' && last.streaming) {
@@ -613,18 +561,13 @@ export function appendMaestroNarratorDelta(
   ];
 }
 
-export function sealMaestroStreamingBubble(
-  thread: MaestroThreadMessage[],
-): MaestroThreadMessage[] {
+export function sealMaestroStreamingBubble(thread: MaestroThreadMessage[]): MaestroThreadMessage[] {
   const last = thread[thread.length - 1];
   if (!last || last.role !== 'maestro' || !last.streaming) return thread;
   return [...thread.slice(0, -1), { ...last, streaming: false }];
 }
 
-export function appendMaestroMilestoneNarration(
-  thread: MaestroThreadMessage[],
-  text: string,
-): MaestroThreadMessage[] {
+export function appendMaestroMilestoneNarration(thread: MaestroThreadMessage[], text: string): MaestroThreadMessage[] {
   const trimmed = text.trim();
   if (trimmed.length === 0) return thread;
   const sealed = sealMaestroStreamingBubble(thread);
@@ -639,9 +582,7 @@ export function appendMaestroMilestoneNarration(
   ];
 }
 
-export function deriveMaestroThreadFromMessages(
-  messages: DynamicWorkflowMessage[],
-): MaestroThreadMessage[] {
+export function deriveMaestroThreadFromMessages(messages: DynamicWorkflowMessage[]): MaestroThreadMessage[] {
   const out: MaestroThreadMessage[] = [];
   for (const m of messages) {
     if (m.kind === 'maestro-chat' && m.role === 'user') {
@@ -655,18 +596,14 @@ export function deriveMaestroThreadFromMessages(
   return out;
 }
 
-export function deriveNarrationLinesFromMessages(
-  messages: DynamicWorkflowMessage[],
-): string[] {
+export function deriveNarrationLinesFromMessages(messages: DynamicWorkflowMessage[]): string[] {
   const lines: string[] = [];
   for (const m of deriveMaestroThreadFromMessages(messages)) {
     if (m.role !== 'maestro') continue;
     const trimmed = m.content.trim();
     if (trimmed) lines.push(trimmed);
   }
-  return lines.length > NARRATION_FEED_LIMIT
-    ? lines.slice(lines.length - NARRATION_FEED_LIMIT)
-    : lines;
+  return lines.length > NARRATION_FEED_LIMIT ? lines.slice(lines.length - NARRATION_FEED_LIMIT) : lines;
 }
 
 export interface GateDecisionSummary {
@@ -677,16 +614,10 @@ export interface GateDecisionSummary {
   at: string;
 }
 
-export function deriveGateDecisionsFromEvents(
-  events: DynamicWorkflowEvent[],
-): GateDecisionSummary[] {
+export function deriveGateDecisionsFromEvents(events: DynamicWorkflowEvent[]): GateDecisionSummary[] {
   const out: GateDecisionSummary[] = [];
   for (const ev of events) {
-    if (
-      ev.type !== 'gate-approved' &&
-      ev.type !== 'gate-rejected' &&
-      ev.type !== 'gate-decision-received'
-    ) {
+    if (ev.type !== 'gate-approved' && ev.type !== 'gate-rejected' && ev.type !== 'gate-decision-received') {
       continue;
     }
     let payload: Record<string, unknown> = {};
@@ -698,8 +629,7 @@ export function deriveGateDecisionsFromEvents(
     } catch {
       payload = {};
     }
-    const gateId =
-      typeof payload.gateId === 'string' && payload.gateId ? payload.gateId : 'gate';
+    const gateId = typeof payload.gateId === 'string' && payload.gateId ? payload.gateId : 'gate';
     const rawDecision =
       typeof payload.decision === 'string' && payload.decision
         ? payload.decision
@@ -725,9 +655,7 @@ export function deriveGateDecisionsFromEvents(
   return out;
 }
 
-export function deriveCloserThreadFromMessages(
-  messages: DynamicWorkflowMessage[],
-): CloserThreadMessage[] {
+export function deriveCloserThreadFromMessages(messages: DynamicWorkflowMessage[]): CloserThreadMessage[] {
   const out: CloserThreadMessage[] = [];
   for (const m of messages) {
     if (m.source === 'closer') {
@@ -781,9 +709,7 @@ export function reconcileCloserThread(
   return [...fromDb, ...liveTail];
 }
 
-function freezeNodeStreams(
-  streams: Record<string, WorkflowNodeStreamState>,
-): Record<string, WorkflowNodeStreamState> {
+function freezeNodeStreams(streams: Record<string, WorkflowNodeStreamState>): Record<string, WorkflowNodeStreamState> {
   const entries = Object.entries(streams);
   if (entries.length === 0) return streams;
   const next: Record<string, WorkflowNodeStreamState> = {};
@@ -801,7 +727,6 @@ function freezeNodeStreams(
 
 let _wfStreamCleanup: (() => void) | null = null;
 let _wfStreamRefCount = 0;
-
 
 const RUNNER_RELOAD_DEBOUNCE_MS = 120;
 const _runnerReloadTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -840,13 +765,9 @@ export const useDynamicWorkflowStore = create<DynamicWorkflowState>((set, get) =
   awaitingUserRunIds: new Set<string>(),
   pausingRunIds: new Set<string>(),
 
-
   getUIStatus: (runId: string): DynamicWorkflowUIStatus => {
     const { runs, selectedRun, streamingRunIds, awaitingUserRunIds, pausingRunIds } = get();
-    const run =
-      selectedRun?.id === runId
-        ? selectedRun
-        : runs.find((r) => r.id === runId) ?? null;
+    const run = selectedRun?.id === runId ? selectedRun : (runs.find((r) => r.id === runId) ?? null);
     if (!run) return 'created';
     return deriveWorkflowUIStatus(run.status, {
       isStreaming: streamingRunIds.has(runId),
@@ -854,7 +775,6 @@ export const useDynamicWorkflowStore = create<DynamicWorkflowState>((set, get) =
       isPausing: pausingRunIds.has(runId),
     });
   },
-
 
   loadRuns: async () => {
     set({ isLoading: true, error: null });
@@ -890,15 +810,14 @@ export const useDynamicWorkflowStore = create<DynamicWorkflowState>((set, get) =
         : {}),
     });
     try {
-      const [run, nodes, events, artifacts, snapshotResult, messages] =
-        await Promise.all([
-          window.lionclaw.dynamicWorkflow.getRun(runId),
-          window.lionclaw.dynamicWorkflow.getNodes(runId),
-          window.lionclaw.dynamicWorkflow.getEvents(runId),
-          window.lionclaw.dynamicWorkflow.getArtifacts(runId),
-          window.lionclaw.dynamicWorkflow.getSnapshot(runId),
-          window.lionclaw.dynamicWorkflow.getMessages(runId),
-        ]);
+      const [run, nodes, events, artifacts, snapshotResult, messages] = await Promise.all([
+        window.lionclaw.dynamicWorkflow.getRun(runId),
+        window.lionclaw.dynamicWorkflow.getNodes(runId),
+        window.lionclaw.dynamicWorkflow.getEvents(runId),
+        window.lionclaw.dynamicWorkflow.getArtifacts(runId),
+        window.lionclaw.dynamicWorkflow.getSnapshot(runId),
+        window.lionclaw.dynamicWorkflow.getMessages(runId),
+      ]);
       if (get().selectedRunId !== runId) return;
       const eventList = Array.isArray(events) ? events : [];
       const maxSeq = eventList.reduce((acc, ev) => (ev.seq > acc ? ev.seq : acc), 0);
@@ -913,8 +832,7 @@ export const useDynamicWorkflowStore = create<DynamicWorkflowState>((set, get) =
       if (get().selectedRunId !== runId) return;
       const nodeList = Array.isArray(nodes) ? nodes : [];
       const messageList = Array.isArray(messages) ? messages : [];
-      const snapshot =
-        snapshotResult && !('error' in snapshotResult) ? snapshotResult : null;
+      const snapshot = snapshotResult && !('error' in snapshotResult) ? snapshotResult : null;
       const dbMaestro = deriveMaestroThreadFromMessages(messageList);
       const dbCloser = deriveCloserThreadFromMessages(messageList);
       const dbNarration = deriveNarrationLinesFromMessages(messageList);
@@ -976,7 +894,6 @@ export const useDynamicWorkflowStore = create<DynamicWorkflowState>((set, get) =
   selectRound: (index: number | null) => {
     set({ selectedRoundIndex: index });
   },
-
 
   start: async (runId: string) => {
     set({ error: null });
@@ -1094,18 +1011,10 @@ export const useDynamicWorkflowStore = create<DynamicWorkflowState>((set, get) =
     }
   },
 
-  approveGate: async (
-    runId: string,
-    gateId: string,
-    decision: DynamicWorkflowGateDecisionInput,
-  ) => {
+  approveGate: async (runId: string, gateId: string, decision: DynamicWorkflowGateDecisionInput) => {
     set({ error: null });
     try {
-      const res = await window.lionclaw.dynamicWorkflow.approveGate(
-        runId,
-        gateId,
-        decision,
-      );
+      const res = await window.lionclaw.dynamicWorkflow.approveGate(runId, gateId, decision);
       if (res && 'error' in res) {
         set({ error: res.error });
         return res.error;
@@ -1126,10 +1035,7 @@ export const useDynamicWorkflowStore = create<DynamicWorkflowState>((set, get) =
   intervene: async (runId: string, intervention: DynamicWorkflowIntervention) => {
     set({ error: null });
     try {
-      const result = await window.lionclaw.dynamicWorkflow.intervene(
-        runId,
-        intervention,
-      );
+      const result = await window.lionclaw.dynamicWorkflow.intervene(runId, intervention);
       if ('error' in result) {
         set({ error: result.error });
       }
@@ -1138,7 +1044,6 @@ export const useDynamicWorkflowStore = create<DynamicWorkflowState>((set, get) =
       set({ error: message });
     }
   },
-
 
   sendMessage: async (runId: string, message: string) => {
     set({ error: null });
@@ -1245,7 +1150,6 @@ export const useDynamicWorkflowStore = create<DynamicWorkflowState>((set, get) =
     }
   },
 
-
   switchAgent: async (runId, nodeId, newAgentId, reason) => {
     set({ error: null });
     try {
@@ -1289,7 +1193,6 @@ export const useDynamicWorkflowStore = create<DynamicWorkflowState>((set, get) =
     }
   },
 
-
   init: () => {
     _wfStreamRefCount += 1;
     if (!_wfStreamCleanup) {
@@ -1327,9 +1230,7 @@ export const useDynamicWorkflowStore = create<DynamicWorkflowState>((set, get) =
         const stillStreaming = Object.values(nodeStreams).some((stream) => stream.isStreaming);
         return {
           nodeStreams,
-          streamingRunIds: stillStreaming
-            ? state.streamingRunIds
-            : withRemoved(state.streamingRunIds, runId),
+          streamingRunIds: stillStreaming ? state.streamingRunIds : withRemoved(state.streamingRunIds, runId),
         };
       });
       return;
@@ -1340,9 +1241,7 @@ export const useDynamicWorkflowStore = create<DynamicWorkflowState>((set, get) =
         streamingRunIds: withRemoved(state.streamingRunIds, runId),
         closerBusyRunIds: withRemoved(state.closerBusyRunIds, runId),
         maestroBusyRunIds: withRemoved(state.maestroBusyRunIds, runId),
-        ...(state.selectedRunId === runId
-          ? { nodeStreams: freezeNodeStreams(state.nodeStreams) }
-          : {}),
+        ...(state.selectedRunId === runId ? { nodeStreams: freezeNodeStreams(state.nodeStreams) } : {}),
       }));
       return;
     }
@@ -1396,10 +1295,7 @@ export const useDynamicWorkflowStore = create<DynamicWorkflowState>((set, get) =
     if (chunk.kind === 'runner' && chunk.type === 'event') {
       const et = chunk.eventType ?? '';
       const schedAt = extractScheduledResumeAt(chunk.payload);
-      if (
-        schedAt &&
-        (et === 'node-retry-scheduled' || et === 'resume-scheduled' || et === 'resume-rearmed')
-      ) {
+      if (schedAt && (et === 'node-retry-scheduled' || et === 'resume-scheduled' || et === 'resume-rearmed')) {
         set((state) => ({ scheduledResumeAt: { ...state.scheduledResumeAt, [runId]: schedAt } }));
       } else if (
         et === 'scheduled-resume-fired' ||
@@ -1432,7 +1328,15 @@ export const useDynamicWorkflowStore = create<DynamicWorkflowState>((set, get) =
         set((state) => ({
           stalledByRun: {
             ...state.stalledByRun,
-            [runId]: { message: extractStallMessage(chunk.payload), at: chunk.payload && typeof chunk.payload === 'object' && typeof (chunk.payload as Record<string, unknown>).at === 'string' ? (chunk.payload as Record<string, string>).at : new Date().toISOString() },
+            [runId]: {
+              message: extractStallMessage(chunk.payload),
+              at:
+                chunk.payload &&
+                typeof chunk.payload === 'object' &&
+                typeof (chunk.payload as Record<string, unknown>).at === 'string'
+                  ? (chunk.payload as Record<string, string>).at
+                  : new Date().toISOString(),
+            },
           },
         }));
       } else if (
@@ -1484,9 +1388,7 @@ export const useDynamicWorkflowStore = create<DynamicWorkflowState>((set, get) =
       } else if (closesDecision) {
         set((state) => ({
           awaitingUserRunIds: withRemoved(state.awaitingUserRunIds, runId),
-          ...(isQuestion && state.selectedRunId === runId
-            ? { pendingQuestion: null }
-            : {}),
+          ...(isQuestion && state.selectedRunId === runId ? { pendingQuestion: null } : {}),
         }));
       }
       get()._scheduleRunnerReload(runId);

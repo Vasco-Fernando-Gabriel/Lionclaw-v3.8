@@ -11,8 +11,7 @@ export function ToolScriptSettingsCard({
   const available = settings.toolScriptAvailable ?? false;
   const enabled = settings.toolScriptEnabled ?? true;
   const effectiveOn = available && enabled;
-  const unavailableReason =
-    settings.toolScriptAvailabilityReason ?? 'python3 nao encontrado';
+  const unavailableReason = settings.toolScriptAvailabilityReason ?? 'python3 nao encontrado';
 
   return (
     <div className="flex flex-col gap-2 bg-zinc-900 rounded-lg border border-zinc-800 px-4 py-3">
@@ -20,9 +19,8 @@ export function ToolScriptSettingsCard({
         <div className="flex-1 min-w-0">
           <p className="text-sm text-zinc-200">Tool Script (Python)</p>
           <p className="text-xs text-zinc-500 mt-0.5">
-            Permite ao agente rodar um script Python que chama as tools do app
-            via RPC, devolvendo so o stdout ao contexto. Desligado: a
-            ferramenta de script fica ausente em todos os runtimes.
+            Permite ao agente rodar um script Python que chama as tools do app via RPC, devolvendo so o stdout ao
+            contexto. Desligado: a ferramenta de script fica ausente em todos os runtimes.
           </p>
         </div>
         <button
@@ -54,11 +52,10 @@ export function ToolScriptSettingsCard({
 
       {available && enabled && (
         <p className="text-[10px] text-zinc-600">
-          Limites: timeout{' '}
-          {Math.round((settings.toolScriptTimeoutMs ?? 300000) / 60000)}min,
-          stdout {Math.round((settings.toolScriptMaxStdoutBytes ?? 50000) / 1000)}KB,
-          stderr {Math.round((settings.toolScriptMaxStderrBytes ?? 10000) / 1000)}KB,
-          max {settings.toolScriptMaxToolCalls ?? 50} tool calls. Tools:{' '}
+          Limites: timeout {Math.round((settings.toolScriptTimeoutMs ?? 300000) / 60000)}min, stdout{' '}
+          {Math.round((settings.toolScriptMaxStdoutBytes ?? 50000) / 1000)}KB, stderr{' '}
+          {Math.round((settings.toolScriptMaxStderrBytes ?? 10000) / 1000)}KB, max{' '}
+          {settings.toolScriptMaxToolCalls ?? 50} tool calls. Tools:{' '}
           {(settings.toolScriptTools ?? []).join(', ') || 'padrao'}
         </p>
       )}

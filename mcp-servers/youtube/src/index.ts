@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { google } from 'googleapis';
 import { youtube_v3 } from 'googleapis';
 
@@ -24,16 +21,14 @@ function initYoutube(): void {
   youtubeApi = google.youtube({ version: 'v3', auth: oauth2Client });
 }
 
-const server = new Server(
-  { name: 'youtube', version: '1.0.0' },
-  { capabilities: { tools: {} } },
-);
+const server = new Server({ name: 'youtube', version: '1.0.0' }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: 'list_videos',
-      description: 'Listar os videos mais recentes do canal do usuario autenticado. Retorna titulo, URL, data de publicacao, views, likes e descricao.',
+      description:
+        'Listar os videos mais recentes do canal do usuario autenticado. Retorna titulo, URL, data de publicacao, views, likes e descricao.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -50,7 +45,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_video',
-      description: 'Obter detalhes completos de um video pelo ID ou URL. Inclui titulo, descricao, tags, views, likes, comentarios, duracao.',
+      description:
+        'Obter detalhes completos de um video pelo ID ou URL. Inclui titulo, descricao, tags, views, likes, comentarios, duracao.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -145,17 +141,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const stats = channel.statistics;
       return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({
-            nome: channel.snippet?.title,
-            descricao: channel.snippet?.description?.substring(0, 200),
-            inscritos: Number(stats?.subscriberCount || 0).toLocaleString('pt-BR'),
-            total_views: Number(stats?.viewCount || 0).toLocaleString('pt-BR'),
-            total_videos: stats?.videoCount,
-            url: `https://youtube.com/channel/${channel.id}`,
-          }, null, 2),
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(
+              {
+                nome: channel.snippet?.title,
+                descricao: channel.snippet?.description?.substring(0, 200),
+                inscritos: Number(stats?.subscriberCount || 0).toLocaleString('pt-BR'),
+                total_views: Number(stats?.viewCount || 0).toLocaleString('pt-BR'),
+                total_videos: stats?.videoCount,
+                url: `https://youtube.com/channel/${channel.id}`,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
       };
     }
 
@@ -203,14 +205,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       });
 
       return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({
-            total_retornado: videos?.length,
-            next_page_token: searchRes.data.nextPageToken || null,
-            videos,
-          }, null, 2),
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(
+              {
+                total_retornado: videos?.length,
+                next_page_token: searchRes.data.nextPageToken || null,
+                videos,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
       };
     }
 
@@ -225,22 +233,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!video) return { content: [{ type: 'text' as const, text: `Video ${videoId} nao encontrado.` }] };
 
       return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({
-            id: video.id,
-            titulo: video.snippet?.title,
-            url: `https://youtu.be/${video.id}`,
-            publicado_em: video.snippet?.publishedAt?.split('T')[0],
-            descricao: video.snippet?.description?.substring(0, 1000),
-            tags: video.snippet?.tags || [],
-            duracao: formatDuration(video.contentDetails?.duration || 'PT0S'),
-            views: Number(video.statistics?.viewCount || 0).toLocaleString('pt-BR'),
-            likes: Number(video.statistics?.likeCount || 0).toLocaleString('pt-BR'),
-            comentarios: Number(video.statistics?.commentCount || 0).toLocaleString('pt-BR'),
-            thumbnail: video.snippet?.thumbnails?.maxres?.url || video.snippet?.thumbnails?.high?.url,
-          }, null, 2),
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(
+              {
+                id: video.id,
+                titulo: video.snippet?.title,
+                url: `https://youtu.be/${video.id}`,
+                publicado_em: video.snippet?.publishedAt?.split('T')[0],
+                descricao: video.snippet?.description?.substring(0, 1000),
+                tags: video.snippet?.tags || [],
+                duracao: formatDuration(video.contentDetails?.duration || 'PT0S'),
+                views: Number(video.statistics?.viewCount || 0).toLocaleString('pt-BR'),
+                likes: Number(video.statistics?.likeCount || 0).toLocaleString('pt-BR'),
+                comentarios: Number(video.statistics?.commentCount || 0).toLocaleString('pt-BR'),
+                thumbnail: video.snippet?.thumbnails?.maxres?.url || video.snippet?.thumbnails?.high?.url,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
       };
     }
 
@@ -267,10 +281,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       });
 
       return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({ total: comments?.length, comentarios: comments }, null, 2),
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify({ total: comments?.length, comentarios: comments }, null, 2),
+          },
+        ],
       };
     }
 
@@ -298,15 +314,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }));
 
       return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({ total: videos?.length, videos }, null, 2),
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify({ total: videos?.length, videos }, null, 2),
+          },
+        ],
       };
     }
 
     return { content: [{ type: 'text' as const, text: `Tool desconhecida: ${name}` }] };
-
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { content: [{ type: 'text' as const, text: `Erro: ${msg}` }] };

@@ -1,8 +1,8 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const h = vi.hoisted(() => ({
-  executeCronQueryMock: vi.fn<(prompt: string, options: Record<string, unknown>, getWindow: unknown) => Promise<void>>(),
+  executeCronQueryMock:
+    vi.fn<(prompt: string, options: Record<string, unknown>, getWindow: unknown) => Promise<void>>(),
   createSessionMock: vi.fn(),
   sendTelegramNotificationMock: vi.fn<(text: string) => Promise<void>>(async () => undefined),
   isTelegramConfiguredMock: vi.fn(() => true),
@@ -89,9 +89,7 @@ describe('SB-10 AC-B23 — notificacao acionavel de falha de task', () => {
     stopScheduler();
 
     expect(h.sendTelegramNotificationMock).toHaveBeenCalled();
-    const sent = h.sendTelegramNotificationMock.mock.calls
-      .map((c) => c[0])
-      .find((m) => m.includes('falhou'));
+    const sent = h.sendTelegramNotificationMock.mock.calls.map((c) => c[0]).find((m) => m.includes('falhou'));
     expect(sent).toBeDefined();
     expect(sent).toContain(LLM_ERROR_TABLE['LLM-QUOTA'].userMessage);
     expect(sent).toContain(LLM_ERROR_TABLE['LLM-QUOTA'].suggestedAction);
@@ -141,9 +139,7 @@ describe('SB-10 AC-B24 — cron invalido visivel e rejeitado', () => {
     });
 
     expect(result).toHaveProperty('error');
-    expect((result as { error: string }).error).toContain(
-      LLM_ERROR_TABLE['CRON-INVALID'].userMessage,
-    );
+    expect((result as { error: string }).error).toContain(LLM_ERROR_TABLE['CRON-INVALID'].userMessage);
     expect(runs.some((sql) => sql.includes('INSERT INTO scheduled_tasks'))).toBe(false);
   });
 

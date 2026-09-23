@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -35,9 +34,11 @@ const getDynamicWorkflowDefinitionMock = vi.fn<(id: string) => unknown>(() => ({
   manifestJson: manifestWithGates(),
 }));
 const getPermissionBypassMock = vi.fn<() => boolean>(() => true);
-const getAgentGatesMock = vi.fn<
-  (id: string) => { access?: string; squad?: string } | undefined
->(() => undefined);
+const getAgentGatesMock = vi.fn<(id: string) => { access?: string; squad?: string } | undefined>(() => undefined);
+vi.mock('../in-flight-desktop-session', () => ({
+  getInFlightDesktopSession: () => getActiveChatSessionMock()?.id ?? null,
+  setInFlightDesktopSession: () => {},
+}));
 vi.mock('../db', () => ({
   getAllAgents: vi.fn(() => []),
   insertAuditEntry: vi.fn(),
@@ -135,8 +136,7 @@ const sendAskQuestionMock = vi.fn<
   ) => Promise<{ id: string; answers: Record<string, string | string[]> }>
 >(async () => ({ id: 'q-1', answers: { '0': 'Aprovar' } }));
 vi.mock('../ask-question', () => ({
-  sendAskQuestion: (getWindow: () => unknown, questions: unknown) =>
-    sendAskQuestionMock(getWindow, questions as never),
+  sendAskQuestion: (getWindow: () => unknown, questions: unknown) => sendAskQuestionMock(getWindow, questions as never),
 }));
 
 const permissionGuardMock = vi.fn<
@@ -166,9 +166,10 @@ vi.mock('../repo-graph/turn-context', () => ({
   getRepoGraphTurnRuntime: vi.fn(() => 'cloud'),
 }));
 
-const lionAgentDispatchMock = vi.fn<(params: unknown) => Promise<{ ok: boolean; summary: string }>>(
-  async () => ({ ok: true, summary: 'done' }),
-);
+const lionAgentDispatchMock = vi.fn<(params: unknown) => Promise<{ ok: boolean; summary: string }>>(async () => ({
+  ok: true,
+  summary: 'done',
+}));
 vi.mock('../lion-sdk/tools/agent', () => ({
   lionAgentDispatch: (params: unknown) => lionAgentDispatchMock(params),
 }));
@@ -195,6 +196,7 @@ const agentCtx: JsonRpcContext = {
   connection: { authenticatedHelper: true, serverId: 'lionclaw-agents', connectionId: 'workflow-control-agent-test' },
 };
 let activeTurn: ActiveChatTurnFixture;
+const activeBinding = () => ({ sessionId: activeTurn.sessionId, turnId: activeTurn.turnId });
 
 beforeEach(() => {
   activeTurn = bindActiveDesktopTurn();
@@ -234,35 +236,34 @@ beforeEach(() => {
 
 afterEach(() => activeTurn.dispose());
 
-
 describe('caller gate (orquestrador-only)', () => {
   it('atende dynamic_workflow_inspect (READ) quando ha chat ativo e nenhum subagente', async () => {
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_inspect',
       id: 1,
-      params: { runId: 'run-1' },
+      params: { ...activeBinding(), runId: 'run-1' },
     });
     expect(res.error).toBeUndefined();
     expect(res.result).toBeDefined();
   });
 
   it('recusa dynamic_workflow_inspect (READ) quando NAO ha sessao de chat ativa', async () => {
-    getActiveChatSessionMock.mockReturnValue(null);
+    activeTurn.dispose();
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_inspect',
       id: 2,
-      params: { runId: 'run-1' },
+      params: { ...activeBinding(), runId: 'run-1' },
     });
     expect(res.result).toBeUndefined();
     expect(res.error?.message).toMatch(/orquestrador/i);
   });
 
   it('recusa dynamic_workflow_start (WRITE) quando NAO ha sessao de chat ativa', async () => {
-    getActiveChatSessionMock.mockReturnValue(null);
+    activeTurn.dispose();
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_start',
       id: 3,
-      params: { runId: 'run-1' },
+      params: { ...activeBinding(), runId: 'run-1' },
     });
     expect(res.error).toBeDefined();
     expect(startMock).not.toHaveBeenCalled();
@@ -274,18 +275,22 @@ describe('caller gate (orquestrador-only)', () => {
       const ins = await dispatch(ctx, {
         method: 'dynamic_workflow_inspect',
         id: 10,
-        params: { runId: 'run-1' },
+        params: { ...activeBinding(), runId: 'run-1' },
       });
       inner.push({ method: 'dynamic_workflow_inspect', refused: !!ins.error });
       const st = await dispatch(ctx, {
         method: 'dynamic_workflow_start',
         id: 11,
-        params: { runId: 'run-1' },
+        params: { ...activeBinding(), runId: 'run-1' },
       });
       inner.push({ method: 'dynamic_workflow_start', refused: !!st.error });
       return { ok: true, summary: 'done' };
     });
-    await handleCallAgent(agentCtx, { agent_id: 'sub-1', task: 'algo' });
+    await handleCallAgent(agentCtx, {
+      agent_id: 'sub-1',
+      task: 'algo',
+      binding: { lane: 'desktop', ...activeBinding() },
+    });
     expect(inner).toEqual([
       { method: 'dynamic_workflow_inspect', refused: true },
       { method: 'dynamic_workflow_start', refused: true },
@@ -293,7 +298,6 @@ describe('caller gate (orquestrador-only)', () => {
     expect(startMock).not.toHaveBeenCalled();
   });
 });
-
 
 describe('gate de permissao das WRITE actions', () => {
   it('isDynamicWorkflowWriteAction separa write de read', () => {
@@ -306,7 +310,7 @@ describe('gate de permissao das WRITE actions', () => {
     await dispatch(ctx, {
       method: 'dynamic_workflow_start',
       id: 20,
-      params: { runId: 'run-1' },
+      params: { ...activeBinding(), runId: 'run-1' },
     });
     expect(permissionGuardMock).toHaveBeenCalledTimes(1);
     expect(permissionGuardMock.mock.calls[0]?.[0]).toBe('mcp__dynamic-workflows__dynamic_workflow_start');
@@ -316,7 +320,7 @@ describe('gate de permissao das WRITE actions', () => {
     await dispatch(ctx, {
       method: 'dynamic_workflow_inspect',
       id: 21,
-      params: { runId: 'run-1' },
+      params: { ...activeBinding(), runId: 'run-1' },
     });
     expect(permissionGuardMock).not.toHaveBeenCalled();
   });
@@ -326,13 +330,12 @@ describe('gate de permissao das WRITE actions', () => {
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_start',
       id: 22,
-      params: { runId: 'run-1' },
+      params: { ...activeBinding(), runId: 'run-1' },
     });
     expect(res.error).toBeDefined();
     expect(startMock).not.toHaveBeenCalled();
   });
 });
-
 
 describe('confirmacao do modo semi com bypass desligado (AC-21)', () => {
   it('bypass LIGADO (default): WRITE nao pede confirmacao humana e despacha', async () => {
@@ -340,7 +343,7 @@ describe('confirmacao do modo semi com bypass desligado (AC-21)', () => {
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_start',
       id: 30,
-      params: { runId: 'run-1' },
+      params: { ...activeBinding(), runId: 'run-1' },
     });
     expect(res.error).toBeUndefined();
     expect(sendAskQuestionMock).not.toHaveBeenCalled();
@@ -353,7 +356,7 @@ describe('confirmacao do modo semi com bypass desligado (AC-21)', () => {
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_start',
       id: 31,
-      params: { runId: 'run-1' },
+      params: { ...activeBinding(), runId: 'run-1' },
     });
     expect(res.error).toBeUndefined();
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
@@ -366,7 +369,7 @@ describe('confirmacao do modo semi com bypass desligado (AC-21)', () => {
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_start',
       id: 32,
-      params: { runId: 'run-1' },
+      params: { ...activeBinding(), runId: 'run-1' },
     });
     expect(res.error).toBeDefined();
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
@@ -379,7 +382,7 @@ describe('confirmacao do modo semi com bypass desligado (AC-21)', () => {
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_start',
       id: 33,
-      params: { runId: 'run-1' },
+      params: { ...activeBinding(), runId: 'run-1' },
     });
     expect(res.error).toBeDefined();
     expect(startMock).not.toHaveBeenCalled();
@@ -390,7 +393,7 @@ describe('confirmacao do modo semi com bypass desligado (AC-21)', () => {
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_inspect',
       id: 34,
-      params: { runId: 'run-1' },
+      params: { ...activeBinding(), runId: 'run-1' },
     });
     expect(res.error).toBeUndefined();
     expect(sendAskQuestionMock).not.toHaveBeenCalled();
@@ -402,14 +405,13 @@ describe('confirmacao do modo semi com bypass desligado (AC-21)', () => {
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_abort',
       id: 35,
-      params: { runId: 'run-1' },
+      params: { ...activeBinding(), runId: 'run-1' },
     });
     expect(res.error).toBeDefined();
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
     expect(abortMock).not.toHaveBeenCalled();
   });
 });
-
 
 describe('idempotencia do start', () => {
   it('start de run ja running = no-op com aviso (nao chama runner.start)', async () => {
@@ -489,7 +491,7 @@ describe('descarte de comando defasado', () => {
       recentEvents: [],
       cost: { actualUsd: 0 },
     });
-    const res = await dynamicWorkflowReplyCore('run-1', 'oi', 'scout'); // mira node antigo
+    const res = await dynamicWorkflowReplyCore('run-1', 'oi', 'scout');
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toMatch(/defasad/i);
     expect(interveneMock).not.toHaveBeenCalled();
@@ -508,7 +510,6 @@ describe('descarte de comando defasado', () => {
     expect(res.ok).toBe(true);
     expect(interveneMock).toHaveBeenCalledTimes(1);
   });
-
 
   it("D8: adjust-next-node com nodeId '*' NAO passa pelo gate 6 (proximo node que iniciar) e devolve a nota do fan-out", async () => {
     getSnapshotMock.mockReturnValue({
@@ -590,7 +591,8 @@ describe('descarte de comando defasado', () => {
       { type: 'rerun-node', nodeId: 'scout', instruction: 'refaca o scout com foco em X' },
       'orchestrator',
     );
-    if (res.ok) expect((res.value as { note?: string }).note).toMatch(/Commits posteriores na worktree NAO sao desfeitos/);
+    if (res.ok)
+      expect((res.value as { note?: string }).note).toMatch(/Commits posteriores na worktree NAO sao desfeitos/);
   });
 
   it('D9: rerun-node e ISENTO do guard terminal (junto com resume); pause em run failed continua barrado', async () => {
@@ -603,7 +605,11 @@ describe('descarte de comando defasado', () => {
       totalCostUsd: 0,
       createdBy: 'orchestrator',
     });
-    const rerun = await dynamicWorkflowInterveneCore('run-1', { type: 'rerun-node', nodeId: 'scout', instruction: 'x' });
+    const rerun = await dynamicWorkflowInterveneCore('run-1', {
+      type: 'rerun-node',
+      nodeId: 'scout',
+      instruction: 'x',
+    });
     expect(rerun.ok).toBe(true);
     const resume = await dynamicWorkflowInterveneCore('run-1', { type: 'resume' });
     expect(resume.ok).toBe(true);
@@ -616,7 +622,11 @@ describe('descarte de comando defasado', () => {
   it('D9: rerun-node sem nodeId ou sem instruction e recusado antes do runner', async () => {
     const semNode = await dynamicWorkflowInterveneCore('run-1', { type: 'rerun-node', nodeId: '', instruction: 'x' });
     expect(semNode.ok).toBe(false);
-    const semInstr = await dynamicWorkflowInterveneCore('run-1', { type: 'rerun-node', nodeId: 'scout', instruction: '   ' });
+    const semInstr = await dynamicWorkflowInterveneCore('run-1', {
+      type: 'rerun-node',
+      nodeId: 'scout',
+      instruction: '   ',
+    });
     expect(semInstr.ok).toBe(false);
     expect(interveneMock).not.toHaveBeenCalled();
   });
@@ -627,7 +637,6 @@ describe('descarte de comando defasado', () => {
     expect(interveneMock).toHaveBeenCalledWith('run-1', { type: 'resume', acceptBoundary: true }, 'orchestrator');
   });
 });
-
 
 describe('orquestrador aprova gate human por comando do humano (SM-31)', () => {
   it('approve de gate de modo orchestrator (baixo risco) despacha ao runner com source orchestrator', async () => {
@@ -659,15 +668,9 @@ describe('orquestrador aprova gate human por comando do humano (SM-31)', () => {
       decision: 'approve',
     });
     expect(res.ok).toBe(true);
-    expect(approveGateMock).toHaveBeenCalledWith(
-      'run-1',
-      'gate-final',
-      { decision: 'approve' },
-      'orchestrator',
-    );
+    expect(approveGateMock).toHaveBeenCalledWith('run-1', 'gate-final', { decision: 'approve' }, 'orchestrator');
   });
 });
-
 
 describe('gates de entrega por autonomia (template plan-driven, sec 6)', () => {
   function manifestWithDeliveryGates(): string {
@@ -749,7 +752,6 @@ describe('gates de entrega por autonomia (template plan-driven, sec 6)', () => {
     expect(interveneMock).not.toHaveBeenCalled();
   });
 
-
   it('SM-2: orquestrador PODE pedir re-plan no gate-plan-review (payload action replan) - despacha ao runner', async () => {
     const res = await dynamicWorkflowApproveCore('run-1', 'gate-plan-review-human', {
       decision: 'approve',
@@ -821,13 +823,11 @@ describe('gates de entrega por autonomia (template plan-driven, sec 6)', () => {
   });
 });
 
-
 describe('Maestro id canonico (F4a, sec 4.1/D-4/D-5)', () => {
   it('o id do seed do Maestro e estavel', () => {
     expect(DYNAMIC_WORKFLOW_MAESTRO_ID).toBe('dynamic-workflow-maestro');
   });
 });
-
 
 describe('dynamic_workflow_edit_coordinator (F4b core)', () => {
   it('edit_coordinator e WRITE (passa pela allowlist)', () => {
@@ -846,7 +846,8 @@ describe('dynamic_workflow_edit_coordinator (F4b core)', () => {
     });
     const res = await dynamicWorkflowEditCoordinatorCore({
       runId: 'run-1',
-      workflowJsSource: "export const meta={name:'x',phases:['P']}; export default async function run(ctx){ return {}; }",
+      workflowJsSource:
+        "export const meta={name:'x',phases:['P']}; export default async function run(ctx){ return {}; }",
       reason: 'reescreve a fase de fix',
     });
     expect(res.ok).toBe(true);
@@ -973,9 +974,7 @@ describe('dynamic_workflow_edit_coordinator (F4b core)', () => {
       manifestJson: manifestWithGates(),
     });
     getAgentGatesMock.mockImplementation((id) =>
-      id === 'dynamic-workflow-doc-writer'
-        ? { access: 'workspace-write', squad: 'dynamic-workflow' }
-        : undefined,
+      id === 'dynamic-workflow-doc-writer' ? { access: 'workspace-write', squad: 'dynamic-workflow' } : undefined,
     );
     const res = await dynamicWorkflowEditCoordinatorCore({
       runId: 'run-1',
@@ -1042,14 +1041,14 @@ describe('dynamic_workflow_edit_coordinator (F4b core)', () => {
       method: 'dynamic_workflow_edit_coordinator',
       id: 99,
       params: {
+        ...activeBinding(),
         runId: 'run-1',
-        workflowJsSource: 'export const meta={name:"x",phases:[]}; export default async function run(ctx){ return {}; }',
+        workflowJsSource:
+          'export const meta={name:"x",phases:[]}; export default async function run(ctx){ return {}; }',
         reason: 'edita via rpc',
       },
     });
     expect(permissionGuardMock).toHaveBeenCalledTimes(1);
-    expect(permissionGuardMock.mock.calls[0]?.[0]).toBe(
-      'mcp__dynamic-workflows__dynamic_workflow_edit_coordinator',
-    );
+    expect(permissionGuardMock.mock.calls[0]?.[0]).toBe('mcp__dynamic-workflows__dynamic_workflow_edit_coordinator');
   });
 });

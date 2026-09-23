@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -46,7 +45,6 @@ import {
   type GitRunResult,
 } from '../dynamic-workflows/workflow-git';
 import { createPermissionGuard } from '../permission-guard';
-
 
 const WORKSPACE = '/work/run-1/worktree';
 
@@ -127,37 +125,24 @@ describe('E1/T1 Superficie 1 (closer guard): push e remotos negados, merge local
       expect(d.message).toContain('encadeado');
     }
 
-    for (const cmd of [
-      'git diff; git push',
-      'git log | git push',
-      'git status && git push --force origin main',
-    ]) {
+    for (const cmd of ['git diff; git push', 'git log | git push', 'git status && git push --force origin main']) {
       const dd = await guard(bash(cmd));
       expect(dd.behavior).toBe('deny');
     }
   });
 });
 
-
-const FORBIDDEN_RUNNER_SUBCOMMANDS = new Set([
-  'push',
-  'fetch',
-  'pull',
-  'clone',
-  'remote',
-  'submodule',
-]);
+const FORBIDDEN_RUNNER_SUBCOMMANDS = new Set(['push', 'fetch', 'pull', 'clone', 'remote', 'submodule']);
 
 interface RecordedCall {
   args: string[];
   cwd: string;
 }
 
-function makeRecordingRunner(opts?: {
-  baseTip?: string | null;
-  ahead?: string;
-  cachedQuietCode?: number;
-}): { runner: GitRunner; calls: RecordedCall[] } {
+function makeRecordingRunner(opts?: { baseTip?: string | null; ahead?: string; cachedQuietCode?: number }): {
+  runner: GitRunner;
+  calls: RecordedCall[];
+} {
   const calls: RecordedCall[] = [];
   const runner: GitRunner = async (args, cwd) => {
     calls.push({ args: [...args], cwd });
@@ -175,9 +160,7 @@ function makeRecordingRunner(opts?: {
     const rest = args.slice(i + 1);
 
     if (sub === 'rev-parse' && rest.includes('--verify')) {
-      return opts?.baseTip === null
-        ? reply({ code: 1 })
-        : reply({ stdout: `${opts?.baseTip ?? 'basecommit0'}\n` });
+      return opts?.baseTip === null ? reply({ code: 1 }) : reply({ stdout: `${opts?.baseTip ?? 'basecommit0'}\n` });
     }
     if (sub === 'rev-parse') {
       return reply({ stdout: 'newheadsha\n' });
@@ -207,8 +190,7 @@ function assertNoRemote(calls: RecordedCall[]): void {
     }
     expect(args).not.toContain('origin');
     if (args[0] === 'merge' || args.includes('merge')) {
-      const hasLocalMode =
-        args.includes('--squash') || args.includes('--ff-only') || args.includes('--abort');
+      const hasLocalMode = args.includes('--squash') || args.includes('--ff-only') || args.includes('--abort');
       expect(hasLocalMode).toBe(true);
     }
   }
@@ -260,10 +242,7 @@ describe('E1/T1 Superficie 2 (runner): merge da entrega e git LOCAL, nunca push/
 
   it('finalizeStagedMerge faz ff-only LOCAL, nunca push', async () => {
     const { runner, calls } = makeRecordingRunner({});
-    const res = await finalizeStagedMerge(
-      { cwd: '/repo', baseBranch: 'main', stagingSha: 'stagingsha' },
-      runner,
-    );
+    const res = await finalizeStagedMerge({ cwd: '/repo', baseBranch: 'main', stagingSha: 'stagingsha' }, runner);
     expect(res.mergeSha).toBeTruthy();
     assertNoRemote(calls);
     expect(calls.some((c) => c.args.includes('merge') && c.args.includes('--ff-only'))).toBe(true);
@@ -278,7 +257,6 @@ describe('E1/T1 Superficie 2 (runner): merge da entrega e git LOCAL, nunca push/
     expect(calls.some((c) => c.args.includes('commit'))).toBe(true);
   });
 });
-
 
 const FORBIDDEN_GIT_DENY_MESSAGE =
   'Comandos git que modificam state (commit, push, reset, rebase, merge, etc) sao proibidos. O usuario faz controle de versao manualmente. Use Write/Edit para arquivos, e git status/diff/log para inspecao.';
@@ -301,9 +279,7 @@ describe('E1/T1 Superficie 3 (Bash autonomo): push/remote negados pelo guard gen
     it(`nega "${label}" por behavior:'deny' (sem modal), mesmo com bypass LIGADO`, async () => {
       const d = await guard('Bash', { command: cmd });
       expect(d.behavior).toBe('deny');
-      expect((d as { behavior: 'deny'; message: string }).message).toBe(
-        FORBIDDEN_GIT_DENY_MESSAGE,
-      );
+      expect((d as { behavior: 'deny'; message: string }).message).toBe(FORBIDDEN_GIT_DENY_MESSAGE);
     });
   }
 
@@ -319,7 +295,6 @@ describe('E1/T1 Superficie 3 (Bash autonomo): push/remote negados pelo guard gen
     }
   });
 });
-
 
 describe('E1/T1 sintese: nenhum caminho autonomo da push', () => {
   it('as tres superficies negam push para o MESMO comando', async () => {

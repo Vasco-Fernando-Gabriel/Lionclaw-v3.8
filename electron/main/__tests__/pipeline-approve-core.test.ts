@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
 
@@ -34,16 +33,9 @@ vi.mock('../pipeline-drive-coordinator', () => ({
   getPipelineDriveCoordinator: vi.fn(),
 }));
 
-import {
-  getHarnessProject,
-  getPipelinePhaseMessagesAsChatHistory,
-  getDriveState,
-} from '../db';
+import { getHarnessProject, getPipelinePhaseMessagesAsChatHistory, getDriveState } from '../db';
 import { pipelineEventBus } from '../pipeline-event-bus';
-import {
-  registerPipelineEngineRef,
-  _resetPipelineEngineRefForTesting,
-} from '../pipeline-engine-ref';
+import { registerPipelineEngineRef, _resetPipelineEngineRefForTesting } from '../pipeline-engine-ref';
 import {
   pipelineApproveCore,
   startPipelineControlPhaseCache,
@@ -109,7 +101,6 @@ beforeEach(() => {
   (getDriveState as Mock).mockReturnValue(null);
 });
 
-
 describe('F4: cache de pipeline:phase-changed (mecanismo)', () => {
   it('guarda o ultimo phase-changed por projectId e sobrescreve no seguinte', () => {
     emitPhaseChanged({ projectId: 'p1', phase: 3, status: 'started', awaitingUser: false });
@@ -144,7 +135,6 @@ describe('F4: cache de pipeline:phase-changed (mecanismo)', () => {
     expect(getCachedPhaseChanged('p1')).toEqual({ phase: 2, status: 'started', awaitingUser: false });
   });
 });
-
 
 describe('pipelineApproveCore F3 (pre-check por allowlist)', () => {
   it('F3-AC1: live "running" sem pergunta pendente nem gate cached -> { error } instrutivo, engine NAO chamado', async () => {
@@ -323,7 +313,6 @@ describe('pipelineApproveCore F3 (2) — requisitos de metadata por fase', () =>
   });
 });
 
-
 describe('pipelineApproveCore W4.1 (Design Lock e gate humano: drive nao locka)', () => {
   it('W4-AC1: drive engajado + dev-v2 fase ODS + lock-and-continue -> erro instrutivo, engine NAO chamado', async () => {
     (getHarnessProject as Mock).mockReturnValue(
@@ -399,21 +388,21 @@ describe('pipelineApproveCore W4.1 (Design Lock e gate humano: drive nao locka)'
     const engine = installEngine({
       getCurrentPhase: vi.fn(() => ({ phase, status: 'paused' })),
       approvePhase: vi.fn(async () => {
-        phase = 6; // lock avanca para a fase 6 (Design Lock, auto)
+        phase = 6;
       }),
     });
 
     const driverRes = await pipelineApproveCore('proj_v2', HUMAN_METADATA);
-    expect(driverRes.ok).toBe(false); // motorista barrado pelo gate W4.1
+    expect(driverRes.ok).toBe(false);
     if (!driverRes.ok) expect(driverRes.error).toContain('Design Lock e gate humano');
-    expect(engine.approvePhase).not.toHaveBeenCalled(); // lock NAO aconteceu pelo drive
-    expect(phase).toBe(5); // fase intacta
+    expect(engine.approvePhase).not.toHaveBeenCalled();
+    expect(phase).toBe(5);
 
     await engine.approvePhase('proj_v2', HUMAN_METADATA);
 
     expect(engine.approvePhase).toHaveBeenCalledTimes(1);
     expect(engine.approvePhase).toHaveBeenCalledWith('proj_v2', HUMAN_METADATA);
-    expect(phase).toBe(6); // o dono travou: a fase AVANCOU (lock aconteceu)
+    expect(phase).toBe(6);
   });
 
   it('W4.1 (escopo): drive engajado mas FORA da fase ODS (dev-v2 fase 3) NAO e bloqueado pelo gate do lock', async () => {
@@ -464,7 +453,6 @@ describe('pipelineApproveCore F3 (3) — precedencia do sinal de turno (rev3)', 
     expect(engine.approvePhase).toHaveBeenCalled();
   });
 });
-
 
 describe('pipelineApproveCore F4 (gate pre-codigo Sprint Validator -> Coder)', () => {
   it('F4-AC1: dev-v2 fase 15 com awaiting-dev-confirmation -> confirmStartDevelopment, Coder (16) inicia; NUNCA approvePhase', async () => {
@@ -587,11 +575,10 @@ describe('pipelineApproveCore F4 (gate pre-codigo Sprint Validator -> Coder)', (
       expect(v2.phase).toBe(16);
       expect(v2.action).toBe('confirm-start-development');
     }
-    expect(engine.approvePhase).toHaveBeenCalledTimes(1); // NUNCA repassado no 2o
+    expect(engine.approvePhase).toHaveBeenCalledTimes(1);
     expect(engine.confirmStartDevelopment).toHaveBeenCalledTimes(1);
   });
 });
-
 
 describe('pipelineApproveCore F1 (early-ack: cascata auto nao segura o retorno)', () => {
   it('F1-AC3: approve aceito com cascata PENDURADA retorna apos a janela de graca (advanced:false + warning)', async () => {
@@ -679,7 +666,7 @@ describe('pipelineApproveCore F1 (early-ack: cascata auto nao segura o retorno)'
       const pending = pipelineApproveCore('proj_a');
       await vi.advanceTimersByTimeAsync(APPROVE_EARLY_ACK_GRACE_MS + 50);
       const res = await pending;
-      expect(res.ok).toBe(true); // ack ja saiu
+      expect(res.ok).toBe(true);
 
       rejectCascade!(new Error('boom em background'));
       await vi.runAllTimersAsync();
@@ -738,7 +725,6 @@ describe('pipelineApproveCore F1 (early-ack: cascata auto nao segura o retorno)'
   });
 });
 
-
 describe('pipelineApproveCore — guardas basicas', () => {
   it('erro quando o pipeline nao existe', async () => {
     (getHarnessProject as Mock).mockReturnValue(undefined);
@@ -771,7 +757,6 @@ describe('pipelineApproveCore — guardas basicas', () => {
     if (!res.ok) expect(res.error).toContain('decisoes suficientes');
   });
 });
-
 
 function bugProject(phase: number, over: Record<string, unknown> = {}): Record<string, unknown> {
   return project({
@@ -862,18 +847,15 @@ describe('TB-26: pipelineApproveCore no Bug Pipe (fase 3 exige action)', () => {
   });
 });
 
-
 describe('TB-42: retorno do close-pipeline (desfecho terminal)', () => {
   it('close-pipeline -> closed:true + outcome, SEM o warning de no-op', async () => {
-    (getHarnessProject as Mock)
-      .mockReturnValueOnce(bugProject(3))
-      .mockReturnValue(
-        bugProject(3, {
-          status: 'done',
-          pipelineCurrentPhase: null,
-          config: { bug: { runId: '20260727_101010-a1b2c3', outcome: 'no-bug' } },
-        }),
-      );
+    (getHarnessProject as Mock).mockReturnValueOnce(bugProject(3)).mockReturnValue(
+      bugProject(3, {
+        status: 'done',
+        pipelineCurrentPhase: null,
+        config: { bug: { runId: '20260727_101010-a1b2c3', outcome: 'no-bug' } },
+      }),
+    );
     installEngine({
       getCurrentPhase: vi.fn(() => ({ phase: 3, status: 'paused' })),
     });

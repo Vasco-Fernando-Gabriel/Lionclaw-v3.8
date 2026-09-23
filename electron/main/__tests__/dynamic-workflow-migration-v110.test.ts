@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -17,7 +16,7 @@ function grabBlock(source: string, name: string): string {
 }
 
 function grabMarker(source: string, name: string): string {
-  const match = source.match(new RegExp("const " + name + " = '([^']*)';"));
+  const match = source.match(new RegExp('const ' + name + " = '([^']*)';"));
   if (!match) throw new Error('marcador ' + name + ' nao encontrado');
   return match[1];
 }
@@ -30,9 +29,7 @@ describe('migration v110 dynamic-workflow builder coder rodar-ate-verde (R10, se
     const neu = grabBlock(V110_SOURCE, 'NEW_BLOCK');
     expect(neu.startsWith(old)).toBe(true);
     const disciplina = neu.slice(old.length).replace(/^\n+/, '');
-    expect(disciplina.startsWith('## Disciplina do coder: rodar ate VERDE (obrigatoria)')).toBe(
-      true,
-    );
+    expect(disciplina.startsWith('## Disciplina do coder: rodar ate VERDE (obrigatoria)')).toBe(true);
     expect(dynamicWorkflowBuilder.systemPrompt).toContain(old);
     expect(dynamicWorkflowBuilder.systemPrompt).toContain(disciplina);
   });

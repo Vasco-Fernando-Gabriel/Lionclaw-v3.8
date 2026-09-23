@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 interface Captured {
@@ -35,9 +34,7 @@ function makeFakeStatement(sql: string) {
       if (n.includes('SELECT MAX(version) AS version')) return { version: 140 };
       if (n.includes('SELECT MAX(version)')) return { v: 140 };
       if (n.includes('SELECT pipeline_type FROM harness_projects WHERE id')) {
-        return routeState.pipelineType === undefined
-          ? undefined
-          : { pipeline_type: routeState.pipelineType };
+        return routeState.pipelineType === undefined ? undefined : { pipeline_type: routeState.pipelineType };
       }
       if (n.includes('SELECT id FROM harness_sprints WHERE project_id')) {
         return { id: 'sprint-row-id' };
@@ -47,8 +44,13 @@ function makeFakeStatement(sql: string) {
       }
       if (n.includes('AS total_input')) {
         return {
-          total_input: 0, total_output: 0, total_cache: 0, total_cost: 0,
-          total_duration: 0, total_tool_uses: 0, total_api_requests: 0,
+          total_input: 0,
+          total_output: 0,
+          total_cache: 0,
+          total_cost: 0,
+          total_duration: 0,
+          total_tool_uses: 0,
+          total_api_requests: 0,
         };
       }
       if (n.includes('AS cloud_cost')) return { cloud_cost: 0 };
@@ -57,9 +59,7 @@ function makeFakeStatement(sql: string) {
     },
     all: (...args: unknown[]) => {
       capturedQueries.push({ sql: n, args, method: 'all' });
-      if (
-        n.includes('SELECT phase_number, phase_name FROM pipeline_phase_metrics WHERE project_id')
-      ) {
+      if (n.includes('SELECT phase_number, phase_name FROM pipeline_phase_metrics WHERE project_id')) {
         return routeState.legacyPhaseRows;
       }
       if (n.includes('SELECT * FROM pipeline_phase_metrics WHERE project_id')) {
@@ -81,8 +81,7 @@ const fakeDb = {
   pragma: vi.fn((statement: string) =>
     statement === 'integrity_check(1)'
       ? [{ integrity_check: 'ok' }]
-      : // Fidelidade de shim (v146+): better-sqlite3 devolve ARRAY de violacoes
-        statement === 'foreign_key_check'
+      : statement === 'foreign_key_check'
         ? []
         : undefined,
   ),
@@ -102,7 +101,12 @@ vi.mock('../paths', () => ({
   getLionClawHome: () => '/tmp/lionclaw-seam-test',
 }));
 vi.mock('fs', () => ({
-  default: { mkdirSync: vi.fn(), existsSync: vi.fn().mockReturnValue(false), readFileSync: vi.fn(() => ''), writeFileSync: vi.fn() },
+  default: {
+    mkdirSync: vi.fn(),
+    existsSync: vi.fn().mockReturnValue(false),
+    readFileSync: vi.fn(() => ''),
+    writeFileSync: vi.fn(),
+  },
   mkdirSync: vi.fn(),
   existsSync: vi.fn().mockReturnValue(false),
   readFileSync: vi.fn(() => ''),
@@ -120,7 +124,6 @@ import {
 
 initDatabase();
 
-
 function lastHistoryReadArgs(): { phaseCandidates: number[]; includeSprintFlag: number } {
   const q = [...capturedQueries]
     .reverse()
@@ -133,7 +136,7 @@ function lastHistoryReadArgs(): { phaseCandidates: number[]; includeSprintFlag: 
   if (!q) throw new Error('history read query not captured');
   const args = q.args;
   const includeSprintFlag = args[args.length - 1] as number;
-  const phaseCandidates = (args.slice(1, args.length - 1) as number[]);
+  const phaseCandidates = args.slice(1, args.length - 1) as number[];
   return { phaseCandidates, includeSprintFlag };
 }
 
@@ -157,13 +160,14 @@ function modelFallbackPhaseSets(): { coder: number[]; evaluator: number[] } {
   function inList(sql: string): number[] {
     const m = sql.match(/phase_number IN \(([^)]*)\)/);
     if (!m) throw new Error('no IN list in model fallback sql: ' + sql);
-    return m[1].split(',').map((x) => parseInt(x.trim(), 10)).sort((a, b) => a - b);
+    return m[1]
+      .split(',')
+      .map((x) => parseInt(x.trim(), 10))
+      .sort((a, b) => a - b);
   }
   if (rows.length < 2) throw new Error('expected 2 model fallback queries, got ' + rows.length);
   return { coder: inList(rows[0].sql), evaluator: inList(rows[1].sql) };
 }
-
-
 
 describe('greeting filter — display read excludes the sentinel agent_id', () => {
   beforeEach(resetRouteState);
@@ -173,11 +177,7 @@ describe('greeting filter — display read excludes the sentinel agent_id', () =
     getPipelinePhaseMessages('p', 3);
     const q = [...capturedQueries]
       .reverse()
-      .find(
-        (c) =>
-          c.method === 'all' &&
-          c.sql.includes('SELECT role, content, tool_calls FROM pipeline_messages'),
-      );
+      .find((c) => c.method === 'all' && c.sql.includes('SELECT role, content, tool_calls FROM pipeline_messages'));
     expect(q).toBeDefined();
     expect(q!.sql).toContain("agent_id IS NOT '__greeting__'");
   });
@@ -187,11 +187,7 @@ describe('greeting filter — display read excludes the sentinel agent_id', () =
     getPipelinePhaseMessagesAsChatHistory('p', 3);
     const q = [...capturedQueries]
       .reverse()
-      .find(
-        (c) =>
-          c.method === 'all' &&
-          c.sql.includes('SELECT id, role, content, tool_calls FROM pipeline_messages'),
-      );
+      .find((c) => c.method === 'all' && c.sql.includes('SELECT id, role, content, tool_calls FROM pipeline_messages'));
     expect(q).toBeDefined();
     expect(q!.sql).not.toContain('__greeting__');
   });
@@ -274,7 +270,6 @@ describe('site 1+2 — history read candidates + sprint flag (non-legacy)', () =
   });
 });
 
-
 describe('INV-22 — legacy development-v2 project remappers (verbatim)', () => {
   beforeEach(() => {
     resetRouteState();
@@ -307,7 +302,6 @@ describe('INV-22 — legacy development-v2 project remappers (verbatim)', () => 
     expect(lastHistoryReadArgs()).toEqual({ phaseCandidates: [7], includeSprintFlag: 0 });
   });
 });
-
 
 describe('site 3 — getSprintMessagePhaseNumbersForProject (sprint message phases)', () => {
   beforeEach(resetRouteState);
@@ -348,7 +342,6 @@ describe('site 3 — getSprintMessagePhaseNumbersForProject (sprint message phas
     expect(sprintMessagePhaseArgs()).toEqual([13, 14]);
   });
 });
-
 
 describe('site 4 — coder/evaluator model fallback are SEPARATE e PER-TIPO (RK-19)', () => {
   beforeEach(resetRouteState);
@@ -400,7 +393,6 @@ describe('site 4 — coder/evaluator model fallback are SEPARATE e PER-TIPO (RK-
   });
 });
 
-
 describe('site 5 — getPipelineMetrics sprintPhases filter (PER-TIPO desde S9)', () => {
   beforeEach(resetRouteState);
 
@@ -412,10 +404,21 @@ describe('site 5 — getPipelineMetrics sprintPhases filter (PER-TIPO desde S9)'
       phase_name: `Phase ${phase_number}`,
       agent_id: null,
       status: 'completed',
-      input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0,
-      cost_usd: 0, duration_ms: 0, tool_uses: 0, api_requests: 0, messages_count: 0,
-      model: null, runtime: null, started_at: null, completed_at: null,
-      metadata: '{}', created_at: '2026-01-01',
+      input_tokens: 0,
+      output_tokens: 0,
+      cache_read_tokens: 0,
+      cache_creation_tokens: 0,
+      cost_usd: 0,
+      duration_ms: 0,
+      tool_uses: 0,
+      api_requests: 0,
+      messages_count: 0,
+      model: null,
+      runtime: null,
+      started_at: null,
+      completed_at: null,
+      metadata: '{}',
+      created_at: '2026-01-01',
     };
   }
 

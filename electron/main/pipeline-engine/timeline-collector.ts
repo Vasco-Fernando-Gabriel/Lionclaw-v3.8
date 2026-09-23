@@ -64,13 +64,9 @@ export function recordPipelineTimelineEvent(event: PipelineTimelineEvent): void 
     return;
   }
 
-  let match = event.toolCallId
-    ? state.tools.find((tool) => tool.toolCallId === event.toolCallId)
-    : undefined;
+  let match = event.toolCallId ? state.tools.find((tool) => tool.toolCallId === event.toolCallId) : undefined;
   if (!match && !event.toolCallId && event.tool) {
-    const candidates = state.tools.filter(
-      (tool) => tool.tool === event.tool && tool.status === 'running',
-    );
+    const candidates = state.tools.filter((tool) => tool.tool === event.tool && tool.status === 'running');
     if (candidates.length === 1) match = candidates[0];
   }
   if (match) {
@@ -94,9 +90,7 @@ export function consumePipelineTimeline(
 
   const remaining = [...(runtimeTools ?? [])];
   const merged: PersistedTimelineToolCall[] = state.tools.map((started) => {
-    let index = started.toolCallId
-      ? remaining.findIndex((tool) => tool.toolCallId === started.toolCallId)
-      : -1;
+    let index = started.toolCallId ? remaining.findIndex((tool) => tool.toolCallId === started.toolCallId) : -1;
     if (index < 0) index = remaining.findIndex((tool) => tool.tool === started.tool);
     const final = index >= 0 ? remaining.splice(index, 1)[0] : undefined;
     return {
@@ -123,23 +117,15 @@ export function consumePipelineTimeline(
   return merged.length > 0 ? merged : undefined;
 }
 
-function remapOffsets(
-  previousContent: string,
-  nextContent: string,
-  tools: PersistedTimelineToolCall[],
-): void {
+function remapOffsets(previousContent: string, nextContent: string, tools: PersistedTimelineToolCall[]): void {
   let prefix = 0;
   const prefixLimit = Math.min(previousContent.length, nextContent.length);
   while (prefix < prefixLimit && previousContent[prefix] === nextContent[prefix]) prefix += 1;
   let suffix = 0;
-  const suffixLimit = Math.min(
-    previousContent.length - prefix,
-    nextContent.length - prefix,
-  );
+  const suffixLimit = Math.min(previousContent.length - prefix, nextContent.length - prefix);
   while (
     suffix < suffixLimit &&
-    previousContent[previousContent.length - 1 - suffix] ===
-      nextContent[nextContent.length - 1 - suffix]
+    previousContent[previousContent.length - 1 - suffix] === nextContent[nextContent.length - 1 - suffix]
   ) {
     suffix += 1;
   }
@@ -148,11 +134,7 @@ function remapOffsets(
   for (const tool of tools) {
     if (!Number.isInteger(tool.textOffset) || (tool.textOffset ?? -1) < 0) continue;
     const offset = tool.textOffset ?? 0;
-    const remapped = offset <= prefix
-      ? offset
-      : offset >= previousChangedEnd
-        ? offset + delta
-        : prefix;
+    const remapped = offset <= prefix ? offset : offset >= previousChangedEnd ? offset + delta : prefix;
     tool.textOffset = Math.max(0, Math.min(nextContent.length, remapped));
   }
 }

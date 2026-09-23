@@ -27,11 +27,17 @@ export function parseCronToState(cron: string): { time: string; days: number[] }
     const minute = Number(parts[0] ?? 0);
     const hour = Number(parts[1] ?? 6);
     const dayOfWeek = parts[4] || '*';
-    const cronDays = dayOfWeek === '*'
-      ? [0, 1, 2, 3, 4, 5, 6]
-      : dayOfWeek.split(',').map(Number).filter((n) => !isNaN(n));
+    const cronDays =
+      dayOfWeek === '*'
+        ? [0, 1, 2, 3, 4, 5, 6]
+        : dayOfWeek
+            .split(',')
+            .map(Number)
+            .filter((n) => !isNaN(n));
 
-    const localDates = cronDays.map((day) => new Date(CRON_REFERENCE_UTC_SUNDAY + day * 86400000 + hour * 3600000 + minute * 60000));
+    const localDates = cronDays.map(
+      (day) => new Date(CRON_REFERENCE_UTC_SUNDAY + day * 86400000 + hour * 3600000 + minute * 60000),
+    );
     const firstLocal = localDates[0] ?? new Date(CRON_REFERENCE_UTC_SUNDAY + 6 * 3600000);
     const time = `${String(firstLocal.getHours()).padStart(2, '0')}:${String(firstLocal.getMinutes()).padStart(2, '0')}`;
     const days = Array.from(new Set(localDates.map((date) => date.getDay()))).sort();
@@ -48,7 +54,9 @@ export function buildUtcCronFromLocalState(time: string, days: number[]): string
   const minute = Number(minuteRaw ?? 0);
   const selectedDays = days.length === 7 ? [0, 1, 2, 3, 4, 5, 6] : days;
 
-  const utcDates = selectedDays.map((day) => new Date(CRON_REFERENCE_LOCAL_SUNDAY + day * 86400000 + hour * 3600000 + minute * 60000));
+  const utcDates = selectedDays.map(
+    (day) => new Date(CRON_REFERENCE_LOCAL_SUNDAY + day * 86400000 + hour * 3600000 + minute * 60000),
+  );
   const firstUtc = utcDates[0] ?? new Date(CRON_REFERENCE_LOCAL_SUNDAY + 6 * 3600000);
   const utcMinute = String(firstUtc.getUTCMinutes());
   const utcHour = String(firstUtc.getUTCHours());
@@ -109,7 +117,10 @@ export function TaskFormModal({ mode, task, onSave, onClose }: Props) {
   const [agents, setAgents] = useState<AgentConfig[]>([]);
 
   useEffect(() => {
-    window.lionclaw.agents.list().then(setAgents).catch(() => setAgents([]));
+    window.lionclaw.agents
+      .list()
+      .then(setAgents)
+      .catch(() => setAgents([]));
   }, []);
 
   useEffect(() => {
@@ -139,9 +150,7 @@ export function TaskFormModal({ mode, task, onSave, onClose }: Props) {
   }, [mode, task]);
 
   const toggleDay = (day: number) => {
-    setDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort(),
-    );
+    setDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort()));
   };
 
   const toggleAllDays = () => {
@@ -177,7 +186,10 @@ export function TaskFormModal({ mode, task, onSave, onClose }: Props) {
       scheduleValue: schedule.value,
       status,
       notify,
-      tags: tagsInput.split(',').map(t => t.trim()).filter(Boolean),
+      tags: tagsInput
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
     };
 
     onSave(input);
@@ -185,11 +197,12 @@ export function TaskFormModal({ mode, task, onSave, onClose }: Props) {
 
   const preview = getSchedulePreview(scheduleMode, time, days, onceDate, intervalAmount, intervalUnit);
 
-  const isValid = name.trim() !== '' && prompt.trim() !== '' && (
-    (scheduleMode === 'recurrent' && days.length > 0) ||
-    (scheduleMode === 'interval' && intervalAmount > 0) ||
-    (scheduleMode === 'once' && onceDate.trim() !== '')
-  );
+  const isValid =
+    name.trim() !== '' &&
+    prompt.trim() !== '' &&
+    ((scheduleMode === 'recurrent' && days.length > 0) ||
+      (scheduleMode === 'interval' && intervalAmount > 0) ||
+      (scheduleMode === 'once' && onceDate.trim() !== ''));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
@@ -199,10 +212,7 @@ export function TaskFormModal({ mode, task, onSave, onClose }: Props) {
           <h2 className="text-base font-semibold text-zinc-100">
             {mode === 'create' ? 'Nova Tarefa' : `Editando: ${task?.name}`}
           </h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300"
-          >
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300">
             <X size={18} />
           </button>
         </div>
@@ -271,14 +281,18 @@ export function TaskFormModal({ mode, task, onSave, onClose }: Props) {
 
             {/* Schedule mode tabs */}
             <div className="flex gap-1 bg-zinc-800 rounded-lg p-1">
-              {([['recurrent', 'Recorrente'], ['once', 'Uma vez'], ['interval', 'Intervalo']] as const).map(([key, label]) => (
+              {(
+                [
+                  ['recurrent', 'Recorrente'],
+                  ['once', 'Uma vez'],
+                  ['interval', 'Intervalo'],
+                ] as const
+              ).map(([key, label]) => (
                 <button
                   key={key}
                   onClick={() => setScheduleMode(key)}
                   className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    scheduleMode === key
-                      ? 'bg-amber-600 text-white'
-                      : 'text-zinc-400 hover:text-zinc-200'
+                    scheduleMode === key ? 'bg-amber-600 text-white' : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
                   {label}

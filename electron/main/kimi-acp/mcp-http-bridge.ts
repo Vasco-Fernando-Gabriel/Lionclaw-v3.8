@@ -1,4 +1,3 @@
-
 import http from 'http';
 import crypto from 'crypto';
 import type { AddressInfo } from 'net';
@@ -82,11 +81,16 @@ function writeJsonRpc(
 function rejectPayloadTooLarge(req: http.IncomingMessage, res: http.ServerResponse): void {
   req.pause();
   res.once('finish', () => req.destroy());
-  writeJsonRpc(res, 413, {
-    jsonrpc: '2.0',
-    id: null,
-    error: { code: -32000, message: 'request body too large' },
-  }, { Connection: 'close' });
+  writeJsonRpc(
+    res,
+    413,
+    {
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32000, message: 'request body too large' },
+    },
+    { Connection: 'close' },
+  );
 }
 
 async function settleBounded(promises: readonly Promise<unknown>[]): Promise<void> {
@@ -286,22 +290,24 @@ export async function startKimiMcpBridge(config: KimiMcpBridgeConfig): Promise<K
           ? { transportCorrelation: { kind: 'mcp-request-id' as const, value: String(id) } }
           : {}),
         signal: call.controller.signal,
-      }).then(
-        (result) => {
-          if (!res.destroyed && !res.writableEnded && !res.headersSent) {
-            writeJsonRpc(res, 200, { jsonrpc: '2.0', id, result });
-          }
-        },
-        (err: unknown) => {
-          if (!res.destroyed && !res.writableEnded && !res.headersSent) {
-            writeJsonRpc(res, 200, {
-              jsonrpc: '2.0',
-              id,
-              error: { code: -32603, message: `bridge tool error: ${redactKimiBridgeError(err)}` },
-            });
-          }
-        },
-      ).finally(() => inFlightTools.delete(call));
+      })
+        .then(
+          (result) => {
+            if (!res.destroyed && !res.writableEnded && !res.headersSent) {
+              writeJsonRpc(res, 200, { jsonrpc: '2.0', id, result });
+            }
+          },
+          (err: unknown) => {
+            if (!res.destroyed && !res.writableEnded && !res.headersSent) {
+              writeJsonRpc(res, 200, {
+                jsonrpc: '2.0',
+                id,
+                error: { code: -32603, message: `bridge tool error: ${redactKimiBridgeError(err)}` },
+              });
+            }
+          },
+        )
+        .finally(() => inFlightTools.delete(call));
       inFlightTools.add(call);
       return;
     }
@@ -356,8 +362,7 @@ export async function startKimiMcpBridge(config: KimiMcpBridgeConfig): Promise<K
           if (session.sse && !session.sse.writableEnded) {
             try {
               session.sse.end();
-            } catch {
-            }
+            } catch {}
           }
         }
         await new Promise<void>((resolve) => {
@@ -376,14 +381,16 @@ export async function startKimiMcpBridge(config: KimiMcpBridgeConfig): Promise<K
           for (const socket of sockets) {
             try {
               socket.destroy();
-            } catch {
-            }
+            } catch {}
           }
           sockets.clear();
         });
       }
       const address = server.address() as AddressInfo | null;
-      logger.debug({ bridgeId, port: address && typeof address !== 'string' ? address.port : null }, 'kimi mcp bridge stopped');
+      logger.debug(
+        { bridgeId, port: address && typeof address !== 'string' ? address.port : null },
+        'kimi mcp bridge stopped',
+      );
     })();
     return stopPromise;
   }

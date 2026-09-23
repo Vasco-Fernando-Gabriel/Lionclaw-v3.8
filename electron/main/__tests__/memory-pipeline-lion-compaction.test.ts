@@ -72,6 +72,10 @@ vi.mock('../db', () => ({
   setLastGateRunAt: vi.fn(),
 }));
 
+vi.mock('../provider-availability', () => ({
+  listProviderStatuses: async () => [],
+}));
+
 vi.mock('../embedding-provider', () => ({
   generateEmbedding: vi.fn(async () => null),
 }));
@@ -83,7 +87,6 @@ vi.mock('../mgraph-engine', () => ({
   appendVaultLog: vi.fn(),
   getExistingVaultFilesList: vi.fn(() => ''),
 }));
-
 
 vi.mock('../secrets-vault', () => ({
   getApiKey: vi.fn(async () => {
@@ -170,11 +173,7 @@ describe('memory pipeline Lion-SDK compaction routing', () => {
   });
 
   it('uses the current Lion-SDK chat provider/model when compaction is Auto(chat)', async () => {
-    await runCompaction(
-      new Date('2026-05-18T00:00:00.000Z'),
-      new Date('2026-05-18T10:30:00.000Z'),
-      'session-1',
-    );
+    await runCompaction(new Date('2026-05-18T00:00:00.000Z'), new Date('2026-05-18T10:30:00.000Z'), 'session-1');
 
     expect(state.lmStudioRequests).toHaveLength(1);
     expect(state.lmStudioRequests[0].config.baseUrl).toBe('http://localhost:1234');
@@ -190,11 +189,7 @@ describe('memory pipeline Lion-SDK compaction routing', () => {
       orchestrator_vertex_api_key_ref: 'ORCHESTRATOR_VERTEX_API_KEY',
     };
 
-    await runCompaction(
-      new Date('2026-05-18T00:00:00.000Z'),
-      new Date('2026-05-18T10:30:00.000Z'),
-      'session-1',
-    );
+    await runCompaction(new Date('2026-05-18T00:00:00.000Z'), new Date('2026-05-18T10:30:00.000Z'), 'session-1');
 
     expect(state.googleRequests).toHaveLength(1);
     expect(state.googleRequests[0].config.apiKey).toBe('compat-key');

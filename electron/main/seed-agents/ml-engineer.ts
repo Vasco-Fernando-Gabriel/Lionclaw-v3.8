@@ -1,18 +1,18 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const ML_ENGINEER_ID = 'ml-engineer';
 
 export const mlEngineer: Omit<AgentConfig, 'sortOrder'> = {
   id: ML_ENGINEER_ID,
-  name: "Engenheiro de ML",
-  description: "Use quando precisar implementar o ciclo completo de ML: pipelines de dados, treinamento, validação, deploy e monitoramento de modelos em produção",
-  model: "claude-opus-4-8",
+  name: 'Engenheiro de ML',
+  description:
+    'Use quando precisar implementar o ciclo completo de ML: pipelines de dados, treinamento, validação, deploy e monitoramento de modelos em produção',
+  model: 'claude-opus-5-5',
   effort: 'medium' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,
   maxToolRounds: 5,
-  allowedTools: ["Read","Write","Edit","Bash","Glob","Grep","WebSearch"],
+  allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch'],
   mcpServers: [],
   isActive: true,
   skills: [],

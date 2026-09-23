@@ -1,9 +1,5 @@
-
 import { describe, it, expect } from 'vitest';
-import {
-  CLAUDE_COMPAT_PRESETS,
-  getClaudeCompatPreset,
-} from '../provider-presets';
+import { CLAUDE_COMPAT_PRESETS, getClaudeCompatPreset } from '../provider-presets';
 
 describe('CLAUDE_COMPAT_PRESETS', () => {
   it('contains exactly 2 presets after SPEC-004 (Z.ai + MiniMax)', () => {

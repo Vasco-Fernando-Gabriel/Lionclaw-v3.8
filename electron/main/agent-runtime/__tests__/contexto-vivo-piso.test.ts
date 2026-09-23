@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,17 +19,10 @@ import {
   __compositionCacheStatsForTests,
   type CompositionSignatureParts,
 } from '../context-measure';
-import {
-  serializeMcpSchemasForContext,
-  GATEWAY_META_TOOL_SCHEMAS,
-  type McpRegistryToolRow,
-} from '../tool-schemas';
+import { serializeMcpSchemasForContext, GATEWAY_META_TOOL_SCHEMAS, type McpRegistryToolRow } from '../tool-schemas';
 
 const MCP_FIXTURE_ROWS: McpRegistryToolRow[] = JSON.parse(
-  readFileSync(
-    join(__dirname, '__fixtures__', 'ctx-piso-mcp-registry-index-composition.json'),
-    'utf-8',
-  ),
+  readFileSync(join(__dirname, '__fixtures__', 'ctx-piso-mcp-registry-index-composition.json'), 'utf-8'),
 );
 
 describe('contexto-vivo §8 — convergencia do PISO forte (ancora real, compat)', () => {
@@ -38,13 +30,13 @@ describe('contexto-vivo §8 — convergencia do PISO forte (ancora real, compat)
 
   it('turno simples: piso_forte em [80%, 110%] do resultUsage real (fixture diferente da calibracao)', () => {
     const systemPrompt = 'p'.repeat(45472);
-    const settingsFilesTokens = Math.ceil(26917 / 4) + Math.ceil(824 / 4); // 6.936
+    const settingsFilesTokens = Math.ceil(26917 / 4) + Math.ceil(824 / 4);
     const mcpJson = serializeMcpSchemasForContext(MCP_FIXTURE_ROWS, {
       includeGatewayMeta: true,
     });
-    expect(mcpJson.length).toBeGreaterThan(20000); // schemas reais, nao stub
+    expect(mcpJson.length).toBeGreaterThan(20000);
     const agentDefsTokens = 5304;
-    const messageTexts = ['u'.repeat(120), 'a'.repeat(100)]; // 30 + 25 = 55
+    const messageTexts = ['u'.repeat(120), 'a'.repeat(100)];
 
     const floor = estimateStrongFloor({
       systemPrompt,
@@ -58,8 +50,8 @@ describe('contexto-vivo §8 — convergencia do PISO forte (ancora real, compat)
       imageCount: 0,
     });
 
-    const lower = Math.floor(REAL_SIMPLE_TURN_PROMPT_TOKENS * 0.8); // 42.198
-    const upper = Math.ceil(REAL_SIMPLE_TURN_PROMPT_TOKENS * 1.1); // 58.023
+    const lower = Math.floor(REAL_SIMPLE_TURN_PROMPT_TOKENS * 0.8);
+    const upper = Math.ceil(REAL_SIMPLE_TURN_PROMPT_TOKENS * 1.1);
     expect(floor).toBeGreaterThanOrEqual(lower);
     expect(floor).toBeLessThanOrEqual(upper);
     expect(floor).toBeGreaterThan(40000);
@@ -107,7 +99,7 @@ describe('contexto-vivo §8 — agentico nao desaba', () => {
 
 describe('contexto-vivo §8 — imagem flat', () => {
   it('tool result com imagem base64 soma 1500 flat, nao ~500k (sem loop de compactacao)', () => {
-    const twoMbBase64 = 'A'.repeat(2 * 1024 * 1024); // ~2MB de base64
+    const twoMbBase64 = 'A'.repeat(2 * 1024 * 1024);
     const toolResultBlocks = [
       { type: 'image', source: { type: 'base64', media_type: 'image/png', data: twoMbBase64 } },
       { type: 'text', text: 'screenshot capturado' },
@@ -118,9 +110,7 @@ describe('contexto-vivo §8 — imagem flat', () => {
   });
 
   it('objeto de imagem unico tambem e flat; string base64 crua (sem shape) segue char/4', () => {
-    expect(estimateAgenticContentTokens({ type: 'image', data: 'B'.repeat(100000) })).toBe(
-      IMAGE_TOKEN_COST,
-    );
+    expect(estimateAgenticContentTokens({ type: 'image', data: 'B'.repeat(100000) })).toBe(IMAGE_TOKEN_COST);
   });
 
   it('fronteira de bookkeeping (§3.5): imagens_flat da formula cobre SO attachments', () => {
@@ -144,13 +134,9 @@ describe('contexto-vivo §8 — imagem flat', () => {
 });
 
 describe('contexto-vivo §8 — fence do historico (§3.4)', () => {
-  const mkMessages = (ids: number[]) =>
-    ids.map((id) => ({ id, content: 'm'.repeat(400) })); // 100 tokens cada
+  const mkMessages = (ids: number[]) => ids.map((id) => ({ id, content: 'm'.repeat(400) }));
 
-  const historyTokensAfterFence = (
-    msgs: Array<{ id: number; content: string }>,
-    fence: number | null,
-  ) =>
+  const historyTokensAfterFence = (msgs: Array<{ id: number; content: string }>, fence: number | null) =>
     estimateStrongFloor({
       messageTexts: msgs.filter((m) => fence === null || m.id > fence).map((m) => m.content),
     });
@@ -251,9 +237,7 @@ describe('contexto-vivo §3.2 — serializacao MCP mode-aware', () => {
   });
 
   it('modo index inclui os 2 meta-tools do gateway sintetico; schema invalido nao lanca', () => {
-    const rows: McpRegistryToolRow[] = [
-      { mcpId: 'x', toolName: 'bad', description: null, inputSchema: '{nao-e-json' },
-    ];
+    const rows: McpRegistryToolRow[] = [{ mcpId: 'x', toolName: 'bad', description: null, inputSchema: '{nao-e-json' }];
     const json = serializeMcpSchemasForContext(rows, { includeGatewayMeta: true });
     const parsed = JSON.parse(json) as Array<{ function: { name: string } }>;
     expect(parsed.length).toBe(GATEWAY_META_TOOL_SCHEMAS.length + 1);

@@ -23,7 +23,11 @@ export function startKnowledgeBridge(): Promise<void> {
     if (process.platform !== 'win32') {
       const socketDir = path.dirname(SOCKET_PATH);
       fs.mkdirSync(socketDir, { recursive: true });
-      try { fs.unlinkSync(SOCKET_PATH); } catch { /* ok */ }
+      try {
+        fs.unlinkSync(SOCKET_PATH);
+      } catch {
+        /* ok */
+      }
     }
 
     server = net.createServer((conn) => {
@@ -69,7 +73,9 @@ async function handleRequest(conn: net.Socket, raw: string): Promise<void> {
     logger.error({ err }, 'KB bridge request failed');
     try {
       conn.write(JSON.stringify({ id: 'unknown', error: errMsg }) + '\n');
-    } catch { /* connection may be dead */ }
+    } catch {
+      /* connection may be dead */
+    }
   }
 }
 
@@ -79,6 +85,10 @@ export function stopKnowledgeBridge(): void {
     server = null;
   }
   if (process.platform !== 'win32') {
-    try { fs.unlinkSync(SOCKET_PATH); } catch { /* ok */ }
+    try {
+      fs.unlinkSync(SOCKET_PATH);
+    } catch {
+      /* ok */
+    }
   }
 }

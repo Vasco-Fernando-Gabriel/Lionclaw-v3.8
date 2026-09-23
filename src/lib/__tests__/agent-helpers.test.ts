@@ -1,8 +1,6 @@
-
 import { describe, it, expect } from 'vitest';
 import { resolveContextWindow, formatContextWindow } from '../agent-helpers';
 import type { AgentConfig } from '../../types/index';
-
 
 function makeExternalAgent(options: {
   provider: 'openrouter' | 'openai' | 'openai-compatible';
@@ -74,9 +72,7 @@ function makeLocalAgent(): AgentConfig {
   };
 }
 
-
 describe('resolveContextWindow', () => {
-
   it('retorna 1_000_000 para OpenRouter + deepseek/deepseek-v4-pro', () => {
     const agent = makeExternalAgent({ provider: 'openrouter', model: 'deepseek/deepseek-v4-pro' });
     expect(resolveContextWindow(agent)).toBe(1_000_000);
@@ -117,7 +113,6 @@ describe('resolveContextWindow', () => {
     expect(resolveContextWindow(agent)).toBe(1_000_000);
   });
 
-
   it('retorna 1_000_000 para OpenAI + gpt-5.5', () => {
     const agent = makeExternalAgent({ provider: 'openai', model: 'gpt-5.5' });
     expect(resolveContextWindow(agent)).toBe(1_000_000);
@@ -128,12 +123,10 @@ describe('resolveContextWindow', () => {
     expect(resolveContextWindow(agent)).toBe(1_000_000);
   });
 
-
   it('retorna null para OpenRouter com slug nao catalogado', () => {
     const agent = makeExternalAgent({ provider: 'openrouter', model: 'unknown/future-model-v99' });
     expect(resolveContextWindow(agent)).toBeNull();
   });
-
 
   it('retorna contextWindow informado pelo usuario para provider openai-compatible', () => {
     const agent = makeExternalAgent({
@@ -152,7 +145,6 @@ describe('resolveContextWindow', () => {
     expect(resolveContextWindow(agent)).toBeNull();
   });
 
-
   it('retorna null para agente cloud', () => {
     expect(resolveContextWindow(makeCloudAgent())).toBeNull();
   });
@@ -170,7 +162,6 @@ describe('resolveContextWindow', () => {
     expect(resolveContextWindow(agent)).toBeNull();
   });
 });
-
 
 describe('formatContextWindow', () => {
   it('1_000_000 => "1M tokens"', () => {

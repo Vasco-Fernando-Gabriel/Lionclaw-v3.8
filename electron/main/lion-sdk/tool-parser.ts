@@ -1,4 +1,3 @@
-
 import { findLionToolSchema, type LionToolSchema } from './tool-registry';
 
 export interface LionToolUse {
@@ -45,18 +44,19 @@ function nextSyntheticId(): string {
   return `lion_call_${Date.now().toString(36)}_${_autoId.toString(36)}`;
 }
 
-
 export function parseContentBlocks(blocks: AnthropicContentBlock[]): ParsedToolCallBatch {
   const calls: LionToolUse[] = [];
   const textParts: string[] = [];
   for (const b of blocks) {
     if (!b || typeof b.type !== 'string') continue;
     if (b.type === 'tool_use') {
-      calls.push(normalizeCall({
-        id: b.id,
-        name: b.name,
-        input: b.input,
-      }));
+      calls.push(
+        normalizeCall({
+          id: b.id,
+          name: b.name,
+          input: b.input,
+        }),
+      );
     } else if (b.type === 'text' && typeof b.text === 'string') {
       textParts.push(b.text);
     }
@@ -96,11 +96,13 @@ export function parseNativeToolCalls(toolCalls: NativeToolCall[]): LionToolUse[]
     } else if (raw && typeof raw === 'object') {
       input = raw;
     }
-    out.push(normalizeCall({
-      id: t.id,
-      name: t.function.name,
-      input,
-    }));
+    out.push(
+      normalizeCall({
+        id: t.id,
+        name: t.function.name,
+        input,
+      }),
+    );
   }
   return out;
 }
@@ -183,7 +185,6 @@ export function parseToolCallBatch(input: CombinedParseInput): ParsedToolCallBat
   return { calls: allCalls, remainingText };
 }
 
-
 function normalizeCall(raw: { id?: string; name?: string; input?: unknown }): LionToolUse {
   const id = typeof raw.id === 'string' && raw.id.length > 0 ? raw.id : nextSyntheticId();
   const name = typeof raw.name === 'string' ? raw.name : '';
@@ -201,14 +202,12 @@ function normalizeCall(raw: { id?: string; name?: string; input?: unknown }): Li
     return {
       id,
       name,
-      input: typeof raw.input === 'object' && raw.input ? raw.input as Record<string, unknown> : {},
+      input: typeof raw.input === 'object' && raw.input ? (raw.input as Record<string, unknown>) : {},
       isError: true,
       errorMessage: `Unknown tool: ${name}`,
     };
   }
-  const input = typeof raw.input === 'object' && raw.input !== null
-    ? raw.input as Record<string, unknown>
-    : {};
+  const input = typeof raw.input === 'object' && raw.input !== null ? (raw.input as Record<string, unknown>) : {};
   const validation = validateInputAgainstSchema(input, schema);
   if (!validation.ok) {
     return {
@@ -226,7 +225,10 @@ function normalizeCall(raw: { id?: string; name?: string; input?: unknown }): Li
   };
 }
 
-function validateInputAgainstSchema(input: Record<string, unknown>, schema: LionToolSchema): { ok: true } | { ok: false; message: string } {
+function validateInputAgainstSchema(
+  input: Record<string, unknown>,
+  schema: LionToolSchema,
+): { ok: true } | { ok: false; message: string } {
   const required = schema.input_schema.required ?? [];
   const missing = required.filter((k) => !(k in input));
   if (missing.length > 0) {

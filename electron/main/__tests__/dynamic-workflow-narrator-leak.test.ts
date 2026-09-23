@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('../db', () => ({
@@ -134,9 +133,9 @@ describe('realNarrateFn - SM-30 (sem leak de abort listener no signal longevo)',
     const signal = controller.signal;
     const tracker = trackAbortListeners(signal);
     executeNarratorMock.mockRejectedValueOnce(new Error('modelo caiu'));
-    await expect(
-      realNarrateFn({ runId: 'run-1', prompt: 'marco que falha', abortSignal: signal }),
-    ).rejects.toThrow('modelo caiu');
+    await expect(realNarrateFn({ runId: 'run-1', prompt: 'marco que falha', abortSignal: signal })).rejects.toThrow(
+      'modelo caiu',
+    );
     expect(tracker.count()).toBe(0);
     const ok = await realNarrateFn({ runId: 'run-1', prompt: 'marco ok', abortSignal: signal });
     expect(ok.text).toBe('O coder comecou a implementar.');

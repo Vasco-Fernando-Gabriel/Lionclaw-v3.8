@@ -1,4 +1,3 @@
-
 import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -57,8 +56,7 @@ afterEach(async () => {
   for (const dir of tmpDirs.splice(0)) {
     try {
       fs.rmSync(dir, { recursive: true, force: true });
-    } catch {
-    }
+    } catch {}
   }
 });
 

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
@@ -47,11 +46,7 @@ vi.mock('../vision-engine', async () => {
 });
 
 import { __telegramInternal, buildTelegramCompactionSeed } from '../telegram-bridge';
-import {
-  VISION_TRANSCRIPTION_MARKER,
-  VisionCallError,
-  buildTranscriptionBlock,
-} from '../vision-engine';
+import { VISION_TRANSCRIPTION_MARKER, VisionCallError, buildTranscriptionBlock } from '../vision-engine';
 
 const ATTACHMENT = {
   id: 'tg-1-2',

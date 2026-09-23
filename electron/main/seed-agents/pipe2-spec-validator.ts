@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const PIPE2_SPEC_VALIDATOR_ID = 'pipe2-spec-validator';

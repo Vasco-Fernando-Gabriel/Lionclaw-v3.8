@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -16,9 +15,7 @@ function grabBlock(source: string, name: string): string {
   return match[1];
 }
 
-const V109_SOURCE = readMigration(
-  'v109-dynamic-workflow-validator-tests-no-containment.ts',
-);
+const V109_SOURCE = readMigration('v109-dynamic-workflow-validator-tests-no-containment.ts');
 
 const BLOCKS: Array<{ old: string; neu: string }> = [
   { old: 'AXIS_OLD', neu: 'AXIS_NEW' },

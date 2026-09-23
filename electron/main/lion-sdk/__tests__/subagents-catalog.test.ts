@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../logger', () => ({
@@ -196,9 +195,7 @@ describe('buildLionSubagentCatalogPrompt index (compact) mode', () => {
   ];
 
   it('index e o DEFAULT do parametro mode', () => {
-    expect(buildLionSubagentCatalogPrompt(AGENTS_IDX)).toBe(
-      buildLionSubagentCatalogPrompt(AGENTS_IDX, 'index'),
-    );
+    expect(buildLionSubagentCatalogPrompt(AGENTS_IDX)).toBe(buildLionSubagentCatalogPrompt(AGENTS_IDX, 'index'));
   });
 
   it('1 linha por agente `- id: resumo (runtime/model)` com TODO chat-eligible presente', () => {

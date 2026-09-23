@@ -1,4 +1,3 @@
-
 import type {
   CodexStreamCallbacks,
   CodexResponse,
@@ -13,10 +12,8 @@ import {
   deriveMcpGatewayDisplayName,
 } from '../mcp-display';
 
-
 export type LionSandbox = 'workspace-write' | 'read-only' | 'danger-full-access';
 export type LionApproval = 'never' | 'on-request' | 'auto-edit';
-
 
 const SANDBOX_TO_WIRE: Record<LionSandbox, string> = {
   'workspace-write': 'workspaceWrite',
@@ -74,14 +71,12 @@ export function approvalFromWire(wire: string): LionApproval {
   return internal;
 }
 
-
 export interface AppServerEvent {
   method: string;
   params?: Record<string, unknown>;
 }
 
 const MAX_PATCH_FAILURE_SAMPLES = 5;
-
 
 export interface TranslatorAccumulator {
   threadId: string | null;
@@ -96,6 +91,7 @@ export interface TranslatorAccumulator {
   failed: boolean;
   openCommands: Map<string, { cmd: string; startedAt: number }>;
   errorCode?: string;
+  errorDetail?: string;
   lastUsage?: CodexTokenUsage;
   modelContextWindow?: number;
 }
@@ -122,7 +118,6 @@ export function createAccumulator(threadId?: string | null): TranslatorAccumulat
   };
 }
 
-
 function toNum(v: unknown): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : 0;
 }
@@ -132,14 +127,10 @@ export function normalizeUsage(payload: Record<string, unknown> | undefined): Co
   const inputTokens = toNum(p['inputTokens'] ?? p['input_tokens']);
   const cachedInputTokens = toNum(p['cachedInputTokens'] ?? p['cached_input_tokens']);
   const outputTokens = toNum(p['outputTokens'] ?? p['output_tokens']);
-  const reasoningOutputTokens = toNum(
-    p['reasoningOutputTokens'] ?? p['reasoning_output_tokens'],
-  );
+  const reasoningOutputTokens = toNum(p['reasoningOutputTokens'] ?? p['reasoning_output_tokens']);
   const explicitTotal = p['totalTokens'] ?? p['total_tokens'];
   const totalTokens =
-    typeof explicitTotal === 'number' && Number.isFinite(explicitTotal)
-      ? explicitTotal
-      : inputTokens + outputTokens;
+    typeof explicitTotal === 'number' && Number.isFinite(explicitTotal) ? explicitTotal : inputTokens + outputTokens;
   return {
     inputTokens,
     cachedInputTokens,
@@ -148,7 +139,6 @@ export function normalizeUsage(payload: Record<string, unknown> | undefined): Co
     totalTokens,
   };
 }
-
 
 function asString(v: unknown): string {
   return typeof v === 'string' ? v : '';
@@ -176,17 +166,34 @@ function flattenMcpResult(result: unknown): string {
     for (const block of content) {
       const b = asRecord(block);
       if (typeof b['text'] === 'string') parts.push(b['text'] as string);
-      else if (b['type'] === 'image' || b['data'] !== undefined || b['url'] !== undefined || b['image_url'] !== undefined) {
-        try { parts.push(JSON.stringify(b)); } catch { /* skip unserializable block */ }
+      else if (
+        b['type'] === 'image' ||
+        b['data'] !== undefined ||
+        b['url'] !== undefined ||
+        b['image_url'] !== undefined
+      ) {
+        try {
+          parts.push(JSON.stringify(b));
+        } catch {
+          /* skip unserializable block */
+        }
       }
     }
     if (parts.length) return parts.join('\n');
   }
   const structured = rec['structuredContent'] ?? rec['structured_content'];
   if (structured !== undefined) {
-    try { return JSON.stringify(structured); } catch { return ''; }
+    try {
+      return JSON.stringify(structured);
+    } catch {
+      return '';
+    }
   }
-  try { return JSON.stringify(result); } catch { return ''; }
+  try {
+    return JSON.stringify(result);
+  } catch {
+    return '';
+  }
 }
 
 export interface TranslateEventHooks {
@@ -250,14 +257,17 @@ export function translateEvent(
       const exitCode = toNum(params['exitCode'] ?? params['exit_code']);
       const open = callId ? acc.openCommands.get(callId) : undefined;
       const durationMs =
-        toNum(params['durationMs'] ?? params['duration_ms']) ||
-        (open ? Math.max(0, Date.now() - open.startedAt) : 0);
+        toNum(params['durationMs'] ?? params['duration_ms']) || (open ? Math.max(0, Date.now() - open.startedAt) : 0);
       const resolvedCmd = cmd || open?.cmd || 'command';
       acc.commandsRun.push({ cmd: resolvedCmd, exitCode, durationMs });
       if (callId) acc.openCommands.delete(callId);
-      cb?.onToolUseComplete?.('Bash', { command: resolvedCmd, exitCode, durationMs }, {
-        callId: callId || undefined,
-      });
+      cb?.onToolUseComplete?.(
+        'Bash',
+        { command: resolvedCmd, exitCode, durationMs },
+        {
+          callId: callId || undefined,
+        },
+      );
       return;
     }
 
@@ -319,10 +329,7 @@ export function translateEvent(
     case 'thread/tokenUsage/updated':
     case 'tokenUsage/updated': {
       const tuRoot = asRecord(params['tokenUsage'] ?? params['usage'] ?? params);
-      const total =
-        tuRoot['total'] && typeof tuRoot['total'] === 'object'
-          ? asRecord(tuRoot['total'])
-          : tuRoot;
+      const total = tuRoot['total'] && typeof tuRoot['total'] === 'object' ? asRecord(tuRoot['total']) : tuRoot;
       acc.usage = normalizeUsage(total);
       if (tuRoot['last'] && typeof tuRoot['last'] === 'object') {
         acc.lastUsage = normalizeUsage(asRecord(tuRoot['last']));
@@ -374,10 +381,7 @@ export function translateEvent(
         const server = asString(item['server']);
         const tool = asString(item['tool']);
         let label = server && tool ? `mcp:${server}.${tool}` : tool || server || 'mcp-tool';
-        if (
-          server === CODEX_GATEWAY_SERVER_ID &&
-          (tool === 'mcp_invoke' || tool === 'mcp_schema')
-        ) {
+        if (server === CODEX_GATEWAY_SERVER_ID && (tool === 'mcp_invoke' || tool === 'mcp_schema')) {
           const rawArgs = item['arguments'] ?? item['args'];
           let parsedArgs: unknown = rawArgs;
           if (typeof rawArgs === 'string') {
@@ -387,8 +391,7 @@ export function translateEvent(
               parsedArgs = null;
             }
           }
-          const metaName =
-            tool === 'mcp_invoke' ? GATEWAY_INVOKE_TOOL_NAME : GATEWAY_SCHEMA_TOOL_NAME;
+          const metaName = tool === 'mcp_invoke' ? GATEWAY_INVOKE_TOOL_NAME : GATEWAY_SCHEMA_TOOL_NAME;
           const real = deriveMcpGatewayDisplayName(metaName, parsedArgs);
           if (real) {
             const [, realServer, realTool] = real.split('__');
@@ -435,38 +438,72 @@ export function translateEvent(
 
     default: {
       hooks.onUnknownEvent?.(event);
-      void toolKindFor(method); // keep helper referenced; classifier is available for callers.
+      void toolKindFor(method);
       return;
     }
   }
 }
 
-
-export function extractCodexErrorCode(event: AppServerEvent): string | undefined {
+function readCodexErrorInfo(event: AppServerEvent): unknown {
   const params = event.params;
   if (!params) return undefined;
   const turnObj = params['turn'] as { error?: unknown } | undefined;
-  const errInfo = params['error'] ?? turnObj?.error;
-  if (typeof errInfo === 'string') return errInfo || undefined;
-  if (errInfo && typeof errInfo === 'object') {
-    const rec = errInfo as Record<string, unknown>;
-    const explicit = rec['code'] ?? rec['kind'] ?? rec['type'];
-    if (typeof explicit === 'string' && explicit) return explicit;
-    const key = Object.keys(rec).find(
-      (k) => k !== 'message' && k !== 'details' && k !== 'willRetry',
-    );
-    if (key) return key;
-  }
-  return undefined;
+  return params['error'] ?? turnObj?.error;
 }
 
+const CODEX_ERROR_DETAIL_KEYS = ['message', 'details', 'detail', 'reason', 'description'];
+
+export function extractCodexErrorCode(event: AppServerEvent): string | undefined {
+  const errInfo = readCodexErrorInfo(event);
+  if (typeof errInfo === 'string') return errInfo || undefined;
+  const tags: string[] = [];
+  let current: unknown = errInfo;
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) break;
+    const rec = current as Record<string, unknown>;
+    const explicit = rec['code'] ?? rec['kind'] ?? rec['type'];
+    if (typeof explicit === 'string' && explicit) {
+      tags.push(explicit);
+      break;
+    }
+    const key = Object.keys(rec).find((k) => !CODEX_ERROR_DETAIL_KEYS.includes(k) && k !== 'willRetry');
+    if (!key) break;
+    tags.push(key);
+    current = rec[key];
+  }
+  return tags.length > 0 ? tags.join('.') : undefined;
+}
+
+export function extractCodexErrorDetail(event: AppServerEvent): string | undefined {
+  const errInfo = readCodexErrorInfo(event);
+  if (errInfo === undefined || errInfo === null) return undefined;
+  if (typeof errInfo === 'string') return errInfo.trim() || undefined;
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  const visit = (value: unknown, depth: number): void => {
+    if (depth > 5 || !value || typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value);
+    const rec = value as Record<string, unknown>;
+    for (const key of CODEX_ERROR_DETAIL_KEYS) {
+      const found = rec[key];
+      if (typeof found === 'string' && found.trim()) parts.push(found.trim());
+    }
+    for (const nested of Object.values(rec)) {
+      if (nested && typeof nested === 'object') visit(nested, depth + 1);
+    }
+  };
+  visit(errInfo, 0);
+  if (parts.length > 0) return Array.from(new Set(parts)).join(' | ').slice(0, 1000);
+  try {
+    return JSON.stringify(errInfo).slice(0, 1000);
+  } catch {
+    return undefined;
+  }
+}
 
 export type TurnOutcome = 'completed' | 'failed' | 'interrupted' | 'timeout' | 'auth_required';
 
-export function finalizeResponse(
-  acc: TranslatorAccumulator,
-  outcome: TurnOutcome,
-): CodexResponse {
+export function finalizeResponse(acc: TranslatorAccumulator, outcome: TurnOutcome): CodexResponse {
   let status: CodexResponse['status'];
   if (acc.authRequired || outcome === 'auth_required') {
     status = 'auth_required';
@@ -490,9 +527,10 @@ export function finalizeResponse(
     ...(acc.errorCode !== undefined && (status === 'failed' || status === 'timeout')
       ? { errorCode: acc.errorCode }
       : {}),
-    ...(acc.lastUsage !== undefined ? { lastUsage: acc.lastUsage } : {}),
-    ...(acc.modelContextWindow !== undefined
-      ? { modelContextWindow: acc.modelContextWindow }
+    ...(acc.errorDetail !== undefined && (status === 'failed' || status === 'timeout')
+      ? { errorDetail: acc.errorDetail }
       : {}),
+    ...(acc.lastUsage !== undefined ? { lastUsage: acc.lastUsage } : {}),
+    ...(acc.modelContextWindow !== undefined ? { modelContextWindow: acc.modelContextWindow } : {}),
   };
 }

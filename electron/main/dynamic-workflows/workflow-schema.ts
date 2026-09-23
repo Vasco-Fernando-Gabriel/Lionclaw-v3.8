@@ -1,16 +1,7 @@
-
 export type SchemaStrategy = 'forced-tool' | 'parse-repair';
 
 export type SchemaRuntime =
-  | 'cloud'
-  | 'local'
-  | 'external'
-  | 'codex'
-  | 'kimi'
-  | 'grok'
-  | 'zai'
-  | 'minimax-tp'
-  | 'cursor';
+  'cloud' | 'local' | 'external' | 'codex' | 'kimi' | 'grok' | 'zai' | 'minimax-tp' | 'cursor';
 
 export function schemaStrategyForRuntime(runtime: SchemaRuntime): SchemaStrategy {
   switch (runtime) {
@@ -33,10 +24,7 @@ export interface SchemaValidationResult {
   errors: string[];
 }
 
-export type SchemaValidator = (
-  value: unknown,
-  schema: WorkflowOutputSchema,
-) => SchemaValidationResult;
+export type SchemaValidator = (value: unknown, schema: WorkflowOutputSchema) => SchemaValidationResult;
 
 export interface WorkflowOutputSchema {
   name?: string;
@@ -44,21 +32,11 @@ export interface WorkflowOutputSchema {
   required?: string[];
 }
 
-export function jsonSchemaToOutputSchema(
-  raw: unknown,
-  refName?: string,
-): WorkflowOutputSchema | null {
+export function jsonSchemaToOutputSchema(raw: unknown, refName?: string): WorkflowOutputSchema | null {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const obj = raw as Record<string, unknown>;
-  const required = Array.isArray(obj.required)
-    ? obj.required.filter((k): k is string => typeof k === 'string')
-    : [];
-  const name =
-    typeof obj.title === 'string'
-      ? obj.title
-      : typeof obj.$id === 'string'
-        ? obj.$id
-        : refName;
+  const required = Array.isArray(obj.required) ? obj.required.filter((k): k is string => typeof k === 'string') : [];
+  const name = typeof obj.title === 'string' ? obj.title : typeof obj.$id === 'string' ? obj.$id : refName;
   return {
     ...(name !== undefined ? { name } : {}),
     type: 'object',
@@ -71,10 +49,7 @@ export interface SchemaAttemptOutput {
   structured?: unknown;
 }
 
-export type SchemaAttemptFn = (params: {
-  attemptIndex: number;
-  feedback: string[];
-}) => Promise<SchemaAttemptOutput>;
+export type SchemaAttemptFn = (params: { attemptIndex: number; feedback: string[] }) => Promise<SchemaAttemptOutput>;
 
 export interface ResolveSchemaOptions {
   runtime: SchemaRuntime;
@@ -108,13 +83,11 @@ export function extractFirstJsonObject(text: string): unknown {
   if (!text) return undefined;
 
   const trimmed = text.trim();
-  const directCandidate =
-    trimmed.startsWith('{') || trimmed.startsWith('[') ? trimmed : null;
+  const directCandidate = trimmed.startsWith('{') || trimmed.startsWith('[') ? trimmed : null;
   if (directCandidate) {
     try {
       return JSON.parse(directCandidate);
-    } catch {
-    }
+    } catch {}
   }
 
   for (let start = 0; start < text.length; start++) {
@@ -154,10 +127,7 @@ export function extractFirstJsonObject(text: string): unknown {
   return undefined;
 }
 
-export function minimalShapeValidator(
-  value: unknown,
-  schema: WorkflowOutputSchema,
-): SchemaValidationResult {
+export function minimalShapeValidator(value: unknown, schema: WorkflowOutputSchema): SchemaValidationResult {
   const errors: string[] = [];
   const wantsObject = schema.type === undefined || schema.type === 'object';
 
@@ -177,9 +147,7 @@ export function minimalShapeValidator(
   return { ok: errors.length === 0, errors };
 }
 
-export async function resolveStructuredOutput(
-  options: ResolveSchemaOptions,
-): Promise<SchemaResolution> {
+export async function resolveStructuredOutput(options: ResolveSchemaOptions): Promise<SchemaResolution> {
   const strategy = schemaStrategyForRuntime(options.runtime);
   const validate = options.validator ?? minimalShapeValidator;
   const maxAttempts = Math.max(1, options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS);
@@ -195,9 +163,7 @@ export async function resolveStructuredOutput(
     } else {
       candidate = extractFirstJsonObject(out.text);
       if (candidate === undefined) {
-        lastErrors = [
-          `nenhum objeto JSON valido no output (schema "${options.schema.name ?? 'sem-nome'}")`,
-        ];
+        lastErrors = [`nenhum objeto JSON valido no output (schema "${options.schema.name ?? 'sem-nome'}")`];
         continue;
       }
     }

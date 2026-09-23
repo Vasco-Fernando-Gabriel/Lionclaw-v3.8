@@ -1,37 +1,3 @@
-/**
- * Architecture-review pipeline handlers (SPEC §4 / Sprint 8A.1).
- *
- * Houses the 7 per-phase methods previously inline in index.ts:
- *   - runArchitecturePhase1Map                    (phase 1, auto)
- *   - handleArchitecturePhase2TriageMessage       (phase 2, conversation)
- *   - runArchitecturePhase3Diagnosis              (phase 3, auto)
- *   - handleArchitecturePhase4DecisionMessage     (phase 4, conversation)
- *   - runArchitecturePhase5Spec                   (phase 5, auto loop builder<->validator)
- *   - handleArchitecturePhase6SpecValidationMessage (phase 6, conversation)
- *   - handleArchitecturePhase7SpecEnricherMessage   (phase 7, conversation)
- *
- * They were moved VERBATIM (mechanical move, not a rewrite) and reparameterized
- * from `this.X` to an injected `ctx: PipelineEngineContext` — the same late-bound
- * `buildXEngine` pattern as reset.ts / message-router.ts / lifecycle.ts. index.ts
- * keeps a thin delegator method for each (so the existing sendMessage / runAutoPhase
- * dispatch via `this.handleArchitectureX` / `this.runArchitectureX` is unchanged)
- * and builds the ctx per call with bound delegates.
- *
- * INVARIANTS PRESERVED
- *  - INV-2 (R8): every agent run goes through `ctx.spawnAgent` — the single
- *    executeAgent entry point in index.ts. No executeAgent here.
- *  - INV-13 (SQL only in db.ts): phase 5's inline
- *    `getDb().prepare('UPDATE harness_projects SET spec_path = ?, updated_at = ...')`
- *    is replaced by `updateHarnessProject(projectId, { specPath })`, which runs the
- *    byte-identical SQL (spec_path = ?, updated_at = datetime('now')) — same
- *    behavior, no SQL outside db.ts (mirrors the reset.ts Sprint 6 treatment).
- *  - INV-1 (IPC): all pipeline:* emits are on the same channels with the same
- *    payloads, unchanged.
- *  - "NAO escrever fora de <runDir>/ durante fases pre-SPEC" and the R6 ADR
- *    (reuse spec-builder/validator/enricher via briefing in the user message)
- *    are unchanged — the prompts are moved verbatim.
- */
-
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../../logger';
@@ -61,10 +27,6 @@ import type { PipelineEngineContext, HandlerPhaseState } from './context';
 
 const logger = createLogger('pipeline-engine');
 
-// -------------------------------------------------------------------------
-// Architecture Review Phase 1: Mapeamento Arquitetural (auto)
-// -------------------------------------------------------------------------
-
 export async function runArchitecturePhase1Map(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -73,14 +35,8 @@ export async function runArchitecturePhase1Map(
 ): Promise<void> {
   const projectPath = (project as { projectPath: string }).projectPath;
 
-  // Ensure run context exists (create runId + dir + manifest if missing).
-  // Idempotent — safe to re-run on phase 1 reset.
   const { context: archCtx, runIdGenerated } = ensureArchitectureReviewContext(project);
 
-  // Persist runId in DB so subsequent phases (and reboots) can resolve the
-  // same run. Without this, getArchitectureReviewContext returns null on the
-  // next call. Critical: this is the gating write — without it the rest of
-  // the pipeline cannot find the run dir.
   if (runIdGenerated) {
     updateHarnessProject(projectId, {
       config: {
@@ -111,10 +67,6 @@ export async function runArchitecturePhase1Map(
     `Siga o processo descrito no seu systemPrompt: reconhecimento inicial, ` +
     `mapeamento top-level, hotspots e honestidade sobre o que nao foi mapeado.`;
 
-  // Snapshot runId in-memory; if spawnAgent fails before it returns, the next
-  // run (after user reset/retry) will read the persisted runId and reuse the
-  // same dir — no orphan run dirs accumulate.
-
   let phase1Output = '';
   const result = await ctx.spawnAgent(ARCHITECTURE_MAPPER_ID, prompt, {
     projectId,
@@ -138,22 +90,17 @@ export async function runArchitecturePhase1Map(
     pipelineType: 'architecture-review',
   });
 
-  // Hard-fail: agente DEVE ter escrito ambos MD e JSON. Sem isso, fase 2 cai
-  // em "Architecture Map not found" — erro tardio confuso para o user.
   if (!fs.existsSync(archCtx.mapMdPath) || !fs.existsSync(archCtx.mapJsonPath)) {
     throw new Error(
       `architecture-mapper did not produce required artefacts. ` +
-      `Expected both:\n  - ${archCtx.mapMdPath}\n  - ${archCtx.mapJsonPath}\n` +
-      `Reset phase 1 and try again.`,
+        `Expected both:\n  - ${archCtx.mapMdPath}\n  - ${archCtx.mapJsonPath}\n` +
+        `Reset phase 1 and try again.`,
     );
   }
-  // Validate JSON is parseable (catches LLM emitting malformed JSON early).
   try {
     JSON.parse(fs.readFileSync(archCtx.mapJsonPath, 'utf-8'));
   } catch (err) {
-    throw new Error(
-      `architecture-mapper produced invalid JSON at ${archCtx.mapJsonPath}: ${(err as Error).message}`,
-    );
+    throw new Error(`architecture-mapper produced invalid JSON at ${archCtx.mapJsonPath}: ${(err as Error).message}`);
   }
 
   emitIPC('pipeline:document-updated', {
@@ -173,13 +120,8 @@ export async function runArchitecturePhase1Map(
 
   logger.info({ projectId, runId: archCtx.runId }, 'Architecture Phase 1 (Map) completed');
 
-  // Auto-advance to phase 2 (Triage conversation).
   await ctx.advanceToNextPhase(projectId, state);
 }
-
-// -------------------------------------------------------------------------
-// Architecture Review Phase 2: Triagem de Alvos (conversation)
-// -------------------------------------------------------------------------
 
 export async function handleArchitecturePhase2TriageMessage(
   ctx: PipelineEngineContext,
@@ -208,7 +150,6 @@ export async function handleArchitecturePhase2TriageMessage(
   }
 
   if (!sessionEntry.alive) {
-    // First turn: build candidates from the map.
     const triagePrompt =
       `Voce e o Architecture Target Triage do pipeline architecture-review.\n` +
       `INFORMACAO IMPORTANTE: NAO modifique codigo do projeto-alvo. ` +
@@ -273,9 +214,6 @@ export async function handleArchitecturePhase2TriageMessage(
     emitIPC('pipeline:agent-completed', { projectId });
     emitPipelineStream({ projectId, phase: 2, type: 'done' });
   } else {
-    // Follow-up: continue conversation. The agent may re-explore code or
-    // refine candidates; on each turn we re-emit the candidates document if
-    // it changed (heuristic: re-emit always — frontend de-dupes).
     const phase2Acc = { text: '', completed: false };
     const followupResult = await ctx.spawnAgent(ARCHITECTURE_TARGET_TRIAGE_ID, message, {
       projectId,
@@ -284,7 +222,6 @@ export async function handleArchitecturePhase2TriageMessage(
       abortController: state.abortController,
       continueSession: true,
       priorMessages: ctx.buildPriorMessagesForPhase(projectId, 2),
-      // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
       rebuildPromptOnRetry: () =>
         buildCodexResumePrompt({
           projectId,
@@ -327,10 +264,6 @@ export async function handleArchitecturePhase2TriageMessage(
     emitPipelineStream({ projectId, phase: 2, type: 'done' });
   }
 }
-
-// -------------------------------------------------------------------------
-// Architecture Review Phase 3: Diagnostico Arquitetural (auto)
-// -------------------------------------------------------------------------
 
 export async function runArchitecturePhase3Diagnosis(
   ctx: PipelineEngineContext,
@@ -409,13 +342,11 @@ export async function runArchitecturePhase3Diagnosis(
     pipelineType: 'architecture-review',
   });
 
-  // Hard-fail: agente DEVE ter escrito ambos MD e JSON. Fase 4/5 dependem
-  // do diagnosis; sem ele o erro vira tardio e confuso.
   if (!fs.existsSync(archCtx.diagnosisMdPath) || !fs.existsSync(archCtx.diagnosisJsonPath)) {
     throw new Error(
       `architecture-diagnostician did not produce required artefacts. ` +
-      `Expected both:\n  - ${archCtx.diagnosisMdPath}\n  - ${archCtx.diagnosisJsonPath}\n` +
-      `Reset phase 3 and try again.`,
+        `Expected both:\n  - ${archCtx.diagnosisMdPath}\n  - ${archCtx.diagnosisJsonPath}\n` +
+        `Reset phase 3 and try again.`,
     );
   }
   try {
@@ -432,7 +363,6 @@ export async function runArchitecturePhase3Diagnosis(
     content: fs.readFileSync(archCtx.diagnosisMdPath, 'utf-8'),
   });
 
-  // Bump manifest updatedAt so UI sees fresh activity timestamp.
   patchArchitectureReviewManifest(project, {});
 
   emitPipelineStream({ projectId, phase: 3, type: 'done' });
@@ -446,13 +376,8 @@ export async function runArchitecturePhase3Diagnosis(
 
   logger.info({ projectId, runId: archCtx.runId, selectedCandidateId }, 'Architecture Phase 3 (Diagnosis) completed');
 
-  // Auto-advance to phase 4 (Decision Interview conversation).
   await ctx.advanceToNextPhase(projectId, state);
 }
-
-// -------------------------------------------------------------------------
-// Architecture Review Phase 4: Entrevista de Decisao (conversation, append-only)
-// -------------------------------------------------------------------------
 
 export async function handleArchitecturePhase4DecisionMessage(
   ctx: PipelineEngineContext,
@@ -481,8 +406,6 @@ export async function handleArchitecturePhase4DecisionMessage(
   }
 
   if (!sessionEntry.alive) {
-    // First turn: ENGINE bootstrap the decision file header (if not exists).
-    // The agent NEVER writes the header — engine owns it. Agent only APPENDS ## DN.
     if (!fs.existsSync(archCtx.decisionsMdPath)) {
       const header =
         `# Architecture Decisions: ${path.basename(projectPath)}/${archCtx.runId}\n\n` +
@@ -494,10 +417,12 @@ export async function handleArchitecturePhase4DecisionMessage(
         `  - ${archCtx.diagnosisMdPath}\n\n` +
         `---\n\n`;
       fs.writeFileSync(archCtx.decisionsMdPath, header, 'utf-8');
-      logger.info({ projectId, decisionsMdPath: archCtx.decisionsMdPath }, 'Architecture Phase 4: created decisions.md header');
+      logger.info(
+        { projectId, decisionsMdPath: archCtx.decisionsMdPath },
+        'Architecture Phase 4: created decisions.md header',
+      );
     }
 
-    // Compute next decision number from current file (monotonic, anti-duplicate).
     const decisionsContent = fs.readFileSync(archCtx.decisionsMdPath, 'utf-8');
     const decisionMatches = decisionsContent.match(/^##\s*D(\d+)/gm) ?? [];
     const nextDecisionN = decisionMatches.length + 1;
@@ -562,8 +487,6 @@ export async function handleArchitecturePhase4DecisionMessage(
     emitIPC('pipeline:agent-completed', { projectId });
     emitPipelineStream({ projectId, phase: 4, type: 'done' });
   } else {
-    // Follow-up turn: continueSession. Agent must re-read decisions.md per the
-    // continuity rule (it sees the system prompt + this user message).
     const phase4Acc = { text: '', completed: false };
     const followupResult = await ctx.spawnAgent(ARCHITECTURE_DECISION_INTERVIEWER_ID, message, {
       projectId,
@@ -572,7 +495,6 @@ export async function handleArchitecturePhase4DecisionMessage(
       abortController: state.abortController,
       continueSession: true,
       priorMessages: ctx.buildPriorMessagesForPhase(projectId, 4),
-      // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
       rebuildPromptOnRetry: () =>
         buildCodexResumePrompt({
           projectId,
@@ -618,21 +540,6 @@ export async function handleArchitecturePhase4DecisionMessage(
   }
 }
 
-// -------------------------------------------------------------------------
-// Architecture Review Phase 5: Spec Generation (auto LOOP builder ↔ validator)
-//
-// Pattern espelhado de runPhase9 (dev/feature):
-// - Loop ate MAX_ROUNDS=3 alternando spec-builder e spec-validator.
-// - Round 1: builder gera SPEC do zero a partir dos 4 artefatos arquiteturais.
-// - Round 2-3: builder corrige a SPEC baseado no `validation-report.md` do round anterior.
-// - Validator sempre escreve `## Status: PASS` ou `## Status: FAIL` no relatorio.
-// - Se PASS, sai do loop. Se FAIL no ultimo round, avanca mesmo assim — fase 6
-//   (conversation) e o gate humano onde o usuario aprova ou pede mais ajustes.
-//
-// R6 ADR: spec-builder e spec-validator sao COMPARTILHADOS entre pipelines.
-// O contexto arquitetural vive no user message do handler, nao em fork de agente.
-// -------------------------------------------------------------------------
-
 export async function runArchitecturePhase5Spec(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -656,7 +563,6 @@ export async function runArchitecturePhase5Spec(
     }
   }
 
-  // Validation report path lives inside the run dir (canonical area).
   const validationReportPath = path.join(archCtx.runDir, `spec-validation-${archCtx.runId}.md`);
 
   const phaseName = ARCHITECTURE_PHASE_NAMES[5] ?? 'Spec Generation';
@@ -676,7 +582,6 @@ export async function runArchitecturePhase5Spec(
         metadata: { round, maxRounds: MAX_ROUNDS },
       });
 
-      // ---- Spec Builder ----
       let builderPrompt: string;
       if (round === 1) {
         builderPrompt =
@@ -724,7 +629,11 @@ export async function runArchitecturePhase5Spec(
         onText: (chunk) => {
           builderOutput += chunk;
           emitPipelineStream({
-            projectId, phase: 5, type: 'text', content: chunk, metadata: { agent: 'spec-builder', round },
+            projectId,
+            phase: 5,
+            type: 'text',
+            content: chunk,
+            metadata: { agent: 'spec-builder', round },
           });
         },
         onToolUse: (toolName) => {
@@ -735,12 +644,6 @@ export async function runArchitecturePhase5Spec(
       if (builderOutput) {
         persistMessage({ kind: 'pipeline', projectId, phaseNumber: 5 }, 'assistant', builderOutput);
       }
-      // 'completed' (nao 'running'): cada round do builder e uma execucao
-      // de agente que terminou. O UPSERT em (projectId, phase, sprint=-1)
-      // sobrescreve a row a cada chamada — a ultima call dentro do loop
-      // (validator do round que passou ou ultimo round) define o status
-      // visivel na ProgressBar. Isso evita o bug visual de fase 5 ficando
-      // "running" pra sempre mesmo apos a fase 6/7 terem rodado.
       ctx.collectMetrics(projectId, 5, SPEC_BUILDER_ID, builderResult, 'completed', {
         pipelineType: 'architecture-review',
       });
@@ -748,7 +651,7 @@ export async function runArchitecturePhase5Spec(
       if (!fs.existsSync(archCtx.specPath)) {
         throw new Error(
           `spec-builder did not write SPEC at expected path ${archCtx.specPath} ` +
-          `(round ${round}). Reset phase 5 and try again.`,
+            `(round ${round}). Reset phase 5 and try again.`,
         );
       }
 
@@ -760,7 +663,6 @@ export async function runArchitecturePhase5Spec(
 
       if (state.abortController.signal.aborted) break;
 
-      // ---- Spec Validator ----
       emitIPC('pipeline:phase-changed', {
         projectId,
         phase: 5,
@@ -801,7 +703,11 @@ export async function runArchitecturePhase5Spec(
         onText: (chunk) => {
           validatorOutput += chunk;
           emitPipelineStream({
-            projectId, phase: 5, type: 'text', content: chunk, metadata: { agent: 'spec-validator', round },
+            projectId,
+            phase: 5,
+            type: 'text',
+            content: chunk,
+            metadata: { agent: 'spec-validator', round },
           });
         },
         onToolUse: (toolName) => {
@@ -836,9 +742,6 @@ export async function runArchitecturePhase5Spec(
     throw err;
   }
 
-  // Persist specPath in DB so subsequent phases find it.
-  // INV-13: routed through updateHarnessProject (byte-identical SQL:
-  // `spec_path = ?, updated_at = datetime('now')`) instead of inline getDb().prepare.
   updateHarnessProject(projectId, { specPath: archCtx.specPath });
 
   patchArchitectureReviewManifest(project, {});
@@ -858,13 +761,8 @@ export async function runArchitecturePhase5Spec(
     `Architecture Phase 5 (Spec Generation) completed (validation: ${passed ? 'PASS' : 'FAIL after ' + MAX_ROUNDS + ' rounds'})`,
   );
 
-  // Auto-advance to phase 6 (Spec Validation conversation — user reviews + approves).
   await ctx.advanceToNextPhase(projectId, state);
 }
-
-// -------------------------------------------------------------------------
-// Architecture Review Phase 6: Spec Validation (conversation, reuses spec-validator)
-// -------------------------------------------------------------------------
 
 export async function handleArchitecturePhase6SpecValidationMessage(
   ctx: PipelineEngineContext,
@@ -916,11 +814,7 @@ export async function handleArchitecturePhase6SpecValidationMessage(
       `## Mensagem do usuario\n${message}`;
 
     const phase6Acc = { text: '', completed: false };
-    // Captura a SPEC ANTES do spawn para detectar edicao sob concordancia
-    // (padrao da fase 9): so emitimos document-updated quando o conteudo muda.
-    const previousSpecContent = fs.existsSync(archCtx.specPath)
-      ? fs.readFileSync(archCtx.specPath, 'utf-8')
-      : '';
+    const previousSpecContent = fs.existsSync(archCtx.specPath) ? fs.readFileSync(archCtx.specPath, 'utf-8') : '';
     const result = await ctx.spawnAgent(ARCH_SPEC_VALIDATOR_ID, validatorPrompt, {
       projectId,
       phaseNumber: 6,
@@ -939,8 +833,6 @@ export async function handleArchitecturePhase6SpecValidationMessage(
     ctx.accumulateMetrics(state, 6, result);
     sessionEntry.alive = true;
 
-    // OBRIGATORIO: se o validador editou a SPEC sob concordancia, a UI so
-    // re-busca o artefato via este evento (PipelinePage). Emite so quando muda.
     if (fs.existsSync(archCtx.specPath)) {
       const currentSpecContent = fs.readFileSync(archCtx.specPath, 'utf-8');
       if (currentSpecContent !== previousSpecContent) {
@@ -955,11 +847,7 @@ export async function handleArchitecturePhase6SpecValidationMessage(
     emitPipelineStream({ projectId, phase: 6, type: 'done' });
   } else {
     const phase6Acc = { text: '', completed: false };
-    // Captura a SPEC ANTES do spawn (padrao da fase 9): emite document-updated
-    // apenas se o validador editou a SPEC sob concordancia neste turno.
-    const previousSpecContent = fs.existsSync(archCtx.specPath)
-      ? fs.readFileSync(archCtx.specPath, 'utf-8')
-      : '';
+    const previousSpecContent = fs.existsSync(archCtx.specPath) ? fs.readFileSync(archCtx.specPath, 'utf-8') : '';
     const followupResult = await ctx.spawnAgent(ARCH_SPEC_VALIDATOR_ID, message, {
       projectId,
       phaseNumber: 6,
@@ -967,7 +855,6 @@ export async function handleArchitecturePhase6SpecValidationMessage(
       abortController: state.abortController,
       continueSession: true,
       priorMessages: ctx.buildPriorMessagesForPhase(projectId, 6),
-      // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
       rebuildPromptOnRetry: () =>
         buildCodexResumePrompt({
           projectId,
@@ -997,7 +884,6 @@ export async function handleArchitecturePhase6SpecValidationMessage(
       persistMessage({ kind: 'pipeline', projectId, phaseNumber: 6 }, 'assistant', cleanedText);
     }
 
-    // OBRIGATORIO: a UI so atualiza a SPEC editada via este evento. Emite so quando muda.
     if (fs.existsSync(archCtx.specPath)) {
       const currentSpecContent = fs.readFileSync(archCtx.specPath, 'utf-8');
       if (currentSpecContent !== previousSpecContent) {
@@ -1012,10 +898,6 @@ export async function handleArchitecturePhase6SpecValidationMessage(
     emitPipelineStream({ projectId, phase: 6, type: 'done' });
   }
 }
-
-// -------------------------------------------------------------------------
-// Architecture Review Phase 7: Spec Enricher (conversation, architecture-specific)
-// -------------------------------------------------------------------------
 
 export async function handleArchitecturePhase7SpecEnricherMessage(
   ctx: PipelineEngineContext,
@@ -1100,7 +982,6 @@ export async function handleArchitecturePhase7SpecEnricherMessage(
       abortController: state.abortController,
       continueSession: true,
       priorMessages: ctx.buildPriorMessagesForPhase(projectId, 7),
-      // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
       rebuildPromptOnRetry: () =>
         buildCodexResumePrompt({
           projectId,

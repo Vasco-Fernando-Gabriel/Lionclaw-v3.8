@@ -4,9 +4,7 @@ import { dynamicWorkflowMaestro } from '../seed-agents/dynamic-workflow-builder'
 export function applyMigrationV97(db: Database.Database): void {
   const seed = dynamicWorkflowMaestro;
 
-  const maxOrder = db
-    .prepare('SELECT COALESCE(MAX(sort_order), 0) AS m FROM agents')
-    .get() as { m: number };
+  const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), 0) AS m FROM agents').get() as { m: number };
 
   db.prepare(
     `INSERT OR IGNORE INTO agents (

@@ -33,16 +33,20 @@ export function upsertChannel(type: string, config: Record<string, unknown>): Ch
   const existing = getChannel(type);
 
   if (existing) {
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE channels SET config = ?, is_active = 1, updated_at = datetime('now') WHERE type = ?
-    `).run(JSON.stringify(config), type);
+    `,
+    ).run(JSON.stringify(config), type);
   } else {
     const id = type;
     const name = type.charAt(0).toUpperCase() + type.slice(1);
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO channels (id, type, name, config, is_active, status)
       VALUES (?, ?, ?, ?, 1, 'disconnected')
-    `).run(id, type, name, JSON.stringify(config));
+    `,
+    ).run(id, type, name, JSON.stringify(config));
   }
 
   logger.info({ type }, 'Channel upserted');
@@ -51,17 +55,21 @@ export function upsertChannel(type: string, config: Record<string, unknown>): Ch
 
 export function toggleChannel(type: string, active: boolean): void {
   const db = getDb();
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE channels SET is_active = ?, updated_at = datetime('now') WHERE type = ?
-  `).run(active ? 1 : 0, type);
+  `,
+  ).run(active ? 1 : 0, type);
   logger.info({ type, active }, 'Channel toggled');
 }
 
 export function updateChannelStatus(type: string, status: string, errorMessage?: string): void {
   const db = getDb();
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE channels SET status = ?, error_message = ?, updated_at = datetime('now') WHERE type = ?
-  `).run(status, errorMessage || null, type);
+  `,
+  ).run(status, errorMessage || null, type);
 }
 
 function mapChannel(row: Record<string, unknown>): Channel {

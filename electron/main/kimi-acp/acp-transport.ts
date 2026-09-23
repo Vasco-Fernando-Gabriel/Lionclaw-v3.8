@@ -1,3 +1,4 @@
+import { createSwarmProcessOwner } from '../agent-runtime/swarm-process';
 
 import { spawn } from 'child_process';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
@@ -19,14 +20,11 @@ export class KimiAcpJsonRpcError extends Error {
   }
 }
 
-
 export interface AcpTransport {
   request(method: string, params?: unknown): Promise<unknown>;
   notify(method: string, params?: unknown): void;
   onNotification(handler: (n: AcpNotification) => void): () => void;
-  onServerRequest(
-    handler: (id: unknown, method: string, params: Record<string, unknown>) => void,
-  ): () => void;
+  onServerRequest(handler: (id: unknown, method: string, params: Record<string, unknown>) => void): () => void;
   respond(id: unknown, result: unknown): void;
   onError(handler: (err: Error) => void): () => void;
   kill(reason: string): void;
@@ -34,6 +32,8 @@ export interface AcpTransport {
 }
 
 export interface AcpSpawnConfig {
+  swarmSupervised?: boolean;
+  swarmOwnerDirectory?: string;
   binary: string;
   cwd: string;
   env: Record<string, string>;
@@ -45,13 +45,9 @@ function asRec(v: unknown): Record<string, unknown> {
   return v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
 }
 
-
 class StdioAcpTransport implements AcpTransport {
   private nextId = 1;
-  private readonly pending = new Map<
-    number,
-    { resolve: (v: unknown) => void; reject: (e: Error) => void }
-  >();
+  private readonly pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   private readonly notificationHandlers = new Set<(n: AcpNotification) => void>();
   private readonly serverRequestHandlers = new Set<
     (id: unknown, method: string, params: Record<string, unknown>) => void
@@ -62,8 +58,7 @@ class StdioAcpTransport implements AcpTransport {
 
   constructor(private readonly child: ChildProcessWithoutNullStreams) {
     child.stdout.on('data', (chunk: Buffer) => this.onData(chunk));
-    child.stderr.on('data', () => {
-    });
+    child.stderr.on('data', () => {});
     child.on('exit', (code) => {
       this.fail(new KimiUnavailableError(`kimi acp exited (code=${String(code)})`));
     });
@@ -104,13 +99,13 @@ class StdioAcpTransport implements AcpTransport {
       this.pending.delete(id);
       if (msg['error']) {
         const errObj = asRec(msg['error']);
-        entry.reject(new KimiAcpJsonRpcError(
-          typeof errObj['message'] === 'string' ? errObj['message'] : 'kimi acp JSON-RPC error',
-          typeof errObj['code'] === 'string' || typeof errObj['code'] === 'number'
-            ? errObj['code']
-            : undefined,
-          errObj['data'],
-        ));
+        entry.reject(
+          new KimiAcpJsonRpcError(
+            typeof errObj['message'] === 'string' ? errObj['message'] : 'kimi acp JSON-RPC error',
+            typeof errObj['code'] === 'string' || typeof errObj['code'] === 'number' ? errObj['code'] : undefined,
+            errObj['data'],
+          ),
+        );
       } else {
         entry.resolve(msg['result']);
       }
@@ -149,16 +144,14 @@ class StdioAcpTransport implements AcpTransport {
     if (this.closed) return;
     try {
       this.child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n');
-    } catch {
-    }
+    } catch {}
   }
 
   respond(id: unknown, result: unknown): void {
     if (this.closed) return;
     try {
       this.child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
-    } catch {
-    }
+    } catch {}
   }
 
   onNotification(handler: (n: AcpNotification) => void): () => void {
@@ -166,9 +159,7 @@ class StdioAcpTransport implements AcpTransport {
     return () => this.notificationHandlers.delete(handler);
   }
 
-  onServerRequest(
-    handler: (id: unknown, method: string, params: Record<string, unknown>) => void,
-  ): () => void {
+  onServerRequest(handler: (id: unknown, method: string, params: Record<string, unknown>) => void): () => void {
     this.serverRequestHandlers.add(handler);
     return () => this.serverRequestHandlers.delete(handler);
   }
@@ -183,8 +174,7 @@ class StdioAcpTransport implements AcpTransport {
     logger.info({ reason }, 'killing kimi acp process');
     try {
       killProcessTree(this.child, 'SIGKILL');
-    } catch {
-    }
+    } catch {}
   }
 
   waitClosed(timeoutMs: number): Promise<boolean> {
@@ -200,14 +190,21 @@ class StdioAcpTransport implements AcpTransport {
 }
 
 export const defaultAcpTransportFactory: AcpTransportFactory = async (config) => {
-  const useShell =
-    process.platform === 'win32' && config.binary.toLowerCase().endsWith('.cmd');
-  const child = spawn(config.binary, ['acp'], {
-    cwd: config.cwd,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    shell: useShell,
-    detached: DETACH_FOR_TREE_KILL,
-    env: config.env,
-  }) as ChildProcessWithoutNullStreams;
+  const useShell = process.platform === 'win32' && config.binary.toLowerCase().endsWith('.cmd');
+  const child = config.swarmSupervised
+    ? createSwarmProcessOwner(config.swarmOwnerDirectory).spawnProcess({
+        command: config.binary,
+        args: ['acp'],
+        cwd: config.cwd,
+        env: config.env,
+        signal: new AbortController().signal,
+      })
+    : (spawn(config.binary, ['acp'], {
+        cwd: config.cwd,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: useShell,
+        detached: DETACH_FOR_TREE_KILL,
+        env: config.env,
+      }) as ChildProcessWithoutNullStreams);
   return new StdioAcpTransport(child);
 };

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -16,7 +15,6 @@ import { parseOpenAiSse } from '../lion-sdk/adapters/openai-sse';
 import { runLionLoop } from '../lion-sdk/runtime';
 import type { LionAdapter, LionStreamEvent } from '../lion-sdk/adapters/types';
 import type { LionStreamTranslator } from '../lion-sdk/stream-translator';
-
 
 function bodyStreamFrom(text: string): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -50,7 +48,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-
 describe('AC-B15: openai-compatible HTTP status -> categoria distinta', () => {
   const cases: Array<[number, string, string]> = [
     [402, '{"error":{"message":"insufficient balance"}}', 'LLM-QUOTA'],
@@ -80,12 +77,9 @@ describe('AC-B15: openai-compatible HTTP status -> categoria distinta', () => {
   }
 });
 
-
 describe('AC-B15: ollama HTTP status -> categoria distinta', () => {
   it('AC-B15: Ollama 404 emite [LLM-MODEL-404]', async () => {
-    globalThis.fetch = vi.fn(async () =>
-      fakeResponse(404, '{"error":"model \'x\' not found"}'),
-    ) as typeof fetch;
+    globalThis.fetch = vi.fn(async () => fakeResponse(404, '{"error":"model \'x\' not found"}')) as typeof fetch;
     const adapter = createOllamaAdapter({ baseUrl: 'http://localhost:11434' });
     const events = await collectEvents(
       adapter.streamCompletion({ model: 'x', messages: [{ role: 'user', content: 'oi' }] }),
@@ -119,7 +113,6 @@ describe('AC-B15: ollama HTTP status -> categoria distinta', () => {
   });
 });
 
-
 describe('AC-B16: 200 com corpo de erro no SSE/NDJSON', () => {
   it('AC-B16: parseOpenAiSse yields kind:error para data:{"error":{...}}', async () => {
     const sse = 'data: {"error":{"message":"You exceeded your current quota","type":"insufficient_quota"}}\n\n';
@@ -131,8 +124,7 @@ describe('AC-B16: 200 com corpo de erro no SSE/NDJSON', () => {
   });
 
   it('AC-B16: parseOpenAiSse NAO classifica chunk normal como erro', async () => {
-    const sse =
-      'data: {"choices":[{"delta":{"content":"oi"}}]}\n\ndata: [DONE]\n\n';
+    const sse = 'data: {"choices":[{"delta":{"content":"oi"}}]}\n\ndata: [DONE]\n\n';
     const kinds: string[] = [];
     for await (const ev of parseOpenAiSse(bodyStreamFrom(sse))) {
       kinds.push(ev.kind);
@@ -170,7 +162,6 @@ describe('AC-B16: 200 com corpo de erro no SSE/NDJSON', () => {
     expect(events.some((e) => e.type === 'done')).toBe(false);
   });
 });
-
 
 describe('SB-6: runLionLoop emite LLM-EMPTY para turno 200 vazio', () => {
   function adapterFromEvents(events: LionStreamEvent[]): LionAdapter {

@@ -1,11 +1,9 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { applyMigrationV122 } from '../db-migrations/v122-security-spec-validator';
 import { securitySpecValidator, SECURITY_SPEC_VALIDATOR_ID } from '../seed-agents/security-spec-validator';
-
 
 interface PreparedCall {
   sql: string;
@@ -27,7 +25,6 @@ function runWithMockDb(): PreparedCall[] {
   applyMigrationV122(mockDb);
   return calls;
 }
-
 
 describe('applyMigrationV122 - estrutural', () => {
   it('exporta applyMigrationV122 como funcao', () => {
@@ -74,9 +71,9 @@ describe('applyMigrationV122 - SQL e leanness', () => {
     const args = insert!.args;
     expect(args[21]).toBe('workspace-write');
     expect(args[21]).toBe(securitySpecValidator.access);
-    expect(args[22]).toBe(0); // allow_bash
-    expect(args[23]).toBe('[]'); // allowed_commands
-    expect(args[24]).toBe(0); // allow_network
+    expect(args[22]).toBe(0);
+    expect(args[23]).toBe('[]');
+    expect(args[24]).toBe(0);
   });
 
   it('faz UM UPDATE direcionado do eixo writer (access=workspace-write) scoped ao id', () => {
@@ -84,11 +81,10 @@ describe('applyMigrationV122 - SQL e leanness', () => {
     expect(updates).toHaveLength(1);
     expect(updates[0].sql).toMatch(/access\s*=\s*'workspace-write'/);
     expect(updates[0].sql).toMatch(/WHERE id = \?/);
-    expect(updates[0].sql).toMatch(/access = 'read-only'/); // so cura linhas ainda no default
+    expect(updates[0].sql).toMatch(/access = 'read-only'/);
     expect(updates[0].args[0]).toBe(SECURITY_SPEC_VALIDATOR_ID);
   });
 });
-
 
 const MAIN_DIR = join(__dirname, '..');
 
@@ -100,9 +96,7 @@ describe('applyMigrationV122 - integracao no runner de db.ts (F7, guardrail esta
   const dbSrc = readMainSource('db.ts');
 
   it('db.ts importa applyMigrationV122 do arquivo da migration', () => {
-    expect(dbSrc).toContain(
-      "import { applyMigrationV122 } from './db-migrations/v122-security-spec-validator'",
-    );
+    expect(dbSrc).toContain("import { applyMigrationV122 } from './db-migrations/v122-security-spec-validator'");
   });
 
   it('runMigrations tem o bloco if (currentVersion < 122) que aplica e versiona', () => {
@@ -110,9 +104,7 @@ describe('applyMigrationV122 - integracao no runner de db.ts (F7, guardrail esta
     expect(start).toBeGreaterThan(-1);
     const block = dbSrc.slice(start, start + 500);
     expect(block).toContain('applyMigrationV122(db)');
-    expect(block).toContain(
-      "db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(122)",
-    );
+    expect(block).toContain("db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(122)");
   });
 });
 

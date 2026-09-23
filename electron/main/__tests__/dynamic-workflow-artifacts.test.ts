@@ -1,15 +1,6 @@
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createHash } from 'node:crypto';
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  symlinkSync,
-  mkdirSync,
-} from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -20,10 +11,7 @@ import {
   WorkflowArtifactPathError,
   type WorkflowArtifactsDeps,
 } from '../dynamic-workflows/workflow-artifacts';
-import type {
-  DynamicWorkflowArtifact,
-  DynamicWorkflowArtifactInsertInput,
-} from '../dynamic-workflows/types';
+import type { DynamicWorkflowArtifact, DynamicWorkflowArtifactInsertInput } from '../dynamic-workflows/types';
 
 let base: string;
 let runDir: string;
@@ -156,9 +144,7 @@ describe('workflow-artifacts: guard de path (artifact fora do run dir falha tipa
     symlinkSync(outsideDir, linkPath, 'dir');
 
     const { deps } = makeDeps();
-    expect(() => resolveArtifactPath(runDir, 'leak/secret.md')).toThrow(
-      WorkflowArtifactPathError,
-    );
+    expect(() => resolveArtifactPath(runDir, 'leak/secret.md')).toThrow(WorkflowArtifactPathError);
     expect(() =>
       writeArtifact(deps, {
         runId: 'run-123',
@@ -185,9 +171,7 @@ describe('workflow-artifacts: guard de path (artifact fora do run dir falha tipa
 
 describe('workflow-artifacts: helpers', () => {
   it('sha256Hex bate o hash de referencia', () => {
-    expect(sha256Hex('abc')).toBe(
-      createHash('sha256').update('abc', 'utf8').digest('hex'),
-    );
+    expect(sha256Hex('abc')).toBe(createHash('sha256').update('abc', 'utf8').digest('hex'));
   });
 
   it('runLogPath resolve logs/<file> dentro do run dir', () => {

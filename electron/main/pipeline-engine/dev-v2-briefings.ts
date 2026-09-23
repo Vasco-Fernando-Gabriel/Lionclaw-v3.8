@@ -1,4 +1,3 @@
-
 import type { DevelopmentV2SprintMetadata } from '../../../src/types/pipeline';
 
 export interface DevV2BriefingCtx {
@@ -6,7 +5,6 @@ export interface DevV2BriefingCtx {
   screenIds?: string[];
   componentIds?: string[];
 }
-
 
 const BRIEFING_PRD_GENERATOR = `Voce esta no Development Pipeline 2.0.
 Sua saida sera usada como fonte de verdade para a fase Open Design.
@@ -75,7 +73,6 @@ Regra adicional obrigatoria para este pipeline:
 - Os IDs em affectedScreenIds e affectedComponentIds devem vir do design-contract.json.
 - A sprint deve incluir o campo designArtifactPath apontando para o artifact/index.html travado quando touchesUI=true.`;
 
-
 export function getDevV2Briefing(agentId: string, ctx?: DevV2BriefingCtx): string | null {
   switch (agentId) {
     case 'prd-generator':
@@ -113,15 +110,16 @@ export function getDevV2Briefing(agentId: string, ctx?: DevV2BriefingCtx): strin
   }
 }
 
-
 function buildPlannerBriefing(screenIds: string[], componentIds: string[]): string {
-  const screenList = screenIds.length > 0
-    ? screenIds.map((id) => `  - ${id}`).join('\n')
-    : '  (nenhum screen encontrado no design contract)';
+  const screenList =
+    screenIds.length > 0
+      ? screenIds.map((id) => `  - ${id}`).join('\n')
+      : '  (nenhum screen encontrado no design contract)';
 
-  const componentList = componentIds.length > 0
-    ? componentIds.map((id) => `  - ${id}`).join('\n')
-    : '  (nenhum componente encontrado no design contract)';
+  const componentList =
+    componentIds.length > 0
+      ? componentIds.map((id) => `  - ${id}`).join('\n')
+      : '  (nenhum componente encontrado no design contract)';
 
   return `Voce esta no Development Pipeline 2.0.
 
@@ -150,12 +148,9 @@ ${componentList}`;
 
 function buildCoderUiBriefing(meta: DevelopmentV2SprintMetadata): string {
   const artifactPath = meta.designArtifactPath ?? '(caminho nao definido no metadata da sprint)';
-  const screenList = meta.affectedScreenIds.length > 0
-    ? meta.affectedScreenIds.join(', ')
-    : '(nao especificado)';
-  const componentList = meta.affectedComponentIds.length > 0
-    ? meta.affectedComponentIds.join(', ')
-    : '(nao especificado)';
+  const screenList = meta.affectedScreenIds.length > 0 ? meta.affectedScreenIds.join(', ') : '(nao especificado)';
+  const componentList =
+    meta.affectedComponentIds.length > 0 ? meta.affectedComponentIds.join(', ') : '(nao especificado)';
 
   return `Esta sprint toca UI. Antes de implementar, leia obrigatoriamente:
 ${artifactPath}

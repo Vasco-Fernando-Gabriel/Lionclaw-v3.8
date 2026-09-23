@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
-  executeCronQueryMock: vi.fn<(prompt: string, options: Record<string, unknown>, getWindow: unknown) => Promise<void>>(),
+  executeCronQueryMock:
+    vi.fn<(prompt: string, options: Record<string, unknown>, getWindow: unknown) => Promise<void>>(),
   createSessionMock: vi.fn(),
   currentDb: { value: null as unknown },
 }));
@@ -83,7 +84,6 @@ describe('scheduler task claim', () => {
     expect(claimScheduledTaskForRun(db, 'task-1', '2026-05-26T11:00:00.000Z')).toBe(false);
   });
 });
-
 
 interface FakeSchedulerDb {
   taskRunUpdates: Array<{ sql: string; params: unknown[] }>;
@@ -225,9 +225,7 @@ describe('scheduler cron reconciliation', () => {
     const count = reconcileActiveCronNextRuns(db, new Date('2026-05-26T00:00:00.000Z'));
 
     expect(count).toBe(1);
-    expect(updates).toEqual([
-      ['2026-05-26T11:00:00.000Z', 'task-1'],
-    ]);
+    expect(updates).toEqual([['2026-05-26T11:00:00.000Z', 'task-1']]);
   });
 
   it('does not update cron rows whose next_run is already consistent', () => {

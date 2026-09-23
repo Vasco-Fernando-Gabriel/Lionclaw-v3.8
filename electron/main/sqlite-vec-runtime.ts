@@ -17,9 +17,10 @@ export function loadSqliteVecForRuntime(
   database: SqliteExtensionDatabase,
   options: SqliteVecRuntimeOptions = {},
 ): string | null {
-  const resourcesPath = options.resourcesPath === undefined
-    ? ((process as NodeJS.Process & { resourcesPath?: string }).resourcesPath ?? null)
-    : options.resourcesPath;
+  const resourcesPath =
+    options.resourcesPath === undefined
+      ? ((process as NodeJS.Process & { resourcesPath?: string }).resourcesPath ?? null)
+      : options.resourcesPath;
   const platform = options.platform ?? process.platform;
   const arch = options.arch ?? process.arch;
   if (resourcesPath) {

@@ -1,4 +1,3 @@
-
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../db', () => ({
@@ -18,17 +17,8 @@ vi.mock('../../logger', () => ({
   }),
 }));
 
-import {
-  MAX_CONSECUTIVE_TOOL_ERRORS,
-  MAX_TOOL_TURNS,
-  runLionLoop,
-  type LionToolDispatcher,
-} from '../runtime';
-import type {
-  LionAdapter,
-  LionStreamEvent,
-  LionStreamRequest,
-} from '../adapters/types';
+import { MAX_CONSECUTIVE_TOOL_ERRORS, MAX_TOOL_TURNS, runLionLoop, type LionToolDispatcher } from '../runtime';
+import type { LionAdapter, LionStreamEvent, LionStreamRequest } from '../adapters/types';
 import { createLionStreamTranslator } from '../stream-translator';
 import type { StreamChunk } from '../../../../src/types';
 
@@ -81,11 +71,13 @@ describe('Lion-SDK runtime loop', () => {
     const { adapter } = makeAdapter(() => [
       {
         type: 'tool_call_delta',
-        toolCalls: [{
-          id: 'c',
-          type: 'function',
-          function: { name: 'Read', arguments: JSON.stringify({ file_path: '/a' }) },
-        }],
+        toolCalls: [
+          {
+            id: 'c',
+            type: 'function',
+            function: { name: 'Read', arguments: JSON.stringify({ file_path: '/a' }) },
+          },
+        ],
       },
       { type: 'done' },
     ]);
@@ -110,11 +102,13 @@ describe('Lion-SDK runtime loop', () => {
     const { adapter } = makeAdapter(() => [
       {
         type: 'tool_call_delta',
-        toolCalls: [{
-          id: 'c',
-          type: 'function',
-          function: { name: 'Read', arguments: JSON.stringify({ file_path: '/a' }) },
-        }],
+        toolCalls: [
+          {
+            id: 'c',
+            type: 'function',
+            function: { name: 'Read', arguments: JSON.stringify({ file_path: '/a' }) },
+          },
+        ],
       },
       { type: 'done' },
     ]);
@@ -172,27 +166,30 @@ describe('Lion-SDK runtime loop', () => {
   });
 
   it('labels mcp_call tool chunks with server and tool name', async () => {
-    const { adapter } = makeAdapter((turn) => turn === 0 ? [
-      {
-        type: 'tool_call_delta',
-        toolCalls: [{
-          id: 'mcp-1',
-          type: 'function',
-          function: {
-            name: 'mcp_call',
-            arguments: JSON.stringify({
-              server_id: 'excalidraw',
-              tool: 'create_view',
-              args: { elements: [] },
-            }),
-          },
-        }],
-      },
-      { type: 'done' },
-    ] : [
-      { type: 'text', delta: 'feito' },
-      { type: 'done' },
-    ]);
+    const { adapter } = makeAdapter((turn) =>
+      turn === 0
+        ? [
+            {
+              type: 'tool_call_delta',
+              toolCalls: [
+                {
+                  id: 'mcp-1',
+                  type: 'function',
+                  function: {
+                    name: 'mcp_call',
+                    arguments: JSON.stringify({
+                      server_id: 'excalidraw',
+                      tool: 'create_view',
+                      args: { elements: [] },
+                    }),
+                  },
+                },
+              ],
+            },
+            { type: 'done' },
+          ]
+        : [{ type: 'text', delta: 'feito' }, { type: 'done' }],
+    );
     const { chunks, emit } = captureChunks();
     const translator = createLionStreamTranslator({ sessionId: 's', emit });
     const dispatcher: LionToolDispatcher = async () => ({ content: 'ok' });
@@ -215,16 +212,18 @@ describe('Lion-SDK runtime loop', () => {
   });
 
   it('can defer fenced fallback tool text and drop it from tool-call transcript turns', async () => {
-    const { adapter } = makeAdapter((turn) => turn === 0 ? [
-      {
-        type: 'text',
-        delta: '```LION_TOOL_USE\n{"calls":[{"id":"call_memory_onboarding_3","name":"mcp_call","input":{"server_id":"memory-search","tool":"memory_search","args":{"query":"onboarding"}}}]}\n```\nAinda nenhum resultado.',
-      },
-      { type: 'done' },
-    ] : [
-      { type: 'text', delta: 'Achei a memoria.' },
-      { type: 'done' },
-    ]);
+    const { adapter } = makeAdapter((turn) =>
+      turn === 0
+        ? [
+            {
+              type: 'text',
+              delta:
+                '```LION_TOOL_USE\n{"calls":[{"id":"call_memory_onboarding_3","name":"mcp_call","input":{"server_id":"memory-search","tool":"memory_search","args":{"query":"onboarding"}}}]}\n```\nAinda nenhum resultado.',
+            },
+            { type: 'done' },
+          ]
+        : [{ type: 'text', delta: 'Achei a memoria.' }, { type: 'done' }],
+    );
     const { chunks, emit } = captureChunks();
     const translator = createLionStreamTranslator({ sessionId: 's', emit });
     const dispatcher: LionToolDispatcher = async () => ({ content: '{"results":[{"content":"onboarding"}]}' });
@@ -242,7 +241,12 @@ describe('Lion-SDK runtime loop', () => {
     });
 
     expect(r.ok).toBe(true);
-    expect(chunks.filter((c) => c.type === 'text').map((c) => c.content).join('')).toBe('Achei a memoria.');
+    expect(
+      chunks
+        .filter((c) => c.type === 'text')
+        .map((c) => c.content)
+        .join(''),
+    ).toBe('Achei a memoria.');
     expect(chunks.find((c) => c.type === 'tool_call')?.tool).toBe('mcp:memory-search.memory_search');
     const assistantWithTool = r.transcript.find((msg) => msg.role === 'assistant' && msg.tool_calls);
     expect(assistantWithTool?.content).toBe('');
@@ -251,19 +255,22 @@ describe('Lion-SDK runtime loop', () => {
   });
 
   it('stores normalized tool call ids in transcript so providers can correlate results', async () => {
-    const { adapter } = makeAdapter((turn) => turn === 0 ? [
-      {
-        type: 'tool_call_delta',
-        toolCalls: [{
-          type: 'function',
-          function: { name: 'Read', arguments: JSON.stringify({ file_path: '/tmp/a.txt' }) },
-        }],
-      },
-      { type: 'done' },
-    ] : [
-      { type: 'text', delta: 'li o arquivo' },
-      { type: 'done' },
-    ]);
+    const { adapter } = makeAdapter((turn) =>
+      turn === 0
+        ? [
+            {
+              type: 'tool_call_delta',
+              toolCalls: [
+                {
+                  type: 'function',
+                  function: { name: 'Read', arguments: JSON.stringify({ file_path: '/tmp/a.txt' }) },
+                },
+              ],
+            },
+            { type: 'done' },
+          ]
+        : [{ type: 'text', delta: 'li o arquivo' }, { type: 'done' }],
+    );
     const { emit } = captureChunks();
     const translator = createLionStreamTranslator({ sessionId: 's', emit });
     const dispatcher: LionToolDispatcher = async () => ({ content: 'conteudo' });
@@ -288,25 +295,28 @@ describe('Lion-SDK runtime loop', () => {
 
   it('preserves native tool call payloads in transcript for strict OpenAI-compatible providers', async () => {
     const rawArguments = '{ "server_id": "memory-search", "tool": "memory_search", "args": { "query": "projeto" } }';
-    const { adapter } = makeAdapter((turn) => turn === 0 ? [
-      { type: 'reasoning', delta: 'preciso consultar a memoria' },
-      {
-        type: 'tool_call_delta',
-        toolCalls: [{
-          index: 0,
-          id: 'mcp_call:0',
-          type: 'function',
-          function: {
-            name: 'mcp_call',
-            arguments: rawArguments,
-          },
-        }],
-      },
-      { type: 'done' },
-    ] : [
-      { type: 'text', delta: 'achei memoria' },
-      { type: 'done' },
-    ]);
+    const { adapter } = makeAdapter((turn) =>
+      turn === 0
+        ? [
+            { type: 'reasoning', delta: 'preciso consultar a memoria' },
+            {
+              type: 'tool_call_delta',
+              toolCalls: [
+                {
+                  index: 0,
+                  id: 'mcp_call:0',
+                  type: 'function',
+                  function: {
+                    name: 'mcp_call',
+                    arguments: rawArguments,
+                  },
+                },
+              ],
+            },
+            { type: 'done' },
+          ]
+        : [{ type: 'text', delta: 'achei memoria' }, { type: 'done' }],
+    );
     const { emit } = captureChunks();
     const translator = createLionStreamTranslator({ sessionId: 's', emit });
     const dispatcher: LionToolDispatcher = async () => ({ content: '{"results":[]}' });
@@ -338,27 +348,30 @@ describe('Lion-SDK runtime loop', () => {
   });
 
   it('preserves provider metadata on native tool calls for adapter replay', async () => {
-    const { adapter } = makeAdapter((turn) => turn === 0 ? [
-      {
-        type: 'tool_call_delta',
-        toolCalls: [{
-          index: 0,
-          id: 'gemini_call_1_0',
-          type: 'function',
-          function: {
-            name: 'Bash',
-            arguments: JSON.stringify({ command: 'echo ok' }),
-          },
-          providerMetadata: {
-            googleGenAi: { thoughtSignature: 'sig-123' },
-          },
-        }],
-      },
-      { type: 'done' },
-    ] : [
-      { type: 'text', delta: 'ok' },
-      { type: 'done' },
-    ]);
+    const { adapter } = makeAdapter((turn) =>
+      turn === 0
+        ? [
+            {
+              type: 'tool_call_delta',
+              toolCalls: [
+                {
+                  index: 0,
+                  id: 'gemini_call_1_0',
+                  type: 'function',
+                  function: {
+                    name: 'Bash',
+                    arguments: JSON.stringify({ command: 'echo ok' }),
+                  },
+                  providerMetadata: {
+                    googleGenAi: { thoughtSignature: 'sig-123' },
+                  },
+                },
+              ],
+            },
+            { type: 'done' },
+          ]
+        : [{ type: 'text', delta: 'ok' }, { type: 'done' }],
+    );
     const { emit } = captureChunks();
     const translator = createLionStreamTranslator({ sessionId: 's', emit });
     const dispatcher: LionToolDispatcher = async () => ({ content: 'exit=0\nok' });

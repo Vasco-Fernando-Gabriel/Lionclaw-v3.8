@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { vi } from 'vitest';
 import type { HarnessProject, HarnessConfig } from '../../../src/types';
@@ -44,7 +43,6 @@ vi.mock('../pipeline-control-core', () => ({
 }));
 
 import { PipelineDriveCoordinator } from '../pipeline-drive-coordinator';
-
 
 const BASE_CONFIG: HarnessConfig = {
   maxRoundsPerSprint: 3,
@@ -108,7 +106,6 @@ function typed(pipelineType: PipelineType, over: Parameters<typeof makeProject>[
   return makeProject({ pipelineType, ...over });
 }
 
-
 describe('buildSeededPrompt - contratos de gate por tipo (B7)', () => {
   it('architecture-review fase 2 (Triagem): menciona selectedCandidateId e a escolha via inspect', () => {
     const prompt = buildPrompt(typed('architecture-review'), 2);
@@ -155,7 +152,6 @@ describe('buildSeededPrompt - contratos de gate por tipo (B7)', () => {
     expect(prompt).not.toContain('lock-and-continue');
   });
 
-
   it('TB-27 bug: bloco com os DOIS desfechos e o path ABSOLUTO do plano', () => {
     const project = typed('bug', {
       projectPath: '/tmp/bugrepo',
@@ -191,7 +187,6 @@ describe('buildSeededPrompt - contratos de gate por tipo (B7)', () => {
     }
   });
 });
-
 
 describe('buildSeededPrompt - anuncio condicional do preview_open (B2)', () => {
   it('dev-v2 POS-lock: anuncia preview_open com o path canonico do artifact (via runDir)', () => {
@@ -239,18 +234,18 @@ describe('buildSeededPrompt - anuncio condicional do preview_open (B2)', () => {
     const project = typed('development-v2', {
       config: { openDesign: { enabled: true, locked: false } },
     });
-    const prompt = buildPrompt(project, 5); // 5 = Open Design Studio
+    const prompt = buildPrompt(project, 5);
     expect(prompt).not.toContain('preview_open');
   });
 
   it('fase de execucao (Coder, type loop) anuncia preview_open com guidance do projeto', () => {
-    const prompt = buildPrompt(typed('development'), 13); // 13 = Coder (loop)
+    const prompt = buildPrompt(typed('development'), 13);
     expect(prompt).toContain('preview_open');
     expect(prompt).toContain('/tmp/demo-project');
   });
 
   it('fase de execucao em outro tipo (security Evaluator) tambem anuncia', () => {
-    const prompt = buildPrompt(typed('security'), 11); // 11 = Evaluator (loop)
+    const prompt = buildPrompt(typed('security'), 11);
     expect(prompt).toContain('preview_open');
   });
 
@@ -260,10 +255,9 @@ describe('buildSeededPrompt - anuncio condicional do preview_open (B2)', () => {
   });
 });
 
-
 describe('buildSeededPrompt - design_prompt nao anunciada no prompt semeado (A4)', () => {
   it('dev-v2 fase do studio: NAO anuncia design_prompt (mantem pipeline_reply)', () => {
-    const prompt = buildPrompt(typed('development-v2'), 5); // 5 = Open Design Studio
+    const prompt = buildPrompt(typed('development-v2'), 5);
     expect(prompt).not.toContain('design_prompt');
     expect(prompt).toContain('pipeline_reply(id, message)');
   });
@@ -279,10 +273,9 @@ describe('buildSeededPrompt - design_prompt nao anunciada no prompt semeado (A4)
   });
 });
 
-
 describe('buildSeededPrompt - design_session_config removida do prompt (C-03)', () => {
   it('dev-v2 fase do studio: NAO anuncia design_session_config nem instrui a dar GO', () => {
-    const prompt = buildPrompt(typed('development-v2'), 5); // 5 = Open Design Studio
+    const prompt = buildPrompt(typed('development-v2'), 5);
     expect(prompt).not.toContain('design_session_config');
     expect(prompt).not.toContain('da o GO');
     expect(prompt).not.toContain('GATILHO UNICO do start sob drive');
@@ -299,7 +292,6 @@ describe('buildSeededPrompt - design_session_config removida do prompt (C-03)', 
     expect(prompt).not.toContain('design_session_config');
   });
 });
-
 
 describe('buildSeededPrompt - gate de revisao da SPEC (specReviewOpen)', () => {
   it('specReviewOpen -> linha de revisao conversacional (reply/approve), sem a linha de fase auto', () => {
@@ -340,16 +332,8 @@ describe('buildSeededPrompt - padroes de sobrevivencia (F9-AC1)', () => {
   });
 });
 
-
 describe('buildSeededPrompt - contrato de stand-down "COMO VOCE OPERA" (W1)', () => {
-
-  it.each([
-    'development',
-    'development-v2',
-    'security',
-    'feature',
-    'architecture-review',
-  ] as PipelineType[])(
+  it.each(['development', 'development-v2', 'security', 'feature', 'architecture-review'] as PipelineType[])(
     'W1-AC1: o contrato REATIVO geral esta presente em %s',
     (pipelineType) => {
       const prompt = buildPrompt(typed(pipelineType), 1);
@@ -397,7 +381,6 @@ describe('buildSeededPrompt - contrato de stand-down "COMO VOCE OPERA" (W1)', ()
     expect(prompt).not.toContain('Fase CONVERSACIONAL: responda com pipeline_reply');
   });
 
-
   it('W1-AC2: a lista de gatilhos de "voce SERA acordado" enumera exatamente os 4 grupos', () => {
     const prompt = buildPrompt(typed('development'), 1);
     expect(prompt).toContain('Voce SERA acordado automaticamente por um turno novo quando:');
@@ -418,7 +401,6 @@ describe('buildSeededPrompt - contrato de stand-down "COMO VOCE OPERA" (W1)', ()
     expect(indentedBullets.slice(0, triggers.length)).toEqual(triggers);
   });
 
-
   it('W1-AC3: o ajuste do F9 (nunca inspecione para ESPERAR) esta presente', () => {
     const prompt = buildPrompt(typed('development'), 1);
     expect(prompt).toContain('Inspecione antes de AGIR');
@@ -433,7 +415,6 @@ describe('buildSeededPrompt - contrato de stand-down "COMO VOCE OPERA" (W1)', ()
     expect(full).toContain('COMO VOCE OPERA:');
   });
 });
-
 
 describe('buildSeededPrompt - regressao da espinha do prompt', () => {
   it('header, tools pipeline_* e regras de autonomia continuam presentes', () => {
@@ -477,7 +458,6 @@ describe('buildSeededPrompt - regressao da espinha do prompt', () => {
     expect(prompt).toContain('nem em full');
   });
 });
-
 
 describe('buildSeededPrompt - truncacao head+tail do pendingQuestion (fix C)', () => {
   const HEAD = 6000;
@@ -532,12 +512,12 @@ describe('buildSeededPrompt - truncacao head+tail do pendingQuestion (fix C)', (
   });
 
   it('(c) emoji straddling o corte do HEAD e do TAIL: sem U+FFFD e sem surrogate orfao', () => {
-    const headPart = 'a'.repeat(HEAD - 1) + EMOJI; // indices 0..5998 = 'a', 5999=HIGH, 6000=LOW
-    expect(headPart.charCodeAt(HEAD - 1)).toBe(0xd83d); // high surrogate exatamente no corte
+    const headPart = 'a'.repeat(HEAD - 1) + EMOJI;
+    expect(headPart.charCodeAt(HEAD - 1)).toBe(0xd83d);
 
     const middle = 'b'.repeat(5000);
 
-    const tailPart = EMOJI + 'c'.repeat(TAIL - 1); // 3001 chars; [0]=HIGH,[1]=LOW,...
+    const tailPart = EMOJI + 'c'.repeat(TAIL - 1);
 
     const pendingQuestion = headPart + middle + tailPart;
     expect(pendingQuestion.length).toBeGreaterThan(HEAD + TAIL);
@@ -556,7 +536,7 @@ describe('buildSeededPrompt - truncacao head+tail do pendingQuestion (fix C)', (
 
     const prompt = buildPrompt(typed('development'), 1, { pendingQuestion });
 
-    expect(prompt).not.toContain(MARKER); // curto, nao trunca
+    expect(prompt).not.toContain(MARKER);
     expect(prompt).not.toContain(FFFD);
     expect(hasLoneSurrogate(prompt)).toBe(false);
   });

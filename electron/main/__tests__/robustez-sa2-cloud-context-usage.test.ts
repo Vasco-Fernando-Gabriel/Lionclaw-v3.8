@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { StreamChunk } from '../../../src/types';
 
@@ -41,6 +40,8 @@ vi.mock('../lion-sdk', () => ({
 }));
 
 vi.mock('../db', () => ({
+  threadIdOf: (s: { id: string; sdkSessionId?: string | null }) => s.sdkSessionId ?? s.id,
+  getSessionOrchestrator: () => null,
   getAllAgents: () => [],
   getAgent: () => undefined,
   insertMessage: vi.fn(() => 1),
@@ -121,7 +122,6 @@ function sentContextUsageChunks(): StreamChunk[] {
     .map(([, chunk]) => chunk as StreamChunk)
     .filter((c) => c.type === 'context_usage');
 }
-
 
 function messageStart(usage: Record<string, number>) {
   return { type: 'stream_event', event: { type: 'message_start', message: { usage } } };

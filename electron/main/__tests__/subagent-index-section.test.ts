@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../db', () => ({
@@ -33,10 +32,7 @@ import {
   buildSystemPrompt,
   getSubagentsPromptMode,
 } from '../prompt-builder';
-import {
-  INDEX_PIPELINE_INTERNAL_SQUADS,
-  summarizeAgentDescription,
-} from '../subagent-summary';
+import { INDEX_PIPELINE_INTERNAL_SQUADS, summarizeAgentDescription } from '../subagent-summary';
 import { estimateTokens } from '../token-estimator';
 
 const mockGetAllAgents = getAllAgents as ReturnType<typeof vi.fn>;
@@ -108,9 +104,7 @@ function fixture126(): FixtureAgent[] {
       }),
     );
   }
-  agents.push(
-    makeAgent({ id: 'codex-1', runtime: 'codex', codexConfig: { model: 'gpt-5.2-codex' } }),
-  );
+  agents.push(makeAgent({ id: 'codex-1', runtime: 'codex', codexConfig: { model: 'gpt-5.2-codex' } }));
   return agents;
 }
 
@@ -143,9 +137,7 @@ describe('AC-58 — orcamento e presenca com 126 agentes', () => {
   it('contem os ids de TODOS os pipeline-internos agrupados por squad (1 linha por squad)', () => {
     const section = buildSubagentIndexSection();
     for (const squad of INTERNAL_SQUADS) {
-      const line = section
-        .split('\n')
-        .find((l) => l.startsWith(`- ${squad}: `));
+      const line = section.split('\n').find((l) => l.startsWith(`- ${squad}: `));
       expect(line, `linha da squad ${squad}`).toBeDefined();
       for (let i = 1; i <= 14; i++) {
         expect(line).toContain(`${squad}-int-${String(i).padStart(2, '0')}`);
@@ -171,9 +163,7 @@ describe('AC-65 — nota de alcance POR ROTA', () => {
 
 describe('sufixo [KB:n] — mesma regra kb_enabled do gate legado (AC-67)', () => {
   it('aparece quando kb_enabled != 0 e docCount > 0', () => {
-    mockGetCompletedDocsCount.mockImplementation((id: string) =>
-      id === 'chat-agent-01' ? 3 : 0,
-    );
+    mockGetCompletedDocsCount.mockImplementation((id: string) => (id === 'chat-agent-01' ? 3 : 0));
     const section = buildSubagentIndexSection();
     const line = section.split('\n').find((l) => l.startsWith('- chat-agent-01: '));
     expect(line).toContain('[KB:3]');
@@ -181,7 +171,7 @@ describe('sufixo [KB:n] — mesma regra kb_enabled do gate legado (AC-67)', () =
 
   it('NAO aparece quando kb_enabled === 0, mesmo com docs', () => {
     const agents = fixture126();
-    agents[0]!.kb_enabled = 0; // chat-agent-01
+    agents[0]!.kb_enabled = 0;
     mockGetAllAgents.mockReturnValue(agents);
     mockGetCompletedDocsCount.mockReturnValue(5);
     const section = buildSubagentIndexSection();
@@ -197,9 +187,7 @@ describe('sufixo [KB:n] — mesma regra kb_enabled do gate legado (AC-67)', () =
 
 describe('resumo deterministico (13.2 item 1)', () => {
   it('corta na primeira sentenca quando ela vem antes de 80 chars', () => {
-    expect(summarizeAgentDescription('Faz backend. E mais coisas depois.', 'X')).toBe(
-      'Faz backend.',
-    );
+    expect(summarizeAgentDescription('Faz backend. E mais coisas depois.', 'X')).toBe('Faz backend.');
   });
 
   it('corta em 80 chars quando a primeira sentenca e maior', () => {
@@ -266,9 +254,7 @@ describe('AC-66 — toggle subagents_prompt_mode', () => {
   });
 
   it("'full' restaura a secao legada no buildSystemPrompt", () => {
-    mockGetSetting.mockImplementation((key: string) =>
-      key === 'subagents_prompt_mode' ? 'full' : undefined,
-    );
+    mockGetSetting.mockImplementation((key: string) => (key === 'subagents_prompt_mode' ? 'full' : undefined));
     const legacy = buildSubagentsSection();
     const prompt = buildSystemPrompt();
     expect(prompt).toContain(legacy);
@@ -303,9 +289,13 @@ describe('AC-66 — toggle subagents_prompt_mode', () => {
 
 describe('alinhamento de squads internos (AC-63 companheiro)', () => {
   it('INDEX_PIPELINE_INTERNAL_SQUADS == conjunto canonico {harness,pipeline,security,feature,enrich}', () => {
-    expect([...INDEX_PIPELINE_INTERNAL_SQUADS].sort()).toEqual(
-      ['enrich', 'feature', 'harness', 'pipeline', 'security'],
-    );
+    expect([...INDEX_PIPELINE_INTERNAL_SQUADS].sort()).toEqual([
+      'enrich',
+      'feature',
+      'harness',
+      'pipeline',
+      'security',
+    ]);
   });
 });
 

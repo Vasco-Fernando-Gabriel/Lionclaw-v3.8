@@ -27,19 +27,13 @@ vi.mock('../db', () => ({
   getSetting: vi.fn((key: string) => state.settings[key]),
 }));
 
-import {
-  DEFAULT_ELEVENLABS_VOICE_ID,
-  generateSpeech,
-  transcribeAudio,
-} from '../voice-engine';
+import { DEFAULT_ELEVENLABS_VOICE_ID, generateSpeech, transcribeAudio } from '../voice-engine';
 
 function installFetchMock() {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
     const urlText = String(url);
     if (urlText.includes('/text-to-speech/')) {
-      state.requestedSpeechVoiceIds.push(
-        decodeURIComponent(urlText.match(/\/text-to-speech\/([^?]+)/)?.[1] ?? ''),
-      );
+      state.requestedSpeechVoiceIds.push(decodeURIComponent(urlText.match(/\/text-to-speech\/([^?]+)/)?.[1] ?? ''));
       return {
         ok: true,
         status: 200,
@@ -91,11 +85,7 @@ describe('voice-engine transcription model selection', () => {
     state.settings.voice_id = '';
     await generateSpeech('ola');
 
-    expect(state.requestedSpeechVoiceIds).toEqual([
-      'explicit-voice',
-      'stored-voice',
-      DEFAULT_ELEVENLABS_VOICE_ID,
-    ]);
+    expect(state.requestedSpeechVoiceIds).toEqual(['explicit-voice', 'stored-voice', DEFAULT_ELEVENLABS_VOICE_ID]);
   });
 
   it('falls back to whisper-1 for invalid stored values', async () => {

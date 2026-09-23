@@ -81,13 +81,11 @@ describe('listRunBundle (D25c)', () => {
     try {
       symlinkSync(outside, join(runDir, 'artifacts', 'link-dir'), 'junction');
       linked = true;
-    } catch {
-    }
+    } catch {}
     try {
       symlinkSync(join(outside, 'secret.txt'), join(runDir, 'artifacts', 'link-file'));
       linked = true;
-    } catch {
-    }
+    } catch {}
     const entries = listRunBundle(runDir);
     expect(entries.map((e) => e.relativePath)).toEqual(['artifacts/a.txt']);
     expect(entries.some((e) => e.relativePath.includes('link'))).toBe(false);

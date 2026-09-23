@@ -68,11 +68,7 @@ const KNOWN_WRAPPER_KEYS = new Set(['plan', 'data', 'result', 'output']);
 export function unwrapKnownJsonWrappers(value: unknown): unknown {
   let current = value;
   for (let iter = 0; iter < 5; iter++) {
-    if (
-      current === null ||
-      typeof current !== 'object' ||
-      Array.isArray(current)
-    ) {
+    if (current === null || typeof current !== 'object' || Array.isArray(current)) {
       break;
     }
     const obj = current as Record<string, unknown>;
@@ -100,17 +96,17 @@ export interface ExtractJSONSource {
   textBlocks: string[];
 }
 
-export function extractJSON<T>(
-  result: ExtractJSONSource,
-  opts: ExtractJSONOptions<T>,
-): { value: T; tier: string } {
+export function extractJSON<T>(result: ExtractJSONSource, opts: ExtractJSONOptions<T>): { value: T; tier: string } {
   const sources = [
     { name: 'result', text: result.output },
     { name: 'accumulated', text: result.accumulatedText },
-    ...result.textBlocks.slice().reverse().map((b, i) => ({
-      name: `block[${result.textBlocks.length - 1 - i}]`,
-      text: b,
-    })),
+    ...result.textBlocks
+      .slice()
+      .reverse()
+      .map((b, i) => ({
+        name: `block[${result.textBlocks.length - 1 - i}]`,
+        text: b,
+      })),
   ];
 
   let lastError: Error | null = null;
@@ -121,16 +117,19 @@ export function extractJSON<T>(
       const parsed = opts.parser(src.text, meta);
       const tier = meta.repaired ? 'jsonrepair' : src.name;
       if (tier !== 'result') {
-        logger.warn({
-          contextLabel: opts.contextLabel,
-          round: opts.round,
-          sprintId: opts.sprintId,
-          fallbackTier: tier,
-          sourceName: src.name,
-          repaired: !!meta.repaired,
-          originalLen: result.output.length,
-          usedLen: src.text.length,
-        }, `${opts.contextLabel} JSON extracted from fallback source`);
+        logger.warn(
+          {
+            contextLabel: opts.contextLabel,
+            round: opts.round,
+            sprintId: opts.sprintId,
+            fallbackTier: tier,
+            sourceName: src.name,
+            repaired: !!meta.repaired,
+            originalLen: result.output.length,
+            usedLen: src.text.length,
+          },
+          `${opts.contextLabel} JSON extracted from fallback source`,
+        );
       }
       return { value: parsed, tier };
     } catch (e) {

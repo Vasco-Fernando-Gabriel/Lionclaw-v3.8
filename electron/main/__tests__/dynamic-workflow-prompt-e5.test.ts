@@ -39,7 +39,9 @@ describe('E5: prompt do orquestrador reflete driver unico + modo automatico', ()
     expect(section).toContain('MODO UNICO full-automatico');
     expect(section).toContain('cc-delivery');
     expect(section).toContain('boundary:');
-    expect(section).toMatch(/voce conduz TODOS os gates do run sozinho \(boundary: e cc-delivery\) sem nunca esperar aval humano/);
+    expect(section).toMatch(
+      /voce conduz TODOS os gates do run sozinho \(boundary: e cc-delivery\) sem nunca esperar aval humano/,
+    );
   });
 
   it('NAO menciona mais os modos semi/full/auto-drive nem set-autonomy', () => {

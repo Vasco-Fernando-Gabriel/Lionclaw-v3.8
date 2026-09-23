@@ -1,4 +1,3 @@
-
 import { createLogger } from '../logger';
 import { ollamaChatWithTools } from '../ollama-client';
 import { getSecret } from '../vault-registry';
@@ -9,14 +8,11 @@ import type { ExternalConfig, AgentConfig } from '../../../src/types';
 
 const logger = createLogger('external-http');
 
-export async function resolveExternalAuth(
-  config: ExternalConfig,
-): Promise<Record<string, string>> {
+export async function resolveExternalAuth(config: ExternalConfig): Promise<Record<string, string>> {
   const apiKey = await getSecret(config.apiKeyRef);
   if (!apiKey) {
     throw new Error(
-      `API key nao encontrada no Vault para provider "${config.apiKeyRef}". ` +
-      `Configure em Configuracoes > Vault.`,
+      `API key nao encontrada no Vault para provider "${config.apiKeyRef}". ` + `Configure em Configuracoes > Vault.`,
     );
   }
   return {
@@ -25,10 +21,8 @@ export async function resolveExternalAuth(
   };
 }
 
-export async function ollamaChatWithRetry(
-  ...args: Parameters<typeof ollamaChatWithTools>
-): Promise<OllamaChatResult> {
-  const MAX_RETRIES = 5;
+export async function ollamaChatWithRetry(...args: Parameters<typeof ollamaChatWithTools>): Promise<OllamaChatResult> {
+  const MAX_RETRIES = args[5]?.disableTaskRetry ? 0 : 5;
   const DEFAULT_429_WAIT_MS = 30_000;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -46,9 +40,7 @@ export async function ollamaChatWithRetry(
       let waitMs: number;
       if (is429) {
         const retryAfterMatch = errMsg.match(/Retry-After:\s*(\d+)/i);
-        waitMs = retryAfterMatch
-          ? parseInt(retryAfterMatch[1], 10) * 1000
-          : DEFAULT_429_WAIT_MS;
+        waitMs = retryAfterMatch ? parseInt(retryAfterMatch[1], 10) * 1000 : DEFAULT_429_WAIT_MS;
       } else {
         waitMs = Math.min(2000 * Math.pow(2, attempt), 30_000);
       }
@@ -65,7 +57,7 @@ export async function ollamaChatWithRetry(
         'External request failed, retrying',
       );
 
-      await new Promise(r => setTimeout(r, waitMs));
+      await new Promise((r) => setTimeout(r, waitMs));
     }
   }
 
@@ -86,13 +78,13 @@ export function mapReasoningParams(
 ): Partial<Record<string, unknown>> {
   const reasoningEffort = effort === 'max' ? 'high' : (effort ?? 'medium');
 
-  if (provider === 'openai' && (model.startsWith('gpt-5.5') || model.startsWith('o'))) {
+  if (provider === 'openai' && (model.startsWith('gpt-6') || model.startsWith('gpt-5.5') || model.startsWith('o'))) {
     if (thinking === 'disabled') return {};
     return { reasoning_effort: reasoningEffort };
   }
 
   if (provider === 'openrouter') {
-    if (model.startsWith('openai/gpt-5')) {
+    if (model.startsWith('openai/gpt-6') || model.startsWith('openai/gpt-5')) {
       return thinking === 'disabled' ? {} : { reasoning_effort: reasoningEffort };
     }
     if (model.startsWith('qwen/qwen3.6') && thinking !== 'disabled') {
@@ -100,19 +92,14 @@ export function mapReasoningParams(
     }
   }
 
-  if (
-    provider === 'kimi' ||
-    provider === 'deepseek' ||
-    provider === 'qwen' ||
-    provider === 'minimax-payg'
-  ) {
+  if (provider === 'kimi' || provider === 'deepseek' || provider === 'qwen' || provider === 'minimax-payg') {
     const cataloged = MODEL_CATALOG[provider]?.find((m) => m.id === model);
     if (cataloged?.reasoning) {
       return materializeReasoning(cataloged.reasoning, reasoningEffort, thinking);
     }
   }
 
-  return {}; // outros providers/modelos: ignora
+  return {};
 }
 
 export function materializeReasoning(
@@ -153,8 +140,10 @@ export function resolveExternalPricing(
 }
 
 export function isContextLengthError(errorMessage: string): boolean {
-  return /context.*(length|limit|exceed|too long)/i.test(errorMessage)
-    || /maximum.*tokens/i.test(errorMessage)
-    || /token.*limit.*exceeded/i.test(errorMessage)
-    || errorMessage.includes('context_length_exceeded');
+  return (
+    /context.*(length|limit|exceed|too long)/i.test(errorMessage) ||
+    /maximum.*tokens/i.test(errorMessage) ||
+    /token.*limit.*exceeded/i.test(errorMessage) ||
+    errorMessage.includes('context_length_exceeded')
+  );
 }

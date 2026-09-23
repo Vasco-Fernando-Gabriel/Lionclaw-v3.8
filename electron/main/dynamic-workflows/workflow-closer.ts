@@ -1,4 +1,3 @@
-
 import {
   createCloserPermissionGuard,
   type CloserGitConfirmRequest,
@@ -16,10 +15,7 @@ import {
   type MergeOutcome,
 } from './workflow-git';
 import { cleanupSprintWorktree } from './workflow-worktree';
-import type {
-  ComposedToolInput,
-  ToolDecision,
-} from './workflow-agent-adapter';
+import type { ComposedToolInput, ToolDecision } from './workflow-agent-adapter';
 import type {
   DynamicWorkflowRun,
   DynamicWorkflowRunPatch,
@@ -31,14 +27,7 @@ import type {
   DynamicWorkflowSprintPatch,
 } from './types';
 
-
-export type CloserSpawnReason =
-  | 'delivery'
-  | 'merge-conflict'
-  | 'gate-failed'
-  | 'user-request'
-  | 'broken-state';
-
+export type CloserSpawnReason = 'delivery' | 'merge-conflict' | 'gate-failed' | 'user-request' | 'broken-state';
 
 export interface CloserNodeDiff {
   nodeId: string;
@@ -55,7 +44,6 @@ export interface CloserSpawnContext {
   lastCheckpointSummary?: string;
   recentEventsLimit?: number;
 }
-
 
 export interface CloserTurnResult {
   ok: boolean;
@@ -77,13 +65,10 @@ export type CloserAgentTurnRunner = (input: {
   canUseTool: (input: ComposedToolInput) => Promise<ToolDecision>;
 }) => Promise<CloserTurnResult>;
 
-
 export interface CloserEngineDeps {
   getRun: (runId: string) => DynamicWorkflowRun | null;
   updateRun: (runId: string, patch: DynamicWorkflowRunPatch) => void;
-  insertMessage: (
-    input: DynamicWorkflowMessageInsertInput,
-  ) => DynamicWorkflowMessage;
+  insertMessage: (input: DynamicWorkflowMessageInsertInput) => DynamicWorkflowMessage;
   listMessages: (runId: string) => DynamicWorkflowMessage[];
   recentEvents: (runId: string, limit: number) => DynamicWorkflowEvent[];
   costAggregate: (runId: string) => DynamicWorkflowRunCostAggregate;
@@ -91,16 +76,11 @@ export interface CloserEngineDeps {
   runAgentTurn: CloserAgentTurnRunner;
   confirmGitWrite?: (req: CloserGitConfirmRequest) => Promise<boolean> | boolean;
   auditGit?: (event: CloserGitAuditEvent) => void;
-  emitEvent?: (input: {
-    runId: string;
-    type: string;
-    payload?: unknown;
-  }) => void;
+  emitEvent?: (input: { runId: string; type: string; payload?: unknown }) => void;
   releaseRunLock?: (runId: string) => void;
   newSessionId?: () => string;
   now?: () => string;
 }
-
 
 export class CloserError extends Error {
   constructor(
@@ -113,11 +93,7 @@ export class CloserError extends Error {
 }
 
 export type CloserErrorCode =
-  | 'run-not-found'
-  | 'closer-not-guard-capable'
-  | 'finalize-not-delivered'
-  | 'session-not-active';
-
+  'run-not-found' | 'closer-not-guard-capable' | 'finalize-not-delivered' | 'session-not-active';
 
 export const DYNAMIC_WORKFLOW_CLOSER_AGENT_ID = 'dynamic-workflow-closer';
 
@@ -130,7 +106,6 @@ function defaultSessionId(): string {
   sessionCounter += 1;
   return `closer-${Date.now().toString(36)}-${sessionCounter.toString(36)}`;
 }
-
 
 export function buildCloserCanUseTool(params: {
   runId: string;
@@ -161,7 +136,6 @@ export function buildCloserCanUseTool(params: {
   });
 }
 
-
 export function resolveCloserCwd(params: {
   run: DynamicWorkflowRun;
   reason: CloserSpawnReason;
@@ -177,7 +151,6 @@ export function resolveCloserCwd(params: {
   }
   return repoRoot;
 }
-
 
 function roleLabel(message: DynamicWorkflowMessage): string {
   if (message.source === 'human') return 'Usuario';
@@ -247,12 +220,7 @@ export function buildCloserTurnPrompt(params: {
   return lines.join('\n');
 }
 
-
-function sumTurnCostToRun(
-  deps: CloserEngineDeps,
-  run: DynamicWorkflowRun,
-  turn: CloserTurnResult,
-): void {
+function sumTurnCostToRun(deps: CloserEngineDeps, run: DynamicWorkflowRun, turn: CloserTurnResult): void {
   const addUsd = turn.costUsd ?? 0;
   if (addUsd <= 0) return;
   deps.updateRun(run.id, {
@@ -260,14 +228,8 @@ function sumTurnCostToRun(
   });
 }
 
-
-function assertCloserGuardCapable(
-  deps: CloserEngineDeps,
-  agentId: string,
-): void {
-  const runtime = deps.resolveCloserRuntime
-    ? deps.resolveCloserRuntime(agentId)
-    : 'cloud';
+function assertCloserGuardCapable(deps: CloserEngineDeps, agentId: string): void {
+  const runtime = deps.resolveCloserRuntime ? deps.resolveCloserRuntime(agentId) : 'cloud';
   const pre = preflightNode({
     grants: { nodeId: `closer:${agentId}`, agentId, access: 'workspace-write' },
     runtime,
@@ -277,7 +239,6 @@ function assertCloserGuardCapable(
     throw new CloserError(pre.message, 'closer-not-guard-capable');
   }
 }
-
 
 export interface CloserSessionResult {
   sessionId: string;
@@ -395,7 +356,6 @@ export function finalizeWorkflow(runId: string, deps: CloserEngineDeps): void {
   deps.releaseRunLock?.(runId);
 }
 
-
 interface RunCloserTurnInternalInput {
   runId: string;
   agentId: string;
@@ -410,9 +370,7 @@ interface RunCloserTurnInternalResult {
   addedCostUsd: number;
 }
 
-async function runCloserTurnInternal(
-  input: RunCloserTurnInternalInput,
-): Promise<RunCloserTurnInternalResult> {
+async function runCloserTurnInternal(input: RunCloserTurnInternalInput): Promise<RunCloserTurnInternalResult> {
   const { runId, agentId, cwd, context, incomingMessage, deps } = input;
 
   if (incomingMessage !== null) {
@@ -454,9 +412,7 @@ async function runCloserTurnInternal(
   const runForCost = deps.getRun(runId) ?? run;
   sumTurnCostToRun(deps, runForCost, turn);
 
-  const content = turn.ok
-    ? turn.output
-    : `[closer indisponivel: ${turn.errorMessage ?? 'erro desconhecido'}]`;
+  const content = turn.ok ? turn.output : `[closer indisponivel: ${turn.errorMessage ?? 'erro desconhecido'}]`;
   const message = deps.insertMessage({
     runId,
     nodeId: null,
@@ -475,7 +431,6 @@ async function runCloserTurnInternal(
 
   return { message, addedCostUsd: turn.costUsd ?? 0 };
 }
-
 
 export interface SprintMergeTarget {
   sprintId: string;
@@ -506,11 +461,7 @@ export interface OrderedMergeDeps {
   name: string;
   runId: string;
   transientPaths?: string[];
-  updateSprintMerge: (
-    runId: string,
-    sprintId: string,
-    patch: DynamicWorkflowSprintPatch,
-  ) => void;
+  updateSprintMerge: (runId: string, sprintId: string, patch: DynamicWorkflowSprintPatch) => void;
   emitEvent?: (input: { runId: string; type: string; payload?: unknown }) => void;
   runStagedRechecks?: (sprintId: string) => Promise<boolean>;
   git?: GitRunner;
@@ -614,9 +565,7 @@ export async function mergeSprintsOrdered(
         type: 'sprint-merge-staged',
         payload: { sprintId: sprint.sprintId, stagingSha: outcome.stagingSha },
       });
-      const rechecksGreen = deps.runStagedRechecks
-        ? await deps.runStagedRechecks(sprint.sprintId)
-        : true;
+      const rechecksGreen = deps.runStagedRechecks ? await deps.runStagedRechecks(sprint.sprintId) : true;
       if (!rechecksGreen) {
         deps.updateSprintMerge(deps.runId, sprint.sprintId, { mergeStatus: 'conflict' });
         results.push({
@@ -683,13 +632,11 @@ export async function mergeSprintsOrdered(
         runId: deps.runId,
         sprintIndex: sprint.index,
       });
-    } catch {
-    }
+    } catch {}
   }
 
   const allMerged =
-    conflictedSprintId === undefined &&
-    results.every((r) => r.mergeStatus === 'merged' || r.mergeStatus === 'skipped');
+    conflictedSprintId === undefined && results.every((r) => r.mergeStatus === 'merged' || r.mergeStatus === 'skipped');
 
   return { sprints: results, allMerged, conflictedSprintId };
 }

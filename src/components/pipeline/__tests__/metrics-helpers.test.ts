@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   formatCostWithMeta,
@@ -8,9 +7,7 @@ import {
   resolveProviderForDisplay,
 } from '../PipelineMetricsReport';
 
-
 describe('formatCostWithMeta', () => {
-
   it('costStatus "known": exibe $0.00 para zero', () => {
     const result = formatCostWithMeta(0, { costStatus: 'known' });
     expect(result).toBe('$0.00');
@@ -31,7 +28,6 @@ describe('formatCostWithMeta', () => {
     expect(result).toBe('$0.00');
   });
 
-
   it('costStatus "unknown": exibe "Custo nao estimado" independente do valor', () => {
     const result = formatCostWithMeta(0.5, { costStatus: 'unknown' });
     expect(result).toBe('Custo nao estimado');
@@ -46,7 +42,6 @@ describe('formatCostWithMeta', () => {
     const result = formatCostWithMeta(999.99, { costStatus: 'unknown' });
     expect(result).toBe('Custo nao estimado');
   });
-
 
   it('metadata undefined: trata como "known", exibe custo normalmente', () => {
     const result = formatCostWithMeta(0.05);
@@ -63,7 +58,6 @@ describe('formatCostWithMeta', () => {
     expect(result).toBe('$0.100');
   });
 
-
   it('valor < 0.001: exibe "<$0.001"', () => {
     const result = formatCostWithMeta(0.0005, { costStatus: 'known' });
     expect(result).toBe('<$0.001');
@@ -77,20 +71,16 @@ describe('formatCostWithMeta', () => {
 
 describe('formatPipelineTotalCost', () => {
   it('rotula total 100% assinatura com ~', () => {
-    expect(formatPipelineTotalCost(0.25, 0.25, { costStatus: 'known' }))
-      .toBe('~$0.250');
+    expect(formatPipelineTotalCost(0.25, 0.25, { costStatus: 'known' })).toBe('~$0.250');
   });
 
   it('preserva total misto e destaca somente a parcela equivalente', () => {
-    expect(formatPipelineTotalCost(0.6, 0.2, { costStatus: 'known' }))
-      .toBe('$0.600 (incl. ~$0.200)');
+    expect(formatPipelineTotalCost(0.6, 0.2, { costStatus: 'known' })).toBe('$0.600 (incl. ~$0.200)');
   });
 
   it('preserva custo conhecido e sinaliza a parcela desconhecida', () => {
-    expect(formatPipelineTotalCost(0.6, 0.2, { costStatus: 'unknown' }))
-      .toBe('$0.600 (incl. ~$0.200) + nao estim.');
-    expect(formatPipelineTotalCost(0, 0, { costStatus: 'unknown' }))
-      .toBe('Custo nao estimado');
+    expect(formatPipelineTotalCost(0.6, 0.2, { costStatus: 'unknown' })).toBe('$0.600 (incl. ~$0.200) + nao estim.');
+    expect(formatPipelineTotalCost(0, 0, { costStatus: 'unknown' })).toBe('Custo nao estimado');
   });
 });
 
@@ -106,16 +96,12 @@ describe('formatRuntimeCost', () => {
   });
 
   it('preserva limite inferior conhecido e sinaliza restante desconhecido', () => {
-    expect(formatRuntimeCost('grok', 0.25, 'unknown'))
-      .toBe('~$0.250 + nao estim.');
-    expect(formatRuntimeCost('cloud', 0.25, 'unknown'))
-      .toBe('$0.250 + nao estim.');
+    expect(formatRuntimeCost('grok', 0.25, 'unknown')).toBe('~$0.250 + nao estim.');
+    expect(formatRuntimeCost('cloud', 0.25, 'unknown')).toBe('$0.250 + nao estim.');
   });
 });
 
-
 describe('formatTokensWithMeta', () => {
-
   it('tokenStatus "reported": exibe tokens formatados', () => {
     const result = formatTokensWithMeta(500, 300, { tokenStatus: 'reported' });
     expect(result).toBe('800');
@@ -136,7 +122,6 @@ describe('formatTokensWithMeta', () => {
     expect(result).toBe('15.0K');
   });
 
-
   it('tokenStatus "not_reported": exibe "tokens nao reportados"', () => {
     const result = formatTokensWithMeta(0, 0, { tokenStatus: 'not_reported' });
     expect(result).toBe('tokens nao reportados');
@@ -146,7 +131,6 @@ describe('formatTokensWithMeta', () => {
     const result = formatTokensWithMeta(1000, 2000, { tokenStatus: 'not_reported' });
     expect(result).toBe('tokens nao reportados');
   });
-
 
   it('metadata undefined: trata como "reported"', () => {
     const result = formatTokensWithMeta(100, 200);
@@ -163,16 +147,13 @@ describe('formatTokensWithMeta', () => {
     expect(result).toBe('300');
   });
 
-
   it('zero tokens com "reported": exibe "0"', () => {
     const result = formatTokensWithMeta(0, 0, { tokenStatus: 'reported' });
     expect(result).toBe('0');
   });
 });
 
-
 describe('resolveProviderForDisplay', () => {
-
   it('retorna metadata.provider quando disponivel', () => {
     const result = resolveProviderForDisplay({ provider: 'kimi' }, 'external');
     expect(result).toBe('kimi');
@@ -196,7 +177,6 @@ describe('resolveProviderForDisplay', () => {
     expect(result).toBe('openrouter');
   });
 
-
   it('fallback para runtime quando metadata e undefined', () => {
     const result = resolveProviderForDisplay(undefined, 'cloud');
     expect(result).toBe('cloud');
@@ -217,7 +197,6 @@ describe('resolveProviderForDisplay', () => {
     expect(result).toBe('codex');
   });
 
-
   it('retorna "unknown" quando metadata e undefined E runtime e null', () => {
     const result = resolveProviderForDisplay(undefined, null);
     expect(result).toBe('unknown');
@@ -227,7 +206,6 @@ describe('resolveProviderForDisplay', () => {
     const result = resolveProviderForDisplay({ tokenStatus: 'reported' }, null);
     expect(result).toBe('unknown');
   });
-
 
   it('fase legada sem metadata: usa runtime como provider display', () => {
     const result = resolveProviderForDisplay(undefined, 'cloud');
@@ -239,14 +217,12 @@ describe('resolveProviderForDisplay', () => {
     expect(result).toBe('qwen');
   });
 
-
   it('sempre retorna uma string', () => {
     expect(typeof resolveProviderForDisplay(undefined, null)).toBe('string');
     expect(typeof resolveProviderForDisplay({ provider: 'kimi' }, 'external')).toBe('string');
     expect(typeof resolveProviderForDisplay({}, 'cloud')).toBe('string');
   });
 });
-
 
 describe('Integracao: formatCostWithMeta + formatTokensWithMeta', () => {
   it('fase com costStatus unknown e tokenStatus not_reported: ambos mostram mensagens de fallback', () => {

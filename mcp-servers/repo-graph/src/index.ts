@@ -1,8 +1,7 @@
-
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { LocalIpcClient, assertEndpointPresentOrExit } from '../../_shared/local-ipc-client.js';
+import { LocalIpcClient, assertEndpointPresentOrExit, withTurnBinding } from '../../_shared/local-ipc-client.js';
 
 assertEndpointPresentOrExit();
 
@@ -17,9 +16,9 @@ type ToolResult = {
   isError?: boolean;
 };
 
-async function proxy(method: string, params: Record<string, unknown>): Promise<ToolResult> {
+async function proxy(method: string, params: Record<string, unknown>, extra?: unknown): Promise<ToolResult> {
   try {
-    const result = await client.callMethod(method, params);
+    const result = await client.callMethod(method, withTurnBinding(params, extra));
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -34,7 +33,7 @@ server.tool(
   'repo_graph_status',
   `${DOMAIN_PREFIX} State of the code graph of the active repository of this conversation (status, indexed commit, staleness, stats). Use to check the graph before relying on it.`,
   {},
-  async () => proxy('repo_graph_status', {}),
+  async (extra) => proxy('repo_graph_status', {}, extra),
 );
 
 server.tool(
@@ -42,13 +41,10 @@ server.tool(
   `${DOMAIN_PREFIX} Search symbols (functions, classes, methods, types, routes, components) and files in the code graph of the active repository. Use this BEFORE bulk Glob/Grep/Read or Bash search.`,
   {
     term: z.string().describe('Search term (symbol or file name, full-text).'),
-    kind: z
-      .string()
-      .optional()
-      .describe('Optional symbol kind filter (e.g. function, class, method, type).'),
+    kind: z.string().optional().describe('Optional symbol kind filter (e.g. function, class, method, type).'),
     limit: z.number().int().positive().optional().describe('Max results (default 20).'),
   },
-  async ({ term, kind, limit }) => proxy('repo_graph_search', { term, kind, limit }),
+  async ({ term, kind, limit }, extra) => proxy('repo_graph_search', { term, kind, limit }, extra),
 );
 
 server.tool(
@@ -57,7 +53,7 @@ server.tool(
   {
     task: z.string().describe('Short description of the task/question to gather context for.'),
   },
-  async ({ task }) => proxy('repo_graph_minimal_context', { task }),
+  async ({ task }, extra) => proxy('repo_graph_minimal_context', { task }, extra),
 );
 
 server.tool(
@@ -67,7 +63,7 @@ server.tool(
     symbol: z.string().describe('Symbol name to analyze.'),
     depth: z.number().int().positive().optional().describe('Traversal depth (default 2).'),
   },
-  async ({ symbol, depth }) => proxy('repo_graph_impact', { symbol, depth }),
+  async ({ symbol, depth }, extra) => proxy('repo_graph_impact', { symbol, depth }, extra),
 );
 
 server.tool(
@@ -76,7 +72,7 @@ server.tool(
   {
     name: z.string().describe('Exact symbol name.'),
   },
-  async ({ name }) => proxy('repo_graph_node', { name }),
+  async ({ name }, extra) => proxy('repo_graph_node', { name }, extra),
 );
 
 server.tool(
@@ -86,7 +82,7 @@ server.tool(
     symbol: z.string().describe('Symbol name.'),
     limit: z.number().int().positive().optional().describe('Max results (default 20).'),
   },
-  async ({ symbol, limit }) => proxy('repo_graph_callers', { symbol, limit }),
+  async ({ symbol, limit }, extra) => proxy('repo_graph_callers', { symbol, limit }, extra),
 );
 
 server.tool(
@@ -96,7 +92,7 @@ server.tool(
     symbol: z.string().describe('Symbol name.'),
     limit: z.number().int().positive().optional().describe('Max results (default 20).'),
   },
-  async ({ symbol, limit }) => proxy('repo_graph_callees', { symbol, limit }),
+  async ({ symbol, limit }, extra) => proxy('repo_graph_callees', { symbol, limit }, extra),
 );
 
 async function main(): Promise<void> {

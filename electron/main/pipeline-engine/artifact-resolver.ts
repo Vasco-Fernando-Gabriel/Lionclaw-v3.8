@@ -1,4 +1,3 @@
-
 import * as path from 'path';
 import type { PhaseArtifactMapEntry } from './registry';
 
@@ -30,9 +29,7 @@ export interface ResetProjectLike {
   pipelineType?: string;
 }
 
-export function resolveArchitectureStemPaths(
-  ctx: ArchReviewContextLike,
-): Record<string, string[]> {
+export function resolveArchitectureStemPaths(ctx: ArchReviewContextLike): Record<string, string[]> {
   return {
     ArchitectureCandidates: [ctx.candidatesMdPath, ctx.candidatesJsonPath],
     ArchitectureDiagnosis: [ctx.diagnosisMdPath, ctx.diagnosisJsonPath],
@@ -42,9 +39,7 @@ export function resolveArchitectureStemPaths(
   };
 }
 
-export function resolveBugStemPaths(
-  ctx: BugContextLike,
-): Record<string, string[]> {
+export function resolveBugStemPaths(ctx: BugContextLike): Record<string, string[]> {
   return {
     'analise-01-root-cause': [ctx.analise01Path],
     'analise-02-historian': [ctx.analise02Path],
@@ -55,15 +50,11 @@ export function resolveBugStemPaths(
   };
 }
 
-function asBugContext(
-  ctx: ArchReviewContextLike | BugContextLike | null,
-): BugContextLike | null {
+function asBugContext(ctx: ArchReviewContextLike | BugContextLike | null): BugContextLike | null {
   return ctx && 'analise01Path' in ctx ? ctx : null;
 }
 
-function asArchContext(
-  ctx: ArchReviewContextLike | BugContextLike | null,
-): ArchReviewContextLike | null {
+function asArchContext(ctx: ArchReviewContextLike | BugContextLike | null): ArchReviewContextLike | null {
   return ctx && 'candidatesMdPath' in ctx ? ctx : null;
 }
 

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../../logger', () => ({
@@ -106,18 +105,18 @@ describe('KI-2 reapForCap (hard cap, machine protection)', () => {
   it('reaps multiple oldest handles when well over the cap', () => {
     const reg = new CodexLifecycleRegistry();
     const cap = 2;
-    const handles = fillIdle(reg, 5); // 5 live, cap 2
+    const handles = fillIdle(reg, 5);
     const reaped = reg.reapForCap(cap);
     expect(reg.liveCount()).toBe(cap - 1);
     expect(reaped.map((h) => h.key.runId)).toEqual(['r-0', 'r-1', 'r-2', 'r-3']);
-    expect(handles[4].status).not.toBe('closed'); // newest survives
+    expect(handles[4].status).not.toBe('closed');
   });
 
   it('default cap constant is the documented bound', () => {
     expect(MAX_LIVE_OFFICIAL_APP_SERVERS).toBeGreaterThan(0);
     const reg = new CodexLifecycleRegistry();
     fillIdle(reg, MAX_LIVE_OFFICIAL_APP_SERVERS);
-    const reaped = reg.reapForCap(); // default cap
+    const reaped = reg.reapForCap();
     expect(reaped.length).toBeGreaterThanOrEqual(1);
     expect(reg.liveCount()).toBeLessThan(MAX_LIVE_OFFICIAL_APP_SERVERS);
   });
@@ -140,7 +139,7 @@ describe('KI-2 reapIdle (slow backstop)', () => {
     const k = pipeKey({ runId: 'r-fresh' });
     const h = fakeHandle(k, { status: 'completed', lastActivityAt: 1000 });
     reg.register(k, h);
-    const now = 1000 + OFFICIAL_APP_SERVER_IDLE_REAP_MS - 1; // just inside the window
+    const now = 1000 + OFFICIAL_APP_SERVER_IDLE_REAP_MS - 1;
     const reaped = reg.reapIdle(OFFICIAL_APP_SERVER_IDLE_REAP_MS, now);
     expect(reaped).toEqual([]);
     expect(reg.liveCount()).toBe(1);
@@ -149,7 +148,7 @@ describe('KI-2 reapIdle (slow backstop)', () => {
   it('does NOT idle-reap an unstamped handle (no liveness data -> left to the cap)', () => {
     const reg = new CodexLifecycleRegistry();
     const k = pipeKey({ runId: 'r-unstamped' });
-    const h = fakeHandle(k, { status: 'completed' }); // no createdAt / lastActivityAt
+    const h = fakeHandle(k, { status: 'completed' });
     reg.register(k, h);
     const reaped = reg.reapIdle(OFFICIAL_APP_SERVER_IDLE_REAP_MS, 10_000_000);
     expect(reaped).toEqual([]);
@@ -160,7 +159,7 @@ describe('KI-2 SAFETY (the part you must not get wrong)', () => {
   it('idle reaper NEVER reaps a running (in-flight turn) handle', () => {
     const reg = new CodexLifecycleRegistry();
     const k = pipeKey({ runId: 'r-running' });
-    const h = fakeHandle(k, { status: 'running', lastActivityAt: 0 }); // old, but in-flight
+    const h = fakeHandle(k, { status: 'running', lastActivityAt: 0 });
     reg.register(k, h);
     const reaped = reg.reapIdle(OFFICIAL_APP_SERVER_IDLE_REAP_MS, 10_000_000);
     expect(reaped).toEqual([]);
@@ -179,7 +178,7 @@ describe('KI-2 SAFETY (the part you must not get wrong)', () => {
     reg.register(c.key, c);
     const reaped = reg.reapForCap(cap);
     expect(reaped).toEqual([]);
-    expect(reg.liveCount()).toBe(3); // none killed, all in-flight
+    expect(reg.liveCount()).toBe(3);
   });
 
   it('NEVER reaps the active chat handle via cap or idle sweep', () => {
@@ -211,9 +210,9 @@ describe('KI-2 young-handle grace (the owner concurrency invariant: pipe + chat 
     reg.register(b.key, b);
     reg.register(c.key, c);
 
-    const reaped = reg.reapForCap(cap, now); // over cap (3 > 2), but every candidate is too young
+    const reaped = reg.reapForCap(cap, now);
     expect(reaped).toEqual([]);
-    expect(reg.liveCount()).toBe(3); // burst tolerated; no about-to-run agent was killed
+    expect(reg.liveCount()).toBe(3);
     expect(a.status).toBe('idle');
     expect(b.status).toBe('idle');
     expect(c.status).toBe('idle');
@@ -237,8 +236,8 @@ describe('KI-2 young-handle grace (the owner concurrency invariant: pipe + chat 
     reg.register(young.key, young);
 
     const reaped = reg.reapForCap(cap, now);
-    expect(reaped).toContain(stale); // abandoned spawn reaped (leak still prevented)
-    expect(reaped).not.toContain(young); // fresh sibling spared even over cap
+    expect(reaped).toContain(stale);
+    expect(reaped).not.toContain(young);
     expect(reg.get(young.key)).toBe(young);
   });
 
@@ -259,7 +258,7 @@ describe('KI-2 reapSameScope (reap-on-register overwrite leak, PRODUCTION key sh
     const reaped = reg.reapSameScope(incoming);
 
     expect(reaped).toContain(old);
-    expect(reg.get(oldKey)).toBeUndefined(); // detached
+    expect(reg.get(oldKey)).toBeUndefined();
   });
 
   it('does NOT reap a freshly-spawned same-scope sibling that has not started its first turn (idle-window race)', () => {
@@ -268,11 +267,11 @@ describe('KI-2 reapSameScope (reap-on-register overwrite leak, PRODUCTION key sh
     const a = fakeHandle(sibling, { status: 'idle', hasStartedTurn: false });
     reg.register(sibling, a);
 
-    const incoming = pipeKey({ runId: 'r-second' }); // concurrent same-scope createRun
+    const incoming = pipeKey({ runId: 'r-second' });
     const reaped = reg.reapSameScope(incoming);
 
     expect(reaped).toEqual([]);
-    expect(reg.get(sibling)).toBe(a); // freshly-spawned sibling survives
+    expect(reg.get(sibling)).toBe(a);
     expect(a.status).toBe('idle');
   });
 
@@ -299,7 +298,7 @@ describe('KI-2 reapSameScope (reap-on-register overwrite leak, PRODUCTION key sh
     const reaped = reg.reapSameScope(incoming);
 
     expect(reaped).toEqual([]);
-    expect(reg.get(oldKey)).toBe(old); // still registered
+    expect(reg.get(oldKey)).toBe(old);
   });
 
   it('reaps an IDLE prior same-project handle but spares a RUNNING same-project sibling', () => {
@@ -312,26 +311,26 @@ describe('KI-2 reapSameScope (reap-on-register overwrite leak, PRODUCTION key sh
     const incoming = pipeKey({ runId: 'r-new' });
     const reaped = reg.reapSameScope(incoming);
 
-    expect(reaped.map((h) => h.key.runId)).toEqual(['r-idle']); // idle reaped
+    expect(reaped.map((h) => h.key.runId)).toEqual(['r-idle']);
     expect(reg.get(idle)).toBeUndefined();
-    expect(reg.get(running)).toBeDefined(); // running same-project sibling survives
+    expect(reg.get(running)).toBeDefined();
   });
 
   it('does NOT touch a different production scope (different project / surface / mcpProfile)', () => {
     const reg = new CodexLifecycleRegistry();
-    const sameProject = pipeKey({ runId: 'r-a' }); // p1, pipeline surface
-    const diffProject = pipeKey({ runId: 'r-b', projectId: 'p2' }); // different project
+    const sameProject = pipeKey({ runId: 'r-a' });
+    const diffProject = pipeKey({ runId: 'r-b', projectId: 'p2' });
     const diffSurface = pipeKey({ runId: 'r-c', surface: 'one-shot', mcpProfile: 'one-shot' });
     reg.register(sameProject, fakeHandle(sameProject, { status: 'completed' }));
     reg.register(diffProject, fakeHandle(diffProject, { status: 'completed' }));
     reg.register(diffSurface, fakeHandle(diffSurface, { status: 'completed' }));
 
-    const incoming = pipeKey({ runId: 'r-a2' }); // same p1 / pipeline / pipeline-profile scope
+    const incoming = pipeKey({ runId: 'r-a2' });
     const reaped = reg.reapSameScope(incoming);
 
     expect(reaped.map((h) => h.key.runId)).toEqual(['r-a']);
-    expect(reg.get(diffProject)).toBeDefined(); // different project untouched
-    expect(reg.get(diffSurface)).toBeDefined(); // different surface untouched
+    expect(reg.get(diffProject)).toBeDefined();
+    expect(reg.get(diffSurface)).toBeDefined();
   });
 
   it('chat scope reaps an older idle chat handle for the same ownerId, never a running one', () => {
@@ -346,8 +345,8 @@ describe('KI-2 reapSameScope (reap-on-register overwrite leak, PRODUCTION key sh
     const incoming = chatKey({ runId: 'r-newchat', ownerId: 'owner-X' });
     const reaped = reg.reapSameScope(incoming);
 
-    expect(reaped.map((h) => h.key.runId)).toEqual(['r-old']); // older idle chat for same owner
-    expect(reg.get(runningChat)).toBeDefined(); // running chat survives
-    expect(reg.get(otherOwner)).toBeDefined(); // different owner untouched
+    expect(reaped.map((h) => h.key.runId)).toEqual(['r-old']);
+    expect(reg.get(runningChat)).toBeDefined();
+    expect(reg.get(otherOwner)).toBeDefined();
   });
 });

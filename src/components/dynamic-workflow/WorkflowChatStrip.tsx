@@ -3,12 +3,8 @@ import { Workflow, Loader2, Pause, FolderGit2 } from 'lucide-react';
 import { useAppStore } from '@/stores/app-store';
 import { useChatStore } from '@/stores/chat-store';
 import { useDynamicWorkflowStore } from '@/stores/dynamic-workflow-store';
-import {
-  selectChatBoundActiveRuns,
-  workflowIndicatorLabel,
-} from './BackgroundWorkflowIndicator';
+import { selectChatBoundActiveRuns, workflowIndicatorLabel } from './BackgroundWorkflowIndicator';
 import type { DynamicWorkflowRun } from '@/types';
-
 
 function StatusBadge({ run }: { run: DynamicWorkflowRun }) {
   const awaiting = run.status === 'blocked' || run.status === 'delivered';

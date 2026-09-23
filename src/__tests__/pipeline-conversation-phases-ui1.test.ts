@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { conversationPhasesOf } from '@/types/pipeline';
 
@@ -64,7 +63,9 @@ describe('UI-1 — PipelinePage showChatInput is TRUE on the spec-review phases 
   });
 
   it('terminal states still hide the chat input on the override phases', () => {
-    expect(showChatInput({ pipelineType: 'development', currentPhase: 9, awaitingUser: true, isDone: true })).toBe(false);
+    expect(showChatInput({ pipelineType: 'development', currentPhase: 9, awaitingUser: true, isDone: true })).toBe(
+      false,
+    );
     expect(
       showChatInput({ pipelineType: 'development-v2', currentPhase: 12, awaitingUser: true, isFailed: true }),
     ).toBe(false);

@@ -18,9 +18,7 @@ interface SlashCommandPickerProps {
 export function SlashCommandPicker({ commands, filter, onSelect, visible, onNavigate }: SlashCommandPickerProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const filtered = commands.filter((cmd) =>
-    cmd.label.toLowerCase().startsWith(filter.toLowerCase()),
-  );
+  const filtered = commands.filter((cmd) => cmd.label.toLowerCase().startsWith(filter.toLowerCase()));
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -70,7 +68,7 @@ export function SlashCommandPicker({ commands, filter, onSelect, visible, onNavi
           }`}
           onMouseEnter={() => setSelectedIndex(i)}
           onMouseDown={(e) => {
-            e.preventDefault(); // prevent textarea blur
+            e.preventDefault();
             onSelect(cmd.command);
           }}
         >

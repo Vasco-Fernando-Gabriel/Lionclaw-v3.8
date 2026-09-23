@@ -56,7 +56,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const completed = await window.lionclaw.onboarding.isCompleted();
       set({ onboardingCompleted: completed });
-    } catch {
-    }
+    } catch {}
   },
 }));

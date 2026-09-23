@@ -1,4 +1,3 @@
-
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../db', () => ({
@@ -23,9 +22,7 @@ import type { LionAdapter, LionStreamEvent, LionStreamRequest } from '../adapter
 import { createLionStreamTranslator } from '../stream-translator';
 import type { StreamChunk } from '../../../../src/types';
 
-function makeMultiTurnAdapter(
-  turns: LionStreamEvent[][],
-): LionAdapter {
+function makeMultiTurnAdapter(turns: LionStreamEvent[][]): LionAdapter {
   let turnIdx = 0;
   return {
     name: 'ollama',
@@ -48,11 +45,13 @@ describe('Lion-SDK runtime - S5.4 progressive usage forwarding', () => {
       [
         {
           type: 'tool_call_delta',
-          toolCalls: [{
-            id: 'c1',
-            type: 'function',
-            function: { name: 'Bash', arguments: JSON.stringify({ command: 'echo hi' }) },
-          }],
+          toolCalls: [
+            {
+              id: 'c1',
+              type: 'function',
+              function: { name: 'Bash', arguments: JSON.stringify({ command: 'echo hi' }) },
+            },
+          ],
         },
         { type: 'usage', usage: { inputTokens: 10, outputTokens: 20 } },
         { type: 'done' },
@@ -98,11 +97,13 @@ describe('Lion-SDK runtime - S5.4 progressive usage forwarding', () => {
       [
         {
           type: 'tool_call_delta',
-          toolCalls: [{
-            id: 'c2',
-            type: 'function',
-            function: { name: 'Read', arguments: JSON.stringify({ file_path: '/a' }) },
-          }],
+          toolCalls: [
+            {
+              id: 'c2',
+              type: 'function',
+              function: { name: 'Read', arguments: JSON.stringify({ file_path: '/a' }) },
+            },
+          ],
         },
         { type: 'usage', usage: { inputTokens: 100, outputTokens: 50 } },
         { type: 'done' },
@@ -203,12 +204,7 @@ describe('Lion-SDK runtime - S5.4 progressive usage forwarding', () => {
   });
 
   it('handles adapter that emits no usage event gracefully (usage stays zero)', async () => {
-    const adapter = makeMultiTurnAdapter([
-      [
-        { type: 'text', delta: 'hi' },
-        { type: 'done' },
-      ],
-    ]);
+    const adapter = makeMultiTurnAdapter([[{ type: 'text', delta: 'hi' }, { type: 'done' }]]);
 
     const { chunks, emit } = captureChunks();
     const translator = createLionStreamTranslator({ sessionId: 's4', emit });
@@ -236,11 +232,13 @@ describe('Lion-SDK runtime - S5.4 progressive usage forwarding', () => {
       if (hasToolCall) {
         evs.push({
           type: 'tool_call_delta',
-          toolCalls: [{
-            id: `c-${input}`,
-            type: 'function',
-            function: { name: 'Bash', arguments: JSON.stringify({ command: 'x' }) },
-          }],
+          toolCalls: [
+            {
+              id: `c-${input}`,
+              type: 'function',
+              function: { name: 'Bash', arguments: JSON.stringify({ command: 'x' }) },
+            },
+          ],
         });
       } else {
         evs.push({ type: 'text', delta: 'final' });

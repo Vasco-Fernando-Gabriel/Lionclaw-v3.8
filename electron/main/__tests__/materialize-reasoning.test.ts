@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi } from 'vitest';
-
 
 vi.mock('../logger', () => ({
   createLogger: () => ({
@@ -19,10 +17,8 @@ vi.mock('../vault-registry', () => ({
   getSecret: vi.fn().mockResolvedValue(null),
 }));
 
-
 import { materializeReasoning, mapReasoningParams } from '../agent-runtime/external-http';
 import type { ReasoningCapability } from '../../../src/lib/provider-presets';
-
 
 describe('materializeReasoning', () => {
   it('kind=none returns {} regardless of effort', () => {
@@ -58,7 +54,11 @@ describe('materializeReasoning', () => {
 
   it('thinking=disabled always returns {} for all kinds', () => {
     const kinds: ReasoningCapability['kind'][] = [
-      'none', 'openai-effort', 'anthropic-thinking-flag', 'qwen-thinking-flag', 'reasoning-content-builtin',
+      'none',
+      'openai-effort',
+      'anthropic-thinking-flag',
+      'qwen-thinking-flag',
+      'reasoning-content-builtin',
     ];
     for (const kind of kinds) {
       const cap = { kind } as ReasoningCapability;
@@ -70,11 +70,10 @@ describe('materializeReasoning', () => {
   });
 });
 
-
 describe('mapReasoningParams - existing openai/openrouter paths (byte-identical)', () => {
   it('openai gpt-5.5: thinking=enabled returns { reasoning_effort: "high" } for effort=max', () => {
     const result = mapReasoningParams('max', 'enabled', undefined, 'openai', 'gpt-5.5-turbo');
-    expect(result).toEqual({ reasoning_effort: 'high' }); // max -> high clamped
+    expect(result).toEqual({ reasoning_effort: 'high' });
   });
 
   it('openai gpt-5.5: thinking=disabled returns {}', () => {
@@ -122,7 +121,6 @@ describe('mapReasoningParams - existing openai/openrouter paths (byte-identical)
     expect(result).toEqual({});
   });
 });
-
 
 describe('mapReasoningParams - new providers via catalog (declarative branch)', () => {
   it('kimi + kimi-k2-turbo-preview (kind=none): returns {}', () => {

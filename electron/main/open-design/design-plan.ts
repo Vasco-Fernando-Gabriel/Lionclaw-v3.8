@@ -155,15 +155,11 @@ function extractStoryRefs(storiesText: string | null, storyCoverageMap: string, 
   return knownStoryIds.map((id) => {
     const heading = new RegExp(`(?:^|\\n)\\s*#{0,6}\\s*${idPattern(id)}\\s*(?:[-—:]+\\s*)?([^\\n]*)`, 'i').exec(source);
     const start = heading?.index ?? source.search(new RegExp(idPattern(id), 'i'));
-    const nextMatch = start >= 0
-      ? source.slice(start + 1).search(new RegExp(`\\n\\s*#{0,6}\\s*(?:US|UC)[- ]?\\d{1,3}\\b`, 'i'))
-      : -1;
-    const segment = start >= 0
-      ? source.slice(start, nextMatch >= 0 ? start + 1 + nextMatch : start + 2200)
-      : '';
-    const compactLine = storyCoverageMap
-      .split('\n')
-      .find((line) => new RegExp(`\\b${idPattern(id)}\\b`, 'i').test(line)) ?? '';
+    const nextMatch =
+      start >= 0 ? source.slice(start + 1).search(new RegExp(`\\n\\s*#{0,6}\\s*(?:US|UC)[- ]?\\d{1,3}\\b`, 'i')) : -1;
+    const segment = start >= 0 ? source.slice(start, nextMatch >= 0 ? start + 1 + nextMatch : start + 2200) : '';
+    const compactLine =
+      storyCoverageMap.split('\n').find((line) => new RegExp(`\\b${idPattern(id)}\\b`, 'i').test(line)) ?? '';
     const title = (heading?.[1]?.trim() || compactLine.replace(/^[-*\s]*/, '').trim() || id)
       .replace(new RegExp(`^${idPattern(id)}\\s*[-—:]*\\s*`, 'i'), '')
       .trim();
@@ -173,9 +169,7 @@ function extractStoryRefs(storiesText: string | null, storyCoverageMap: string, 
 }
 
 function storyIdsMatching(refs: StoryRef[], patterns: RegExp[]): string[] {
-  return refs
-    .filter((ref) => patterns.some((pattern) => pattern.test(ref.lower)))
-    .map((ref) => ref.id);
+  return refs.filter((ref) => patterns.some((pattern) => pattern.test(ref.lower))).map((ref) => ref.id);
 }
 
 function uniqueStoryIds(...groups: string[][]): string[] {
@@ -188,7 +182,7 @@ function sha256(input: string): string {
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : null;
 }
 
@@ -264,7 +258,8 @@ export function validateDesignPlan(plan: DesignPlan, knownStoryIds: string[]): D
   for (const item of plan.coverage ?? []) {
     if (item.userStoryId) covered.add(item.userStoryId);
     for (const sid of item.screenIds ?? []) {
-      if (!screenIds.has(sid)) errors.push(`coverage ${item.userStoryId || '(sem story)'} referencia screen inexistente: ${sid}`);
+      if (!screenIds.has(sid))
+        errors.push(`coverage ${item.userStoryId || '(sem story)'} referencia screen inexistente: ${sid}`);
     }
   }
   for (const delta of plan.deltas ?? []) {
@@ -309,7 +304,9 @@ function buildDeterministicDesignPlan(inputs: EnsureDesignPlanInputs, knownStory
     const prCommentIds = storyIdsMatching(refs, [/coment[aá]rio.*pr|comentar.*pr/]);
     const scheduleIds = storyIdsMatching(refs, [/hor[aá]rio|agend|schedule|cron.*configurad|disparar.*cron/]);
     const reviewPrIds = storyIdsMatching(refs, [/revisar.*pr|validar.*pr|prs? abertos|pull request/]);
-    const runIsolationIds = storyIdsMatching(refs, [/ambiente.*run|isol(ar|amento).*run|workdir|execu[cç][aã]o.*isolad/]);
+    const runIsolationIds = storyIdsMatching(refs, [
+      /ambiente.*run|isol(ar|amento).*run|workdir|execu[cç][aã]o.*isolad/,
+    ]);
     const dashboardRunIds = storyIdsMatching(refs, [/dashboard|acompanhar.*runs?|runs? em dashboard|status.*runs?/]);
     const logsIds = storyIdsMatching(refs, [/logs? completos?|stdout|tool calls?/]);
     const emailFailureIds = storyIdsMatching(refs, [/email|e-mail|notifica|falha de run|run falhar/]);
@@ -318,14 +315,21 @@ function buildDeterministicDesignPlan(inputs: EnsureDesignPlanInputs, knownStory
 
     const loginStories = authIds.length > 0 ? authIds : [stories[0] ?? 'US-01'];
     const painelStories = uniqueStoryIds(scheduleIds, reviewPrIds, dashboardRunIds);
-    const cronsStories = uniqueStoryIds(cronCreateIds, cronEditIds, cronDeleteIds, manualRunIds, prCommentIds, scheduleIds);
+    const cronsStories = uniqueStoryIds(
+      cronCreateIds,
+      cronEditIds,
+      cronDeleteIds,
+      manualRunIds,
+      prCommentIds,
+      scheduleIds,
+    );
     const integracoesStories = uniqueStoryIds(githubIds, anthropicIds, emailFailureIds);
     const runsStories = uniqueStoryIds(dashboardRunIds, logsIds, reviewPrIds, runIsolationIds, emailFailureIds);
     const cobrancaStories = billingIds;
     const auditoriaStories = uniqueStoryIds(tenantIsolationIds, auditIds, runIsolationIds);
 
     const fallbackScreen = painelStories.length > 0 ? 'painel' : 'crons';
-    const actionStories = (ids: string[], screenIds: string[]) => ids.length > 0 ? ids : screenIds;
+    const actionStories = (ids: string[], screenIds: string[]) => (ids.length > 0 ? ids : screenIds);
 
     const screens: DesignPlanScreen[] = [
       {
@@ -349,7 +353,12 @@ function buildDeterministicDesignPlan(inputs: EnsureDesignPlanInputs, knownStory
         purpose: 'Acompanhar proximas execucoes, runs recentes, falhas, tokens usados e custo estimado.',
         userStoryIds: painelStories,
         primaryActions: [
-          { id: 'action-run-selected-cron', label: 'Rodar cron agora', type: 'button', userStoryIds: actionStories(manualRunIds, painelStories) },
+          {
+            id: 'action-run-selected-cron',
+            label: 'Rodar cron agora',
+            type: 'button',
+            userStoryIds: actionStories(manualRunIds, painelStories),
+          },
         ],
         states: ['loading', 'empty', 'success', 'error'],
         components: ['run-status-strip', 'upcoming-crons', 'runs-table', 'failure-alerts'],
@@ -363,13 +372,36 @@ function buildDeterministicDesignPlan(inputs: EnsureDesignPlanInputs, knownStory
         purpose: 'Criar, editar, deletar, disparar manualmente e configurar comentario opcional em PRs.',
         userStoryIds: cronsStories,
         primaryActions: [
-          { id: 'action-create-cron', label: 'Novo cron de PR', type: 'button', userStoryIds: actionStories(cronCreateIds, cronsStories) },
-          { id: 'action-run-cron-now', label: 'Executar agora', type: 'button', userStoryIds: actionStories(manualRunIds, cronsStories) },
+          {
+            id: 'action-create-cron',
+            label: 'Novo cron de PR',
+            type: 'button',
+            userStoryIds: actionStories(cronCreateIds, cronsStories),
+          },
+          {
+            id: 'action-run-cron-now',
+            label: 'Executar agora',
+            type: 'button',
+            userStoryIds: actionStories(manualRunIds, cronsStories),
+          },
         ],
         states: ['empty', 'editing', 'saving', 'running', 'error', 'success'],
         components: ['cron-list', 'cron-form-drawer', 'pr-comment-toggle', 'delete-confirm-dialog'],
-        dataShownOrEdited: ['owner_repo', 'cron_expression', 'agent_prompt', 'comment_on_pr', 'active', 'last_run_status'],
-        apiExpectations: ['GET /crons', 'POST /crons', 'PATCH /crons/{id}', 'DELETE /crons/{id}', 'POST /crons/{id}/run'],
+        dataShownOrEdited: [
+          'owner_repo',
+          'cron_expression',
+          'agent_prompt',
+          'comment_on_pr',
+          'active',
+          'last_run_status',
+        ],
+        apiExpectations: [
+          'GET /crons',
+          'POST /crons',
+          'PATCH /crons/{id}',
+          'DELETE /crons/{id}',
+          'POST /crons/{id}/run',
+        ],
       },
       {
         id: 'integracoes',
@@ -378,9 +410,24 @@ function buildDeterministicDesignPlan(inputs: EnsureDesignPlanInputs, knownStory
         purpose: 'Conectar GitHub PAT, Anthropic API key BYOK e email de alerta com segredos mascarados.',
         userStoryIds: integracoesStories,
         primaryActions: [
-          { id: 'action-save-github-pat', label: 'Salvar GitHub PAT', type: 'submit', userStoryIds: actionStories(githubIds, integracoesStories) },
-          { id: 'action-save-anthropic-key', label: 'Salvar Anthropic API key', type: 'submit', userStoryIds: actionStories(anthropicIds, integracoesStories) },
-          { id: 'action-save-alert-email', label: 'Salvar email de falha', type: 'submit', userStoryIds: actionStories(emailFailureIds, integracoesStories) },
+          {
+            id: 'action-save-github-pat',
+            label: 'Salvar GitHub PAT',
+            type: 'submit',
+            userStoryIds: actionStories(githubIds, integracoesStories),
+          },
+          {
+            id: 'action-save-anthropic-key',
+            label: 'Salvar Anthropic API key',
+            type: 'submit',
+            userStoryIds: actionStories(anthropicIds, integracoesStories),
+          },
+          {
+            id: 'action-save-alert-email',
+            label: 'Salvar email de falha',
+            type: 'submit',
+            userStoryIds: actionStories(emailFailureIds, integracoesStories),
+          },
         ],
         states: ['disconnected', 'connected', 'saving', 'masked', 'error'],
         components: ['github-pat-form', 'anthropic-key-form', 'failure-email-form', 'secret-redaction-note'],
@@ -394,11 +441,25 @@ function buildDeterministicDesignPlan(inputs: EnsureDesignPlanInputs, knownStory
         purpose: 'Consultar runs, revisar PRs processados e abrir logs completos com stdout e tool calls redigidos.',
         userStoryIds: runsStories,
         primaryActions: [
-          { id: 'action-open-run-log', label: 'Abrir logs', type: 'button', userStoryIds: actionStories(logsIds, runsStories) },
+          {
+            id: 'action-open-run-log',
+            label: 'Abrir logs',
+            type: 'button',
+            userStoryIds: actionStories(logsIds, runsStories),
+          },
         ],
         states: ['loading', 'empty', 'queued', 'running', 'retrying', 'success', 'failed'],
         components: ['runs-filter-bar', 'runs-table', 'run-log-panel', 'redacted-secret-badge'],
-        dataShownOrEdited: ['run_status', 'repository', 'pull_requests', 'stdout', 'tool_calls', 'tokens', 'estimated_cost', 'workdir_id'],
+        dataShownOrEdited: [
+          'run_status',
+          'repository',
+          'pull_requests',
+          'stdout',
+          'tool_calls',
+          'tokens',
+          'estimated_cost',
+          'workdir_id',
+        ],
         apiExpectations: ['GET /runs', 'GET /runs/{id}', 'GET /runs/{id}/logs'],
       },
       {
@@ -408,7 +469,12 @@ function buildDeterministicDesignPlan(inputs: EnsureDesignPlanInputs, knownStory
         purpose: 'Exibir plano unico mensal, status da assinatura e acao via Stripe Link.',
         userStoryIds: cobrancaStories,
         primaryActions: [
-          { id: 'action-open-stripe-link', label: 'Assinar por R$49/mes', type: 'link', userStoryIds: actionStories(billingIds, cobrancaStories) },
+          {
+            id: 'action-open-stripe-link',
+            label: 'Assinar por R$49/mes',
+            type: 'link',
+            userStoryIds: actionStories(billingIds, cobrancaStories),
+          },
         ],
         states: ['active', 'inactive', 'loading', 'error'],
         components: ['billing-plan', 'stripe-link-action', 'subscription-status'],
@@ -442,10 +508,10 @@ function buildDeterministicDesignPlan(inputs: EnsureDesignPlanInputs, knownStory
     ].filter((nav) => keptScreenIds.has(nav.targetScreenId) && nav.userStoryIds.length > 0);
 
     const screenIdsForStory = (userStoryId: string) => {
-      const direct = screens
-        .filter((screen) => screen.userStoryIds.includes(userStoryId))
-        .map((screen) => screen.id);
-      return direct.length > 0 ? direct : [keptScreenIds.has(fallbackScreen) ? fallbackScreen : screens[0]?.id ?? 'login'];
+      const direct = screens.filter((screen) => screen.userStoryIds.includes(userStoryId)).map((screen) => screen.id);
+      return direct.length > 0
+        ? direct
+        : [keptScreenIds.has(fallbackScreen) ? fallbackScreen : (screens[0]?.id ?? 'login')];
     };
 
     const productName = [inputs.discovery ?? '', inputs.stories ?? ''].join('\n').toLowerCase().includes('lioncron')
@@ -483,12 +549,32 @@ function buildDeterministicDesignPlan(inputs: EnsureDesignPlanInputs, knownStory
       screens,
       navigation,
       sampleData: [
-        { label: 'Repositorio', value: 'lionlabs/lioncron', userStoryIds: uniqueStoryIds(githubIds, cronCreateIds, reviewPrIds).filter((us) => stories.includes(us)) },
-        { label: 'Schedule', value: '0 */6 * * *', userStoryIds: uniqueStoryIds(cronCreateIds, scheduleIds).filter((us) => stories.includes(us)) },
-        { label: 'Run falha', value: 'falha - 18.742 tokens - US$0,37', userStoryIds: uniqueStoryIds(dashboardRunIds, logsIds, emailFailureIds).filter((us) => stories.includes(us)) },
-        { label: 'Audit log', value: 'cron.updated por admin@exemplo.dev - tenant lc_4827', userStoryIds: uniqueStoryIds(tenantIsolationIds, auditIds).filter((us) => stories.includes(us)) },
+        {
+          label: 'Repositorio',
+          value: 'lionlabs/lioncron',
+          userStoryIds: uniqueStoryIds(githubIds, cronCreateIds, reviewPrIds).filter((us) => stories.includes(us)),
+        },
+        {
+          label: 'Schedule',
+          value: '0 */6 * * *',
+          userStoryIds: uniqueStoryIds(cronCreateIds, scheduleIds).filter((us) => stories.includes(us)),
+        },
+        {
+          label: 'Run falha',
+          value: 'falha - 18.742 tokens - US$0,37',
+          userStoryIds: uniqueStoryIds(dashboardRunIds, logsIds, emailFailureIds).filter((us) => stories.includes(us)),
+        },
+        {
+          label: 'Audit log',
+          value: 'cron.updated por admin@exemplo.dev - tenant lc_4827',
+          userStoryIds: uniqueStoryIds(tenantIsolationIds, auditIds).filter((us) => stories.includes(us)),
+        },
       ].filter((item) => item.userStoryIds.length > 0),
-      coverage: stories.map((userStoryId) => ({ userStoryId, screenIds: screenIdsForStory(userStoryId), notes: 'Cobertura deterministica por semantica da user story.' })),
+      coverage: stories.map((userStoryId) => ({
+        userStoryId,
+        screenIds: screenIdsForStory(userStoryId),
+        notes: 'Cobertura deterministica por semantica da user story.',
+      })),
       deltas: [],
       openDesignInstructions: [
         'Trate este plano como blueprint obrigatorio de produto e gere uma SPA operacional, nao uma landing page.',
@@ -536,7 +622,9 @@ function buildDeterministicDesignPlan(inputs: EnsureDesignPlanInputs, knownStory
         route: '#principal',
         purpose: 'Executar as principais tarefas do produto usando dados das stories aprovadas.',
         userStoryIds: stories,
-        primaryActions: [{ id: 'action-primary', label: 'Executar acao principal', type: 'button', userStoryIds: stories }],
+        primaryActions: [
+          { id: 'action-primary', label: 'Executar acao principal', type: 'button', userStoryIds: stories },
+        ],
         states: ['loading', 'empty', 'success', 'error'],
         components: ['primary-list', 'detail-panel', 'form-drawer'],
         dataShownOrEdited: ['entidade_principal'],
@@ -545,7 +633,11 @@ function buildDeterministicDesignPlan(inputs: EnsureDesignPlanInputs, knownStory
     ],
     navigation: [{ id: 'nav-principal', label: 'Principal', targetScreenId: 'principal', userStoryIds: stories }],
     sampleData: [],
-    coverage: stories.map((userStoryId) => ({ userStoryId, screenIds: ['principal'], notes: 'Cobertura deterministica.' })),
+    coverage: stories.map((userStoryId) => ({
+      userStoryId,
+      screenIds: ['principal'],
+      notes: 'Cobertura deterministica.',
+    })),
     deltas: [],
     openDesignInstructions: [
       'Gere uma SPA operacional, nao uma landing page.',
@@ -566,9 +658,7 @@ function buildPlanPromptBlock(
   const statusLine = fallback
     ? `Plano operacional validado pelo codigo; validacao deterministica: ${validation.ok ? 'aprovada' : 'rejeitada'}.`
     : `Plano deterministico gerado pelo LionClaw; validacao deterministica: ${validation.ok ? 'aprovada' : 'rejeitada'}.`;
-  const validatorLine = validatorReport?.approved === false
-    ? `Riscos do validator: ${validatorReport.summary}`
-    : null;
+  const validatorLine = validatorReport?.approved === false ? `Riscos do validator: ${validatorReport.summary}` : null;
   return `## Design Plan aprovado antes do LionDesign
 
 Este e o blueprint de produto para o artifact visual. O schema do design-contract e o Design Lock continuam tendo prioridade maxima.
@@ -608,7 +698,10 @@ Regras para usar este plano:
 - Nao escreva regra de negocio, criterio de aceite ou contrato como texto visivel na UI.`;
 }
 
-function getPlanPaths(projectPath: string, pipelineDocsId: string | null): {
+function getPlanPaths(
+  projectPath: string,
+  pipelineDocsId: string | null,
+): {
   planPath: string;
   validationPath: string;
   promptBlockPath: string;
@@ -626,7 +719,12 @@ function getPlanPaths(projectPath: string, pipelineDocsId: string | null): {
 function readReusablePlan(
   paths: ReturnType<typeof getPlanPaths>,
   inputHash: string,
-): { plan: DesignPlan; validation: DesignPlanValidationResult; validatorReport: DesignPlanValidatorReport | null; fallback: boolean } | null {
+): {
+  plan: DesignPlan;
+  validation: DesignPlanValidationResult;
+  validatorReport: DesignPlanValidatorReport | null;
+  fallback: boolean;
+} | null {
   if (!fs.existsSync(paths.planPath) || !fs.existsSync(paths.validationPath)) return null;
   try {
     const planRaw = JSON.parse(fs.readFileSync(paths.planPath, 'utf-8')) as { inputHash?: string; plan?: unknown };
@@ -636,7 +734,9 @@ function readReusablePlan(
       validatorReport?: DesignPlanValidatorReport | null;
     };
     if (planRaw.inputHash !== inputHash || validationRaw.inputHash !== inputHash) return null;
-    const isLegacyFallback = Boolean((planRaw as { fallback?: unknown }).fallback || (validationRaw as { fallback?: unknown }).fallback);
+    const isLegacyFallback = Boolean(
+      (planRaw as { fallback?: unknown }).fallback || (validationRaw as { fallback?: unknown }).fallback,
+    );
     if (isLegacyFallback) return null;
     if (!isDesignPlan(planRaw.plan)) return null;
     const validation = validateDesignPlan(planRaw.plan, validationRaw.validation?.knownStoryIds ?? []);
@@ -654,19 +754,26 @@ function readReusablePlan(
 
 export async function ensureDesignPlan(inputs: EnsureDesignPlanInputs): Promise<EnsureDesignPlanResult> {
   const knownStoryIds = extractStoryIds(inputs.stories);
-  const inputHash = sha256(JSON.stringify({
-    schema: DESIGN_PLAN_SCHEMA_VERSION,
-    projectName: inputs.projectName,
-    discovery: inputs.discovery ?? '',
-    stories: inputs.stories ?? '',
-    prdValidatorNotes: inputs.prdValidatorNotes ?? '',
-    storyCoverageMap: inputs.storyCoverageMap,
-  }));
+  const inputHash = sha256(
+    JSON.stringify({
+      schema: DESIGN_PLAN_SCHEMA_VERSION,
+      projectName: inputs.projectName,
+      discovery: inputs.discovery ?? '',
+      stories: inputs.stories ?? '',
+      prdValidatorNotes: inputs.prdValidatorNotes ?? '',
+      storyCoverageMap: inputs.storyCoverageMap,
+    }),
+  );
   const paths = getPlanPaths(inputs.projectPath, inputs.pipelineDocsId);
 
   const reusable = readReusablePlan(paths, inputHash);
   if (reusable) {
-    const promptBlock = buildPlanPromptBlock(reusable.plan, reusable.validation, reusable.validatorReport, reusable.fallback);
+    const promptBlock = buildPlanPromptBlock(
+      reusable.plan,
+      reusable.validation,
+      reusable.validatorReport,
+      reusable.fallback,
+    );
     fs.writeFileSync(paths.promptBlockPath, promptBlock, 'utf-8');
     inputs.onText?.('[Design Plan] Reutilizando plano de telas ja validado.\n');
     inputs.onProgress?.({ stage: 'planner', status: 'done', detail: 'Plano de telas ja validado foi reutilizado.' });
@@ -688,15 +795,26 @@ export async function ensureDesignPlan(inputs: EnsureDesignPlanInputs): Promise<
   const validation = validateDesignPlan(plan, knownStoryIds);
   if (!validation.ok) {
     const message = validation.errors.join('; ');
-    logger.warn({ projectId: inputs.projectId, errors: validation.errors }, 'deterministic design plan failed validation');
+    logger.warn(
+      { projectId: inputs.projectId, errors: validation.errors },
+      'deterministic design plan failed validation',
+    );
     inputs.onText?.(`[Design Plan] Plano deterministico rejeitado: ${message}\n`);
     inputs.onProgress?.({ stage: 'planner', status: 'warning', detail: message });
     throw new Error(`Design Plan deterministico invalido: ${message}`);
   }
 
   const promptBlock = buildPlanPromptBlock(plan, validation, null, false);
-  fs.writeFileSync(paths.planPath, JSON.stringify({ inputHash, plan, fallback: false, source: 'deterministic' }, null, 2), 'utf-8');
-  fs.writeFileSync(paths.validationPath, JSON.stringify({ inputHash, validation, validatorReport: null, fallback: false, source: 'deterministic' }, null, 2), 'utf-8');
+  fs.writeFileSync(
+    paths.planPath,
+    JSON.stringify({ inputHash, plan, fallback: false, source: 'deterministic' }, null, 2),
+    'utf-8',
+  );
+  fs.writeFileSync(
+    paths.validationPath,
+    JSON.stringify({ inputHash, validation, validatorReport: null, fallback: false, source: 'deterministic' }, null, 2),
+    'utf-8',
+  );
   fs.writeFileSync(paths.promptBlockPath, promptBlock, 'utf-8');
   inputs.onText?.('[Design Plan] Plano deterministico aprovado e salvo.\n');
   inputs.onProgress?.({ stage: 'planner', status: 'done', detail: 'Plano deterministico aprovado.' });

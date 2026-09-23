@@ -1,8 +1,6 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-
 
 vi.mock('../../codex-runtime/errors', () => {
   class CodexAuthError extends Error {
@@ -61,8 +59,14 @@ function makeResult(extra?: Partial<AgentExecutionResult>): AgentExecutionResult
   return {
     output: 'resposta',
     metrics: {
-      inputTokens: 1, outputTokens: 2, cacheReadTokens: 0, cacheCreationTokens: 0,
-      toolUses: 0, apiRequests: 1, costUsd: 0, durationMs: 5,
+      inputTokens: 1,
+      outputTokens: 2,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      toolUses: 0,
+      apiRequests: 1,
+      costUsd: 0,
+      durationMs: 5,
     },
     model: 'claude-sonnet-4-5',
     runtime: 'cloud',
@@ -80,7 +84,11 @@ describe('AC-B5 [INV] — allowlist de re-throw CRU no catch do execute.ts', () 
     const raw = new CodexUnavailableError('codex app-server exited (code=null)');
     cloudRun.mockRejectedValueOnce(raw);
     let caught: unknown;
-    try { await executeAgent(makeReq()); } catch (e) { caught = e; }
+    try {
+      await executeAgent(makeReq());
+    } catch (e) {
+      caught = e;
+    }
     expect(caught).toBe(raw);
     expect(caught instanceof CodexUnavailableError).toBe(true);
     expect(caught instanceof TypedProviderError).toBe(false);
@@ -114,7 +122,11 @@ describe('AC-B5 [INV] — allowlist de re-throw CRU no catch do execute.ts', () 
     const raw = new Error('HTTP 429: rate limit exceeded');
     cloudRun.mockRejectedValueOnce(raw);
     let caught: unknown;
-    try { await executeAgent(makeReq()); } catch (e) { caught = e; }
+    try {
+      await executeAgent(makeReq());
+    } catch (e) {
+      caught = e;
+    }
     expect(caught).toBeInstanceOf(TypedProviderError);
     const typed = caught as TypedProviderError;
     expect(typed.code).toBe('LLM-RATE-429');
@@ -149,6 +161,9 @@ describe('AC-B5 [INV] — allowlist de re-throw CRU no catch do execute.ts', () 
 
       case 'grok':
         return await grokExecutor.run(wrappedReq, config);
+
+      case 'cursor':
+        return await cursorExecutor.run(wrappedReq, config);
 
       default: {
         // Exhaustiveness guard: if a new runtime is added to AgentConfig['runtime']

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
@@ -74,7 +73,6 @@ function odStudioPrompt(): string {
   });
 }
 
-
 describe('A-AC1: prompt semeado da fase OD sem briefing', () => {
   it('o prompt da fase do Open Design Studio NAO menciona briefing', () => {
     const prompt = odStudioPrompt();
@@ -90,7 +88,6 @@ describe('A-AC1: prompt semeado da fase OD sem briefing', () => {
     expect(prompt).not.toContain('briefing');
   });
 });
-
 
 const ROOT = process.cwd();
 function readSource(rel: string): string {

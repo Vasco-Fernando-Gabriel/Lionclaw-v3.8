@@ -3,29 +3,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { ChatErrorBanner } from '../ChatErrorBanner';
+import { createThreadState, useChatStore } from '@/stores/chat-store';
 import type { StreamChunk } from '@/types';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type StreamCallback = (chunk: StreamChunk) => void;
-
-let streamCallback: StreamCallback | null = null;
 let container: HTMLDivElement;
 let root: Root | null = null;
 
 beforeEach(() => {
   vi.useFakeTimers();
-  streamCallback = null;
   (window as unknown as Record<string, unknown>).lionclaw = {
     chat: {
-      onStream: (cb: StreamCallback) => {
-        streamCallback = cb;
-        return () => {
-          streamCallback = null;
-        };
-      },
+      getSessions: async () => [],
+      listOpenSessions: async () => [],
+      getMessages: async () => [],
+      getContextUsage: async () => null,
     },
+    activity: { getBlocks: async () => [] },
+    settings: { get: async () => ({ voiceResponseEnabled: false }) },
   };
+  useChatStore.setState({
+    currentSessionId: 's1',
+    openLanes: [],
+    sessions: [],
+    threads: { s1: createThreadState({ hydrated: true }), s2: createThreadState({ hydrated: true }) },
+    streamingSessionIds: new Set(),
+  });
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -51,7 +55,7 @@ function mount() {
 
 function emit(chunk: StreamChunk) {
   act(() => {
-    streamCallback?.(chunk);
+    useChatStore.getState().handleStreamChunk(chunk);
   });
 }
 
@@ -64,7 +68,7 @@ describe('ChatErrorBanner (SB-3)', () => {
     mount();
     expect(banner()).toBeNull();
 
-    emit({ type: 'error', code: 'LLM-QUOTA', error: 'Cota ou creditos do provider esgotados.' });
+    emit({ type: 'error', sessionId: 's1', code: 'LLM-QUOTA', error: 'Cota ou creditos do provider esgotados.' });
 
     const el = banner();
     expect(el).not.toBeNull();
@@ -81,7 +85,7 @@ describe('ChatErrorBanner (SB-3)', () => {
 
   it('AC-B7: banner persistente e dispensavel manualmente (botao X)', () => {
     mount();
-    emit({ type: 'error', code: 'LLM-QUOTA' });
+    emit({ type: 'error', sessionId: 's1', code: 'LLM-QUOTA' });
     expect(banner()).not.toBeNull();
 
     const dismiss = container.querySelector<HTMLButtonElement>('button[aria-label="Dispensar erro"]');
@@ -94,7 +98,7 @@ describe('ChatErrorBanner (SB-3)', () => {
 
   it('AC-B7 (contraste): erro NAO-persistente auto-dispensa em 8s (paridade com o antigo)', () => {
     mount();
-    emit({ type: 'error', error: 'erro qualquer nao classificavel' });
+    emit({ type: 'error', sessionId: 's1', error: 'erro qualquer nao classificavel' });
     expect(banner()).not.toBeNull();
 
     act(() => {
@@ -105,7 +109,7 @@ describe('ChatErrorBanner (SB-3)', () => {
 
   it('AC-B9b: chunk LLM-EMPTY mostra o fallback "O agente terminou sem resposta"', () => {
     mount();
-    emit({ type: 'error', code: 'LLM-EMPTY', error: 'O agente terminou sem resposta.' });
+    emit({ type: 'error', sessionId: 's1', code: 'LLM-EMPTY', error: 'O agente terminou sem resposta.' });
 
     const el = banner();
     expect(el).not.toBeNull();
@@ -123,15 +127,38 @@ describe('ChatErrorBanner (SB-3)', () => {
     expect(banner()).toBeNull();
   });
 
-  it('done de turno bem-sucedido limpa banner NAO-persistente antigo (persistente fica)', () => {
+  it('done de turno bem-sucedido limpa banner NAO-persistente antigo (persistente fica)', async () => {
     mount();
-    emit({ type: 'error', code: 'LLM-NET' });
+    emit({ type: 'error', sessionId: 's1', code: 'LLM-NET' });
     expect(banner()).not.toBeNull();
     emit({ type: 'done', sessionId: 's1' });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(banner()).toBeNull();
 
-    emit({ type: 'error', code: 'LLM-QUOTA' });
+    emit({ type: 'error', sessionId: 's1', code: 'LLM-QUOTA' });
     emit({ type: 'done', sessionId: 's1' });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(banner()).not.toBeNull();
+  });
+
+  it('10.1: o banner filtra pela lane visivel; o erro de outra lane so aparece ao selecionar a lane dela', () => {
+    mount();
+    emit({ type: 'error', sessionId: 's2', code: 'LLM-NET', error: 'rede' });
+    expect(banner()).toBeNull();
+
+    act(() => {
+      useChatStore.setState({ currentSessionId: 's2' });
+    });
+    expect(banner()).not.toBeNull();
+    expect(banner()!.dataset.code).toBe('LLM-NET');
+
+    act(() => {
+      useChatStore.setState({ currentSessionId: 's1' });
+    });
+    expect(banner()).toBeNull();
   });
 });

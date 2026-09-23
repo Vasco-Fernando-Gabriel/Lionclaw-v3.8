@@ -1,4 +1,3 @@
-
 import crypto from 'crypto';
 import { createLogger } from '../logger';
 import { getHarnessProject } from '../db';
@@ -22,10 +21,7 @@ export interface DesignPromptDelivery {
 
 export type DesignPromptResult = DesignPromptDelivery | { error: string };
 
-export async function sendDesignPrompt(
-  projectId: string,
-  message: string,
-): Promise<DesignPromptResult> {
+export async function sendDesignPrompt(projectId: string, message: string): Promise<DesignPromptResult> {
   try {
     if (!projectId || typeof message !== 'string' || !message.trim()) {
       return { error: 'design_prompt: id e message sao obrigatorios' };

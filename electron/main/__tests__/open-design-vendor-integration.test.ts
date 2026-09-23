@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
@@ -12,7 +11,6 @@ function read(rel: string): string {
 function readJson(rel: string): unknown {
   return JSON.parse(read(rel));
 }
-
 
 describe('Sprint 5 integration — lock outputs ↔ fase 6+ paths block', () => {
   const lockSrc = read('electron/main/open-design/lock.ts');
@@ -49,7 +47,6 @@ describe('Sprint 5 integration — lock outputs ↔ fase 6+ paths block', () => 
   });
 });
 
-
 describe('Sprint 5 integration — forbidden endpoints parity (SPEC L809-819)', () => {
   const adapterSrc = read('electron/main/open-design/adapter-http.ts');
   const lockSrc = read('electron/main/open-design/lock.ts');
@@ -73,12 +70,9 @@ describe('Sprint 5 integration — forbidden endpoints parity (SPEC L809-819)', 
   });
 });
 
-
 describe('Sprint 5 integration — PreflightResult shape (SPEC L1035-1036)', () => {
   const installerSrc = read('electron/main/open-design/installer.ts');
-  const snapshotSrc = read(
-    'electron/main/__tests__/__snapshots__/ipc-channels-snapshot.test.ts.snap',
-  );
+  const snapshotSrc = read('electron/main/__tests__/__snapshots__/ipc-channels-snapshot.test.ts.snap');
 
   it('installer.ts defines status union {ready, deps-missing, vendor-missing}', () => {
     expect(installerSrc).toMatch(/'ready'/);
@@ -97,7 +91,6 @@ describe('Sprint 5 integration — PreflightResult shape (SPEC L1035-1036)', () 
     expect(installerSrc).not.toMatch(/openDesignRoot:\s/);
   });
 });
-
 
 describe('Sprint 5 integration — preload public surface (SPEC L1247)', () => {
   const preloadSrc = read('electron/preload/index.ts');
@@ -122,7 +115,6 @@ describe('Sprint 5 integration — preload public surface (SPEC L1247)', () => {
   });
 });
 
-
 describe('Sprint 1 wiring — boot installer kickoff (SPEC L457-462)', () => {
   const indexSrc = read('electron/main/index.ts');
 
@@ -137,7 +129,6 @@ describe('Sprint 1 wiring — boot installer kickoff (SPEC L457-462)', () => {
     expect(ensureIdx).toBeGreaterThan(whenReadyIdx);
   });
 });
-
 
 describe('Sprint 5 integration — vendor flatten (SPEC L975-1027)', () => {
   it('vendor/open-design/.vendor-meta.json exists with canonical shape', () => {
@@ -163,12 +154,9 @@ describe('Sprint 5 integration — vendor flatten (SPEC L975-1027)', () => {
   });
 });
 
-
 describe('Sprint 5 integration — SessionConfig pt-BR locale (SPEC L632-638)', () => {
   const typesSrc = read('src/types/open-design.ts');
-  const sessionViewSrc = read(
-    'src/components/open-design/SessionConfigView.tsx',
-  );
+  const sessionViewSrc = read('src/components/open-design/SessionConfigView.tsx');
 
   it('OpenDesignSessionConfig declares locale field (pt-BR default)', () => {
     expect(typesSrc).toMatch(/locale[?:]?:\s*['"]pt-BR['"]|locale\??:\s*string/);
@@ -178,7 +166,6 @@ describe('Sprint 5 integration — SessionConfig pt-BR locale (SPEC L632-638)', 
     expect(sessionViewSrc).toMatch(/['"]pt-BR['"]/);
   });
 });
-
 
 describe('Sprint 5 integration — StudioView lock wiring (SPEC L826, L871-873)', () => {
   const studioSrc = read('src/components/open-design/StudioView.tsx');
@@ -193,30 +180,5 @@ describe('Sprint 5 integration — StudioView lock wiring (SPEC L826, L871-873)'
 
   it('StudioView does NOT call window.lionclaw.openDesign.lock (removed in Sprint 4)', () => {
     expect(studioSrc).not.toMatch(/openDesign\.lock\(/);
-  });
-});
-
-
-describe('Sprint 5 integration — gates script wiring', () => {
-  const scriptPath = path.join(REPO_ROOT, 'scripts', 'sprint5-gates.sh');
-
-  it('scripts/sprint5-gates.sh exists', () => {
-    expect(fs.existsSync(scriptPath)).toBe(true);
-  });
-
-  it('scripts/sprint5-gates.sh is executable', () => {
-    const stat = fs.statSync(scriptPath);
-    expect((stat.mode & 0o100) !== 0).toBe(true);
-  });
-
-  it('script documents the 6 gates inline (SPEC L1242-1249)', () => {
-    const src = fs.readFileSync(scriptPath, 'utf-8');
-    expect(src).toMatch(/Gate 1/);
-    expect(src).toMatch(/Gate 2/);
-    expect(src).toMatch(/Gate 3/);
-    expect(src).toMatch(/Gate 4/);
-    expect(src).toMatch(/Gate 5/);
-    expect(src).toMatch(/Gate 6/);
-    expect(src).toMatch(/SPEC L1242-1249/);
   });
 });

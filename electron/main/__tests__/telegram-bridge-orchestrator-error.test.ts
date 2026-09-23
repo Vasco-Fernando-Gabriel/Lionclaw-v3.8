@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const h = vi.hoisted(() => {
@@ -91,12 +90,7 @@ describe('bridge do Telegram: erro tipado do resolver -> mensagem especifica (SP
       ),
     );
 
-    const response = await __telegramInternal.executeTelegramQueryForTests(
-      'oi',
-      'tg-session',
-      42,
-      'Breno',
-    );
+    const response = await __telegramInternal.executeTelegramQueryForTests('oi', 'tg-session', 42, 'Breno');
 
     expect(response).toBe('Orquestrador nao configurado: abra Configuracoes no app.');
     expect(response).not.toMatch(/Erro ao processar/i);
@@ -110,12 +104,7 @@ describe('bridge do Telegram: erro tipado do resolver -> mensagem especifica (SP
       ),
     );
 
-    const response = await __telegramInternal.executeTelegramQueryForTests(
-      'oi',
-      'tg-session',
-      42,
-      'Breno',
-    );
+    const response = await __telegramInternal.executeTelegramQueryForTests('oi', 'tg-session', 42, 'Breno');
 
     expect(response).toMatch(/codex-sdk ainda nao habilitado/i);
     expect(response).not.toMatch(/Erro ao processar/i);
@@ -124,8 +113,8 @@ describe('bridge do Telegram: erro tipado do resolver -> mensagem especifica (SP
   it('erro NAO-tipado do turno e re-lancado (nao vira mensagem especifica)', async () => {
     h.executeTelegramLaneQueryMock.mockRejectedValueOnce(new Error('boom generico do SDK'));
 
-    await expect(
-      __telegramInternal.executeTelegramQueryForTests('oi', 'tg-session', 42, 'Breno'),
-    ).rejects.toThrow('boom generico do SDK');
+    await expect(__telegramInternal.executeTelegramQueryForTests('oi', 'tg-session', 42, 'Breno')).rejects.toThrow(
+      'boom generico do SDK',
+    );
   });
 });

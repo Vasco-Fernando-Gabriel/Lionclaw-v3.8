@@ -1,9 +1,5 @@
-
 import { describe, it, expect, vi } from 'vitest';
-import {
-  applyMigrationV68,
-  __V68_INTERNAL,
-} from '../db-migrations/v68-orchestrator-compaction-trigger-settings';
+import { applyMigrationV68, __V68_INTERNAL } from '../db-migrations/v68-orchestrator-compaction-trigger-settings';
 
 describe('applyMigrationV68 - structural', () => {
   it('exports applyMigrationV68 as a function', () => {
@@ -11,10 +7,7 @@ describe('applyMigrationV68 - structural', () => {
   });
 
   it('declares context-window and threshold defaults', () => {
-    expect(__V68_INTERNAL.COMPACTION_TRIGGER_DEFAULTS).toContainEqual([
-      'orchestrator_context_window_tokens',
-      '',
-    ]);
+    expect(__V68_INTERNAL.COMPACTION_TRIGGER_DEFAULTS).toContainEqual(['orchestrator_context_window_tokens', '']);
     expect(__V68_INTERNAL.COMPACTION_TRIGGER_DEFAULTS).toContainEqual([
       'orchestrator_compaction_threshold_percent',
       '70',

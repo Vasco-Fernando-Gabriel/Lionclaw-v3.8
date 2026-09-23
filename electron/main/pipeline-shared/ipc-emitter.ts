@@ -1,4 +1,3 @@
-
 import { BrowserWindow } from 'electron';
 import { pipelineEventBus } from '../pipeline-event-bus';
 import { brandLionDesignPayload } from '../liondesign-branding';
@@ -31,8 +30,7 @@ function deliver(channel: string, payload: unknown): void {
         win.webContents.send(channel, payload);
       }
     }
-  } catch {
-  }
+  } catch {}
 
   if (channel.startsWith('pipeline:')) {
     pipelineEventBus.emit(channel, payload);

@@ -2,10 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const indexSrc = readFileSync(
-  path.join(__dirname, '..', 'index.ts'),
-  'utf8',
-);
+const indexSrc = readFileSync(path.join(__dirname, '..', 'index.ts'), 'utf8');
 
 describe('terminal quit seams (index.ts, assercao de fonte)', () => {
   it('boot-env-snapshot e o PRIMEIRO import (antes das mutacoes de env)', () => {

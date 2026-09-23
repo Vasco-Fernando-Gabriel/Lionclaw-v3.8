@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { PT_BR_BLOCK } from './_shared/language-pt-br';
 import { GIT_RESTRICTIONS_BLOCK } from './_shared/git-restrictions';
@@ -11,7 +10,7 @@ export const bugRootCauseAnalyst: Omit<AgentConfig, 'sortOrder'> = {
   name: 'Bug Root Cause Analyst',
   description:
     'Fase 2 do pipeline bug, lente de fluxo: parte do sintoma e caminha para tras pela execucao ate a linha que produz o estado errado. Produz analise em MD; nao escreve arquivo.',
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'enabled' as const,
   thinkingBudget: 10000,

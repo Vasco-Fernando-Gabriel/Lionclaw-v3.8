@@ -1,4 +1,3 @@
-
 import Database from 'better-sqlite3';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { __V59_INTERNAL, applyMigrationV59 } from '../db-migrations/v59-pipe2-prompts';
@@ -15,7 +14,6 @@ const {
   OLD_PIPE2_SPEC_ENRICHER_PROMPT,
   NEW_PIPE2_SPEC_ENRICHER_PROMPT,
 } = __V59_INTERNAL;
-
 
 describe('db-migration-v59: OLD prompts are placeholders', () => {
   it('pipe2-prd-completo OLD is placeholder', () => {
@@ -101,7 +99,6 @@ describe('db-migration-v59: contrato OLD != NEW', () => {
   }
 });
 
-
 const SCHEMA_AGENTS = `
   CREATE TABLE agents (
     id TEXT PRIMARY KEY,
@@ -120,9 +117,12 @@ const SCHEMA_AGENTS = `
 `;
 
 function insertAgent(db: Database.Database, id: string, system_prompt: string): void {
-  db.prepare(
-    `INSERT INTO agents (id, name, description, system_prompt) VALUES (?, ?, ?, ?)`,
-  ).run(id, id, `desc-${id}`, system_prompt);
+  db.prepare(`INSERT INTO agents (id, name, description, system_prompt) VALUES (?, ?, ?, ?)`).run(
+    id,
+    id,
+    `desc-${id}`,
+    system_prompt,
+  );
 }
 
 const AGENT_IDS = [
@@ -134,19 +134,19 @@ const AGENT_IDS = [
 ] as const;
 
 const OLD_PROMPTS: Record<string, string> = {
-  'pipe2-prd-completo':   OLD_PIPE2_PRD_COMPLETO_PROMPT,
-  'pipe2-tech-frontend':  OLD_PIPE2_TECH_FRONTEND_PROMPT,
-  'pipe2-spec-builder':   OLD_PIPE2_SPEC_BUILDER_PROMPT,
+  'pipe2-prd-completo': OLD_PIPE2_PRD_COMPLETO_PROMPT,
+  'pipe2-tech-frontend': OLD_PIPE2_TECH_FRONTEND_PROMPT,
+  'pipe2-spec-builder': OLD_PIPE2_SPEC_BUILDER_PROMPT,
   'pipe2-spec-validator': OLD_PIPE2_SPEC_VALIDATOR_PROMPT,
-  'pipe2-spec-enricher':  OLD_PIPE2_SPEC_ENRICHER_PROMPT,
+  'pipe2-spec-enricher': OLD_PIPE2_SPEC_ENRICHER_PROMPT,
 };
 
 const NEW_PROMPTS: Record<string, string> = {
-  'pipe2-prd-completo':   NEW_PIPE2_PRD_COMPLETO_PROMPT,
-  'pipe2-tech-frontend':  NEW_PIPE2_TECH_FRONTEND_PROMPT,
-  'pipe2-spec-builder':   NEW_PIPE2_SPEC_BUILDER_PROMPT,
+  'pipe2-prd-completo': NEW_PIPE2_PRD_COMPLETO_PROMPT,
+  'pipe2-tech-frontend': NEW_PIPE2_TECH_FRONTEND_PROMPT,
+  'pipe2-spec-builder': NEW_PIPE2_SPEC_BUILDER_PROMPT,
   'pipe2-spec-validator': NEW_PIPE2_SPEC_VALIDATOR_PROMPT,
-  'pipe2-spec-enricher':  NEW_PIPE2_SPEC_ENRICHER_PROMPT,
+  'pipe2-spec-enricher': NEW_PIPE2_SPEC_ENRICHER_PROMPT,
 };
 
 describe('db-migration-v59: applyMigrationV59 (banco in-memory)', () => {
@@ -161,9 +161,7 @@ describe('db-migration-v59: applyMigrationV59 (banco in-memory)', () => {
     it(`aplica NEW prompt quando system_prompt = OLD (${agentId})`, () => {
       insertAgent(db, agentId, OLD_PROMPTS[agentId]!);
       applyMigrationV59(db);
-      const row = db
-        .prepare(`SELECT system_prompt FROM agents WHERE id = ?`)
-        .get(agentId) as { system_prompt: string };
+      const row = db.prepare(`SELECT system_prompt FROM agents WHERE id = ?`).get(agentId) as { system_prompt: string };
       expect(row.system_prompt).toBe(NEW_PROMPTS[agentId]);
     });
   }
@@ -175,9 +173,7 @@ describe('db-migration-v59: applyMigrationV59 (banco in-memory)', () => {
     }
     applyMigrationV59(db);
     for (const id of AGENT_IDS) {
-      const row = db
-        .prepare(`SELECT system_prompt FROM agents WHERE id = ?`)
-        .get(id) as { system_prompt: string };
+      const row = db.prepare(`SELECT system_prompt FROM agents WHERE id = ?`).get(id) as { system_prompt: string };
       expect(row.system_prompt).toBe(CUSTOM);
     }
   });
@@ -190,16 +186,24 @@ describe('db-migration-v59: applyMigrationV59 (banco in-memory)', () => {
 
     applyMigrationV59(db);
 
-    const prdCompleto = db.prepare(`SELECT system_prompt FROM agents WHERE id='pipe2-prd-completo'`).get() as { system_prompt: string };
+    const prdCompleto = db.prepare(`SELECT system_prompt FROM agents WHERE id='pipe2-prd-completo'`).get() as {
+      system_prompt: string;
+    };
     expect(prdCompleto.system_prompt).toBe(NEW_PIPE2_PRD_COMPLETO_PROMPT);
 
-    const techFrontend = db.prepare(`SELECT system_prompt FROM agents WHERE id='pipe2-tech-frontend'`).get() as { system_prompt: string };
+    const techFrontend = db.prepare(`SELECT system_prompt FROM agents WHERE id='pipe2-tech-frontend'`).get() as {
+      system_prompt: string;
+    };
     expect(techFrontend.system_prompt).toBe('custom-frontend-prompt');
 
-    const specBuilder = db.prepare(`SELECT system_prompt FROM agents WHERE id='pipe2-spec-builder'`).get() as { system_prompt: string };
+    const specBuilder = db.prepare(`SELECT system_prompt FROM agents WHERE id='pipe2-spec-builder'`).get() as {
+      system_prompt: string;
+    };
     expect(specBuilder.system_prompt).toBe(NEW_PIPE2_SPEC_BUILDER_PROMPT);
 
-    const specValidator = db.prepare(`SELECT system_prompt FROM agents WHERE id='pipe2-spec-validator'`).get() as { system_prompt: string };
+    const specValidator = db.prepare(`SELECT system_prompt FROM agents WHERE id='pipe2-spec-validator'`).get() as {
+      system_prompt: string;
+    };
     expect(specValidator.system_prompt).toBe('custom-validator-prompt');
   });
 
@@ -208,11 +212,9 @@ describe('db-migration-v59: applyMigrationV59 (banco in-memory)', () => {
       insertAgent(db, id, OLD_PROMPTS[id]!);
     }
     applyMigrationV59(db);
-    applyMigrationV59(db); // second run: NEW != OLD, so no additional UPDATE happens
+    applyMigrationV59(db);
     for (const id of AGENT_IDS) {
-      const row = db
-        .prepare(`SELECT system_prompt FROM agents WHERE id = ?`)
-        .get(id) as { system_prompt: string };
+      const row = db.prepare(`SELECT system_prompt FROM agents WHERE id = ?`).get(id) as { system_prompt: string };
       expect(row.system_prompt).toBe(NEW_PROMPTS[id]);
     }
   });

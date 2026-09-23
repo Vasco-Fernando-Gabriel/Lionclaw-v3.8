@@ -10,12 +10,14 @@ vi.mock('../../logger', () => ({
 }));
 vi.mock('../../mcp-manager', () => ({
   getMCPConfigForAgent: async () => ({ allowed: { command: 'node', args: ['allowed.js'] } }),
-  getMcpToolRegistryEntries: () => [{
-    mcpId: 'allowed',
-    toolName: 'visible',
-    description: 'Tool permitida',
-    inputSchema: JSON.stringify({ type: 'object', properties: {}, additionalProperties: false }),
-  }],
+  getMcpToolRegistryEntries: () => [
+    {
+      mcpId: 'allowed',
+      toolName: 'visible',
+      description: 'Tool permitida',
+      inputSchema: JSON.stringify({ type: 'object', properties: {}, additionalProperties: false }),
+    },
+  ],
 }));
 vi.mock('../../mcp-invoke', () => ({
   getMcpToolSchema,
@@ -53,10 +55,9 @@ describe('Cursor MCP index scope (paridade grok)', () => {
     ).rejects.toThrow('nao pertence ao escopo');
     expect(getMcpToolSchema).not.toHaveBeenCalled();
 
-    const allowed = await schema!(
-      invocation('mcp_schema', { server: 'allowed', tool: 'visible' }),
-      { signal: abort.signal },
-    );
+    const allowed = await schema!(invocation('mcp_schema', { server: 'allowed', tool: 'visible' }), {
+      signal: abort.signal,
+    });
     expect(allowed).toBe('schema permitido');
     expect(getMcpToolSchema).toHaveBeenCalledWith('allowed', 'visible');
   });

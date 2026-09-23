@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -8,10 +7,7 @@ import type { MCPServerConfig } from '../../../src/types';
 import { PROCESS_IDENTITY_HELPER_IDS } from '../helper-identity';
 import { CODEX_GATEWAY_SERVER_ID } from '../mcp-display';
 import { resolveGatewayScriptPath } from '../mcp-manager';
-import {
-  isPackagedDistributionRuntime,
-  resolveInternalNodeBinary,
-} from '../distribution-runtime';
+import { isPackagedDistributionRuntime, resolveInternalNodeBinary } from '../distribution-runtime';
 import {
   tomlKeyForConfigPath,
   segmentDeclaresMcpServer,
@@ -19,12 +15,7 @@ import {
   LIONCLAW_MANAGED_BEGIN_MARKER,
   LIONCLAW_MANAGED_END_MARKER,
 } from '../codex-pipeline-config';
-import {
-  deleteWrapper,
-  generateWrapper,
-  listWrappers,
-  writeWrapper,
-} from './mcp-wrapper-generator';
+import { deleteWrapper, generateWrapper, listWrappers, writeWrapper } from './mcp-wrapper-generator';
 
 const logger = createLogger('codex-mcp-config-sync');
 
@@ -154,10 +145,7 @@ function stripOrphanMarkerLines(segment: string): string {
   return kept;
 }
 
-function removeManagedIdSections(
-  segment: string,
-  ids: ReadonlySet<string>,
-): { content: string; adopted: string[] } {
+function removeManagedIdSections(segment: string, ids: ReadonlySet<string>): { content: string; adopted: string[] } {
   if (segment.length === 0 || ids.size === 0) return { content: segment, adopted: [] };
   const out: string[] = [];
   const adopted = new Set<string>();
@@ -238,9 +226,7 @@ async function atomicWrite(file: string, content: string): Promise<void> {
 export async function syncCodexMcpConfig(): Promise<void> {
   const lionclawHome = getLionClawHome();
   const configFile = getCodexConfigFile();
-  const nodeCommand = isPackagedDistributionRuntime()
-    ? resolveInternalNodeBinary()
-    : 'node';
+  const nodeCommand = isPackagedDistributionRuntime() ? resolveInternalNodeBinary() : 'node';
 
   let all: MCPServerConfig[];
   try {
@@ -256,19 +242,16 @@ export async function syncCodexMcpConfig(): Promise<void> {
   const pre = stripOrphanMarkerLines(rawPre);
   const post = stripOrphanMarkerLines(rawPost);
   const gatewayOutsideSections =
-    extractMcpServerSections(pre, CODEX_GATEWAY_SERVER_ID) +
-    extractMcpServerSections(post, CODEX_GATEWAY_SERVER_ID);
+    extractMcpServerSections(pre, CODEX_GATEWAY_SERVER_ID) + extractMcpServerSections(post, CODEX_GATEWAY_SERVER_ID);
   const gatewayOutsideIsDebris =
-    gatewayOutsideSections.length > 0 &&
-    gatewayOutsideSections.includes(`mcp-wrappers/${CODEX_GATEWAY_SERVER_ID}`);
+    gatewayOutsideSections.length > 0 && gatewayOutsideSections.includes(`mcp-wrappers/${CODEX_GATEWAY_SERVER_ID}`);
   if (gatewayOutsideIsDebris) {
     logger.warn(
       { id: CODEX_GATEWAY_SERVER_ID },
       'entry stranded do gateway fora do managed block aponta pro wrapper do LionClaw; adotada (removida do corpo, recriada dentro do bloco)',
     );
   }
-  const gatewayCollisionOutside =
-    gatewayOutsideSections.length > 0 && !gatewayOutsideIsDebris;
+  const gatewayCollisionOutside = gatewayOutsideSections.length > 0 && !gatewayOutsideIsDebris;
   const gatewayCollisionDb = all.some((s) => s.id === CODEX_GATEWAY_SERVER_ID);
   const gatewayCollision = gatewayCollisionOutside || gatewayCollisionDb;
   if (gatewayCollision) {
@@ -282,23 +265,16 @@ export async function syncCodexMcpConfig(): Promise<void> {
     );
   }
 
-  const syncable = gatewayCollisionOutside
-    ? active.filter((s) => s.id !== CODEX_GATEWAY_SERVER_ID)
-    : active;
+  const syncable = gatewayCollisionOutside ? active.filter((s) => s.id !== CODEX_GATEWAY_SERVER_ID) : active;
 
   const resolved: ResolvedServer[] = [];
   for (const server of syncable) {
     const envKeys = Array.isArray(server.envKeys) ? server.envKeys : [];
     const fetchHelperToken = PROCESS_IDENTITY_HELPER_IDS.has(server.id.toLowerCase());
     if (envKeys.length > 0 || fetchHelperToken) {
-      const source = generateWrapper(
-        server.id,
-        server.command,
-        server.args,
-        envKeys,
-        lionclawHome,
-        { fetchHelperToken },
-      );
+      const source = generateWrapper(server.id, server.command, server.args, envKeys, lionclawHome, {
+        fetchHelperToken,
+      });
       const wrapperPath = await writeWrapper(server.id, source, lionclawHome);
       resolved.push({
         id: server.id,
@@ -330,11 +306,7 @@ export async function syncCodexMcpConfig(): Promise<void> {
     gatewayWrapperPath = await writeWrapper(CODEX_GATEWAY_SERVER_ID, gatewaySource, lionclawHome);
   }
 
-  const expectedWrappers = new Set(
-    resolved
-      .filter((r) => r.wrapperPath)
-      .map((r) => path.basename(r.wrapperPath!)),
-  );
+  const expectedWrappers = new Set(resolved.filter((r) => r.wrapperPath).map((r) => path.basename(r.wrapperPath!)));
   if (gatewayWrapperPath) {
     expectedWrappers.add(path.basename(gatewayWrapperPath));
   }
@@ -367,9 +339,7 @@ export async function syncCodexMcpConfig(): Promise<void> {
 
   const preNorm = preSweep.content.length > 0 ? ensureTrailingNewline(preSweep.content) : '';
   const postNorm = postSweep.content.length > 0 ? ensureLeadingNewline(postSweep.content) : '';
-  const next = `${preNorm}${managed}\n${postNorm}`
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/\n*$/, '\n');
+  const next = `${preNorm}${managed}\n${postNorm}`.replace(/\n{3,}/g, '\n\n').replace(/\n*$/, '\n');
 
   if (next === existing) {
     logger.debug({ configFile, count: resolved.length }, 'codex config.toml already in sync');

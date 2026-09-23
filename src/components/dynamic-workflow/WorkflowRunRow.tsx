@@ -1,20 +1,7 @@
-import {
-  Workflow,
-  Bot,
-  Loader2,
-  CheckCircle2,
-  AlertTriangle,
-  Ban,
-  Lock,
-  Hand,
-} from 'lucide-react';
+import { Workflow, Bot, Loader2, CheckCircle2, AlertTriangle, Ban, Lock, Hand } from 'lucide-react';
 import { useAppStore } from '@/stores/app-store';
-import {
-  useDynamicWorkflowStore,
-  type DynamicWorkflowUIStatus,
-} from '@/stores/dynamic-workflow-store';
+import { useDynamicWorkflowStore, type DynamicWorkflowUIStatus } from '@/stores/dynamic-workflow-store';
 import type { LiveActivity, LiveActivityStatus, DynamicWorkflowRun } from '@/types';
-
 
 export interface WorkflowActivityNode extends LiveActivity {
   children: WorkflowActivityNode[];
@@ -164,14 +151,9 @@ export function WorkflowRunRow({ node, now }: { node: WorkflowActivityNode; now:
 
   const liveUiStatus = useDynamicWorkflowStore((s) => (runId ? s.getUIStatus(runId) : null));
   const liveRun = useDynamicWorkflowStore((s) =>
-    runId
-      ? s.selectedRun?.id === runId
-        ? s.selectedRun
-        : s.runs.find((r) => r.id === runId) ?? null
-      : null,
+    runId ? (s.selectedRun?.id === runId ? s.selectedRun : (s.runs.find((r) => r.id === runId) ?? null)) : null,
   );
-  const status: LiveActivityStatus =
-    liveRun && liveUiStatus ? uiToActivityStatus(liveUiStatus) : node.status;
+  const status: LiveActivityStatus = liveRun && liveUiStatus ? uiToActivityStatus(liveUiStatus) : node.status;
   const clock = liveRun ? formatRunClock(liveRun, status === 'running', now) : formatLiveClock(node, now);
   const cost = liveRun ? formatCost(liveRun.totalCostUsd) : formatCost(node.costUsd);
   const description =
@@ -188,16 +170,13 @@ export function WorkflowRunRow({ node, now }: { node: WorkflowActivityNode; now:
   const gateChild = node.children.find(
     (c) =>
       c.status !== 'done' &&
-      ((c.description ?? '').toLowerCase().includes('gate') ||
-        (c.label ?? '').toLowerCase().includes('gate')),
+      ((c.description ?? '').toLowerCase().includes('gate') || (c.label ?? '').toLowerCase().includes('gate')),
   );
 
   return (
     <div
       className={`rounded border px-2 py-1.5 ${
-        status === 'running'
-          ? 'border-amber-500/30 bg-amber-500/5'
-          : 'border-zinc-700/60 bg-zinc-900/60'
+        status === 'running' ? 'border-amber-500/30 bg-amber-500/5' : 'border-zinc-700/60 bg-zinc-900/60'
       }`}
       data-testid="workflow-run-row"
     >
@@ -216,12 +195,8 @@ export function WorkflowRunRow({ node, now }: { node: WorkflowActivityNode; now:
         title={clickable ? 'Abrir workflow' : undefined}
         className={`flex items-center gap-1.5 ${clickable ? 'cursor-pointer' : ''}`}
       >
-        <Workflow
-          className={`w-3.5 h-3.5 shrink-0 ${status === 'running' ? 'text-amber-400' : 'text-zinc-500'}`}
-        />
-        <span
-          className={`truncate text-xs font-medium ${status === 'running' ? 'text-zinc-200' : 'text-zinc-300'}`}
-        >
+        <Workflow className={`w-3.5 h-3.5 shrink-0 ${status === 'running' ? 'text-amber-400' : 'text-zinc-500'}`} />
+        <span className={`truncate text-xs font-medium ${status === 'running' ? 'text-zinc-200' : 'text-zinc-300'}`}>
           {node.label}
         </span>
         <span className={`ml-auto shrink-0 text-[10px] font-medium ${STATUS_TEXT_CLASS[status]}`}>

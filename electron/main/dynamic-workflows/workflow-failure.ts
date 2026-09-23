@@ -1,19 +1,7 @@
-
-import type {
-  DynamicWorkflowFailureClass,
-  DynamicWorkflowRetryPolicy,
-} from '../../../src/types/dynamic-workflow';
+import type { DynamicWorkflowFailureClass, DynamicWorkflowRetryPolicy } from '../../../src/types/dynamic-workflow';
 
 export type WorkflowFailureRuntime =
-  | 'cloud'
-  | 'local'
-  | 'external'
-  | 'codex'
-  | 'kimi'
-  | 'grok'
-  | 'zai'
-  | 'minimax-tp'
-  | 'cursor';
+  'cloud' | 'local' | 'external' | 'codex' | 'kimi' | 'grok' | 'zai' | 'minimax-tp' | 'cursor';
 
 export interface FailureClassificationInput {
   runtime: WorkflowFailureRuntime;
@@ -33,12 +21,7 @@ const CODEX_PERMANENT_INFRA_HINTS = [
   'thread/start returned no threadid',
 ];
 
-const USER_ABORT_HINTS = [
-  'aborted by user',
-  'canceled by user',
-  'cancelled by user',
-  'the operation was aborted',
-];
+const USER_ABORT_HINTS = ['aborted by user', 'canceled by user', 'cancelled by user', 'the operation was aborted'];
 
 function isUserAbort(error: unknown): boolean {
   if (errorName(error) === 'AbortError') return true;
@@ -61,11 +44,7 @@ function errorName(error: unknown): string | null {
     if (typeof named.name === 'string' && named.name.length > 0) {
       return named.name;
     }
-    if (
-      named.constructor &&
-      typeof named.constructor.name === 'string' &&
-      named.constructor.name.length > 0
-    ) {
+    if (named.constructor && typeof named.constructor.name === 'string' && named.constructor.name.length > 0) {
       return named.constructor.name;
     }
   }
@@ -137,9 +116,7 @@ const TRANSIENT_HINTS = [
 
 const TIMEOUT_HINTS = ['timed out', 'timeout', 'deadline exceeded'];
 
-function classifyFromHttpStatus(
-  status: number,
-): DynamicWorkflowFailureClass | null {
+function classifyFromHttpStatus(status: number): DynamicWorkflowFailureClass | null {
   if (status === 401 || status === 403) return 'provider-auth';
   if (status === 429) return 'provider-limit';
   if (status === 408) return 'timeout';
@@ -156,9 +133,7 @@ function classifyFromMessage(msg: string): DynamicWorkflowFailureClass | null {
   return null;
 }
 
-export function classifyFailure(
-  input: FailureClassificationInput,
-): DynamicWorkflowFailureClass {
+export function classifyFailure(input: FailureClassificationInput): DynamicWorkflowFailureClass {
   if (input.schemaExhausted) return 'schema';
 
   const name = errorName(input.error);
@@ -185,7 +160,6 @@ export function classifyFailure(
 
   return 'logic';
 }
-
 
 export const DEFAULT_RETRY_POLICY: DynamicWorkflowRetryPolicy = {
   maxAutoRetries: 3,
@@ -248,7 +222,6 @@ export function decideRetry(
   };
 }
 
-
 const WINDOW_LIMIT_HINTS = [
   'usage limit reached',
   'usage limit',
@@ -265,18 +238,9 @@ const WINDOW_LIMIT_HINTS = [
 
 const OVERLOADED_HINTS = ['overloaded', 'overloaded_error', 'capacity', 'congestion'];
 
-const CLI_RELOGIN_HINTS = [
-  'run /login',
-  'please re-authenticate',
-  'session expired',
-  'token expired',
-  'codex login',
-];
+const CLI_RELOGIN_HINTS = ['run /login', 'please re-authenticate', 'session expired', 'token expired', 'codex login'];
 
-function refineFromRuntimeMessage(
-  runtime: WorkflowFailureRuntime,
-  msg: string,
-): DynamicWorkflowFailureClass | null {
+function refineFromRuntimeMessage(runtime: WorkflowFailureRuntime, msg: string): DynamicWorkflowFailureClass | null {
   if (!msg) return null;
 
   if (runtime === 'codex' && CLI_RELOGIN_HINTS.some((h) => msg.includes(h))) {
@@ -294,9 +258,7 @@ function refineFromRuntimeMessage(
   return null;
 }
 
-export function classifyFailureByRuntime(
-  input: FailureClassificationInput,
-): DynamicWorkflowFailureClass {
+export function classifyFailureByRuntime(input: FailureClassificationInput): DynamicWorkflowFailureClass {
   const base = classifyFailure(input);
   if (base !== 'logic') return base;
   const refined = refineFromRuntimeMessage(input.runtime, errorMessage(input.error));

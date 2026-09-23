@@ -14,7 +14,7 @@ describe('stream timeline reducer', () => {
     timeline = appendTimelineTool(timeline, { tool: 'Read', input: {}, toolCallId: 'r1' });
     timeline = appendTimelineText(timeline, 'depois');
     expect(timeline.map((block) => block.kind)).toEqual(['text', 'tool', 'text']);
-    expect(timeline.map((block) => block.kind === 'text' ? block.content : block.tool)).toEqual([
+    expect(timeline.map((block) => (block.kind === 'text' ? block.content : block.tool))).toEqual([
       'antes',
       'Read',
       'depois',
@@ -62,7 +62,7 @@ describe('stream timeline reducer', () => {
       [{ tool: 'Read', input: {}, textOffset: 3, sequence: 1, toolCallId: 'r' }],
       'm1',
     );
-    expect(modern.map((block) => block.kind === 'text' ? block.content : block.tool)).toEqual(['A😀', 'Read', 'BC']);
+    expect(modern.map((block) => (block.kind === 'text' ? block.content : block.tool))).toEqual(['A😀', 'Read', 'BC']);
     const legacy = timelineFromPersisted(content, [{ tool: 'Read', input: {} }], 'm2');
     expect(legacy.map((block) => block.kind)).toEqual(['tool', 'text']);
   });
@@ -74,7 +74,7 @@ describe('stream timeline reducer', () => {
     timeline = appendTimelineTool(timeline, { tool: 'Write', toolCallId: 'w' });
 
     const replaced = replaceTimelineText(timeline, 'antes  depois');
-    expect(replaced.map((block) => block.kind === 'text' ? block.content : block.tool)).toEqual([
+    expect(replaced.map((block) => (block.kind === 'text' ? block.content : block.tool))).toEqual([
       'antes ',
       'Read',
       ' depois',

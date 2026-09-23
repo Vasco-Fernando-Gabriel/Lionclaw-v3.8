@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { PT_BR_BLOCK } from './_shared/language-pt-br';
 
@@ -9,7 +8,7 @@ export const dynamicWorkflowCoderCodex: Omit<AgentConfig, 'sortOrder'> = {
   name: 'Dynamic Workflow Coder (Codex/GPT)',
   description:
     'Writer do workflow dinamico em runtime Codex (GPT): implementa a SPEC dentro do writeSet do node, no workspace isolado do run. Continuation-aware; git de escrita e do host.',
-  model: 'gpt-6-astra',
+  model: 'gpt-6-sol',
   effort: 'high' as const,
   thinking: 'adaptive' as const,
   maxTurns: 150,
@@ -20,7 +19,7 @@ export const dynamicWorkflowCoderCodex: Omit<AgentConfig, 'sortOrder'> = {
   skills: [],
   runtime: 'codex' as const,
   codexConfig: {
-    model: 'gpt-6-astra',
+    model: 'gpt-6-sol',
     sandbox: 'workspace-write',
     reasoningEffort: 'medium',
   },

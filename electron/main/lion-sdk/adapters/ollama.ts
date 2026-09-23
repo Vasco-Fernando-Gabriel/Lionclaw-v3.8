@@ -1,4 +1,3 @@
-
 import { createLogger } from '../../logger';
 import { normalizeBaseUrl } from './base-url';
 import {
@@ -7,12 +6,7 @@ import {
   normalizeOpenAiCompatHttpError,
   normalizeOpenAiCompatTransportError,
 } from './openai-compat-errors';
-import type {
-  AdapterConfig,
-  LionAdapter,
-  LionStreamEvent,
-  LionStreamRequest,
-} from './types';
+import type { AdapterConfig, LionAdapter, LionStreamEvent, LionStreamRequest } from './types';
 import type { NativeToolCall } from '../tool-parser';
 
 const logger = createLogger('lion-adapter-ollama');
@@ -185,7 +179,11 @@ export function createOllamaAdapter(config: AdapterConfig): LionAdapter {
         yield { type: 'error', error: `Ollama stream falhou: ${norm.userMessage}` };
         return;
       } finally {
-        try { reader.releaseLock(); } catch { /* noop */ }
+        try {
+          reader.releaseLock();
+        } catch {
+          /* noop */
+        }
       }
 
       yield { type: 'done', finishReason };

@@ -1,8 +1,8 @@
-
 import { createLogger } from '../logger';
 import type { AgentQueryConfig } from '../agent-config-resolver';
 import type { ChatFeatureToggles } from '../../../src/types';
 import type { SubagentDispatchContext } from './types';
+import type { McpInvocationTurnBinding } from '../mcp-invocation-context';
 import { appendRepoGraphSection } from '../prompt-builder-repo-graph';
 import {
   buildSubagentTriggerTool,
@@ -27,7 +27,9 @@ export interface BuildKimiSessionToolsArgs {
   projectId?: string;
   capabilities?: ChatFeatureToggles;
   lane?: 'desktop' | 'telegram' | 'cron' | 'pipeline' | 'workflow';
+  sessionId?: string;
   dispatchContext?: SubagentDispatchContext;
+  turnBinding?: McpInvocationTurnBinding;
 }
 
 export interface KimiSessionTools {
@@ -37,11 +39,7 @@ export interface KimiSessionTools {
 
 const SKILLS_BLOCK_HEADER = '## Skills Disponiveis (via MCP)';
 
-const SKILLS_BLOCK_TOOLS = [
-  'mcp__skills__list_skills',
-  'mcp__skills__load_skill',
-  'mcp__skills__get_skill_metadata',
-];
+const SKILLS_BLOCK_TOOLS = ['mcp__skills__list_skills', 'mcp__skills__load_skill', 'mcp__skills__get_skill_metadata'];
 
 const MCP_TOOL_TOKEN = /mcp__[A-Za-z0-9_-]+__[A-Za-z0-9_-]+/g;
 
@@ -50,16 +48,12 @@ function appendKimiSwarmSteering(prompt: string, hasSubagentTool: boolean): stri
     'Runtime: a ferramenta nativa de paralelismo do Kimi (AgentSwarm) NAO esta disponivel aqui e sera recusada; nao tente usa-la.',
   ];
   if (hasSubagentTool) {
-    parts.push(
-      'Para delegar trabalho a sub-agentes, use a ferramenta lion_run_subagent (os sub-agentes do LionClaw).',
-    );
+    parts.push('Para delegar trabalho a sub-agentes, use a ferramenta lion_run_subagent (os sub-agentes do LionClaw).');
   }
   return `${prompt}\n\n${parts.join(' ')}`.trimEnd();
 }
 
-export async function buildKimiSessionTools(
-  args: BuildKimiSessionToolsArgs,
-): Promise<KimiSessionTools> {
+export async function buildKimiSessionTools(args: BuildKimiSessionToolsArgs): Promise<KimiSessionTools> {
   const {
     profile,
     config,
@@ -68,7 +62,9 @@ export async function buildKimiSessionTools(
     projectId,
     capabilities,
     lane = 'desktop',
+    sessionId,
     dispatchContext,
+    turnBinding,
   } = args;
 
   let externalTools: KimiExternalTool[];
@@ -77,12 +73,11 @@ export async function buildKimiSessionTools(
   switch (profile) {
     case 'chat': {
       const { getSetting } = await import('../db');
-      const mcpPromptMode: 'index' | 'full' =
-        getSetting('mcp_prompt_mode') === 'full' ? 'full' : 'index';
+      const mcpPromptMode: 'index' | 'full' = getSetting('mcp_prompt_mode') === 'full' ? 'full' : 'index';
       const [subagent, userQuestion, catalog] = await Promise.all([
         buildSubagentTriggerTool({ cwd, abortController, projectId, dispatchContext }),
-        lane === 'desktop' ? buildUserQuestionTool() : Promise.resolve(null),
-        buildCoreMcpCatalogTools(config, mcpPromptMode, capabilities),
+        lane === 'desktop' ? buildUserQuestionTool(sessionId) : Promise.resolve(null),
+        buildCoreMcpCatalogTools(config, mcpPromptMode, capabilities, turnBinding),
       ]);
       externalTools = [subagent, ...(userQuestion ? [userQuestion] : []), ...catalog];
       if (mcpPromptMode === 'index') {
@@ -95,9 +90,10 @@ export async function buildKimiSessionTools(
       break;
     }
     case 'pipeline': {
-      const subagent = dispatchContext && config.allowedTools.includes('Agent')
-        ? await buildSubagentTriggerTool({ cwd, abortController, projectId, dispatchContext })
-        : null;
+      const subagent =
+        dispatchContext && config.allowedTools.includes('Agent')
+          ? await buildSubagentTriggerTool({ cwd, abortController, projectId, dispatchContext })
+          : null;
       externalTools = subagent ? [subagent] : [];
       break;
     }
@@ -110,9 +106,10 @@ export async function buildKimiSessionTools(
       const allowlistedTools = await Promise.all(
         mcpAllowlist.map((toolName) => buildAllowlistTool(toolName, capabilities)),
       );
-      const subagent = dispatchContext && config.allowedTools.includes('Agent')
-        ? await buildSubagentTriggerTool({ cwd, abortController, projectId, dispatchContext })
-        : null;
+      const subagent =
+        dispatchContext && config.allowedTools.includes('Agent')
+          ? await buildSubagentTriggerTool({ cwd, abortController, projectId, dispatchContext })
+          : null;
       externalTools = [...(subagent ? [subagent] : []), ...allowlistedTools];
       break;
     }
@@ -129,8 +126,8 @@ export async function buildKimiSessionTools(
   const strippedPrompt = stripUnmaterializedToolInstructions(promptWithMcpIndex, materializedNames);
   const hasRepoGraphTools = [...materializedNames].some((n) => n.startsWith('mcp__repo-graph__'));
   let steeredPrompt = strippedPrompt;
-  if (hasRepoGraphTools) {
-    const withRepoGraph = appendRepoGraphSection(strippedPrompt, 'mcp');
+  if (hasRepoGraphTools && sessionId) {
+    const withRepoGraph = appendRepoGraphSection(strippedPrompt, sessionId, 'mcp');
     if (withRepoGraph !== strippedPrompt) {
       steeredPrompt = `${withRepoGraph}\n\nNeste runtime as tools do repo-graph aparecem com o prefixo mcp__repo-graph__ (ex: mcp__repo-graph__repo_graph_search, mcp__repo-graph__repo_graph_minimal_context); chame-as por esse nome exato.`;
     }
@@ -145,10 +142,7 @@ export async function buildKimiSessionTools(
   return { externalTools, systemPrompt };
 }
 
-export function stripUnmaterializedToolInstructions(
-  systemPrompt: string,
-  materializedNames: Set<string>,
-): string {
+export function stripUnmaterializedToolInstructions(systemPrompt: string, materializedNames: Set<string>): string {
   if (!systemPrompt || systemPrompt.length === 0) return systemPrompt;
 
   let result = systemPrompt;
@@ -183,7 +177,7 @@ function findFirstUnmaterializedToken(
 }
 
 function removeEnclosingBlockOrLine(text: string, tokenIndex: number, offendingToken: string): string {
-  const lineStart = text.lastIndexOf('\n', tokenIndex) + 1; // 0 if not found
+  const lineStart = text.lastIndexOf('\n', tokenIndex) + 1;
   const lineEol = text.indexOf('\n', tokenIndex);
   const ownLine = lineEol === -1 ? text.slice(lineStart) : text.slice(lineStart, lineEol);
   if (ownLine.startsWith('## ')) {
@@ -208,11 +202,11 @@ function removeEnclosingBlockOrLine(text: string, tokenIndex: number, offendingT
 function findGoverningHeaderStart(text: string, lineStart: number): number {
   let pos = lineStart;
   while (pos > 0) {
-    const prevLineEnd = pos - 1; // the '\n' before this line
+    const prevLineEnd = pos - 1;
     const prevLineStart = text.lastIndexOf('\n', prevLineEnd - 1) + 1;
     const prevLine = text.slice(prevLineStart, prevLineEnd);
     if (prevLine.startsWith('## ')) return prevLineStart;
-    if (prevLine.trim().length === 0) return -1; // blank line breaks the block
+    if (prevLine.trim().length === 0) return -1;
     pos = prevLineStart;
   }
   const firstLineEnd = text.indexOf('\n', lineStart);
@@ -226,7 +220,7 @@ function removeBlockFromHeader(text: string, header: string, blockTokens?: reado
 
   const afterHeader = start + header.length;
   const nextHeaderRel = text.slice(afterHeader).search(/\n## /);
-  const hardEnd = nextHeaderRel === -1 ? text.length : afterHeader + nextHeaderRel + 1; // +1 keeps the leading \n with the next block
+  const hardEnd = nextHeaderRel === -1 ? text.length : afterHeader + nextHeaderRel + 1;
 
   let end = hardEnd;
   if (blockTokens && blockTokens.length > 0) {

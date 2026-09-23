@@ -41,11 +41,28 @@ describe('aggregateMetricsBySprint', () => {
       node('delivery', null, 'Entrega'),
     ];
     const nodeRuns = [
-      nodeRun({ nodeId: 'planner', phaseId: 'Planejamento', inputTokens: 100, outputTokens: 50, costUsd: 1, durationMs: 1000, toolUses: 1, model: 'gpt-5.5' }),
+      nodeRun({
+        nodeId: 'planner',
+        phaseId: 'Planejamento',
+        inputTokens: 100,
+        outputTokens: 50,
+        costUsd: 1,
+        durationMs: 1000,
+        toolUses: 1,
+        model: 'gpt-5.5',
+      }),
       nodeRun({ nodeId: 'coder-s0', inputTokens: 200, outputTokens: 80, costUsd: 2, durationMs: 2000, toolUses: 3 }),
       nodeRun({ nodeId: 'fix-s0', inputTokens: 50, outputTokens: 20, costUsd: 0.5, durationMs: 500, toolUses: 1 }),
       nodeRun({ nodeId: 'coder-s1', inputTokens: 300, outputTokens: 90, costUsd: 3, durationMs: 3000, toolUses: 2 }),
-      nodeRun({ nodeId: 'delivery', phaseId: 'Entrega', inputTokens: 10, outputTokens: 5, costUsd: 0.1, durationMs: 100, toolUses: 0 }),
+      nodeRun({
+        nodeId: 'delivery',
+        phaseId: 'Entrega',
+        inputTokens: 10,
+        outputTokens: 5,
+        costUsd: 0.1,
+        durationMs: 100,
+        toolUses: 0,
+      }),
     ];
 
     const { rows, totals } = aggregateMetricsBySprint(nodeRuns, nodes);
@@ -55,7 +72,7 @@ describe('aggregateMetricsBySprint', () => {
     const s0 = rows.find((r) => r.key === 's0')!;
     expect(s0.isSprint).toBe(true);
     expect(s0.label).toBe('Sprint 0');
-    expect(s0.nodeCount).toBe(2); // coder-s0 + fix-s0
+    expect(s0.nodeCount).toBe(2);
     expect(s0.costUsd).toBeCloseTo(2.5);
     expect(s0.inputTokens).toBe(250);
     expect(s0.durationMs).toBe(2500);
@@ -73,9 +90,7 @@ describe('aggregateMetricsBySprint', () => {
 
   it('conta custo nao estimado (costStatus != known) por grupo e no total', () => {
     const nodes = [node('coder-s0', 's0')];
-    const nodeRuns = [
-      nodeRun({ nodeId: 'coder-s0', costUsd: 0, costStatus: 'unknown' }),
-    ];
+    const nodeRuns = [nodeRun({ nodeId: 'coder-s0', costUsd: 0, costStatus: 'unknown' })];
     const { rows, totals } = aggregateMetricsBySprint(nodeRuns, nodes);
     expect(rows[0].unknownCostCount).toBe(1);
     expect(totals.unknownCostCount).toBe(1);
@@ -104,7 +119,6 @@ describe('aggregateMetricsBySprint', () => {
   });
 });
 
-
 describe('D21: TotalPill exportada e aggregateCostBreakdown', () => {
   it('TotalPill e um componente exportado (reuso pela aba Custo, HandoffView intacto)', () => {
     expect(typeof TotalPill).toBe('function');
@@ -122,7 +136,16 @@ describe('D21: TotalPill exportada e aggregateCostBreakdown', () => {
   it('totais, por fase (primeira aparicao), por papel e top N por custo com flag de desconhecido', () => {
     const runs: CockpitNodeRun[] = [
       cnr({ nodeId: 'scout', phaseId: 'Docs', agentId: 'dynamic-workflow-scout', costUsd: 0, costStatus: 'unknown' }),
-      cnr({ nodeId: 'cc:S1:u1:0', phaseId: 'S1', agentId: 'dynamic-workflow-coder', label: 'u1', costUsd: 0.5, durationMs: 1000, inputTokens: 10, outputTokens: 5 }),
+      cnr({
+        nodeId: 'cc:S1:u1:0',
+        phaseId: 'S1',
+        agentId: 'dynamic-workflow-coder',
+        label: 'u1',
+        costUsd: 0.5,
+        durationMs: 1000,
+        inputTokens: 10,
+        outputTokens: 5,
+      }),
       cnr({ nodeId: 'cc:S1:v1:0', phaseId: 'S1', agentId: 'dynamic-workflow-validator-spec', costUsd: 0.2 }),
       cnr({ nodeId: 'cc:S1:v2:0', phaseId: 'S1', agentId: 'dynamic-workflow-validator-tests', costUsd: 0.3 }),
       cnr({ nodeId: 'cc:S2:u2:0', phaseId: 'S2', agentId: 'dynamic-workflow-coder', costUsd: 0.7 }),
@@ -158,7 +181,11 @@ describe('D21: TotalPill exportada e aggregateCostBreakdown', () => {
     expect(b.topNodes[1].displayName).toBe('u1');
     const only = aggregateCostBreakdown([runs[0]]);
     expect(only.topNodes).toHaveLength(1);
-    expect(only.topNodes[0]).toMatchObject({ nodeId: 'scout', displayName: 'dynamic-workflow-scout', costUnknown: true });
+    expect(only.topNodes[0]).toMatchObject({
+      nodeId: 'scout',
+      displayName: 'dynamic-workflow-scout',
+      costUnknown: true,
+    });
   });
 
   it('nome da fase vem do manifest quando existe; papel ausente vira "sem agente"', () => {
@@ -186,9 +213,21 @@ describe('D21: TotalPill exportada e aggregateCostBreakdown', () => {
 
   it('P2: fases e papeis em ordem de PRIMEIRA APARICAO por startedAt, nao alfabetica de nodeId', () => {
     const runs: CockpitNodeRun[] = [
-      cnr({ nodeId: 'a-plano', phaseId: 'Plano', agentId: 'planner', costUsd: 0.3, startedAt: '2026-09-02T04:50:00.000Z' }),
+      cnr({
+        nodeId: 'a-plano',
+        phaseId: 'Plano',
+        agentId: 'planner',
+        costUsd: 0.3,
+        startedAt: '2026-09-02T04:50:00.000Z',
+      }),
       cnr({ nodeId: 'b-tech', phaseId: 'Tech', agentId: 'tech', costUsd: 0.2, startedAt: '2026-09-02T04:45:00.000Z' }),
-      cnr({ nodeId: 'c-discovery', phaseId: 'Discovery', agentId: 'scout', costUsd: 0.1, startedAt: '2026-09-02T04:40:00.000Z' }),
+      cnr({
+        nodeId: 'c-discovery',
+        phaseId: 'Discovery',
+        agentId: 'scout',
+        costUsd: 0.1,
+        startedAt: '2026-09-02T04:40:00.000Z',
+      }),
     ];
     const b = aggregateCostBreakdown(runs);
     expect(b.byPhase.map((p) => p.key)).toEqual(['Discovery', 'Tech', 'Plano']);
@@ -199,7 +238,14 @@ describe('D21: TotalPill exportada e aggregateCostBreakdown', () => {
 
   it('P3: attempt posterior sem label/agentId nao rebaixa o nome do top node (compara com id encurtado)', () => {
     const b = aggregateCostBreakdown([
-      cnr({ nodeId: 'cc:S1:u1:0', phaseId: 'S1', agentId: 'dynamic-workflow-coder', label: 'u1', attempt: 0, costUsd: 0.5 }),
+      cnr({
+        nodeId: 'cc:S1:u1:0',
+        phaseId: 'S1',
+        agentId: 'dynamic-workflow-coder',
+        label: 'u1',
+        attempt: 0,
+        costUsd: 0.5,
+      }),
       cnr({ nodeId: 'cc:S1:u1:0', phaseId: 'S1', agentId: null, label: null, attempt: 1, costUsd: 0.1 }),
     ]);
     expect(b.topNodes).toHaveLength(1);

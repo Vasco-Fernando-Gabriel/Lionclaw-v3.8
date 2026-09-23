@@ -1,4 +1,3 @@
-
 import {
   FunctionCallingConfigMode,
   GoogleGenAI,
@@ -11,17 +10,11 @@ import {
 
 import { createLogger } from '../../logger';
 import type { NativeToolCall } from '../tool-parser';
-import type {
-  LionAdapter,
-  LionChatMessage,
-  LionStreamEvent,
-  LionStreamRequest,
-} from './types';
+import type { LionAdapter, LionChatMessage, LionStreamEvent, LionStreamRequest } from './types';
 import { buildGoogleToolConfig } from './google-genai-schema';
 import { normalizeGoogleGenAiError } from './google-genai-errors';
 
 const logger = createLogger('lion-adapter-google-genai');
-
 
 function parseToolArgs(args: unknown): Record<string, unknown> {
   if (args && typeof args === 'object' && !Array.isArray(args)) {
@@ -33,8 +26,7 @@ function parseToolArgs(args: unknown): Record<string, unknown> {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         return parsed as Record<string, unknown>;
       }
-    } catch {
-    }
+    } catch {}
     return { _raw: args };
   }
   return {};
@@ -109,8 +101,7 @@ function toGeminiContents(messages: LionChatMessage[]): ToGeminiContentsResult {
             args,
           };
           const fnPart: Part = { functionCall: fnCall };
-          const thoughtSignature =
-            tc.providerMetadata?.googleGenAi?.thoughtSignature;
+          const thoughtSignature = tc.providerMetadata?.googleGenAi?.thoughtSignature;
           if (thoughtSignature) {
             fnPart.thoughtSignature = thoughtSignature;
           }
@@ -124,9 +115,7 @@ function toGeminiContents(messages: LionChatMessage[]): ToGeminiContentsResult {
 
     if (m.role === 'tool') {
       const callId = m.tool_call_id ?? '';
-      const name = callId
-        ? (toolCallNamesById.get(callId) ?? m.name ?? '')
-        : (m.name ?? '');
+      const name = callId ? (toolCallNamesById.get(callId) ?? m.name ?? '') : (m.name ?? '');
       const content = m.content ?? '';
       const responseObj: Record<string, unknown> = looksLikeToolError(content)
         ? { error: content }
@@ -148,7 +137,6 @@ function toGeminiContents(messages: LionChatMessage[]): ToGeminiContentsResult {
     contents,
   };
 }
-
 
 function collectToolCallsFromChunk(
   chunk: GenerateContentResponse,
@@ -210,7 +198,6 @@ function collectToolCallsFromChunk(
   return out;
 }
 
-
 const FATAL_FINISH_REASONS = new Set<string>([
   'SAFETY',
   'RECITATION',
@@ -222,7 +209,6 @@ const FATAL_FINISH_REASONS = new Set<string>([
   'IMAGE_SAFETY',
   'UNEXPECTED_TOOL_CALL',
 ]);
-
 
 export interface GoogleGenAiAdapterOptions {
   apiKey: string;
@@ -271,10 +257,7 @@ export function createGoogleGenAiAdapter(opts: GoogleGenAiAdapterOptions): LionA
         });
       } catch (e) {
         const normalized = normalizeGoogleGenAiError(e);
-        logger.warn(
-          { code: normalized.code, status: normalized.status },
-          'Vertex Gemini stream initialization failed',
-        );
+        logger.warn({ code: normalized.code, status: normalized.status }, 'Vertex Gemini stream initialization failed');
         yield { type: 'error', error: normalized.userMessage };
         return;
       }
@@ -309,11 +292,7 @@ export function createGoogleGenAiAdapter(opts: GoogleGenAiAdapterOptions): LionA
             yield { type: 'text', delta: textDelta };
           }
 
-          const toolCalls = collectToolCallsFromChunk(
-            chunk,
-            localTurn,
-            totalToolCallsEmitted,
-          );
+          const toolCalls = collectToolCallsFromChunk(chunk, localTurn, totalToolCallsEmitted);
           if (toolCalls.length > 0) {
             anyFunctionCall = true;
             totalToolCallsEmitted += toolCalls.length;
@@ -322,10 +301,8 @@ export function createGoogleGenAiAdapter(opts: GoogleGenAiAdapterOptions): LionA
 
           const um = chunk.usageMetadata;
           if (um) {
-            const inputTokens =
-              (um.promptTokenCount ?? 0) + (um.toolUsePromptTokenCount ?? 0);
-            const outputTokens =
-              (um.candidatesTokenCount ?? 0) + (um.thoughtsTokenCount ?? 0);
+            const inputTokens = (um.promptTokenCount ?? 0) + (um.toolUsePromptTokenCount ?? 0);
+            const outputTokens = (um.candidatesTokenCount ?? 0) + (um.thoughtsTokenCount ?? 0);
             if (inputTokens > 0 || outputTokens > 0) {
               yield {
                 type: 'usage',
@@ -357,21 +334,13 @@ export function createGoogleGenAiAdapter(opts: GoogleGenAiAdapterOptions): LionA
           return;
         }
         const normalized = normalizeGoogleGenAiError(e);
-        logger.warn(
-          { code: normalized.code, status: normalized.status },
-          'Vertex Gemini stream iteration failed',
-        );
+        logger.warn({ code: normalized.code, status: normalized.status }, 'Vertex Gemini stream iteration failed');
         anyErrorEmitted = true;
         yield { type: 'error', error: normalized.userMessage };
         return;
       }
 
-      if (
-        !anyTextEmitted &&
-        !anyFunctionCall &&
-        !anyErrorEmitted &&
-        !sawFinishReason
-      ) {
+      if (!anyTextEmitted && !anyFunctionCall && !anyErrorEmitted && !sawFinishReason) {
         yield { type: 'error', error: 'Gemini returned empty response.' };
         return;
       }

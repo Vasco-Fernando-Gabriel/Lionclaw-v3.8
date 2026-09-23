@@ -148,9 +148,7 @@ export function GoogleOAuthSetup() {
       </div>
 
       {error && (
-        <div className="px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-300">
-          {error}
-        </div>
+        <div className="px-3 py-2 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-300">{error}</div>
       )}
       {success && (
         <div className="px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg text-xs text-green-300">
@@ -167,13 +165,13 @@ export function GoogleOAuthSetup() {
         <div className="space-y-3 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700/50">
           {editingCredentials ? (
             <p className="text-xs text-zinc-400">
-              Cole o novo Client ID e Client Secret para rotacionar as credenciais. Ao salvar, a
-              autorizacao atual e limpa e voce reautoriza com o novo client.
+              Cole o novo Client ID e Client Secret para rotacionar as credenciais. Ao salvar, a autorizacao atual e
+              limpa e voce reautoriza com o novo client.
             </p>
           ) : (
             <p className="text-xs text-zinc-400">
-              Crie um projeto no Google Cloud Console e configure OAuth 2.0.
-              Adicione <code className="text-amber-400">http://localhost</code> como redirect URI autorizado.
+              Crie um projeto no Google Cloud Console e configure OAuth 2.0. Adicione{' '}
+              <code className="text-amber-400">http://localhost</code> como redirect URI autorizado.
             </p>
           )}
           <a
@@ -181,15 +179,18 @@ export function GoogleOAuthSetup() {
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
-            onClick={(e) => { e.preventDefault(); window.open('https://console.cloud.google.com/apis/credentials'); }}
+            onClick={(e) => {
+              e.preventDefault();
+              window.open('https://console.cloud.google.com/apis/credentials');
+            }}
           >
             <ExternalLink size={11} />
             Google Cloud Console
           </a>
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2">
             <p className="text-[11px] text-amber-300">
-              Seu projeto Google Cloud deve estar em modo "Production".
-              Apps em modo "Testing" perdem a autenticacao a cada 7 dias.
+              Seu projeto Google Cloud deve estar em modo "Production". Apps em modo "Testing" perdem a autenticacao a
+              cada 7 dias.
             </p>
           </div>
           <input

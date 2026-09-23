@@ -27,16 +27,13 @@ export function LockedDesignViewer({ projectId }: LockedDesignViewerProps) {
       setError(null);
 
       try {
-        const result = await window.lionclaw.openDesign.getLockedSnapshot(projectId) as
-          | { ok: true; paths: LockedSnapshotPaths; lockedAt: string | null }
-          | { error: string };
+        const result = (await window.lionclaw.openDesign.getLockedSnapshot(projectId)) as
+          { ok: true; paths: LockedSnapshotPaths; lockedAt: string | null } | { error: string };
 
         if (cancelled) return;
 
         if ('error' in result) {
-          setError(result.error === 'not-locked'
-            ? 'Design ainda nao foi travado.'
-            : result.error);
+          setError(result.error === 'not-locked' ? 'Design ainda nao foi travado.' : result.error);
           setLoading(false);
           return;
         }
@@ -62,7 +59,9 @@ export function LockedDesignViewer({ projectId }: LockedDesignViewerProps) {
     };
 
     void load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [projectId]);
 
   if (loading) {
@@ -92,15 +91,9 @@ export function LockedDesignViewer({ projectId }: LockedDesignViewerProps) {
           Read-only
         </div>
         {lockedAt && (
-          <span className="text-[11px] text-zinc-500">
-            Travado em {new Date(lockedAt).toLocaleString('pt-BR')}
-          </span>
+          <span className="text-[11px] text-zinc-500">Travado em {new Date(lockedAt).toLocaleString('pt-BR')}</span>
         )}
-        {paths && (
-          <span className="text-[11px] text-zinc-600 ml-auto truncate max-w-xs">
-            {paths.snapshotDir}
-          </span>
-        )}
+        {paths && <span className="text-[11px] text-zinc-600 ml-auto truncate max-w-xs">{paths.snapshotDir}</span>}
       </div>
 
       {/* Sandboxed iframe carregando via protocolo `lionclaw-asset://` para
@@ -115,12 +108,8 @@ export function LockedDesignViewer({ projectId }: LockedDesignViewerProps) {
           title="Design Travado (Read-only)"
         />
       ) : (
-        <div className="flex items-center justify-center flex-1 text-zinc-500 text-sm">
-          Conteudo nao disponivel
-        </div>
+        <div className="flex items-center justify-center flex-1 text-zinc-500 text-sm">Conteudo nao disponivel</div>
       )}
     </div>
   );
 }
-
-

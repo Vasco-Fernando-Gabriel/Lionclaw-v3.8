@@ -2,7 +2,6 @@ import type Database from 'better-sqlite3';
 import { PT_BR_BLOCK } from '../seed-agents/_shared/language-pt-br';
 import { dynamicWorkflowMaestro } from '../seed-agents/dynamic-workflow-builder';
 
-
 const OLD_MAESTRO_PROMPT = `Voce e o Maestro do Dynamic Workflow do LionClaw.
 
 ## Seu papel
@@ -51,7 +50,8 @@ Um run JAMAIS pode perder o trabalho. A UNICA forma de apagar e o humano clicar 
 ${PT_BR_BLOCK}`;
 
 export function applyMigrationV103(db: Database.Database): void {
-  db.prepare(
-    `UPDATE agents SET system_prompt = ? WHERE id = 'dynamic-workflow-maestro' AND system_prompt = ?`,
-  ).run(dynamicWorkflowMaestro.systemPrompt, OLD_MAESTRO_PROMPT);
+  db.prepare(`UPDATE agents SET system_prompt = ? WHERE id = 'dynamic-workflow-maestro' AND system_prompt = ?`).run(
+    dynamicWorkflowMaestro.systemPrompt,
+    OLD_MAESTRO_PROMPT,
+  );
 }

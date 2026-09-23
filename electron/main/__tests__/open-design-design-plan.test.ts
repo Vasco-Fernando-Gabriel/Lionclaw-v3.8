@@ -2,11 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import {
-  ensureDesignPlan,
-  validateDesignPlan,
-  type DesignPlan,
-} from '../open-design/design-plan';
+import { ensureDesignPlan, validateDesignPlan, type DesignPlan } from '../open-design/design-plan';
 
 function makePlan(overrides: Partial<DesignPlan> = {}): DesignPlan {
   return {
@@ -25,9 +21,7 @@ function makePlan(overrides: Partial<DesignPlan> = {}): DesignPlan {
         route: '#login',
         purpose: 'Autenticar usuario.',
         userStoryIds: ['US-01'],
-        primaryActions: [
-          { id: 'action-login', label: 'Entrar', type: 'submit', userStoryIds: ['US-01'] },
-        ],
+        primaryActions: [{ id: 'action-login', label: 'Entrar', type: 'submit', userStoryIds: ['US-01'] }],
         states: ['idle', 'loading', 'error', 'success'],
         components: ['login-form'],
         dataShownOrEdited: ['email', 'password'],
@@ -51,9 +45,7 @@ function makePlan(overrides: Partial<DesignPlan> = {}): DesignPlan {
     navigation: [
       { id: 'nav-integracoes', label: 'Integracoes', targetScreenId: 'integracoes', userStoryIds: ['US-02'] },
     ],
-    sampleData: [
-      { label: 'Repositorio', value: 'lionlabs/lioncron', userStoryIds: ['US-02'] },
-    ],
+    sampleData: [{ label: 'Repositorio', value: 'lionlabs/lioncron', userStoryIds: ['US-02'] }],
     coverage: [
       { userStoryId: 'US-01', screenIds: ['login'], notes: 'Acesso.' },
       { userStoryId: 'US-02', screenIds: ['integracoes'], notes: 'BYOK.' },
@@ -71,9 +63,7 @@ describe('open-design design-plan', () => {
 
     const invalid = validateDesignPlan(
       makePlan({
-        navigation: [
-          { id: 'nav-missing', label: 'Missing', targetScreenId: 'missing', userStoryIds: ['US-02'] },
-        ],
+        navigation: [{ id: 'nav-missing', label: 'Missing', targetScreenId: 'missing', userStoryIds: ['US-02'] }],
         coverage: [{ userStoryId: 'US-01', screenIds: ['login'], notes: 'Acesso.' }],
       }),
       ['US-01', 'US-02'],

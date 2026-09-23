@@ -19,13 +19,16 @@ describe.skipIf(process.env['LIONCLAW_REAL_GROK_PROBE'] !== '1')('Grok real dev 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 90_000);
     try {
-      const result = await grokExecutor.run({
-        agentId: 'grok-real-dev-probe',
-        prompt: 'Responda exatamente: LIONCLAW_GROK_EXECUTOR_OK',
-        cwd: process.cwd(),
-        abortController: controller,
-        permission: { mode: 'default', dangerouslySkipPermissions: false },
-      }, config);
+      const result = await grokExecutor.run(
+        {
+          agentId: 'grok-real-dev-probe',
+          prompt: 'Responda exatamente: LIONCLAW_GROK_EXECUTOR_OK',
+          cwd: process.cwd(),
+          abortController: controller,
+          permission: { mode: 'default', dangerouslySkipPermissions: false },
+        },
+        config,
+      );
       expect(result.runtime).toBe('grok');
       expect(result.output.trim()).toBe('LIONCLAW_GROK_EXECUTOR_OK');
     } finally {

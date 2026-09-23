@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import {
@@ -31,7 +30,7 @@ describe('resolveChatCapabilitiesForTurn - precedencia (A.4)', () => {
       options: { featureToggles: snapshot },
     });
 
-    expect(result).toEqual(snapshot);
+    expect(result).toEqual({ ...snapshot, swarm: false });
     expect(getChatFeatureTogglesMock).not.toHaveBeenCalled();
   });
 
@@ -109,9 +108,11 @@ describe('resolveChatCapabilitiesForTurn - precedencia (A.4)', () => {
 
 describe('sanitizeChatFeatureToggles', () => {
   it('aceita o shape exato com os dois booleans', () => {
-    expect(
-      sanitizeChatFeatureToggles({ pipelineControl: true, dynamicWorkflows: false }),
-    ).toEqual({ pipelineControl: true, dynamicWorkflows: false });
+    expect(sanitizeChatFeatureToggles({ pipelineControl: true, dynamicWorkflows: false })).toEqual({
+      pipelineControl: true,
+      dynamicWorkflows: false,
+      swarm: false,
+    });
   });
 
   it.each([
@@ -131,16 +132,18 @@ describe('sanitizeChatFeatureTogglesPatch', () => {
       ok: true,
       patch: { pipelineControl: true },
     });
-    expect(
-      sanitizeChatFeatureTogglesPatch({ pipelineControl: false, dynamicWorkflows: true }),
-    ).toEqual({ ok: true, patch: { pipelineControl: false, dynamicWorkflows: true } });
+    expect(sanitizeChatFeatureTogglesPatch({ pipelineControl: false, dynamicWorkflows: true })).toEqual({
+      ok: true,
+      patch: { pipelineControl: false, dynamicWorkflows: true },
+    });
     expect(sanitizeChatFeatureTogglesPatch({})).toEqual({ ok: true, patch: {} });
   });
 
   it('ignora chaves desconhecidas (patch e parcial por contrato)', () => {
-    expect(
-      sanitizeChatFeatureTogglesPatch({ dynamicWorkflows: true, extra: 'x' }),
-    ).toEqual({ ok: true, patch: { dynamicWorkflows: true } });
+    expect(sanitizeChatFeatureTogglesPatch({ dynamicWorkflows: true, extra: 'x' })).toEqual({
+      ok: true,
+      patch: { dynamicWorkflows: true },
+    });
   });
 
   it.each([

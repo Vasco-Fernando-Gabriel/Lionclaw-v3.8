@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -83,10 +82,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   },
 }));
 
-import {
-  resolveSubagentRepoRoot,
-  type SubagentRepoRootDeps,
-} from '../repo-graph/validate-root';
+import { resolveSubagentRepoRoot, type SubagentRepoRootDeps } from '../repo-graph/validate-root';
 import { lionAgentDispatch } from '../lion-sdk/tools/agent';
 import { getCodexAgentsServer } from '../codex-agents-mcp';
 import {
@@ -97,7 +93,9 @@ import {
 
 const base = fs.mkdtempSync(path.join(os.tmpdir(), 'repo-graph-containment-'));
 const repoDir = fs.realpathSync(fs.mkdirSync(path.join(base, 'repo'), { recursive: true }) ?? path.join(base, 'repo'));
-const otherDir = fs.realpathSync(fs.mkdirSync(path.join(base, 'other'), { recursive: true }) ?? path.join(base, 'other'));
+const otherDir = fs.realpathSync(
+  fs.mkdirSync(path.join(base, 'other'), { recursive: true }) ?? path.join(base, 'other'),
+);
 const escapeLink = path.join(base, 'escape-link');
 fs.symlinkSync(otherDir, escapeLink);
 
@@ -106,8 +104,7 @@ afterAll(() => {
 });
 
 const dbDeps: SubagentRepoRootDeps = {
-  getSessionActiveRepository: (sessionId) =>
-    sessionId === 'sess-1' ? { repositoryId: 'repo-1' } : null,
+  getSessionActiveRepository: (sessionId) => (sessionId === 'sess-1' ? { repositoryId: 'repo-1' } : null),
   getLocalRepository: (id) => (id === 'repo-1' ? { canonicalRootPath: repoDir } : null),
 };
 
@@ -149,46 +146,31 @@ describe('resolveSubagentRepoRoot — AC-8 (13.2)', () => {
 
   it('repoRoot com "../" -> { error } (sem normalizacao silenciosa)', async () => {
     const sneaky = `${repoDir}/../repo`;
-    const result = await resolveSubagentRepoRoot(
-      { repoRoot: sneaky, sessionId: 'sess-1' },
-      dbDeps,
-    );
+    const result = await resolveSubagentRepoRoot({ repoRoot: sneaky, sessionId: 'sess-1' }, dbDeps);
     expect(result).toEqual({ error: expect.stringContaining('../') });
   });
 
   it('repoRoot DIFERENTE do canonical da sessao -> { error }', async () => {
-    const result = await resolveSubagentRepoRoot(
-      { repoRoot: otherDir, sessionId: 'sess-1' },
-      dbDeps,
-    );
+    const result = await resolveSubagentRepoRoot({ repoRoot: otherDir, sessionId: 'sess-1' }, dbDeps);
     expect(result).toEqual({
       error: expect.stringContaining('nao corresponde ao repositorio ativo'),
     });
   });
 
   it('symlink que escapa do canonical -> { error } (realpath, igualdade estrita)', async () => {
-    const result = await resolveSubagentRepoRoot(
-      { repoRoot: escapeLink, sessionId: 'sess-1' },
-      dbDeps,
-    );
+    const result = await resolveSubagentRepoRoot({ repoRoot: escapeLink, sessionId: 'sess-1' }, dbDeps);
     expect(result).toEqual({
       error: expect.stringContaining('nao corresponde ao repositorio ativo'),
     });
   });
 
   it('sessao sem repo ativo -> { error }', async () => {
-    const result = await resolveSubagentRepoRoot(
-      { repoRoot: repoDir, sessionId: 'sess-sem-repo' },
-      dbDeps,
-    );
+    const result = await resolveSubagentRepoRoot({ repoRoot: repoDir, sessionId: 'sess-sem-repo' }, dbDeps);
     expect(result).toEqual({ error: expect.stringContaining('nenhum repositorio ativo') });
   });
 
   it('repoRoot IGUAL ao canonical -> { cwd } validado', async () => {
-    const result = await resolveSubagentRepoRoot(
-      { repoRoot: repoDir, sessionId: 'sess-1' },
-      dbDeps,
-    );
+    const result = await resolveSubagentRepoRoot({ repoRoot: repoDir, sessionId: 'sess-1' }, dbDeps);
     expect(result).toEqual({ cwd: repoDir });
   });
 });
@@ -266,7 +248,7 @@ describe('Lion Agent (11.4) — repoRoot validado + regressao sem repoRoot', () 
 
   it('runtime local COM repo ativo no turno: renderedMarkdown injetado no prompt (11.2/AC-7)', async () => {
     setRepoGraphTurnSession('sess-1', 'lion-sdk');
-    setRepoGraphTurnContext({
+    setRepoGraphTurnContext('sess-1', {
       repositoryId: 'repo-1',
       canonicalRootPath: repoDir,
       status: 'ready',
@@ -364,14 +346,16 @@ describe('run_codex_agent (11.3) — workspace e ownership definidos pelo host',
       prompt: 'tarefa no repo',
     });
     expect(result.isError).toBeFalsy();
-    expect(executeAgentMock).toHaveBeenCalledWith(expect.objectContaining({
-      cwd: repoDir,
-      abortController: expect.any(AbortController),
-      executionContext: expect.objectContaining({
-        ownerId: 'sess-1',
-        rootExecutionId: 'root-codex-test',
+    expect(executeAgentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: repoDir,
+        abortController: expect.any(AbortController),
+        executionContext: expect.objectContaining({
+          ownerId: 'sess-1',
+          rootExecutionId: 'root-codex-test',
+        }),
       }),
-    }));
+    );
   });
 
   it('encaminha context/prompt ao Codex sem aceitar ownership do modelo', async () => {
@@ -382,10 +366,12 @@ describe('run_codex_agent (11.3) — workspace e ownership definidos pelo host',
       context: 'dados lidos',
     });
     expect(result.isError).toBeFalsy();
-    expect(executeAgentMock).toHaveBeenCalledWith(expect.objectContaining({
-      cwd: repoDir,
-      prompt: 'dados lidos\n\npergunta',
-    }));
+    expect(executeAgentMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: repoDir,
+        prompt: 'dados lidos\n\npergunta',
+      }),
+    );
     expect(insertRepoGraphTurnUsageMock).not.toHaveBeenCalled();
   });
 });

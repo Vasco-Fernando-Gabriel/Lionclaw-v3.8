@@ -1,10 +1,8 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import net from 'net';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-
 
 const sandboxState = vi.hoisted(() => ({
   path: '/tmp/lionclaw-ipc-cross-platform-uninitialized',
@@ -25,7 +23,6 @@ vi.mock('../paths', () => ({
   getBackgroundCwd: () => path.join(sandboxState.path, 'background'),
 }));
 
-
 const auditEntries: Array<Record<string, unknown>> = [];
 const agents: Array<Record<string, unknown>> = [];
 
@@ -36,13 +33,11 @@ vi.mock('../db', () => ({
   },
 }));
 
-
 const mcpServers: Array<Record<string, unknown>> = [];
 
 vi.mock('../mcp-manager', () => ({
   getAllMCPServers: () => mcpServers,
 }));
-
 
 const secrets = new Map<string, string>();
 
@@ -50,11 +45,9 @@ vi.mock('../secrets-vault', () => ({
   getSecret: async (key: string) => secrets.get(key) ?? null,
 }));
 
-
 vi.mock('../ask-question', () => ({
   sendAskQuestion: async () => ({ id: 'unused', answers: [] }),
 }));
-
 
 const skillEntries: Array<{
   name: string;
@@ -97,14 +90,8 @@ vi.mock('../skills', () => ({
   },
 }));
 
-
-import {
-  startLocalIpcServer,
-  stopLocalIpcServer,
-  getCurrentEndpoint,
-} from '../local-ipc';
+import { startLocalIpcServer, stopLocalIpcServer, getCurrentEndpoint } from '../local-ipc';
 import { resolveSocketRuntimeDir } from '../local-ipc/platform-unix';
-
 
 const IS_POSIX = process.platform !== 'win32';
 
@@ -157,7 +144,6 @@ async function callRpc(
   });
 }
 
-
 beforeEach(async () => {
   const shortRoot = IS_POSIX ? '/tmp' : os.tmpdir();
   sandboxState.path = await fs.promises.mkdtemp(path.join(shortRoot, 'lc-ipc-'));
@@ -171,14 +157,11 @@ beforeEach(async () => {
 afterEach(async () => {
   try {
     await stopLocalIpcServer();
-  } catch {
-  }
+  } catch {}
   try {
     await fs.promises.rm(sandboxState.path, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
 });
-
 
 describe('local-ipc server lifecycle (SP-6.5)', () => {
   it('starts, advertises endpoint, round-trips list_skills, and stops cleanly', async () => {
@@ -227,9 +210,7 @@ describe('local-ipc server lifecycle (SP-6.5)', () => {
     }
     expect(fs.existsSync(expectedFile)).toBe(false);
   });
-
 });
-
 
 describe('get_mcp_env narrow scope (SP-6.6)', () => {
   it('returns env values for an active server and writes an audit row WITHOUT values', async () => {

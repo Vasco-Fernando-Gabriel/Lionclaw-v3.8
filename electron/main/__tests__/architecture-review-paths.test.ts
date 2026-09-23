@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import path from 'path';
 import fs from 'fs';
@@ -21,7 +20,6 @@ import {
   resolveArchitecturePhaseDocument,
   readArchitectureReviewManifest,
 } from '../architecture-review-paths';
-
 
 let tmpRoot: string;
 
@@ -52,10 +50,8 @@ beforeEach(() => {
 afterEach(() => {
   try {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
 });
-
 
 describe('generateArchitectureReviewRunId', () => {
   it('matches format YYYYMMDD_HHmmss-<hex6>', () => {

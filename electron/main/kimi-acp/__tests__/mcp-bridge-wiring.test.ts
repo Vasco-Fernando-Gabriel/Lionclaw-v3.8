@@ -1,16 +1,10 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { KimiExternalTool } from '../../agent-runtime/kimi-external-tools';
 import type { KimiAcpMcpServerEntry } from '../types';
 import type { KimiMcpBridgeConfig } from '../mcp-http-bridge';
-import type {
-  CliAgenticResponse,
-  CliRunHandle,
-  CliStreamCallbacks,
-} from '../../agent-runtime/cli-agentic/contract';
+import type { CliAgenticResponse, CliRunHandle, CliStreamCallbacks } from '../../agent-runtime/cli-agentic/contract';
 import type { AgentQueryConfig } from '../../agent-config-resolver';
 import type { AgentExecutionRequest } from '../../agent-runtime/types';
-
 
 vi.mock('../../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
@@ -74,11 +68,7 @@ interface CapturedCreateRun {
 }
 let lastCreateRunOpts: CapturedCreateRun | null = null;
 const handleSendMock = vi.fn(
-  async (
-    _prompt: string,
-    _cb?: CliStreamCallbacks,
-    _abortSignal?: AbortSignal,
-  ): Promise<CliAgenticResponse> => ({
+  async (_prompt: string, _cb?: CliStreamCallbacks, _abortSignal?: AbortSignal): Promise<CliAgenticResponse> => ({
     content: 'ok',
     usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
     toolUses: 0,
@@ -113,7 +103,6 @@ vi.mock('../acp-driver', () => ({
 
 import { createChatKimiSession } from '../../kimi-sdk/session';
 import { kimiExecutor } from '../../agent-runtime/kimi-executor';
-
 
 function fakeTool(name: string): KimiExternalTool {
   return {
@@ -189,13 +178,15 @@ describe('B4: chat-lane HTTP-MCP bridge wiring (SPEC-BRIDGE section 5.1)', () =>
 
     expect(lastCreateRunOpts).not.toBeNull();
     expect(lastCreateRunOpts?.mcpServers).toEqual([CANNED_ENTRY]);
-    expect(acquireKimiSlotMock).toHaveBeenCalledWith(expect.objectContaining({
-      role: 'parent',
-      toolBearing: true,
-      executionDepth: 0,
-      rootExecutionId: expect.any(String),
-      parentExecutionId: expect.any(String),
-    }));
+    expect(acquireKimiSlotMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: 'parent',
+        toolBearing: true,
+        executionDepth: 0,
+        rootExecutionId: expect.any(String),
+        parentExecutionId: expect.any(String),
+      }),
+    );
     const slotRequest = acquireKimiSlotMock.mock.calls[0][0] as {
       rootExecutionId: string;
       parentExecutionId: string;
@@ -258,11 +249,13 @@ describe('B4: chat-lane HTTP-MCP bridge wiring (SPEC-BRIDGE section 5.1)', () =>
       throw new Error('handshake failed');
     };
 
-    await expect(createChatKimiSession({
-      sessionId: 's-create-fail',
-      model: 'kimi-code/kimi-for-coding',
-      permission,
-    })).rejects.toThrow('handshake failed');
+    await expect(
+      createChatKimiSession({
+        sessionId: 's-create-fail',
+        model: 'kimi-code/kimi-for-coding',
+        permission,
+      }),
+    ).rejects.toThrow('handshake failed');
 
     expect(fakeBridge.stop).toHaveBeenCalledTimes(1);
     expect(releaseSlotMock).toHaveBeenCalledTimes(1);
@@ -296,7 +289,6 @@ describe('B4: chat-lane HTTP-MCP bridge wiring (SPEC-BRIDGE section 5.1)', () =>
     expect(lastCreateRunOpts?.mcpServers).toEqual([CANNED_ENTRY]);
   });
 });
-
 
 function fakeConfig(over: Partial<AgentQueryConfig> = {}): AgentQueryConfig {
   return {
@@ -334,10 +326,7 @@ describe('B5: agent-scoped-lane HTTP-MCP bridge wiring (SPEC-BRIDGE section 5.2)
     const fakeBridge = makeFakeBridge();
     startKimiMcpBridgeMock.mockResolvedValue(fakeBridge);
 
-    await kimiExecutor.run(
-      fakeRequest(),
-      fakeConfig({ allowedTools: ['mcp__google_calendar__list_events'] }),
-    );
+    await kimiExecutor.run(fakeRequest(), fakeConfig({ allowedTools: ['mcp__google_calendar__list_events'] }));
 
     expect(startKimiMcpBridgeMock).toHaveBeenCalledTimes(1);
     const bridgeConfig = startKimiMcpBridgeMock.mock.calls[0][0] as KimiMcpBridgeConfig;
@@ -354,10 +343,7 @@ describe('B5: agent-scoped-lane HTTP-MCP bridge wiring (SPEC-BRIDGE section 5.2)
       systemPrompt: 'Voce e um subagente.',
     });
 
-    await kimiExecutor.run(
-      fakeRequest({ projectId: 'proj-1' }),
-      fakeConfig({ allowedTools: ['Read', 'Write'] }),
-    );
+    await kimiExecutor.run(fakeRequest({ projectId: 'proj-1' }), fakeConfig({ allowedTools: ['Read', 'Write'] }));
 
     expect(startKimiMcpBridgeMock).not.toHaveBeenCalled();
     expect(lastCreateRunOpts?.mcpServers).toEqual([]);
@@ -384,10 +370,7 @@ describe('B5: agent-scoped-lane HTTP-MCP bridge wiring (SPEC-BRIDGE section 5.2)
     const fakeBridge = makeFakeBridge();
     startKimiMcpBridgeMock.mockResolvedValue(fakeBridge);
 
-    await kimiExecutor.run(
-      fakeRequest(),
-      fakeConfig({ allowedTools: ['mcp__google_calendar__list_events'] }),
-    );
+    await kimiExecutor.run(fakeRequest(), fakeConfig({ allowedTools: ['mcp__google_calendar__list_events'] }));
 
     expect(handleCloseMock).toHaveBeenCalledTimes(1);
     expect(fakeBridge.stop).toHaveBeenCalledTimes(1);
@@ -412,10 +395,7 @@ describe('B5: agent-scoped-lane HTTP-MCP bridge wiring (SPEC-BRIDGE section 5.2)
     };
 
     await expect(
-      kimiExecutor.run(
-        fakeRequest(),
-        fakeConfig({ allowedTools: ['mcp__google_calendar__list_events'] }),
-      ),
+      kimiExecutor.run(fakeRequest(), fakeConfig({ allowedTools: ['mcp__google_calendar__list_events'] })),
     ).rejects.toThrow('createRun blew up');
 
     expect(startKimiMcpBridgeMock).toHaveBeenCalledTimes(1);
@@ -436,10 +416,7 @@ describe('B5: agent-scoped-lane HTTP-MCP bridge wiring (SPEC-BRIDGE section 5.2)
     handleSendMock.mockRejectedValueOnce(new Error('send blew up'));
 
     await expect(
-      kimiExecutor.run(
-        fakeRequest(),
-        fakeConfig({ allowedTools: ['mcp__google_calendar__list_events'] }),
-      ),
+      kimiExecutor.run(fakeRequest(), fakeConfig({ allowedTools: ['mcp__google_calendar__list_events'] })),
     ).rejects.toThrow('send blew up');
 
     expect(rejectingBridge.stop).toHaveBeenCalledTimes(1);

@@ -52,11 +52,14 @@ export async function wipeOpenDesign(projectId: string): Promise<{ ok: true } | 
             logger.warn({ err, file: f }, 'wipeOpenDesign: falha ao apagar arquivo de snapshot (nao-fatal)');
           }
         }
-        logger.info({ projectId, snapshotDir: snap.snapshotDir }, 'wipeOpenDesign: snapshot do lock apagado (prompt preservado)');
+        logger.info(
+          { projectId, snapshotDir: snap.snapshotDir },
+          'wipeOpenDesign: snapshot do lock apagado (prompt preservado)',
+        );
       }
     }
 
-    clearSessionConfig(projectId); // conversationId, initialPromptHash, initialPromptSentAt, sessionConfig*
+    clearSessionConfig(projectId);
     setOpenDesignConfig(projectId, {
       locked: false,
       lockedAt: undefined,

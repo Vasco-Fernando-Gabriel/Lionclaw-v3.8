@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
@@ -54,11 +53,7 @@ beforeEach(() => {
 
 describe('setActiveTelegramSession (SPEC 3.1 / AC-9)', () => {
   it('arquiva TODAS as outras sessoes telegram active (estado legado com varias)', () => {
-    h.listActiveTelegramSessionsMock.mockReturnValue([
-      { id: 'old-1' },
-      { id: 'old-2' },
-      { id: 'nova' },
-    ]);
+    h.listActiveTelegramSessionsMock.mockReturnValue([{ id: 'old-1' }, { id: 'old-2' }, { id: 'nova' }]);
 
     setActiveTelegramSession('nova');
 

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -38,10 +37,7 @@ vi.mock('../pipeline-shared/lock', () => ({
   isProjectLocked: vi.fn(() => false),
 }));
 
-import {
-  mapOrchestratorToAgentPatch,
-  InvalidOrchestratorMappingError,
-} from '../agent-sync';
+import { mapOrchestratorToAgentPatch, InvalidOrchestratorMappingError } from '../agent-sync';
 import type { OrchestratorSelection } from '../orchestrator-selection';
 
 describe('agent-sync lynchpin (cursor-sdk -> cursor)', () => {
@@ -70,8 +66,6 @@ describe('agent-sync lynchpin (cursor-sdk -> cursor)', () => {
       model: 'composer-2.5',
       source: 'settings',
     };
-    expect(() => mapOrchestratorToAgentPatch(sel)).toThrow(
-      InvalidOrchestratorMappingError,
-    );
+    expect(() => mapOrchestratorToAgentPatch(sel)).toThrow(InvalidOrchestratorMappingError);
   });
 });

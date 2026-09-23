@@ -88,9 +88,7 @@ describe('initDatabase: wiring comportamental fail-closed', () => {
     expect(fs.existsSync(migrationError.backupPath!)).toBe(true);
     const markerPath = path.join(path.dirname(migrationError.backupPath!), 'migration-in-progress.json');
     expect(fs.existsSync(markerPath)).toBe(true);
-    expect(JSON.parse(fs.readFileSync(markerPath, 'utf8')).backupPath).toBe(
-      migrationError.backupPath,
-    );
+    expect(JSON.parse(fs.readFileSync(markerPath, 'utf8')).backupPath).toBe(migrationError.backupPath);
     expect(() => getDb()).toThrow('Database not initialized');
 
     const reopened = new Database(dbPath, { readonly: true, fileMustExist: true });

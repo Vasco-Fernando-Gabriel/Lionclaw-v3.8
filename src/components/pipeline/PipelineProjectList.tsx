@@ -2,7 +2,6 @@ import { Plus, Loader2 } from 'lucide-react';
 import type { PipelineProject } from '@/types/pipeline';
 import { PipelineProjectCard } from './PipelineProjectCard';
 
-
 function sortProjects(projects: PipelineProject[]): PipelineProject[] {
   const order: Record<string, number> = {
     running: 0,
@@ -35,9 +34,7 @@ export function PipelineProjectList({ projects, isLoading, onSelect, onNewPipeli
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-zinc-100">Pipeline</h1>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Automacao completa: Discovery ate Acceptance Review
-          </p>
+          <p className="text-xs text-zinc-500 mt-0.5">Automacao completa: Discovery ate Acceptance Review</p>
         </div>
         <button
           onClick={onNewPipeline}
@@ -62,11 +59,7 @@ export function PipelineProjectList({ projects, isLoading, onSelect, onNewPipeli
       ) : (
         <div className="grid grid-cols-1 gap-3 max-w-3xl">
           {sorted.map((project) => (
-            <PipelineProjectCard
-              key={project.id}
-              project={project}
-              onSelect={onSelect}
-            />
+            <PipelineProjectCard key={project.id} project={project} onSelect={onSelect} />
           ))}
         </div>
       )}

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -26,19 +25,18 @@ const captured = vi.hoisted(() => ({
   runs: [] as Array<{ extraArgs?: string[] }>,
 }));
 vi.mock('../agent-runtime/codex-session-factory', () => ({
-  resolveCodexSessionForRun: vi.fn(
-    async (args: { extraArgs?: string[] }) => {
-      captured.runs.push(args);
-      return { threadId: null, close: () => undefined };
-    },
-  ),
+  resolveCodexSessionForRun: vi.fn(async (args: { extraArgs?: string[] }) => {
+    captured.runs.push(args);
+    return { threadId: null, close: () => undefined };
+  }),
 }));
 
 const composition = vi.hoisted(() => ({
   resolve: vi.fn(
-    (
-      _opts?: { agentId?: string; isOnboarding?: boolean },
-    ): { mode: 'index' | 'full'; extraArgs: string[]; fingerprint: string | null } => ({
+    (_opts?: {
+      agentId?: string;
+      isOnboarding?: boolean;
+    }): { mode: 'index' | 'full'; extraArgs: string[]; fingerprint: string | null } => ({
       mode: 'full',
       extraArgs: [],
       fingerprint: null,
@@ -46,9 +44,8 @@ const composition = vi.hoisted(() => ({
   ),
 }));
 vi.mock('../codex-chat-spawn-extras', () => ({
-  resolveChatCodexMcpComposition: (
-    opts?: { agentId?: string; isOnboarding?: boolean },
-  ) => composition.resolve(opts as never),
+  resolveChatCodexMcpComposition: (opts?: { agentId?: string; isOnboarding?: boolean }) =>
+    composition.resolve(opts as never),
 }));
 
 import { createChatCodexSession } from '../codex-sdk/session';
@@ -92,9 +89,7 @@ describe('createChatCodexSession - composicao do spawn (W2)', () => {
       fingerprint: INDEX_COMPOSITION.fingerprint,
     });
     await createChatCodexSession({ sessionId: 's1', model: 'gpt-5.5', agentId: 'persona-x' });
-    expect(composition.resolve).toHaveBeenCalledWith(
-      expect.objectContaining({ agentId: 'persona-x' }),
-    );
+    expect(composition.resolve).toHaveBeenCalledWith(expect.objectContaining({ agentId: 'persona-x' }));
     expect(captured.runs[0].extraArgs).toEqual(INDEX_COMPOSITION.extraArgs);
   });
 });

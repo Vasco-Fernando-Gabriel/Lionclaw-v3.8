@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -17,9 +16,7 @@ import {
   type InternalCapabilityLeaseInput,
 } from '../chat-capability-lease';
 
-function leaseInput(
-  overrides: Partial<InternalCapabilityLeaseInput> = {},
-): InternalCapabilityLeaseInput {
+function leaseInput(overrides: Partial<InternalCapabilityLeaseInput> = {}): InternalCapabilityLeaseInput {
   return {
     coordinator: 'pipeline-drive-coordinator',
     driveProjectId: 'proj-42',
@@ -68,11 +65,7 @@ describe('lease valida', () => {
 
   it('serverId com alias historico normaliza antes da allowlist (pipeline-control == lionclaw-pipeline-control)', () => {
     const { token } = createInternalCapabilityLease(leaseInput());
-    expect(
-      verifyInternalCapabilityLease(
-        verifyInput(token, { serverId: 'pipeline-control' }),
-      ),
-    ).toBe(true);
+    expect(verifyInternalCapabilityLease(verifyInput(token, { serverId: 'pipeline-control' }))).toBe(true);
   });
 
   it('sem maxUses: reutilizavel dentro do TTL', () => {
@@ -90,7 +83,7 @@ describe('expiracao (TTL)', () => {
     vi.advanceTimersByTime(999);
     expect(verifyInternalCapabilityLease(verifyInput(token))).toBe(true);
 
-    vi.advanceTimersByTime(2); // t=1001 >= expiresAt
+    vi.advanceTimersByTime(2);
     expect(verifyInternalCapabilityLease(verifyInput(token))).toBe(false);
   });
 
@@ -114,11 +107,7 @@ describe('maxUses', () => {
   it('verificacao NEGADA nao consome uso', () => {
     const { token } = createInternalCapabilityLease(leaseInput({ maxUses: 1 }));
 
-    expect(
-      verifyInternalCapabilityLease(
-        verifyInput(token, { serverId: 'lionclaw-dynamic-workflows' }),
-      ),
-    ).toBe(false);
+    expect(verifyInternalCapabilityLease(verifyInput(token, { serverId: 'lionclaw-dynamic-workflows' }))).toBe(false);
 
     expect(verifyInternalCapabilityLease(verifyInput(token))).toBe(true);
     expect(verifyInternalCapabilityLease(verifyInput(token))).toBe(false);
@@ -130,9 +119,7 @@ describe('dryRun (S6b): checa validade IDENTICA sem consumir uso', () => {
     const { token } = createInternalCapabilityLease(leaseInput({ maxUses: 1 }));
 
     for (let i = 0; i < 5; i++) {
-      expect(
-        verifyInternalCapabilityLease({ ...verifyInput(token), dryRun: true }),
-      ).toBe(true);
+      expect(verifyInternalCapabilityLease({ ...verifyInput(token), dryRun: true })).toBe(true);
     }
 
     expect(verifyInternalCapabilityLease(verifyInput(token))).toBe(true);
@@ -141,12 +128,8 @@ describe('dryRun (S6b): checa validade IDENTICA sem consumir uso', () => {
 
   it('dryRun:false explicito consome igual ao default', () => {
     const { token } = createInternalCapabilityLease(leaseInput({ maxUses: 1 }));
-    expect(
-      verifyInternalCapabilityLease({ ...verifyInput(token), dryRun: false }),
-    ).toBe(true);
-    expect(
-      verifyInternalCapabilityLease({ ...verifyInput(token), dryRun: false }),
-    ).toBe(false);
+    expect(verifyInternalCapabilityLease({ ...verifyInput(token), dryRun: false })).toBe(true);
+    expect(verifyInternalCapabilityLease({ ...verifyInput(token), dryRun: false })).toBe(false);
   });
 
   it('dryRun NAO afrouxa NENHUM predicado (identico ao verify consumidor)', () => {
@@ -171,56 +154,36 @@ describe('dryRun (S6b): checa validade IDENTICA sem consumir uso', () => {
 
   it('dryRun respeita maxUses JA esgotado (checa o mesmo predicado, so nao incrementa)', () => {
     const { token } = createInternalCapabilityLease(leaseInput({ maxUses: 1 }));
-    expect(verifyInternalCapabilityLease(verifyInput(token))).toBe(true); // consome o unico uso
-    expect(
-      verifyInternalCapabilityLease({ ...verifyInput(token), dryRun: true }),
-    ).toBe(false);
+    expect(verifyInternalCapabilityLease(verifyInput(token))).toBe(true);
+    expect(verifyInternalCapabilityLease({ ...verifyInput(token), dryRun: true })).toBe(false);
   });
 
   it('dryRun respeita TTL (expirada nega)', () => {
     const { token } = createInternalCapabilityLease(leaseInput({ ttlMs: 1_000 }));
     vi.advanceTimersByTime(1_001);
-    expect(
-      verifyInternalCapabilityLease({ ...verifyInput(token), dryRun: true }),
-    ).toBe(false);
+    expect(verifyInternalCapabilityLease({ ...verifyInput(token), dryRun: true })).toBe(false);
   });
 });
 
 describe('spoof / criterios divergentes -> nega', () => {
   it('coordinator fora da enum fechada nega', () => {
     const { token } = createInternalCapabilityLease(leaseInput());
-    expect(
-      verifyInternalCapabilityLease(
-        verifyInput(token, { coordinator: 'coordenador-malicioso' }),
-      ),
-    ).toBe(false);
+    expect(verifyInternalCapabilityLease(verifyInput(token, { coordinator: 'coordenador-malicioso' }))).toBe(false);
   });
 
   it('coordinator NA enum mas diferente do da lease nega', () => {
     const { token } = createInternalCapabilityLease(leaseInput());
-    expect(
-      verifyInternalCapabilityLease(
-        verifyInput(token, { coordinator: 'dynamic-workflow-ignition' }),
-      ),
-    ).toBe(false);
+    expect(verifyInternalCapabilityLease(verifyInput(token, { coordinator: 'dynamic-workflow-ignition' }))).toBe(false);
   });
 
   it('driveProjectId errado nega', () => {
     const { token } = createInternalCapabilityLease(leaseInput());
-    expect(
-      verifyInternalCapabilityLease(
-        verifyInput(token, { driveProjectId: 'proj-outro' }),
-      ),
-    ).toBe(false);
+    expect(verifyInternalCapabilityLease(verifyInput(token, { driveProjectId: 'proj-outro' }))).toBe(false);
   });
 
   it('driveTurnId errado nega', () => {
     const { token } = createInternalCapabilityLease(leaseInput());
-    expect(
-      verifyInternalCapabilityLease(
-        verifyInput(token, { driveTurnId: 'drive-turn-99' }),
-      ),
-    ).toBe(false);
+    expect(verifyInternalCapabilityLease(verifyInput(token, { driveTurnId: 'drive-turn-99' }))).toBe(false);
   });
 
   it('serverId fora da allowlist nega', () => {
@@ -237,18 +200,12 @@ describe('spoof / criterios divergentes -> nega', () => {
 
   it('toolName fora dos prefixos permitidos nega', () => {
     const { token } = createInternalCapabilityLease(leaseInput());
-    expect(
-      verifyInternalCapabilityLease(
-        verifyInput(token, { toolName: 'dynamic_workflow_run' }),
-      ),
-    ).toBe(false);
+    expect(verifyInternalCapabilityLease(verifyInput(token, { toolName: 'dynamic_workflow_run' }))).toBe(false);
   });
 
   it('token desconhecido (forjado) nega', () => {
     createInternalCapabilityLease(leaseInput());
-    expect(
-      verifyInternalCapabilityLease(verifyInput('token-forjado-qualquer')),
-    ).toBe(false);
+    expect(verifyInternalCapabilityLease(verifyInput('token-forjado-qualquer'))).toBe(false);
   });
 
   it('token vazio nega', () => {

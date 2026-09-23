@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 
@@ -32,7 +31,10 @@ const { dbRuns, fakeDb, spawnMock } = vi.hoisted(() => {
         return { changes: 1 };
       },
     }),
-    transaction: (fn: (...args: unknown[]) => unknown) => (...args: unknown[]) => fn(...args),
+    transaction:
+      (fn: (...args: unknown[]) => unknown) =>
+      (...args: unknown[]) =>
+        fn(...args),
   };
   return { dbRuns, fakeDb, spawnMock: vi.fn() };
 });
@@ -75,17 +77,11 @@ import {
   registerMcpStatusChangedEmitter,
   type McpStatusChangedPayload,
 } from '../mcp-manager';
-import {
-  normalizeMcpToolCallResult,
-  isMcpEmptyErrorResult,
-  callMCPTool,
-} from '../mcp-tool-bridge';
+import { normalizeMcpToolCallResult, isMcpEmptyErrorResult, callMCPTool } from '../mcp-tool-bridge';
 import { lionMcpCall } from '../lion-sdk/tools/mcp';
 import type { McpServerConnection, McpSessionClient } from '../mcp-tool-bridge';
 
-function makeFakeClient(
-  responder: (id: number) => Record<string, unknown>,
-): McpSessionClient {
+function makeFakeClient(responder: (id: number) => Record<string, unknown>): McpSessionClient {
   const conn: McpServerConnection = {
     serverId: 'srv1',
     proc: undefined,
@@ -107,7 +103,6 @@ function makeFakeClient(
   };
   return { connections: [conn] };
 }
-
 
 class FakeProc extends EventEmitter {
   stdout = new EventEmitter();
@@ -169,9 +164,7 @@ describe('SB-7 AC-B18: crash no handshake de discovery', () => {
     await nextTick();
     proc.stdout.emit(
       'data',
-      Buffer.from(
-        JSON.stringify({ id: 2, result: { tools: [{ name: 'tool_a', description: 'd' }] } }) + '\n',
-      ),
+      Buffer.from(JSON.stringify({ id: 2, result: { tools: [{ name: 'tool_a', description: 'd' }] } }) + '\n'),
     );
 
     await expect(promise).resolves.toEqual(['tool_a']);
@@ -184,7 +177,6 @@ describe('SB-7 AC-B18: crash no handshake de discovery', () => {
     expect(payloads.some((p) => p.id === 'srv1' && p.status === 'stopped')).toBe(true);
   });
 });
-
 
 describe('SB-7 AC-B18b: tools/call vazio vira errorResult (paridade K5)', () => {
   it('AC-B18b (bridge): normalizeMcpToolCallResult(null) vira errorResult MCP-EMPTY', () => {

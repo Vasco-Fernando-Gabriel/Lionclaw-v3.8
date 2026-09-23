@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { google } from 'googleapis';
 import { drive_v3 } from 'googleapis';
 import fs from 'fs';
@@ -51,16 +48,14 @@ function initDrive(): void {
   driveApi = google.drive({ version: 'v3', auth: oauth2Client });
 }
 
-const server = new Server(
-  { name: 'google-drive', version: '1.0.0' },
-  { capabilities: { tools: {} } },
-);
+const server = new Server({ name: 'google-drive', version: '1.0.0' }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: 'list_files',
-      description: 'Listar arquivos e pastas no Google Drive. Retorna id, nome, tipo, tamanho, data de modificacao e link.',
+      description:
+        'Listar arquivos e pastas no Google Drive. Retorna id, nome, tipo, tamanho, data de modificacao e link.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -74,7 +69,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'search_files',
-      description: 'Buscar arquivos no Drive usando sintaxe de query do Google Drive (ex: "name contains \'relatorio\' and mimeType=\'application/pdf\'").',
+      description:
+        "Buscar arquivos no Drive usando sintaxe de query do Google Drive (ex: \"name contains 'relatorio' and mimeType='application/pdf'\").",
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -86,7 +82,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'get_file_metadata',
-      description: 'Obter metadados completos de um arquivo: nome, tipo, tamanho, dono, permissoes, data de criacao e modificacao.',
+      description:
+        'Obter metadados completos de um arquivo: nome, tipo, tamanho, dono, permissoes, data de criacao e modificacao.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -97,7 +94,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'read_file',
-      description: 'Ler o conteudo de um arquivo do Drive. Google Docs/Sheets/Slides sao exportados como texto. Outros arquivos retornam base64 (limite 50KB).',
+      description:
+        'Ler o conteudo de um arquivo do Drive. Google Docs/Sheets/Slides sao exportados como texto. Outros arquivos retornam base64 (limite 50KB).',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -204,13 +202,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'export_google_doc',
-      description: 'Exportar um Google Doc, Sheet ou Slide para um formato de arquivo (pdf, docx, xlsx, pptx, csv, txt) e salvar no disco local.',
+      description:
+        'Exportar um Google Doc, Sheet ou Slide para um formato de arquivo (pdf, docx, xlsx, pptx, csv, txt) e salvar no disco local.',
       inputSchema: {
         type: 'object' as const,
         properties: {
           file_id: { type: 'string', description: 'ID do Google Doc/Sheet/Slide' },
           export_format: { type: 'string', description: 'Formato de exportacao: pdf, docx, xlsx, pptx, csv ou txt' },
-          destination_path: { type: 'string', description: 'Caminho completo de destino no disco local (opcional, usa /tmp se omitido)' },
+          destination_path: {
+            type: 'string',
+            description: 'Caminho completo de destino no disco local (opcional, usa /tmp se omitido)',
+          },
         },
         required: ['file_id', 'export_format'],
       },
@@ -252,10 +254,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }));
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify(files, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(files, null, 2),
+            },
+          ],
         };
       }
 
@@ -279,24 +283,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }));
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify(files, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(files, null, 2),
+            },
+          ],
         };
       }
 
       case 'get_file_metadata': {
         const res = await driveApi.files.get({
           fileId: a.file_id as string,
-          fields: 'id, name, mimeType, size, modifiedTime, createdTime, webViewLink, webContentLink, parents, owners, permissions, shared, sharingUser, trashed, starred, description',
+          fields:
+            'id, name, mimeType, size, modifiedTime, createdTime, webViewLink, webContentLink, parents, owners, permissions, shared, sharingUser, trashed, starred, description',
         });
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify(res.data, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(res.data, null, 2),
+            },
+          ],
         };
       }
 
@@ -321,10 +330,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const buffer = Buffer.from(exportRes.data as ArrayBuffer);
           content = buffer.toString('utf-8');
         } else {
-          const downloadRes = await driveApi.files.get(
-            { fileId, alt: 'media' },
-            { responseType: 'arraybuffer' },
-          );
+          const downloadRes = await driveApi.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
           const buffer = Buffer.from(downloadRes.data as ArrayBuffer);
           const maxBytes = 50 * 1024;
           if (buffer.length > maxBytes) {
@@ -352,10 +358,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify(result, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
         };
       }
 
@@ -383,20 +391,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           );
           fs.writeFileSync(destPath, Buffer.from(exportRes.data as ArrayBuffer));
         } else {
-          const downloadRes = await driveApi.files.get(
-            { fileId, alt: 'media' },
-            { responseType: 'arraybuffer' },
-          );
+          const downloadRes = await driveApi.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
           fs.writeFileSync(destPath, Buffer.from(downloadRes.data as ArrayBuffer));
         }
 
         const stats = fs.statSync(destPath);
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: `Arquivo baixado com sucesso.\nDestino: ${destPath}\nTamanho: ${stats.size} bytes`,
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: `Arquivo baixado com sucesso.\nDestino: ${destPath}\nTamanho: ${stats.size} bytes`,
+            },
+          ],
         };
       }
 
@@ -429,14 +436,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify({
-              message: 'Upload realizado com sucesso.',
-              localSize: stats.size,
-              file: res.data,
-            }, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                {
+                  message: 'Upload realizado com sucesso.',
+                  localSize: stats.size,
+                  file: res.data,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
         };
       }
 
@@ -453,13 +466,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify({
-              message: 'Pasta criada com sucesso.',
-              folder: res.data,
-            }, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                {
+                  message: 'Pasta criada com sucesso.',
+                  folder: res.data,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
         };
       }
 
@@ -481,13 +500,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify({
-              message: 'Arquivo movido com sucesso.',
-              file: res.data,
-            }, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                {
+                  message: 'Arquivo movido com sucesso.',
+                  file: res.data,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
         };
       }
 
@@ -499,13 +524,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify({
-              message: 'Arquivo renomeado com sucesso.',
-              file: res.data,
-            }, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                {
+                  message: 'Arquivo renomeado com sucesso.',
+                  file: res.data,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
         };
       }
 
@@ -516,10 +547,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: `Arquivo movido para a lixeira com sucesso. ID: ${a.file_id as string}`,
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: `Arquivo movido para a lixeira com sucesso. ID: ${a.file_id as string}`,
+            },
+          ],
         };
       }
 
@@ -528,7 +561,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validRoles = ['reader', 'writer', 'commenter'];
         if (!validRoles.includes(role)) {
           return {
-            content: [{ type: 'text' as const, text: `Erro Google Drive: Role invalido. Use: reader, writer ou commenter` }],
+            content: [
+              { type: 'text' as const, text: `Erro Google Drive: Role invalido. Use: reader, writer ou commenter` },
+            ],
             isError: true,
           };
         }
@@ -544,13 +579,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify({
-              message: `Arquivo compartilhado com ${a.email as string} como ${role}.`,
-              permission: res.data,
-            }, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                {
+                  message: `Arquivo compartilhado com ${a.email as string} como ${role}.`,
+                  permission: res.data,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
         };
       }
 
@@ -574,10 +615,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }));
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify(files, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(files, null, 2),
+            },
+          ],
         };
       }
 
@@ -595,10 +638,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const exportMimes = GOOGLE_EXPORT_MIMES[mimeType];
         if (!exportMimes) {
           return {
-            content: [{
-              type: 'text' as const,
-              text: `Erro Google Drive: Tipo de arquivo '${mimeType}' nao suporta exportacao. Use apenas com Google Docs, Sheets ou Slides.`,
-            }],
+            content: [
+              {
+                type: 'text' as const,
+                text: `Erro Google Drive: Tipo de arquivo '${mimeType}' nao suporta exportacao. Use apenas com Google Docs, Sheets ou Slides.`,
+              },
+            ],
             isError: true,
           };
         }
@@ -607,10 +652,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!exportMimeType) {
           const supported = Object.keys(exportMimes).join(', ');
           return {
-            content: [{
-              type: 'text' as const,
-              text: `Erro Google Drive: Formato '${exportFormat}' nao suportado para este tipo de arquivo. Formatos suportados: ${supported}`,
-            }],
+            content: [
+              {
+                type: 'text' as const,
+                text: `Erro Google Drive: Formato '${exportFormat}' nao suportado para este tipo de arquivo. Formatos suportados: ${supported}`,
+              },
+            ],
             isError: true,
           };
         }
@@ -634,16 +681,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const stats = fs.statSync(destPath);
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify({
-              message: 'Exportacao concluida com sucesso.',
-              source: { id: meta.id, name: meta.name, mimeType: meta.mimeType },
-              destination: destPath,
-              format: exportFormat,
-              size: stats.size,
-            }, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                {
+                  message: 'Exportacao concluida com sucesso.',
+                  source: { id: meta.id, name: meta.name, mimeType: meta.mimeType },
+                  destination: destPath,
+                  format: exportFormat,
+                  size: stats.size,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
         };
       }
 

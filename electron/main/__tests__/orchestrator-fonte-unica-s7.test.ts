@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: () => {
@@ -105,7 +103,7 @@ vi.mock('../agent-runtime/codex-session-factory', () => ({
   })),
 }));
 vi.mock('../codex-sdk/stream-translator', () => ({
-  createCodexStreamTranslator: () => ({ callbacks: {}, finalize: vi.fn(), fail: vi.fn() }),
+  createCodexStreamTranslator: () => ({ callbacks: {}, finalize: vi.fn(), fail: vi.fn(), timelineEvents: () => [] }),
 }));
 
 import type { OrchestratorSelection } from '../orchestrator-selection';
@@ -160,10 +158,7 @@ const SELECTIONS = {
   'codex-sdk': { runtime: 'codex-sdk', provider: 'codex', model: 'model-c', source: 'settings' },
   'kimi-sdk': { runtime: 'kimi-sdk', provider: 'kimi', model: 'model-d', source: 'settings' },
   'lion-sdk': { runtime: 'lion-sdk', provider: 'ollama', model: 'model-e', source: 'settings' },
-} satisfies Record<
-  'claude-sdk' | 'claude-compat-sdk' | 'codex-sdk' | 'kimi-sdk' | 'lion-sdk',
-  OrchestratorSelection
->;
+} satisfies Record<'claude-sdk' | 'claude-compat-sdk' | 'codex-sdk' | 'kimi-sdk' | 'lion-sdk', OrchestratorSelection>;
 
 function options(overrides: Partial<QueryOptions> = {}): QueryOptions {
   return { sessionId: 'sess-int', silent: true, _forceNewSession: false, ...overrides };
@@ -181,7 +176,6 @@ beforeEach(() => {
   getApiKey.mockResolvedValue(null);
   codexSendImpl = async () => ({ status: 'completed', threadId: 'thread-1', content: 'ok', usage: { totalTokens: 1 } });
 });
-
 
 describe('AC-1/AC-10: cada runtime configurado despacha para SEU executor na lane (telegram e cron)', () => {
   const runtimes = Object.keys(SELECTIONS) as Array<keyof typeof SELECTIONS>;

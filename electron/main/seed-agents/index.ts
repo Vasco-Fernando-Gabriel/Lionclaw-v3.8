@@ -1,4 +1,5 @@
-
+import { SWARM_SEED_AGENTS } from './swarm-registry';
+export { SWARM_SEED_AGENTS, SWARM_AGENT_IDS } from './swarm-registry';
 
 export { harnessPlanner, HARNESS_PLANNER_ID } from './harness-planner';
 export { harnessCoder, HARNESS_CODER_ID } from './harness-coder';
@@ -8,18 +9,9 @@ import { harnessPlanner, HARNESS_PLANNER_ID } from './harness-planner';
 import { harnessCoder, HARNESS_CODER_ID } from './harness-coder';
 import { harnessEvaluator, HARNESS_EVALUATOR_ID } from './harness-evaluator';
 
-export const HARNESS_AGENT_IDS = [
-  HARNESS_PLANNER_ID,
-  HARNESS_CODER_ID,
-  HARNESS_EVALUATOR_ID,
-] as const;
+export const HARNESS_AGENT_IDS = [HARNESS_PLANNER_ID, HARNESS_CODER_ID, HARNESS_EVALUATOR_ID] as const;
 
-export const HARNESS_SEED_AGENTS = [
-  harnessPlanner,
-  harnessCoder,
-  harnessEvaluator,
-];
-
+export const HARNESS_SEED_AGENTS = [harnessPlanner, harnessCoder, harnessEvaluator];
 
 export { specBuilder, SPEC_BUILDER_ID } from './spec-builder';
 export { specValidator, SPEC_VALIDATOR_ID } from './spec-validator';
@@ -27,16 +19,9 @@ export { specValidator, SPEC_VALIDATOR_ID } from './spec-validator';
 import { specBuilder, SPEC_BUILDER_ID } from './spec-builder';
 import { specValidator, SPEC_VALIDATOR_ID } from './spec-validator';
 
-export const PIPELINE_SPEC_AGENT_IDS = [
-  SPEC_BUILDER_ID,
-  SPEC_VALIDATOR_ID,
-] as const;
+export const PIPELINE_SPEC_AGENT_IDS = [SPEC_BUILDER_ID, SPEC_VALIDATOR_ID] as const;
 
-export const PIPELINE_SPEC_SEED_AGENTS = [
-  specBuilder,
-  specValidator,
-];
-
+export const PIPELINE_SPEC_SEED_AGENTS = [specBuilder, specValidator];
 
 export { specValidatorEnrich, SPEC_VALIDATOR_ENRICH_ID } from './spec-validator-enrich';
 export { specEnricher, SPEC_ENRICHER_ID } from './spec-enricher';
@@ -44,16 +29,9 @@ export { specEnricher, SPEC_ENRICHER_ID } from './spec-enricher';
 import { specValidatorEnrich, SPEC_VALIDATOR_ENRICH_ID } from './spec-validator-enrich';
 import { specEnricher, SPEC_ENRICHER_ID } from './spec-enricher';
 
-export const ENRICH_AGENT_IDS = [
-  SPEC_VALIDATOR_ENRICH_ID,
-  SPEC_ENRICHER_ID,
-] as const;
+export const ENRICH_AGENT_IDS = [SPEC_VALIDATOR_ENRICH_ID, SPEC_ENRICHER_ID] as const;
 
-export const ENRICH_SEED_AGENTS = [
-  specValidatorEnrich,
-  specEnricher,
-];
-
+export const ENRICH_SEED_AGENTS = [specValidatorEnrich, specEnricher];
 
 export { discoveryAgent, DISCOVERY_AGENT_ID } from './discovery-agent';
 export { prdGenerator, PRD_GENERATOR_ID } from './prd-generator';
@@ -72,13 +50,7 @@ export const PIPELINE_AGENT_IDS = [
   SPRINT_VALIDATOR_ID,
 ] as const;
 
-export const PIPELINE_SEED_AGENTS = [
-  discoveryAgent,
-  prdGenerator,
-  prdValidator,
-  sprintValidator,
-];
-
+export const PIPELINE_SEED_AGENTS = [discoveryAgent, prdGenerator, prdValidator, sprintValidator];
 
 export { techDatabase, TECH_DATABASE_ID } from './tech-database';
 export { techBackend, TECH_BACKEND_ID } from './tech-backend';
@@ -90,27 +62,15 @@ import { techBackend, TECH_BACKEND_ID } from './tech-backend';
 import { techFrontend, TECH_FRONTEND_ID } from './tech-frontend';
 import { techSecurity, TECH_SECURITY_ID } from './tech-security';
 
-export const TECH_AGENT_IDS = [
-  TECH_DATABASE_ID,
-  TECH_BACKEND_ID,
-  TECH_FRONTEND_ID,
-  TECH_SECURITY_ID,
-] as const;
+export const TECH_AGENT_IDS = [TECH_DATABASE_ID, TECH_BACKEND_ID, TECH_FRONTEND_ID, TECH_SECURITY_ID] as const;
 
-export const TECH_SEED_AGENTS = [
-  techDatabase,
-  techBackend,
-  techFrontend,
-  techSecurity,
-];
-
+export const TECH_SEED_AGENTS = [techDatabase, techBackend, techFrontend, techSecurity];
 
 export { skillCreator, SKILL_CREATOR_ID } from './skill-creator';
 
 import { skillCreator } from './skill-creator';
 
 export const SKILL_CREATOR_AGENTS = [skillCreator];
-
 
 export { repoProfiler, REPO_PROFILER_ID } from './repo-profiler';
 export { securitySecretsScanner, SECRETS_SCANNER_ID } from './security-secrets-scanner';
@@ -171,7 +131,6 @@ export const SECURITY_SEED_AGENTS = [
   securityResolutionTracker,
   securitySpecValidator,
 ];
-
 
 export { backendDeveloper, BACKEND_DEVELOPER_ID } from './backend-developer';
 export { frontendDeveloper, FRONTEND_DEVELOPER_ID } from './frontend-developer';
@@ -257,7 +216,6 @@ export const LIBRARY_SEED_AGENTS = [
   securityAuditor,
 ];
 
-
 export { featDiscovery, FEAT_DISCOVERY_ID } from './feat-discovery';
 export { featPrdGenerator, FEAT_PRD_GENERATOR_ID } from './feat-prd-generator';
 export { featPrdValidator, FEAT_PRD_VALIDATOR_ID } from './feat-prd-validator';
@@ -298,18 +256,23 @@ export const FEATURE_SEED_AGENTS = [
   featTechSecurity,
 ];
 
-
 export { architectureMapper, ARCHITECTURE_MAPPER_ID } from './architecture-mapper';
 export { architectureTargetTriage, ARCHITECTURE_TARGET_TRIAGE_ID } from './architecture-target-triage';
 export { architectureDiagnostician, ARCHITECTURE_DIAGNOSTICIAN_ID } from './architecture-diagnostician';
-export { architectureDecisionInterviewer, ARCHITECTURE_DECISION_INTERVIEWER_ID } from './architecture-decision-interviewer';
+export {
+  architectureDecisionInterviewer,
+  ARCHITECTURE_DECISION_INTERVIEWER_ID,
+} from './architecture-decision-interviewer';
 export { archSpecValidator, ARCH_SPEC_VALIDATOR_ID } from './arch-spec-validator';
 export { architectureSpecEnricher, ARCHITECTURE_SPEC_ENRICHER_ID } from './architecture-spec-enricher';
 
 import { architectureMapper, ARCHITECTURE_MAPPER_ID } from './architecture-mapper';
 import { architectureTargetTriage, ARCHITECTURE_TARGET_TRIAGE_ID } from './architecture-target-triage';
 import { architectureDiagnostician, ARCHITECTURE_DIAGNOSTICIAN_ID } from './architecture-diagnostician';
-import { architectureDecisionInterviewer, ARCHITECTURE_DECISION_INTERVIEWER_ID } from './architecture-decision-interviewer';
+import {
+  architectureDecisionInterviewer,
+  ARCHITECTURE_DECISION_INTERVIEWER_ID,
+} from './architecture-decision-interviewer';
 import { archSpecValidator, ARCH_SPEC_VALIDATOR_ID } from './arch-spec-validator';
 import { architectureSpecEnricher, ARCHITECTURE_SPEC_ENRICHER_ID } from './architecture-spec-enricher';
 
@@ -330,7 +293,6 @@ export const ARCHITECTURE_REVIEW_SEED_AGENTS = [
   archSpecValidator,
   architectureSpecEnricher,
 ];
-
 
 export { pipe2PrdCompleto, PIPE2_PRD_COMPLETO_ID } from './pipe2-prd-completo';
 export { pipe2TechFrontend, PIPE2_TECH_FRONTEND_ID } from './pipe2-tech-frontend';
@@ -368,7 +330,6 @@ export const PIPE2_SEED_AGENTS = [
   pipe2DesignPlanValidator,
 ];
 
-
 export { bugDiscovery, BUG_DISCOVERY_ID } from './bug-discovery';
 export { bugRootCauseAnalyst, BUG_ROOT_CAUSE_ANALYST_ID } from './bug-root-cause-analyst';
 export { bugContextHistorian, BUG_CONTEXT_HISTORIAN_ID } from './bug-context-historian';
@@ -401,7 +362,6 @@ export const BUG_SEED_AGENTS = [
   bugSpecValidator,
 ];
 
-
 export { dynamicWorkflowBuilder, DYNAMIC_WORKFLOW_BUILDER_ID } from './dynamic-workflow-builder';
 export {
   dynamicWorkflowMaestro,
@@ -412,14 +372,26 @@ export { dynamicWorkflowScout, DYNAMIC_WORKFLOW_SCOUT_ID } from './dynamic-workf
 export { dynamicWorkflowCoder, DYNAMIC_WORKFLOW_CODER_ID } from './dynamic-workflow-coder';
 export { dynamicWorkflowFixer, DYNAMIC_WORKFLOW_FIXER_ID } from './dynamic-workflow-fixer';
 export { dynamicWorkflowValidatorSpec, DYNAMIC_WORKFLOW_VALIDATOR_SPEC_ID } from './dynamic-workflow-validator-spec';
-export { dynamicWorkflowValidatorRegression, DYNAMIC_WORKFLOW_VALIDATOR_REGRESSION_ID } from './dynamic-workflow-validator-regression';
+export {
+  dynamicWorkflowValidatorRegression,
+  DYNAMIC_WORKFLOW_VALIDATOR_REGRESSION_ID,
+} from './dynamic-workflow-validator-regression';
 export { dynamicWorkflowValidatorTests, DYNAMIC_WORKFLOW_VALIDATOR_TESTS_ID } from './dynamic-workflow-validator-tests';
 export { dynamicWorkflowCloser, DYNAMIC_WORKFLOW_CLOSER_ID } from './dynamic-workflow-closer';
 export { dynamicWorkflowNarrator, DYNAMIC_WORKFLOW_NARRATOR_ID } from './dynamic-workflow-narrator';
 export { dynamicWorkflowSprintPlanner, DYNAMIC_WORKFLOW_SPRINT_PLANNER_ID } from './dynamic-workflow-sprint-planner';
-export { dynamicWorkflowPlanValidatorCoverage, DYNAMIC_WORKFLOW_PLAN_VALIDATOR_COVERAGE_ID } from './dynamic-workflow-plan-validator-coverage';
-export { dynamicWorkflowPlanValidatorTopology, DYNAMIC_WORKFLOW_PLAN_VALIDATOR_TOPOLOGY_ID } from './dynamic-workflow-plan-validator-topology';
-export { dynamicWorkflowPlanValidatorCriteria, DYNAMIC_WORKFLOW_PLAN_VALIDATOR_CRITERIA_ID } from './dynamic-workflow-plan-validator-criteria';
+export {
+  dynamicWorkflowPlanValidatorCoverage,
+  DYNAMIC_WORKFLOW_PLAN_VALIDATOR_COVERAGE_ID,
+} from './dynamic-workflow-plan-validator-coverage';
+export {
+  dynamicWorkflowPlanValidatorTopology,
+  DYNAMIC_WORKFLOW_PLAN_VALIDATOR_TOPOLOGY_ID,
+} from './dynamic-workflow-plan-validator-topology';
+export {
+  dynamicWorkflowPlanValidatorCriteria,
+  DYNAMIC_WORKFLOW_PLAN_VALIDATOR_CRITERIA_ID,
+} from './dynamic-workflow-plan-validator-criteria';
 export { dynamicWorkflowRefuter, DYNAMIC_WORKFLOW_REFUTER_ID } from './dynamic-workflow-refuter';
 export { dynamicWorkflowCoderCodex, DYNAMIC_WORKFLOW_CODER_CODEX_ID } from './dynamic-workflow-coder-codex';
 export { dynamicWorkflowCoderGlm, DYNAMIC_WORKFLOW_CODER_GLM_ID } from './dynamic-workflow-coder-glm';
@@ -430,14 +402,26 @@ import { dynamicWorkflowScout, DYNAMIC_WORKFLOW_SCOUT_ID } from './dynamic-workf
 import { dynamicWorkflowCoder, DYNAMIC_WORKFLOW_CODER_ID } from './dynamic-workflow-coder';
 import { dynamicWorkflowFixer, DYNAMIC_WORKFLOW_FIXER_ID } from './dynamic-workflow-fixer';
 import { dynamicWorkflowValidatorSpec, DYNAMIC_WORKFLOW_VALIDATOR_SPEC_ID } from './dynamic-workflow-validator-spec';
-import { dynamicWorkflowValidatorRegression, DYNAMIC_WORKFLOW_VALIDATOR_REGRESSION_ID } from './dynamic-workflow-validator-regression';
+import {
+  dynamicWorkflowValidatorRegression,
+  DYNAMIC_WORKFLOW_VALIDATOR_REGRESSION_ID,
+} from './dynamic-workflow-validator-regression';
 import { dynamicWorkflowValidatorTests, DYNAMIC_WORKFLOW_VALIDATOR_TESTS_ID } from './dynamic-workflow-validator-tests';
 import { dynamicWorkflowCloser, DYNAMIC_WORKFLOW_CLOSER_ID } from './dynamic-workflow-closer';
 import { dynamicWorkflowNarrator } from './dynamic-workflow-narrator';
 import { dynamicWorkflowSprintPlanner, DYNAMIC_WORKFLOW_SPRINT_PLANNER_ID } from './dynamic-workflow-sprint-planner';
-import { dynamicWorkflowPlanValidatorCoverage, DYNAMIC_WORKFLOW_PLAN_VALIDATOR_COVERAGE_ID } from './dynamic-workflow-plan-validator-coverage';
-import { dynamicWorkflowPlanValidatorTopology, DYNAMIC_WORKFLOW_PLAN_VALIDATOR_TOPOLOGY_ID } from './dynamic-workflow-plan-validator-topology';
-import { dynamicWorkflowPlanValidatorCriteria, DYNAMIC_WORKFLOW_PLAN_VALIDATOR_CRITERIA_ID } from './dynamic-workflow-plan-validator-criteria';
+import {
+  dynamicWorkflowPlanValidatorCoverage,
+  DYNAMIC_WORKFLOW_PLAN_VALIDATOR_COVERAGE_ID,
+} from './dynamic-workflow-plan-validator-coverage';
+import {
+  dynamicWorkflowPlanValidatorTopology,
+  DYNAMIC_WORKFLOW_PLAN_VALIDATOR_TOPOLOGY_ID,
+} from './dynamic-workflow-plan-validator-topology';
+import {
+  dynamicWorkflowPlanValidatorCriteria,
+  DYNAMIC_WORKFLOW_PLAN_VALIDATOR_CRITERIA_ID,
+} from './dynamic-workflow-plan-validator-criteria';
 import { dynamicWorkflowRefuter, DYNAMIC_WORKFLOW_REFUTER_ID } from './dynamic-workflow-refuter';
 import { dynamicWorkflowCoderCodex } from './dynamic-workflow-coder-codex';
 import { dynamicWorkflowCoderGlm } from './dynamic-workflow-coder-glm';
@@ -473,24 +457,18 @@ export const DYNAMIC_WORKFLOW_SEED_AGENTS = [
   dynamicWorkflowRefuter,
 ];
 
-export const DYNAMIC_WORKFLOW_AUX_SEED_AGENTS = [
-  dynamicWorkflowNarrator,
-  dynamicWorkflowMaestro,
-];
+export const DYNAMIC_WORKFLOW_AUX_SEED_AGENTS = [dynamicWorkflowNarrator, dynamicWorkflowMaestro];
 
-export const DYNAMIC_WORKFLOW_CODER_VARIANT_SEED_AGENTS = [
-  dynamicWorkflowCoderCodex,
-  dynamicWorkflowCoderGlm,
-];
+export const DYNAMIC_WORKFLOW_CODER_VARIANT_SEED_AGENTS = [dynamicWorkflowCoderCodex, dynamicWorkflowCoderGlm];
 
 export const DYNAMIC_WORKFLOW_AUTHORED_SEED_AGENTS = [dynamicWorkflowDocWriter];
-
 
 import type { AgentConfig } from '../../../src/types';
 
 type SeedAgent = Omit<AgentConfig, 'sortOrder'>;
 
 export const ALL_SEED_AGENTS: readonly SeedAgent[] = [
+  ...SWARM_SEED_AGENTS,
   ...SKILL_CREATOR_AGENTS,
   ...HARNESS_SEED_AGENTS,
   ...PIPELINE_SPEC_SEED_AGENTS,
@@ -509,9 +487,7 @@ export const ALL_SEED_AGENTS: readonly SeedAgent[] = [
   ...DYNAMIC_WORKFLOW_AUTHORED_SEED_AGENTS,
 ];
 
-const SEED_AGENT_BY_ID = new Map<string, SeedAgent>(
-  ALL_SEED_AGENTS.map((a) => [a.id, a] as const),
-);
+const SEED_AGENT_BY_ID = new Map<string, SeedAgent>(ALL_SEED_AGENTS.map((a) => [a.id, a] as const));
 
 export function listSeedAgentIds(): string[] {
   return ALL_SEED_AGENTS.map((a) => a.id);

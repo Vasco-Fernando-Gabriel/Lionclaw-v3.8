@@ -3,7 +3,6 @@ import { dynamicWorkflowPlanValidatorCoverage } from '../seed-agents/dynamic-wor
 import { dynamicWorkflowPlanValidatorTopology } from '../seed-agents/dynamic-workflow-plan-validator-topology';
 import { dynamicWorkflowPlanValidatorCriteria } from '../seed-agents/dynamic-workflow-plan-validator-criteria';
 
-
 const OLD_MARKER = "verdict: 'pass' quando nenhum finding P1/P2";
 const NEW_MARKER = '## Severidade no estagio de PLANO';
 

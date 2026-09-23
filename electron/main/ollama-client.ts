@@ -15,7 +15,7 @@ async function fetchWithTimeout(url: string, options: RequestInit): Promise<Resp
   try {
     return await fetch(url, { ...options, signal: controller.signal });
   } finally {
-    clearTimeout(timer);
+    if (timer !== null) clearTimeout(timer);
   }
 }
 
@@ -55,11 +55,7 @@ export async function checkOllamaAvailable(
   }
 }
 
-async function tryGenerateEmbedding(
-  baseUrl: string,
-  model: string,
-  text: string,
-): Promise<number[] | null> {
+async function tryGenerateEmbedding(baseUrl: string, model: string, text: string): Promise<number[] | null> {
   const res = await fetchWithTimeout(`${baseUrl}/api/embeddings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -115,7 +111,9 @@ export async function ollamaChat(
   const trimmed = baseUrl.replace(/\/+$/, '');
   const url = isOllama
     ? `${trimmed}/api/chat`
-    : (trimmed.endsWith('/v1') ? `${trimmed}/chat/completions` : `${trimmed}/v1/chat/completions`);
+    : trimmed.endsWith('/v1')
+      ? `${trimmed}/chat/completions`
+      : `${trimmed}/v1/chat/completions`;
 
   const body: Record<string, unknown> = {
     model,
@@ -143,7 +141,6 @@ export async function ollamaChat(
   if (!content) throw new Error('Empty response from LLM chat');
   return content;
 }
-
 
 export interface OllamaToolSchema {
   type: 'function';
@@ -208,6 +205,11 @@ export interface OllamaChatResult {
 }
 
 export interface OllamaChatWithToolsOptions {
+  signal?: AbortSignal;
+  onActivity?: () => void;
+  toolDispatch?: (name: string, input: Record<string, unknown>) => Promise<{ result: string; isError: boolean }>;
+  disableTaskRetry?: boolean;
+  externallyManagedTimeout?: boolean;
   maxRounds?: number;
   temperature?: number;
   cwd?: string;
@@ -223,7 +225,7 @@ export interface OllamaChatWithToolsOptions {
   mcpServers?: Record<string, McpServerSpec>;
 }
 
-const CHAT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutos
+const CHAT_TIMEOUT_MS = 5 * 60 * 1000;
 
 async function fetchChatNonStreaming(
   baseUrl: string,
@@ -235,12 +237,17 @@ async function fetchChatNonStreaming(
   authHeaders?: Record<string, string>,
   maxTokens?: number,
   extraBodyParams?: Partial<Record<string, unknown>>,
+  signal?: AbortSignal,
+  onActivity?: () => void,
+  externallyManagedTimeout = false,
 ): Promise<OllamaChatApiResponse> {
   const isOllama = provider === 'ollama';
   const trimmed = baseUrl.replace(/\/+$/, '');
   const url = isOllama
     ? `${trimmed}/api/chat`
-    : (trimmed.endsWith('/v1') ? `${trimmed}/chat/completions` : `${trimmed}/v1/chat/completions`);
+    : trimmed.endsWith('/v1')
+      ? `${trimmed}/chat/completions`
+      : `${trimmed}/v1/chat/completions`;
 
   const body: Record<string, unknown> = {
     model,
@@ -268,7 +275,7 @@ async function fetchChatNonStreaming(
   }
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
+  const timer = externallyManagedTimeout ? null : setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
 
   try {
     const res = await fetch(url, {
@@ -278,9 +285,10 @@ async function fetchChatNonStreaming(
         ...authHeaders,
       },
       body: JSON.stringify(body),
-      signal: controller.signal,
+      signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
     });
 
+    onActivity?.();
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(`${isOllama ? 'Ollama' : provider} ${url} HTTP ${res.status}: ${text.substring(0, 300)}`);
@@ -290,31 +298,45 @@ async function fetchChatNonStreaming(
       return (await res.json()) as OllamaChatApiResponse;
     }
 
-    const data = await res.json() as Record<string, unknown>;
-    const choices = data.choices as Array<{
-      message: {
-        content?: string;
-        reasoning_content?: string;
-        tool_calls?: Array<{ id?: string; function: { name: string; arguments: string | Record<string, unknown> } }>;
-      }
-    }> | undefined;
-    const usage = data.usage as {
-      prompt_tokens?: number;
-      completion_tokens?: number;
-      total_tokens?: number;
-      cost?: number;                    // OpenRouter: custo real cobrado em USD
-      prompt_cache_hit_tokens?: number; // DeepSeek: tokens servidos do cache
-      cache_hit_tokens?: number;        // MiniMax: tokens servidos do cache
-    } | undefined;
+    const data = (await res.json()) as Record<string, unknown>;
+    const choices = data.choices as
+      | Array<{
+          message: {
+            content?: string;
+            reasoning_content?: string;
+            tool_calls?: Array<{
+              id?: string;
+              function: { name: string; arguments: string | Record<string, unknown> };
+            }>;
+          };
+        }>
+      | undefined;
+    const usage = data.usage as
+      | {
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          total_tokens?: number;
+          cost?: number;
+          prompt_cache_hit_tokens?: number;
+          cache_hit_tokens?: number;
+        }
+      | undefined;
 
     const rawToolCalls = choices?.[0]?.message?.tool_calls;
     const toolCalls: OllamaToolCall[] | undefined = rawToolCalls?.map((tc) => ({
       id: tc.id,
       function: {
         name: tc.function.name,
-        arguments: typeof tc.function.arguments === 'string'
-          ? (() => { try { return JSON.parse(tc.function.arguments as string); } catch { return {}; } })()
-          : tc.function.arguments,
+        arguments:
+          typeof tc.function.arguments === 'string'
+            ? (() => {
+                try {
+                  return JSON.parse(tc.function.arguments as string);
+                } catch {
+                  return {};
+                }
+              })()
+            : tc.function.arguments,
       },
     }));
 
@@ -332,7 +354,7 @@ async function fetchChatNonStreaming(
       done: true,
     };
   } finally {
-    clearTimeout(timer);
+    if (timer !== null) clearTimeout(timer);
   }
 }
 
@@ -347,6 +369,9 @@ async function fetchChatStreamingWithTools(
   maxTokens?: number,
   onTextDelta?: (chunk: string) => void,
   extraBodyParams?: Partial<Record<string, unknown>>,
+  signal?: AbortSignal,
+  onActivity?: () => void,
+  externallyManagedTimeout = false,
 ): Promise<OllamaChatApiResponse> {
   const url = baseUrl.replace(/\/+$/, '').endsWith('/v1')
     ? `${baseUrl.replace(/\/+$/, '')}/chat/completions`
@@ -383,14 +408,14 @@ async function fetchChatStreamingWithTools(
   );
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
+  const timer = externallyManagedTimeout ? null : setTimeout(() => controller.abort(), CHAT_TIMEOUT_MS);
 
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify(body),
-      signal: controller.signal,
+      signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
     });
 
     if (!res.ok) {
@@ -426,6 +451,7 @@ async function fetchChatStreamingWithTools(
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      onActivity?.();
       buffer += decoder.decode(value, { stream: true });
 
       const lines = buffer.split('\n');
@@ -447,18 +473,20 @@ async function fetchChatStreamingWithTools(
           usage = event.usage as typeof usage;
         }
 
-        const choices = event.choices as Array<{
-          delta?: {
-            content?: string;
-            reasoning_content?: string;
-            tool_calls?: Array<{
-              index?: number;
-              id?: string;
-              type?: string;
-              function?: { name?: string; arguments?: string };
-            }>;
-          };
-        }> | undefined;
+        const choices = event.choices as
+          | Array<{
+              delta?: {
+                content?: string;
+                reasoning_content?: string;
+                tool_calls?: Array<{
+                  index?: number;
+                  id?: string;
+                  type?: string;
+                  function?: { name?: string; arguments?: string };
+                }>;
+              };
+            }>
+          | undefined;
 
         const choice = choices?.[0];
         if (!choice) continue;
@@ -537,7 +565,7 @@ async function fetchChatStreamingWithTools(
       done: true,
     };
   } finally {
-    clearTimeout(timer);
+    if (timer !== null) clearTimeout(timer);
   }
 }
 
@@ -603,6 +631,7 @@ export async function ollamaChatWithTools(
 
   try {
     for (let round = 0; round < maxRounds; round++) {
+      options.signal?.throwIfAborted();
       const apiResponse = streaming
         ? await fetchChatStreamingWithTools(
             baseUrl,
@@ -615,6 +644,9 @@ export async function ollamaChatWithTools(
             maxTokens,
             onTextDelta,
             extraBodyParams,
+            options.signal,
+            options.onActivity,
+            options.externallyManagedTimeout,
           )
         : await fetchChatNonStreaming(
             baseUrl,
@@ -626,8 +658,13 @@ export async function ollamaChatWithTools(
             authHeaders,
             maxTokens,
             extraBodyParams,
+            options.signal,
+            options.onActivity,
+            options.externallyManagedTimeout,
           );
 
+      options.signal?.throwIfAborted();
+      options.onActivity?.();
       roundCount += 1;
       totalOutputTokens += apiResponse.eval_count ?? 0;
       totalPromptTokens += apiResponse.prompt_eval_count ?? 0;
@@ -665,7 +702,7 @@ export async function ollamaChatWithTools(
         const assistantMessage: OllamaChatMessage = {
           role: 'assistant',
           content: msgContent || null,
-          tool_calls: toolCallsWithIds.map(tc => ({
+          tool_calls: toolCallsWithIds.map((tc) => ({
             id: tc.id,
             type: 'function' as const,
             function: {
@@ -691,7 +728,13 @@ export async function ollamaChatWithTools(
         let toolOutput: string;
         let toolIsError: boolean;
 
-        if (mcpClient) {
+        options.signal?.throwIfAborted();
+        if (options.toolDispatch) {
+          const dispatched = await options.toolDispatch(toolName, toolArgs);
+          toolOutput = dispatched.result;
+          toolIsError = dispatched.isError;
+          options.signal?.throwIfAborted();
+        } else if (mcpClient) {
           try {
             const dispatchResult = await executeToolDispatch(toolName, toolArgs, cwd, mcpClient);
             if (
@@ -704,9 +747,7 @@ export async function ollamaChatWithTools(
               toolOutput = r.result;
               toolIsError = r.isError;
             } else {
-              toolOutput = typeof dispatchResult === 'string'
-                ? dispatchResult
-                : JSON.stringify(dispatchResult);
+              toolOutput = typeof dispatchResult === 'string' ? dispatchResult : JSON.stringify(dispatchResult);
               toolIsError = false;
             }
           } catch (err) {
@@ -765,6 +806,8 @@ export async function ollamaChatWithTools(
               maxTokens,
               extraBodyParams,
             );
+        options.signal?.throwIfAborted();
+        options.onActivity?.();
         roundCount += 1;
         finalContent = finalResponse.message?.content ?? '[Limite de rounds atingido sem resposta final]';
         totalOutputTokens += finalResponse.eval_count ?? 0;
@@ -798,7 +841,6 @@ export async function ollamaChatWithTools(
     usageReported: anyUsageReported,
   };
 }
-
 
 export type OllamaStreamChunkType = 'text' | 'tool_call' | 'done';
 
@@ -875,9 +917,7 @@ export async function* ollamaChatStream(
   const timeoutController = new AbortController();
   const timer = setTimeout(() => timeoutController.abort(), CHAT_TIMEOUT_MS);
 
-  const combinedSignal = signal
-    ? AbortSignal.any([signal, timeoutController.signal])
-    : timeoutController.signal;
+  const combinedSignal = signal ? AbortSignal.any([signal, timeoutController.signal]) : timeoutController.signal;
 
   let res: Response;
   try {
@@ -888,7 +928,7 @@ export async function* ollamaChatStream(
       signal: combinedSignal,
     });
   } catch (err) {
-    clearTimeout(timer);
+    if (timer !== null) clearTimeout(timer);
     if ((err as { name?: string }).name === 'AbortError') {
       yield { type: 'done', done: { model, tokensUsed: 0, promptTokens: 0 } };
       return;
@@ -897,14 +937,14 @@ export async function* ollamaChatStream(
   }
 
   if (!res.ok) {
-    clearTimeout(timer);
+    if (timer !== null) clearTimeout(timer);
     const text = await res.text().catch(() => '');
     throw new Error(`${isOllama ? 'Ollama' : provider} stream HTTP ${res.status}: ${text.substring(0, 300)}`);
   }
 
   const body_ = res.body;
   if (!body_) {
-    clearTimeout(timer);
+    if (timer !== null) clearTimeout(timer);
     throw new Error('LLM response has no body');
   }
 
@@ -922,7 +962,7 @@ export async function* ollamaChatStream(
       yield* parseOpenAISSEStream(reader, decoder, buffer, finalModel, totalOutputTokens, totalPromptTokens);
     }
   } finally {
-    clearTimeout(timer);
+    if (timer !== null) clearTimeout(timer);
     reader.releaseLock();
   }
 }
@@ -1068,7 +1108,11 @@ async function* parseOpenAISSEStream(
         for (const [, tc] of toolCallAccumulator) {
           if (tc.name) {
             let args: Record<string, unknown> = {};
-            try { args = JSON.parse(tc.args); } catch { /* empty */ }
+            try {
+              args = JSON.parse(tc.args);
+            } catch {
+              /* empty */
+            }
             yield {
               type: 'tool_call',
               toolCall: { name: tc.name, arguments: args, ...(tc.id ? { id: tc.id } : {}) },
@@ -1083,7 +1127,11 @@ async function* parseOpenAISSEStream(
   for (const [, tc] of toolCallAccumulator) {
     if (tc.name) {
       let args: Record<string, unknown> = {};
-      try { args = JSON.parse(tc.args); } catch { /* empty */ }
+      try {
+        args = JSON.parse(tc.args);
+      } catch {
+        /* empty */
+      }
       yield {
         type: 'tool_call',
         toolCall: { name: tc.name, arguments: args, ...(tc.id ? { id: tc.id } : {}) },

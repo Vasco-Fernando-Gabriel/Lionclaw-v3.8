@@ -2,11 +2,9 @@ import { useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { HarnessSprint } from '@/types';
 
-
 interface SprintsFormattedViewProps {
   sprints: HarnessSprint[];
 }
-
 
 interface SprintCardProps {
   sprint: HarnessSprint;
@@ -41,9 +39,7 @@ function SprintCard({ sprint, sprintNumber }: SprintCardProps) {
         </div>
 
         {/* Chevron icon */}
-        <div className="shrink-0 text-zinc-500">
-          {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        </div>
+        <div className="shrink-0 text-zinc-500">{expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</div>
       </button>
 
       {/* Expandable body */}
@@ -68,15 +64,12 @@ function SprintCard({ sprint, sprintNumber }: SprintCardProps) {
           </div>
 
           {/* Sprint index for reference */}
-          <div className="text-[11px] text-zinc-600">
-            ID: {sprint.id}
-          </div>
+          <div className="text-[11px] text-zinc-600">ID: {sprint.id}</div>
         </div>
       )}
     </div>
   );
 }
-
 
 export function SprintsFormattedView({ sprints }: SprintsFormattedViewProps) {
   if (sprints.length === 0) {
@@ -93,11 +86,7 @@ export function SprintsFormattedView({ sprints }: SprintsFormattedViewProps) {
         Plano de sprints ({sprints.length} {sprints.length === 1 ? 'sprint' : 'sprints'})
       </h2>
       {sprints.map((sprint, index) => (
-        <SprintCard
-          key={sprint.id}
-          sprint={sprint}
-          sprintNumber={index + 1}
-        />
+        <SprintCard key={sprint.id} sprint={sprint} sprintNumber={index + 1} />
       ))}
     </div>
   );

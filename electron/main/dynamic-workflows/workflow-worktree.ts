@@ -1,5 +1,13 @@
-
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync, readFileSync, unlinkSync, symlinkSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+  unlinkSync,
+  symlinkSync,
+} from 'node:fs';
 import { join, isAbsolute, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createLogger } from '../logger';
@@ -23,11 +31,7 @@ const logger = createLogger('dynamic-workflow-worktree');
 const BASELINE_AUTHOR_NAME = 'LionClaw Workflow';
 const BASELINE_AUTHOR_EMAIL = 'workflow@lionclaw.local';
 
-export type ProjectGitState =
-  | 'git-with-commits' // repo existente com pelo menos 1 commit
-  | 'git-unborn' // repo git inicializado mas HEAD unborn (zero commits)
-  | 'empty' // pasta vazia (ou inexistente)
-  | 'code-no-git'; // pasta com arquivos mas sem repositorio git
+export type ProjectGitState = 'git-with-commits' | 'git-unborn' | 'empty' | 'code-no-git';
 
 export interface ProjectStateProbe {
   state: ProjectGitState;
@@ -37,10 +41,7 @@ export interface ProjectStateProbe {
   needsBaselineCommit: boolean;
 }
 
-export async function probeProjectState(
-  projectPath: string,
-  git: GitRunner = runGit,
-): Promise<ProjectStateProbe> {
+export async function probeProjectState(projectPath: string, git: GitRunner = runGit): Promise<ProjectStateProbe> {
   if (!isAbsolute(projectPath)) {
     throw new WorkflowGitError(`projectPath deve ser absoluto: ${projectPath}`);
   }
@@ -228,14 +229,9 @@ export async function cleanupWorktree(input: CleanupInput, git: GitRunner = runG
   }
 }
 
-
 export const SPRINT_WORKTREE_ROOT_MAX_LEN = 150;
 
-export function defaultSprintWorktreePath(
-  projectPath: string,
-  runId: string,
-  sprintIndex: number,
-): string {
+export function defaultSprintWorktreePath(projectPath: string, runId: string, sprintIndex: number): string {
   return join(projectPath, '.lionclaw', 'wf', shortRunId(runId), `s${Math.max(0, Math.floor(sprintIndex))}`);
 }
 
@@ -289,14 +285,7 @@ export async function prepareSprintWorktree(
 
   await setLongpaths(input.repoRoot, git);
 
-  await ensureSprintWorktree(
-    input.repoRoot,
-    chosen.path,
-    branch,
-    input.baseCommitSha,
-    git,
-    input.backoff,
-  );
+  await ensureSprintWorktree(input.repoRoot, chosen.path, branch, input.baseCommitSha, git, input.backoff);
   writeRunLock(chosen.path, input.runId);
   await ensureRunLockExcluded(chosen.path, git);
   linkNodeModulesBestEffort(input.repoRoot, chosen.path);
@@ -325,10 +314,7 @@ export async function cleanupSprintWorktree(
     const branch = sprintBranchName(input.runId, input.sprintIndex);
     const del = await git(['branch', '-D', branch], input.repoRoot);
     if (del.code !== 0) {
-      logger.debug(
-        { runId: input.runId, branch, stderr: del.stderr },
-        'branch da sprint ja ausente no cleanup',
-      );
+      logger.debug({ runId: input.runId, branch, stderr: del.stderr }, 'branch da sprint ja ausente no cleanup');
     }
   }
 }
@@ -358,7 +344,6 @@ async function ensureSprintWorktree(
   }
 }
 
-
 const RUN_LOCK_FILE = WORKFLOW_RUN_LOCK_FILE;
 
 export async function ensureRunLockExcluded(worktreePath: string, git: GitRunner = runGit): Promise<void> {
@@ -377,11 +362,7 @@ export async function ensureRunLockExcluded(worktreePath: string, git: GitRunner
     const current = existsSync(excludeFile) ? readFileSync(excludeFile, 'utf8') : '';
     if (current.split(/\r?\n/).includes(line)) return;
     mkdirSync(dirname(excludeFile), { recursive: true });
-    writeFileSync(
-      excludeFile,
-      `${current}${current === '' || current.endsWith('\n') ? '' : '\n'}${line}\n`,
-      'utf8',
-    );
+    writeFileSync(excludeFile, `${current}${current === '' || current.endsWith('\n') ? '' : '\n'}${line}\n`, 'utf8');
   } catch (err) {
     logger.warn({ err, worktreePath }, 'exclude do run-lock falhou (lock pode aparecer como untracked)');
   }
@@ -418,8 +399,7 @@ export function clearRunLock(worktreePath: string): void {
   if (existsSync(file)) {
     try {
       unlinkSync(file);
-    } catch {
-    }
+    } catch {}
   }
 }
 
@@ -430,7 +410,6 @@ export function isCrashMarkerStale(worktreePath: string): boolean {
   }
   return lock.pid !== process.pid;
 }
-
 
 function isDirEmpty(dir: string): boolean {
   try {

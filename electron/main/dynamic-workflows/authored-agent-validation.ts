@@ -1,15 +1,10 @@
-
 import { DYNAMIC_WORKFLOW_AGENT_DENYLIST } from './types';
 
-export type AuthoredAgentLookup = (
-  id: string,
-) => { access?: string | null; squad?: string | null } | undefined;
+export type AuthoredAgentLookup = (id: string) => { access?: string | null; squad?: string | null } | undefined;
 
 export const AUTHORED_WORKFLOW_SQUAD_ALLOWLIST = new Set<string>(['dynamic-workflow']);
 
-export const AUTHORED_WORKFLOW_AGENT_DENYLIST = new Set<string>(
-  DYNAMIC_WORKFLOW_AGENT_DENYLIST,
-);
+export const AUTHORED_WORKFLOW_AGENT_DENYLIST = new Set<string>(DYNAMIC_WORKFLOW_AGENT_DENYLIST);
 
 export const AGENT_DENYLIST_REASON =
   'builder (modo manifest removido), closer (escreve fora do gate de entrega), narrator e ' +
@@ -60,8 +55,7 @@ export function validateAuthoredAgentTypes(
       return {
         ok: false,
         error:
-          `workflow autorado referencia o agentType "${agentType}", que esta na denylist: ` +
-          AGENT_DENYLIST_REASON,
+          `workflow autorado referencia o agentType "${agentType}", que esta na denylist: ` + AGENT_DENYLIST_REASON,
       };
     }
     const agent = deps.getAgent(agentType);

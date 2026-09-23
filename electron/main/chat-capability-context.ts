@@ -1,28 +1,31 @@
-
 import { createLogger } from './logger';
 import { verifyInternalCapabilityLease } from './chat-capability-lease';
 import type { AgentPermissionProfile } from './agent-runtime/types';
-import type { ChatFeatureToggles } from '../../src/types';
+import type { ChatFeatureToggles, OrchestratorRuntime } from '../../src/types';
 
 const logger = createLogger('chat-capability-context');
-
 
 export const CHAT_TURN_CONTEXT_TTL_SETTING_KEY = 'chat_turn_context_ttl_ms';
 
 export const DEFAULT_CHAT_TURN_CONTEXT_TTL_MS = 1_800_000;
 
-
 export type ChatLane = 'desktop' | 'telegram' | 'cron';
 
-export function toChatLane(name: string): ChatLane | undefined {
-  return name === 'desktop' || name === 'telegram' || name === 'cron'
-    ? name
-    : undefined;
+export type SerialChatLane = Exclude<ChatLane, 'desktop'>;
+
+export interface ActiveChatTurnBinding {
+  sessionId: string;
+  turnId: string;
 }
 
 export type ChatTurnOrigin = 'user' | 'system-event';
 
-export type ChatCapabilityName = 'pipelineControl' | 'dynamicWorkflows';
+export type ChatCapabilityName = 'pipelineControl' | 'dynamicWorkflows' | 'swarm';
+
+export interface ChatTurnOrchestrator {
+  runtime: OrchestratorRuntime;
+  effort?: string;
+}
 
 export interface ChatCapabilityTurnContext {
   surface: 'chat';
@@ -30,6 +33,7 @@ export interface ChatCapabilityTurnContext {
   turnId: string;
   origin: ChatTurnOrigin;
   capabilities: ChatFeatureToggles;
+  orchestrator?: ChatTurnOrchestrator;
   cwd?: string;
   permissionProfile?: AgentPermissionProfile;
   allowedTools?: string[];
@@ -45,10 +49,9 @@ export interface ChatCapabilityTurnContext {
   leaseCapability?: ChatCapabilityName;
 }
 
-export type ChatCapabilityTurnContextInput = Omit<
-  ChatCapabilityTurnContext,
-  'createdAt' | 'expiresAt' | 'origin'
-> & { origin?: ChatTurnOrigin };
+export type ChatCapabilityTurnContextInput = Omit<ChatCapabilityTurnContext, 'createdAt' | 'expiresAt' | 'origin'> & {
+  origin?: ChatTurnOrigin;
+};
 
 interface TurnContextEntry {
   ctx: ChatCapabilityTurnContext;
@@ -56,12 +59,11 @@ interface TurnContextEntry {
   expiresAt: number;
 }
 
-
 const turnContexts = new Map<string, TurnContextEntry>();
 
 const activeTurns = new Map<string, string>();
 
-const laneActiveTurns = new Map<ChatLane, { sessionId: string; turnId: string }>();
+const laneActiveTurns = new Map<SerialChatLane, ActiveChatTurnBinding>();
 
 function turnKey(sessionId: string, turnId: string): string {
   return `${sessionId}::${turnId}`;
@@ -83,15 +85,9 @@ function sweepExpiredTurnContexts(now: number): void {
   }
 }
 
-
-export function registerChatCapabilityTurn(
-  ctx: ChatCapabilityTurnContextInput,
-  ttlMs?: number,
-): void {
+export function registerChatCapabilityTurn(ctx: ChatCapabilityTurnContextInput, ttlMs?: number): void {
   const effectiveTtl =
-    typeof ttlMs === 'number' && Number.isFinite(ttlMs) && ttlMs > 0
-      ? ttlMs
-      : DEFAULT_CHAT_TURN_CONTEXT_TTL_MS;
+    typeof ttlMs === 'number' && Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : DEFAULT_CHAT_TURN_CONTEXT_TTL_MS;
   const now = Date.now();
   sweepExpiredTurnContexts(now);
 
@@ -108,9 +104,9 @@ export function registerChatCapabilityTurn(
   const stored: ChatCapabilityTurnContext = {
     ...ctx,
     capabilities: { ...ctx.capabilities },
+    orchestrator: ctx.orchestrator === undefined ? undefined : { ...ctx.orchestrator },
     allowedTools: ctx.allowedTools === undefined ? undefined : [...ctx.allowedTools],
-    allowedServerIds:
-      ctx.allowedServerIds === undefined ? undefined : [...ctx.allowedServerIds],
+    allowedServerIds: ctx.allowedServerIds === undefined ? undefined : [...ctx.allowedServerIds],
     readRoots: ctx.readRoots === undefined ? undefined : [...ctx.readRoots],
     writeRoots: ctx.writeRoots === undefined ? undefined : [...ctx.writeRoots],
     origin: ctx.origin ?? 'user',
@@ -152,57 +148,88 @@ export function getChatCapabilityTurn(input: {
   return {
     ...entry.ctx,
     capabilities: { ...entry.ctx.capabilities },
-    allowedTools:
-      entry.ctx.allowedTools === undefined ? undefined : [...entry.ctx.allowedTools],
-    allowedServerIds:
-      entry.ctx.allowedServerIds === undefined
-        ? undefined
-        : [...entry.ctx.allowedServerIds],
+    orchestrator: entry.ctx.orchestrator === undefined ? undefined : { ...entry.ctx.orchestrator },
+    allowedTools: entry.ctx.allowedTools === undefined ? undefined : [...entry.ctx.allowedTools],
+    allowedServerIds: entry.ctx.allowedServerIds === undefined ? undefined : [...entry.ctx.allowedServerIds],
     readRoots: entry.ctx.readRoots === undefined ? undefined : [...entry.ctx.readRoots],
     writeRoots: entry.ctx.writeRoots === undefined ? undefined : [...entry.ctx.writeRoots],
     expiresAt: entry.expiresAt,
   };
 }
 
-export function clearChatCapabilityTurn(input: {
-  sessionId: string;
-  turnId: string;
-}): void {
+export function clearChatCapabilityTurn(input: { sessionId: string; turnId: string }): void {
   turnContexts.delete(turnKey(input.sessionId, input.turnId));
 }
 
-
-export function setActiveChatTurn(input: {
-  sessionId: string;
-  lane: ChatLane;
-  turnId: string;
-}): void {
+export function setActiveChatTurn(input: { sessionId: string; lane: ChatLane; turnId: string }): void {
   activeTurns.set(laneKey(input.sessionId, input.lane), input.turnId);
-  laneActiveTurns.set(input.lane, {
-    sessionId: input.sessionId,
-    turnId: input.turnId,
-  });
+  if (input.lane !== 'desktop') {
+    laneActiveTurns.set(input.lane, {
+      sessionId: input.sessionId,
+      turnId: input.turnId,
+    });
+  }
 }
 
-export function getActiveChatTurn(input: {
-  sessionId: string;
-  lane: ChatLane;
-}): string | undefined {
+export function getActiveChatTurn(input: { sessionId: string; lane: ChatLane }): string | undefined {
   return activeTurns.get(laneKey(input.sessionId, input.lane));
 }
 
-export function getActiveChatTurnByLane(
-  lane: ChatLane,
-): { sessionId: string; turnId: string } | undefined {
+export function getActiveChatTurnBinding(input: {
+  sessionId: string;
+  lane: ChatLane;
+}): ActiveChatTurnBinding | undefined {
+  const turnId = activeTurns.get(laneKey(input.sessionId, input.lane));
+  return turnId === undefined ? undefined : { sessionId: input.sessionId, turnId };
+}
+
+export function getActiveChatTurnByLane(lane: SerialChatLane): ActiveChatTurnBinding | undefined {
   const entry = laneActiveTurns.get(lane);
   return entry === undefined ? undefined : { ...entry };
 }
 
-export function clearActiveChatTurn(input: {
-  sessionId: string;
+export function listActiveDesktopTurns(): ActiveChatTurnBinding[] {
+  const prefix = 'desktop::';
+  const out: ActiveChatTurnBinding[] = [];
+  for (const [key, turnId] of activeTurns) {
+    if (key.startsWith(prefix)) out.push({ sessionId: key.slice(prefix.length), turnId });
+  }
+  return out;
+}
+
+export type TurnBindingResolution =
+  | { ok: true; binding: ActiveChatTurnBinding }
+  | {
+      ok: false;
+      code: 'turn_binding_required';
+      reason: 'session-missing' | 'no-active-turn' | 'turn-mismatch';
+    };
+
+export function resolveTurnBinding(input: {
   lane: ChatLane;
+  sessionId?: string;
   turnId?: string;
-}): void {
+}): TurnBindingResolution {
+  if (input.lane !== 'desktop') {
+    const active = getActiveChatTurnByLane(input.lane);
+    if (!active) return { ok: false, code: 'turn_binding_required', reason: 'no-active-turn' };
+    if (input.turnId !== undefined && input.turnId !== active.turnId) {
+      return { ok: false, code: 'turn_binding_required', reason: 'turn-mismatch' };
+    }
+    return { ok: true, binding: active };
+  }
+  if (!input.sessionId) {
+    return { ok: false, code: 'turn_binding_required', reason: 'session-missing' };
+  }
+  const active = getActiveChatTurnBinding({ sessionId: input.sessionId, lane: 'desktop' });
+  if (!active) return { ok: false, code: 'turn_binding_required', reason: 'no-active-turn' };
+  if (input.turnId !== undefined && input.turnId !== active.turnId) {
+    return { ok: false, code: 'turn_binding_required', reason: 'turn-mismatch' };
+  }
+  return { ok: true, binding: active };
+}
+
+export function clearActiveChatTurn(input: { sessionId: string; lane: ChatLane; turnId?: string }): void {
   const key = laneKey(input.sessionId, input.lane);
   if (input.turnId !== undefined) {
     const current = activeTurns.get(key);
@@ -215,6 +242,7 @@ export function clearActiveChatTurn(input: {
     }
   }
   activeTurns.delete(key);
+  if (input.lane === 'desktop') return;
   const laneEntry = laneActiveTurns.get(input.lane);
   if (
     laneEntry !== undefined &&
@@ -225,19 +253,17 @@ export function clearActiveChatTurn(input: {
   }
 }
 
-
 export interface ResolveEffectiveCapabilitiesInput {
   sessionToggles: ChatFeatureToggles;
   origin?: ChatTurnOrigin;
   lease?: { valid: boolean; capability: ChatCapabilityName };
 }
 
-export function resolveEffectiveCapabilities(
-  input: ResolveEffectiveCapabilitiesInput,
-): ChatFeatureToggles {
+export function resolveEffectiveCapabilities(input: ResolveEffectiveCapabilitiesInput): ChatFeatureToggles {
   const effective: ChatFeatureToggles = {
     pipelineControl: input.sessionToggles.pipelineControl,
     dynamicWorkflows: input.sessionToggles.dynamicWorkflows,
+    swarm: input.sessionToggles.swarm === true,
   };
   if (input.origin === 'system-event' && input.lease?.valid === true) {
     effective[input.lease.capability] = true;
@@ -245,9 +271,8 @@ export function resolveEffectiveCapabilities(
   return effective;
 }
 
-const CAPABILITY_LEASE_PROBES: Readonly<
-  Record<ChatCapabilityName, { serverId: string; toolName: string }>
-> = {
+const CAPABILITY_LEASE_PROBES: Readonly<Record<ChatCapabilityName, { serverId: string; toolName: string }>> = {
+  swarm: { serverId: 'lionclaw-swarm', toolName: 'swarm_inspect' },
   pipelineControl: {
     serverId: 'lionclaw-pipeline-control',
     toolName: 'pipeline_reply',
@@ -262,13 +287,7 @@ function deriveLease(
   turnCtx: ChatCapabilityTurnContext,
 ): { valid: boolean; capability: ChatCapabilityName } | undefined {
   if (turnCtx.origin !== 'system-event') return undefined;
-  const {
-    internalLeaseToken,
-    leaseCapability,
-    leaseCoordinator,
-    driveProjectId,
-    driveTurnId,
-  } = turnCtx;
+  const { internalLeaseToken, leaseCapability, leaseCoordinator, driveProjectId, driveTurnId } = turnCtx;
   if (
     internalLeaseToken === undefined ||
     internalLeaseToken.length === 0 ||
@@ -279,9 +298,7 @@ function deriveLease(
   ) {
     return undefined;
   }
-  const probe = CAPABILITY_LEASE_PROBES[leaseCapability] as
-    | { serverId: string; toolName: string }
-    | undefined;
+  const probe = CAPABILITY_LEASE_PROBES[leaseCapability] as { serverId: string; toolName: string } | undefined;
   if (probe === undefined) return undefined;
   const valid = verifyInternalCapabilityLease({
     token: internalLeaseToken,
@@ -295,9 +312,7 @@ function deriveLease(
   return valid ? { valid: true, capability: leaseCapability } : undefined;
 }
 
-export function computeEffectiveCapabilitiesForTurn(
-  turnCtx: ChatCapabilityTurnContext,
-): ChatFeatureToggles {
+export function computeEffectiveCapabilitiesForTurn(turnCtx: ChatCapabilityTurnContext): ChatFeatureToggles {
   return resolveEffectiveCapabilities({
     sessionToggles: turnCtx.capabilities,
     origin: turnCtx.origin,
@@ -305,8 +320,8 @@ export function computeEffectiveCapabilitiesForTurn(
   });
 }
 
-
 const CHAT_CAPABILITY_SERVER_ALIASES: Readonly<Record<string, string>> = {
+  'swarm': 'lionclaw-swarm',
   'pipeline-control': 'lionclaw-pipeline-control',
 };
 
@@ -314,7 +329,6 @@ export function normalizeChatCapabilityServerId(serverId: string): string {
   const normalized = serverId.trim().toLowerCase();
   return CHAT_CAPABILITY_SERVER_ALIASES[normalized] ?? normalized;
 }
-
 
 export function __resetChatCapabilityContextForTests(): void {
   turnContexts.clear();

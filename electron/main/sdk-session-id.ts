@@ -14,13 +14,7 @@ function uuidFromHex(hex: string): string {
   ].join('-');
 }
 
-export function makeScopedSdkSessionId(
-  scope: string,
-  sessionId: string,
-): string {
-  const hash = crypto
-    .createHash('sha256')
-    .update(`${scope}:${sessionId}`)
-    .digest('hex');
+export function makeScopedSdkSessionId(scope: string, sessionId: string): string {
+  const hash = crypto.createHash('sha256').update(`${scope}:${sessionId}`).digest('hex');
   return uuidFromHex(hash);
 }

@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 
@@ -12,11 +11,7 @@ const defaultFs: PathGuardFs = {
   existsSync: (p: string) => fs.existsSync(p),
 };
 
-export type PathGuardDenyReason =
-  | 'outside-root'
-  | 'symlink-escape'
-  | 'protected-path'
-  | 'not-in-write-set';
+export type PathGuardDenyReason = 'outside-root' | 'symlink-escape' | 'protected-path' | 'not-in-write-set';
 
 export interface PathGuardAllow {
   ok: true;
@@ -96,10 +91,7 @@ export class WorkflowPathGuard {
     this.fsImpl = config.fsImpl ?? defaultFs;
     this.root = canonicalizeMaybeMissing(config.workspaceRoot, this.fsImpl);
     this.protectedRegexes = (config.protectedPaths ?? []).map(globToRegExp);
-    this.writeSetRegexes =
-      config.writeSet && config.writeSet.length > 0
-        ? config.writeSet.map(globToRegExp)
-        : null;
+    this.writeSetRegexes = config.writeSet && config.writeSet.length > 0 ? config.writeSet.map(globToRegExp) : null;
   }
 
   get canonicalRoot(): string {
@@ -153,10 +145,7 @@ export class WorkflowPathGuard {
 
   private assertContained(canonical: string): PathGuardResult {
     const relative = path.relative(this.root, canonical);
-    const escapes =
-      relative === '..' ||
-      relative.startsWith('..' + path.sep) ||
-      path.isAbsolute(relative);
+    const escapes = relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative);
     if (escapes) {
       return {
         ok: false,
@@ -172,4 +161,3 @@ export class WorkflowPathGuard {
     };
   }
 }
-

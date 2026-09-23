@@ -56,7 +56,7 @@ export function ActivityBoard({ onViewSession }: Props) {
   };
 
   const handleCalendarPeriodChange = (period: { from: string; to: string }) => {
-    setFilters(prev => ({ ...prev, from: period.from, to: period.to }));
+    setFilters((prev) => ({ ...prev, from: period.from, to: period.to }));
   };
 
   const total = stats.scheduled + stats.running + stats.success + stats.error;
@@ -117,11 +117,7 @@ export function ActivityBoard({ onViewSession }: Props) {
       </div>
 
       {/* Filters */}
-      <ActivityFiltersBar
-        filters={filters}
-        onChange={handleFiltersChange}
-        availableTags={availableTags}
-      />
+      <ActivityFiltersBar filters={filters} onChange={handleFiltersChange} availableTags={availableTags} />
 
       {/* View content */}
       <div className="flex-1 overflow-auto p-6">

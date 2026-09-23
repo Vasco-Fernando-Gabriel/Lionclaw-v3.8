@@ -9,18 +9,11 @@ import type {
   DynamicWorkflowRunStatus,
 } from '@/types';
 
-
-export function isRunDeliveredTerminal(
-  runStatus: DynamicWorkflowRunStatus | null | undefined,
-): boolean {
+export function isRunDeliveredTerminal(runStatus: DynamicWorkflowRunStatus | null | undefined): boolean {
   return runStatus === 'delivered' || runStatus === 'completed';
 }
 
-
-export function isDeliveryGatePhase(
-  phaseId: string,
-  nodes: DynamicWorkflowNode[],
-): boolean {
+export function isDeliveryGatePhase(phaseId: string, nodes: DynamicWorkflowNode[]): boolean {
   const inPhase = nodes.filter((n) => n.phaseId === phaseId);
   if (inPhase.length === 0) return false;
   return inPhase.every((n) => n.type === 'gate' || n.type === 'artifact');
@@ -38,13 +31,7 @@ export function selectRenderedPhases(
   return phases;
 }
 
-
-export type WorkflowPhaseDisplayStatus =
-  | 'pending'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'skipped';
+export type WorkflowPhaseDisplayStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
 const ROUND_SUFFIX_RE = /-r(\d+)$/;
 
@@ -55,26 +42,17 @@ export function parseRoundIndex(nodeId: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export function isLoopPhase(
-  phaseId: string,
-  nodeRuns: DynamicWorkflowNodeRun[],
-): boolean {
-  return nodeRuns.some(
-    (nr) => nr.phaseId === phaseId && parseRoundIndex(nr.nodeId) !== null,
-  );
+export function isLoopPhase(phaseId: string, nodeRuns: DynamicWorkflowNodeRun[]): boolean {
+  return nodeRuns.some((nr) => nr.phaseId === phaseId && parseRoundIndex(nr.nodeId) !== null);
 }
 
-function combineNodeStatuses(
-  statuses: DynamicWorkflowNodeStatus[],
-): WorkflowPhaseDisplayStatus {
+function combineNodeStatuses(statuses: DynamicWorkflowNodeStatus[]): WorkflowPhaseDisplayStatus {
   if (statuses.length === 0) return 'pending';
   if (statuses.includes('running')) return 'running';
   if (statuses.includes('failed') || statuses.includes('blocked')) return 'failed';
   if (statuses.includes('interrupted')) return 'running';
   if (statuses.includes('pending')) {
-    const anyDone = statuses.some(
-      (s) => s === 'completed' || s === 'skipped' || s === 'cancelled',
-    );
+    const anyDone = statuses.some((s) => s === 'completed' || s === 'skipped' || s === 'cancelled');
     return anyDone ? 'running' : 'pending';
   }
   if (statuses.every((s) => s === 'skipped' || s === 'cancelled')) return 'skipped';
@@ -106,9 +84,7 @@ export function derivePhaseDisplayStatus(
   const ran = Array.from(latestByNode.values()).map((nr) => nr.status);
 
   if (phaseNodes && phaseNodes.length > 0) {
-    const anyFinished =
-      deliveredFinal ||
-      ran.some((s) => s === 'completed' || s === 'skipped' || s === 'cancelled');
+    const anyFinished = deliveredFinal || ran.some((s) => s === 'completed' || s === 'skipped' || s === 'cancelled');
     if (anyFinished) {
       for (const node of phaseNodes) {
         if (node.phaseId !== phaseId) continue;
@@ -133,10 +109,7 @@ export interface AggregatedPhaseMetrics {
   hasUnknownCost: boolean;
 }
 
-export function aggregatePhaseMetrics(
-  phaseId: string,
-  nodeRuns: DynamicWorkflowNodeRun[],
-): AggregatedPhaseMetrics {
+export function aggregatePhaseMetrics(phaseId: string, nodeRuns: DynamicWorkflowNodeRun[]): AggregatedPhaseMetrics {
   const acc: AggregatedPhaseMetrics = {
     inputTokens: 0,
     outputTokens: 0,
@@ -159,11 +132,7 @@ export function aggregatePhaseMetrics(
   return acc;
 }
 
-export type WorkflowRoundDisplayStatus =
-  | 'pending'
-  | 'running'
-  | 'passed'
-  | 'failed';
+export type WorkflowRoundDisplayStatus = 'pending' | 'running' | 'passed' | 'failed';
 
 export interface WorkflowRoundInfo {
   index: number;
@@ -171,9 +140,7 @@ export interface WorkflowRoundInfo {
   nodeIds: string[];
 }
 
-export function deriveRoundsFromNodeRuns(
-  nodeRuns: DynamicWorkflowNodeRun[],
-): WorkflowRoundInfo[] {
+export function deriveRoundsFromNodeRuns(nodeRuns: DynamicWorkflowNodeRun[]): WorkflowRoundInfo[] {
   const byRound = new Map<number, DynamicWorkflowNodeRun[]>();
   for (const nr of nodeRuns) {
     const idx = parseRoundIndex(nr.nodeId);
@@ -184,9 +151,7 @@ export function deriveRoundsFromNodeRuns(
   }
 
   const rounds: WorkflowRoundInfo[] = [];
-  for (const [index, runs] of Array.from(byRound.entries()).sort(
-    (a, b) => a[0] - b[0],
-  )) {
+  for (const [index, runs] of Array.from(byRound.entries()).sort((a, b) => a[0] - b[0])) {
     const latestByNode = new Map<string, DynamicWorkflowNodeRun>();
     for (const nr of runs) {
       const prev = latestByNode.get(nr.nodeId);
@@ -211,12 +176,7 @@ export function deriveRoundsFromNodeRuns(
   return rounds;
 }
 
-
-export type WorkflowSprintDisplayStatus =
-  | 'pending'
-  | 'running'
-  | 'passed'
-  | 'failed';
+export type WorkflowSprintDisplayStatus = 'pending' | 'running' | 'passed' | 'failed';
 
 export interface WorkflowSprintRoundInfo {
   index: number;
@@ -231,9 +191,7 @@ export interface WorkflowSprintGroup {
   nodeIds: string[];
 }
 
-function combineSprintStatus(
-  statuses: DynamicWorkflowNodeStatus[],
-): WorkflowSprintDisplayStatus {
+function combineSprintStatus(statuses: DynamicWorkflowNodeStatus[]): WorkflowSprintDisplayStatus {
   const combined = combineNodeStatuses(statuses);
   if (combined === 'failed') return 'failed';
   if (combined === 'running') return 'running';
@@ -248,10 +206,7 @@ export function deriveSprintGroups(
 ): WorkflowSprintGroup[] {
   const deliveredTerminal = isRunDeliveredTerminal(runStatus);
   const sprintOrder: string[] = [];
-  const bySprint = new Map<
-    string,
-    Map<number, { nodeIds: Set<string> }>
-  >();
+  const bySprint = new Map<string, Map<number, { nodeIds: Set<string> }>>();
   for (const node of nodes) {
     if (!node.sprintId) continue;
     const round = typeof node.roundIndex === 'number' ? node.roundIndex : 0;
@@ -271,10 +226,7 @@ export function deriveSprintGroups(
     if (!prev || nr.attempt > prev.attempt) latestByNode.set(nr.nodeId, nr);
   }
 
-  const statusesFor = (
-    nodeIds: Set<string>,
-    sprintHasFinished: boolean,
-  ): DynamicWorkflowNodeStatus[] => {
+  const statusesFor = (nodeIds: Set<string>, sprintHasFinished: boolean): DynamicWorkflowNodeStatus[] => {
     const out: DynamicWorkflowNodeStatus[] = [];
     for (const id of nodeIds) {
       const nr = latestByNode.get(id);
@@ -304,9 +256,7 @@ export function deriveSprintGroups(
 
     const rounds: WorkflowSprintRoundInfo[] = [];
     const allNodeIds = new Set<string>();
-    for (const [index, { nodeIds }] of Array.from(roundsMap.entries()).sort(
-      (a, b) => a[0] - b[0],
-    )) {
+    for (const [index, { nodeIds }] of Array.from(roundsMap.entries()).sort((a, b) => a[0] - b[0])) {
       for (const id of nodeIds) allNodeIds.add(id);
       const combined = combineNodeStatuses(statusesFor(nodeIds, sprintHasFinished));
       const status: WorkflowRoundDisplayStatus =
@@ -328,7 +278,6 @@ export function deriveSprintGroups(
   }
   return groups;
 }
-
 
 export interface WorkflowSprintChip {
   index: number;
@@ -378,7 +327,6 @@ export function deriveCurrentSprintChip(
   };
 }
 
-
 const STATUS_NUM_COLOR: Record<WorkflowPhaseDisplayStatus, string> = {
   pending: 'text-zinc-600',
   running: 'text-orange-300',
@@ -402,21 +350,12 @@ function PhaseStatusIcon({ status }: { status: WorkflowPhaseDisplayStatus }) {
   if (status === 'skipped') {
     return <Minus size={10} strokeWidth={2} className="text-zinc-500" />;
   }
-  return (
-    <span
-      className="inline-block w-2.5 h-2.5 rounded-full"
-      style={{ border: '1.5px dashed #52525b' }}
-    />
-  );
+  return <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ border: '1.5px dashed #52525b' }} />;
 }
 
 function PhaseConnector({ completed }: { completed: boolean }) {
   return (
-    <div
-      className={`h-0.5 flex-1 mx-0.5 rounded transition-colors ${
-        completed ? 'bg-green-600' : 'bg-zinc-800'
-      }`}
-    />
+    <div className={`h-0.5 flex-1 mx-0.5 rounded transition-colors ${completed ? 'bg-green-600' : 'bg-zinc-800'}`} />
   );
 }
 
@@ -461,15 +400,7 @@ const TOOLTIP_POSITION: Record<'left' | 'center' | 'right', string> = {
   right: 'right-0',
 };
 
-function PhaseTooltip({
-  phase,
-  metrics,
-  status,
-  loop,
-  activeRound,
-  totalRounds,
-  align,
-}: PhaseTooltipProps) {
+function PhaseTooltip({ phase, metrics, status, loop, activeRound, totalRounds, align }: PhaseTooltipProps) {
   return (
     <div
       className={`absolute bottom-full mb-2 z-50 pointer-events-none ${TOOLTIP_POSITION[align]}`}
@@ -481,9 +412,7 @@ function PhaseTooltip({
         <p className="font-semibold text-zinc-100 mb-1">{phase.name}</p>
         {loop && (
           <p className="text-amber-300/80 mb-1 text-[11px]">
-            {activeRound !== null
-              ? `loop rodada ${activeRound + 1}/${totalRounds}`
-              : `loop (${totalRounds} rodadas)`}
+            {activeRound !== null ? `loop rodada ${activeRound + 1}/${totalRounds}` : `loop (${totalRounds} rodadas)`}
           </p>
         )}
         {metrics.attempts > 0 ? (
@@ -501,15 +430,11 @@ function PhaseTooltip({
             </div>
             <div className="flex gap-3">
               <span className="text-zinc-500">Tokens in:</span>
-              <span className="text-zinc-300">
-                {metrics.inputTokens.toLocaleString()}
-              </span>
+              <span className="text-zinc-300">{metrics.inputTokens.toLocaleString()}</span>
             </div>
             <div className="flex gap-3">
               <span className="text-zinc-500">Tokens out:</span>
-              <span className="text-zinc-300">
-                {metrics.outputTokens.toLocaleString()}
-              </span>
+              <span className="text-zinc-300">{metrics.outputTokens.toLocaleString()}</span>
             </div>
             <div className="flex gap-3">
               <span className="text-zinc-500">Tentativas:</span>
@@ -517,9 +442,7 @@ function PhaseTooltip({
             </div>
           </div>
         ) : (
-          <p className="text-zinc-600 text-[11px]">
-            {status === 'pending' ? 'Ainda nao executado' : 'Sem metricas'}
-          </p>
+          <p className="text-zinc-600 text-[11px]">{status === 'pending' ? 'Ainda nao executado' : 'Sem metricas'}</p>
         )}
       </div>
       {/* SM-13: a seta aponta para o badge. Center fica no meio; left/right ficam
@@ -538,7 +461,6 @@ function PhaseTooltip({
     </div>
   );
 }
-
 
 export interface WorkflowProgressBarProps {
   manifest: DynamicWorkflowManifest | null;
@@ -561,15 +483,9 @@ export function WorkflowProgressBar({
 }: WorkflowProgressBarProps) {
   const [hovered, setHovered] = useState<string | null>(null);
 
-  const allPhases = useMemo(
-    () => (manifest ? [...manifest.phases].sort((a, b) => a.order - b.order) : []),
-    [manifest],
-  );
+  const allPhases = useMemo(() => (manifest ? [...manifest.phases].sort((a, b) => a.order - b.order) : []), [manifest]);
 
-  const phases = useMemo(
-    () => selectRenderedPhases(allPhases, nodes),
-    [allPhases, nodes],
-  );
+  const phases = useMemo(() => selectRenderedPhases(allPhases, nodes), [allPhases, nodes]);
   const rounds = useMemo(() => deriveRoundsFromNodeRuns(nodeRuns), [nodeRuns]);
   const totalRounds = rounds.length;
   const activeRoundIndex = useMemo(() => {
@@ -577,17 +493,12 @@ export function WorkflowProgressBar({
     return running ? running.index : null;
   }, [rounds]);
 
-  const sprintChip = useMemo(
-    () => deriveCurrentSprintChip(nodes, nodeRuns),
-    [nodes, nodeRuns],
-  );
+  const sprintChip = useMemo(() => deriveCurrentSprintChip(nodes, nodeRuns), [nodes, nodeRuns]);
 
   if (phases.length === 0) {
     return (
       <div className="border-b border-zinc-800 bg-zinc-950/80 px-4 py-3 shrink-0">
-        <p className="text-[10px] font-mono text-zinc-600">
-          topologia indisponivel (manifest ausente)
-        </p>
+        <p className="text-[10px] font-mono text-zinc-600">topologia indisponivel (manifest ausente)</p>
       </div>
     );
   }
@@ -652,35 +563,20 @@ export function WorkflowProgressBar({
                   role={clickable ? 'button' : undefined}
                   style={{ minWidth: 30 }}
                 >
-                  <span
-                    className={`text-[11px] font-bold leading-none ${STATUS_NUM_COLOR[status]}`}
-                  >
-                    {idx + 1}
-                  </span>
-                  <span
-                    className={`text-[10px] font-medium leading-none mt-0.5 ${STATUS_NUM_COLOR[status]}`}
-                  >
+                  <span className={`text-[11px] font-bold leading-none ${STATUS_NUM_COLOR[status]}`}>{idx + 1}</span>
+                  <span className={`text-[10px] font-medium leading-none mt-0.5 ${STATUS_NUM_COLOR[status]}`}>
                     {phaseAbbrev(phase)}
                   </span>
                   <div className="mt-1 flex items-center justify-center h-3 gap-0.5">
                     {/* Marcador de loop (SPEC 13.7.1): RotateCcw + sufixo rN. */}
                     {loop && (
-                      <span
-                        className="inline-flex items-center"
-                        data-testid={`loop-marker-${phase.id}`}
-                      >
+                      <span className="inline-flex items-center" data-testid={`loop-marker-${phase.id}`}>
                         <RotateCcw
                           size={9}
-                          className={
-                            status === 'running'
-                              ? 'text-amber-400'
-                              : STATUS_NUM_COLOR[status]
-                          }
+                          className={status === 'running' ? 'text-amber-400' : STATUS_NUM_COLOR[status]}
                         />
                         {activeRoundIndex !== null && status === 'running' && (
-                          <span className="text-[8px] font-mono text-amber-300 ml-0.5">
-                            r{activeRoundIndex + 1}
-                          </span>
+                          <span className="text-[8px] font-mono text-amber-300 ml-0.5">r{activeRoundIndex + 1}</span>
                         )}
                       </span>
                     )}
@@ -705,12 +601,10 @@ export function WorkflowProgressBar({
             </div>
           );
         })}
-
       </div>
     </div>
   );
 }
-
 
 const SPRINT_CHIP_COLOR: Record<WorkflowSprintDisplayStatus, string> = {
   pending: 'border-zinc-700 bg-zinc-900 text-zinc-400',
@@ -719,13 +613,7 @@ const SPRINT_CHIP_COLOR: Record<WorkflowSprintDisplayStatus, string> = {
   failed: 'border-red-500/50 bg-red-500/10 text-red-300',
 };
 
-function SprintChip({
-  chip,
-  onDrillDown,
-}: {
-  chip: WorkflowSprintChip;
-  onDrillDown?: (sprintId: string) => void;
-}) {
+function SprintChip({ chip, onDrillDown }: { chip: WorkflowSprintChip; onDrillDown?: (sprintId: string) => void }) {
   const label = `Sprint ${chip.index}/${chip.total}${chip.roundLabel ? ` - ${chip.roundLabel}` : ''}`;
   const className = `flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium ${SPRINT_CHIP_COLOR[chip.status]}`;
   if (onDrillDown) {
@@ -744,11 +632,7 @@ function SprintChip({
     );
   }
   return (
-    <span
-      className={className}
-      title={`Sprint atual: ${chip.sprintId} (${chip.status})`}
-      data-testid="sprint-chip"
-    >
+    <span className={className} title={`Sprint atual: ${chip.sprintId} (${chip.status})`} data-testid="sprint-chip">
       <Layers size={11} className="shrink-0" />
       <span>{label}</span>
     </span>

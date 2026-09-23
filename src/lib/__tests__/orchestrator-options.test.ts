@@ -1,10 +1,5 @@
-
 import { describe, it, expect } from 'vitest';
-import {
-  buildOrchestratorOptions,
-  findOrchestratorGroup,
-  listOpenAiCompatiblePresets,
-} from '../orchestrator-options';
+import { buildOrchestratorOptions, findOrchestratorGroup, listOpenAiCompatiblePresets } from '../orchestrator-options';
 import { CLAUDE_DEFAULT_MODEL } from '../../constants/claude-models';
 import { VERTEX_MODEL_CATALOG } from '../../constants/vertex-gemini-models';
 
@@ -21,16 +16,14 @@ describe('orchestrator-options: Claude SDK catalog', () => {
       ]),
     );
     expect(claude!.defaultModel).toBe(CLAUDE_DEFAULT_MODEL);
-    expect(claude!.defaultModel).toBe('claude-opus-5');
+    expect(claude!.defaultModel).toBe('claude-opus-5-5');
   });
 });
 
 describe('orchestrator-options: Gemini Agent Platform group', () => {
   it('buildOrchestratorOptions includes a vertex-ai group', () => {
     const groups = buildOrchestratorOptions();
-    const vertex = groups.find(
-      (g) => g.runtime === 'lion-sdk' && g.provider === 'vertex-ai',
-    );
+    const vertex = groups.find((g) => g.runtime === 'lion-sdk' && g.provider === 'vertex-ai');
     expect(vertex).toBeDefined();
   });
 
@@ -68,9 +61,7 @@ describe('orchestrator-options: Gemini Agent Platform group', () => {
       ['lion-sdk', 'vertex-ai'],
     ];
     for (const [runtime, provider] of expected) {
-      expect(
-        groups.find((g) => g.runtime === runtime && g.provider === provider),
-      ).toBeDefined();
+      expect(groups.find((g) => g.runtime === runtime && g.provider === provider)).toBeDefined();
     }
   });
 });

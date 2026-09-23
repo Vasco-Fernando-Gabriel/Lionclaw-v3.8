@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { GIT_RESTRICTIONS_BLOCK } from './_shared/git-restrictions';
 
@@ -9,7 +8,7 @@ export const frontendDeveloper: Omit<AgentConfig, 'sortOrder'> = {
   name: 'Desenvolvedor Frontend',
   description:
     'Use quando precisar construir aplicações frontend completas em React, Vue e Angular, exigindo expertise multi-framework e integração full-stack',
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,

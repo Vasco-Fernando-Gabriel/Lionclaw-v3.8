@@ -3,7 +3,6 @@ import { dynamicWorkflowPlanValidatorCoverage } from '../seed-agents/dynamic-wor
 import { dynamicWorkflowPlanValidatorTopology } from '../seed-agents/dynamic-workflow-plan-validator-topology';
 import { dynamicWorkflowPlanValidatorCriteria } from '../seed-agents/dynamic-workflow-plan-validator-criteria';
 
-
 const OLD_MARKER = 'Na duvida entre P1 e P2, use P2.';
 const NEW_MARKER = 'regra DURA - leia com atencao';
 

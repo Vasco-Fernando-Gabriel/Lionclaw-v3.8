@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -30,13 +29,7 @@ vi.mock('../ipc/repo-graph', () => ({
   }),
 }));
 
-import {
-  initDatabase,
-  getDb,
-  insertHarnessProject,
-  getHarnessProject,
-  getBugAnalysisAgentStatuses,
-} from '../db';
+import { initDatabase, getDb, insertHarnessProject, getHarnessProject, getBugAnalysisAgentStatuses } from '../db';
 import { registerPipelineHandlers } from '../ipc/pipeline';
 import { resetPhase, type ResetEngineContext } from '../pipeline-engine/reset';
 import { runBugPhase2ParallelAnalysis } from '../pipeline-engine/handlers/bug';
@@ -44,13 +37,8 @@ import { handleBugPhase1DiscoveryMessage } from '../pipeline-engine/handlers/bug
 import { BugAnalysisRunner } from '../bug-analysis-runner';
 import { getBugContext } from '../bug-paths';
 import type { PipelineEngine } from '../pipeline-engine';
-import type {
-  PipelineEngineContext,
-  HandlerPhaseState,
-  SpawnAgentResult,
-} from '../pipeline-engine/handlers/context';
+import type { PipelineEngineContext, HandlerPhaseState, SpawnAgentResult } from '../pipeline-engine/handlers/context';
 import type { HarnessProject } from '../../../src/types';
-
 
 let projectPath = '';
 
@@ -108,8 +96,7 @@ function makeCtx(): PipelineEngineContext {
     advanceToNextPhase: vi.fn(async () => {}),
     buildPriorMessagesForPhase: () => undefined,
     makeConversationOnText:
-      (_projectId: string, _phase: number, acc: { text: string; completed: boolean }) =>
-      (chunk: string) => {
+      (_projectId: string, _phase: number, acc: { text: string; completed: boolean }) => (chunk: string) => {
         acc.text += chunk;
       },
     createBugAnalysisRunner: () => new BugAnalysisRunner(fakeEngine),
@@ -164,11 +151,7 @@ async function runPhase1And2(project: HarnessProject): Promise<void> {
 function writeDiagnostico(project: HarnessProject): void {
   const bugCtx = getBugContext(project)!;
   fs.mkdirSync(bugCtx.runDir, { recursive: true });
-  fs.writeFileSync(
-    bugCtx.diagnosticoPath,
-    '# Diagnostico\n\n## Resumo\nO botao trava ao salvar.\n',
-    'utf-8',
-  );
+  fs.writeFileSync(bugCtx.diagnosticoPath, '# Diagnostico\n\n## Resumo\nO botao trava ao salvar.\n', 'utf-8');
 }
 
 async function runPhase2Again(projectId: string): Promise<void> {
@@ -197,19 +180,16 @@ beforeAll(() => {
 afterAll(() => {
   try {
     getDb().close();
-  } catch {
-  }
+  } catch {}
   try {
     fs.rmSync(state.home, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
 });
 
 beforeEach(() => {
   projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-bug-audit-proj-'));
   execFileSync('git', ['init', '-q'], { cwd: projectPath, stdio: 'ignore' });
 });
-
 
 describe('TB-38 (i): duas execucoes da fase 2 devolvem sempre 3 linhas', () => {
   it('SEM reset entre as duas execucoes: 3 linhas (UNIQUE (project_id, run_id, agent_id) da V143)', async () => {
@@ -244,7 +224,6 @@ describe('TB-38 (i): duas execucoes da fase 2 devolvem sempre 3 linhas', () => {
   });
 });
 
-
 describe('TB-23: bug_analysis_agent_status fica VAZIA apos o reset das fases 1 e 2', () => {
   it('reset da fase 2 esvazia a tabela', async () => {
     const project = createBugProject();
@@ -272,7 +251,6 @@ describe('TB-23: bug_analysis_agent_status fica VAZIA apos o reset das fases 1 e
     expect(after.sprintsJsonPath ?? null).toBeNull();
   });
 });
-
 
 describe('TB-38 (iii): projeto bug sem config.bug.runId', () => {
   it('devolve { agents: [] } sem lancar', () => {

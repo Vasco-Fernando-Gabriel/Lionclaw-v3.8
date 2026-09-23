@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -40,7 +39,6 @@ import type {
 } from '../dynamic-workflows/types';
 import type { NodeRunResult, RunNodeAgentInput } from '../dynamic-workflows/workflow-agent-adapter';
 import type { GateCheckSpec, GateRunResult } from '../dynamic-workflows/workflow-gates';
-
 
 interface Harness {
   deps: HostApiDeps;
@@ -117,10 +115,48 @@ function manifest(): DynamicWorkflowManifest {
     name: 'l1-wf',
     phases: [{ id: 'S1', name: 'S1', order: 0 }],
     nodes: [
-      { id: 'scout', type: 'agent', phaseId: 'S1', agentId: 'a-scout', access: 'read-only', canResume: true, produces: [], consumes: [] },
-      { id: 'reader', type: 'agent', phaseId: 'S1', agentId: 'a-scout', access: 'read-only', canResume: true, produces: [], consumes: [] },
-      { id: 'coder', type: 'agent', phaseId: 'S1', agentId: 'dynamic-workflow-coder', access: 'workspace-write', writeSet: ['src/**'], canResume: true, produces: [], consumes: [] },
-      { id: 'val', type: 'agent', phaseId: 'S1', agentId: 'a-val', access: 'read-only', schemaRef: 'validator.schema.json', canResume: true, produces: [], consumes: [] },
+      {
+        id: 'scout',
+        type: 'agent',
+        phaseId: 'S1',
+        agentId: 'a-scout',
+        access: 'read-only',
+        canResume: true,
+        produces: [],
+        consumes: [],
+      },
+      {
+        id: 'reader',
+        type: 'agent',
+        phaseId: 'S1',
+        agentId: 'a-scout',
+        access: 'read-only',
+        canResume: true,
+        produces: [],
+        consumes: [],
+      },
+      {
+        id: 'coder',
+        type: 'agent',
+        phaseId: 'S1',
+        agentId: 'dynamic-workflow-coder',
+        access: 'workspace-write',
+        writeSet: ['src/**'],
+        canResume: true,
+        produces: [],
+        consumes: [],
+      },
+      {
+        id: 'val',
+        type: 'agent',
+        phaseId: 'S1',
+        agentId: 'a-val',
+        access: 'read-only',
+        schemaRef: 'validator.schema.json',
+        canResume: true,
+        produces: [],
+        consumes: [],
+      },
     ],
     parallelism: { maxConcurrentAgents: 3, parallelWritersAllowed: false },
     gates: [],
@@ -229,9 +265,20 @@ function makeHarness(opts: {
     },
     insertGateDecision: (input) => {
       gateDecisions.push(input);
-      return { ...input, nodeId: input.nodeId ?? null, reason: input.reason ?? null, payloadJson: input.payloadJson ?? '{}', createdAt: 'x' };
+      return {
+        ...input,
+        nodeId: input.nodeId ?? null,
+        reason: input.reason ?? null,
+        payloadJson: input.payloadJson ?? '{}',
+        createdAt: 'x',
+      };
     },
-    registerArtifact: (input) => ({ ...input, nodeId: input.nodeId ?? null, metadataJson: input.metadataJson ?? '{}', createdAt: 'x' }),
+    registerArtifact: (input) => ({
+      ...input,
+      nodeId: input.nodeId ?? null,
+      metadataJson: input.metadataJson ?? '{}',
+      createdAt: 'x',
+    }),
     getRunCheckpoint: () => checkpointJson,
     persistRunCheckpoint: (_runId, cp) => {
       checkpointJson = cp;
@@ -241,7 +288,12 @@ function makeHarness(opts: {
       runPatches.push({ ...patch });
     },
     appendJournalEntry: (input: DynamicWorkflowJournalAppendInput) => {
-      journal.push({ ...input, outputRef: input.outputRef ?? null, sideEffectKey: input.sideEffectKey ?? null, createdAt: 'x' });
+      journal.push({
+        ...input,
+        outputRef: input.outputRef ?? null,
+        sideEffectKey: input.sideEffectKey ?? null,
+        createdAt: 'x',
+      });
     },
     listJournalEntries: () => [...journal].sort((a, b) => a.callIndex - b.callIndex),
     truncateJournalFrom: (_runId, from) => {
@@ -249,7 +301,10 @@ function makeHarness(opts: {
     },
     claimAdjustmentsForNode: (_runId, nodeId) => {
       const got = messages.filter(
-        (m) => m.consumedAt === null && (m.kind === 'adjustment' || m.kind === AGENT_SWITCH_MESSAGE_KIND) && (m.nodeId === nodeId || m.nodeId === '*'),
+        (m) =>
+          m.consumedAt === null &&
+          (m.kind === 'adjustment' || m.kind === AGENT_SWITCH_MESSAGE_KIND) &&
+          (m.nodeId === nodeId || m.nodeId === '*'),
       );
       for (const m of got) {
         m.consumedAt = '2026-09-03T12:00:01.000Z';
@@ -286,7 +341,12 @@ function makeHarness(opts: {
       calls += 1;
       return opts.adapter(input, calls);
     },
-    emit: (input) => events.push({ type: input.type, nodeId: input.nodeId, payload: (input.payload ?? {}) as Record<string, unknown> }),
+    emit: (input) =>
+      events.push({
+        type: input.type,
+        nodeId: input.nodeId,
+        payload: (input.payload ?? {}) as Record<string, unknown>,
+      }),
     generateId: (prefix) => `${prefix}_${nodeRuns.length}_${events.length}`,
     now: () => '2026-09-03T12:00:00.000Z',
     sleep: async () => {},
@@ -328,7 +388,6 @@ async function tick(): Promise<void> {
   for (let i = 0; i < 5; i++) await Promise.resolve();
 }
 
-
 describe('L1.1: falha nao-retryavel abre o gate failure:<nodeId> DENTRO do agent() e o coordenador fica parado', () => {
   it('gate aberto ANTES de qualquer outro agent(); skip devolve null e o proximo agent() so roda depois', async () => {
     const h = makeHarness({
@@ -348,10 +407,22 @@ describe('L1.1: falha nao-retryavel abre o gate failure:<nodeId> DENTRO do agent
     expect(readerRan).toBe(false);
     const blocked = h.runPatches.find((p) => p.status === 'blocked');
     const pd = JSON.parse(String(blocked?.pendingDecisionJson)).pendingDecision as Record<string, unknown>;
-    expect(pd).toMatchObject({ type: 'provider', id: 'failure:scout', gateId: 'failure:scout', nodeId: 'scout', failureClass: 'logic', actions: ['retry', 'switch-agent', 'skip', 'abort'] });
+    expect(pd).toMatchObject({
+      type: 'provider',
+      id: 'failure:scout',
+      gateId: 'failure:scout',
+      nodeId: 'scout',
+      failureClass: 'logic',
+      actions: ['retry', 'switch-agent', 'skip', 'abort'],
+    });
     expect(String(pd.prompt)).toContain('maximum number of turns');
     const gateEv = h.events.find((e) => e.type === 'gate-blocked');
-    expect(gateEv?.payload).toMatchObject({ gateId: 'failure:scout', mode: 'orchestrator', failure: true, failureClass: 'logic' });
+    expect(gateEv?.payload).toMatchObject({
+      gateId: 'failure:scout',
+      mode: 'orchestrator',
+      failure: true,
+      failureClass: 'logic',
+    });
     expect(h.events.filter((e) => e.type === 'node-failed')).toHaveLength(1);
 
     h.resolveGate('failure:scout', { decision: 'approve', approvedBy: 'orchestrator', payload: { action: 'skip' } });
@@ -372,7 +443,9 @@ describe('L1.1: falha nao-retryavel abre o gate failure:<nodeId> DENTRO do agent
     const h = makeHarness({
       adapter: (input, call) => {
         prompts.push(input.prompt);
-        return Promise.resolve(call === 1 ? failResult(input) : okResult(input, 'ARQUIVOS TOCADOS:\n- src/a.ts\nRESUMO: ok'));
+        return Promise.resolve(
+          call === 1 ? failResult(input) : okResult(input, 'ARQUIVOS TOCADOS:\n- src/a.ts\nRESUMO: ok'),
+        );
       },
       hook: () => BLOCKED_LOGIC,
     });
@@ -381,13 +454,26 @@ describe('L1.1: falha nao-retryavel abre o gate failure:<nodeId> DENTRO do agent
     await tick();
     expect(h.pendingGates()).toEqual(['failure:scout']);
     h.addMessage('scout', 'adjustment', 'foque no arquivo a.ts');
-    h.resolveGate('failure:scout', { decision: 'approve', approvedBy: 'orchestrator', payload: { action: 'retry', instruction: 'foque no arquivo a.ts' } });
+    h.resolveGate('failure:scout', {
+      decision: 'approve',
+      approvedBy: 'orchestrator',
+      payload: { action: 'retry', instruction: 'foque no arquivo a.ts' },
+    });
     const out = await pending;
     expect(out).toBe('ARQUIVOS TOCADOS:\n- src/a.ts\nRESUMO: ok');
     expect(prompts).toEqual(['base', `base${ADJUSTMENT_PROMPT_HEADER}foque no arquivo a.ts`]);
-    expect(h.nodeRuns.map((n) => [n.nodeId, n.attempt, n.status])).toEqual([['scout', 1, 'failed'], ['scout', 2, 'completed']]);
+    expect(h.nodeRuns.map((n) => [n.nodeId, n.attempt, n.status])).toEqual([
+      ['scout', 1, 'failed'],
+      ['scout', 2, 'completed'],
+    ]);
     const baseHash = computeNodeInputHash({ agentId: 'a-scout', prompt: 'base', access: 'read-only', writeSet: [] });
-    const adjustedHash = computeNodeInputHash({ agentId: 'a-scout', prompt: 'base', access: 'read-only', writeSet: [], adjustment: 'foque no arquivo a.ts' });
+    const adjustedHash = computeNodeInputHash({
+      agentId: 'a-scout',
+      prompt: 'base',
+      access: 'read-only',
+      writeSet: [],
+      adjustment: 'foque no arquivo a.ts',
+    });
     expect(h.nodeRuns[0]!.inputHash).toBe(baseHash);
     expect(h.nodeRuns[1]!.inputHash).toBe(adjustedHash);
     expect(h.journal).toHaveLength(1);
@@ -410,7 +496,11 @@ describe('L1.1: falha nao-retryavel abre o gate failure:<nodeId> DENTRO do agent
     const pending = api.agent({ id: 'scout', agentId: 'a-scout', access: 'read-only', prompt: 'p' });
     await tick();
     h.addMessage('scout', AGENT_SWITCH_MESSAGE_KIND, 'a-scout-b');
-    h.resolveGate('failure:scout', { decision: 'approve', approvedBy: 'orchestrator', payload: { action: 'switch-agent', agentType: 'a-scout-b' } });
+    h.resolveGate('failure:scout', {
+      decision: 'approve',
+      approvedBy: 'orchestrator',
+      payload: { action: 'switch-agent', agentType: 'a-scout-b' },
+    });
     await pending;
     expect(agents).toEqual(['a-scout', 'a-scout-b']);
     expect(h.nodeRuns[1]!.agentId).toBe('a-scout-b');
@@ -435,7 +525,10 @@ describe('L1.1: falha nao-retryavel abre o gate failure:<nodeId> DENTRO do agent
       await tick();
       h.resolveGate('failure:scout', resolution);
       await expect(pending).rejects.toMatchObject({ code: 'run-aborted' } as Partial<WorkflowHostFatalError>);
-      expect(h.events.find((e) => e.type === 'gate-rejected')?.payload).toMatchObject({ gateId: 'failure:scout', action: 'abort' });
+      expect(h.events.find((e) => e.type === 'gate-rejected')?.payload).toMatchObject({
+        gateId: 'failure:scout',
+        action: 'abort',
+      });
       expect(h.journal).toHaveLength(0);
       h.cleanup();
     }
@@ -444,7 +537,8 @@ describe('L1.1: falha nao-retryavel abre o gate failure:<nodeId> DENTRO do agent
   it('retry automatico (retry-scheduled): o host aguarda o backoff (sleep injetado) e roda a nova attempt in-process, sem gate', async () => {
     const sleeps: number[] = [];
     const h = makeHarness({
-      adapter: (input, call) => Promise.resolve(call < 3 ? failResult(input, 'provider-limit', 'rate limit') : okResult(input)),
+      adapter: (input, call) =>
+        Promise.resolve(call < 3 ? failResult(input, 'provider-limit', 'rate limit') : okResult(input)),
       hook: ({ attempt }) =>
         attempt < 3
           ? { outcome: 'retry-scheduled', backoffMs: 30_000 * attempt, failureClass: 'provider-limit' }
@@ -476,7 +570,14 @@ describe('L1.1: falha nao-retryavel abre o gate failure:<nodeId> DENTRO do agent
       adapter: (input) =>
         Promise.resolve({
           ...failResult(input),
-          cost: { ...okResult(input).cost!, costUsd: 0, costStatus: 'unknown', costUnknownReason: 'error-without-usage', inputTokens: 0, outputTokens: 0 },
+          cost: {
+            ...okResult(input).cost!,
+            costUsd: 0,
+            costStatus: 'unknown',
+            costUnknownReason: 'error-without-usage',
+            inputTokens: 0,
+            outputTokens: 0,
+          },
         }),
     });
     const api = createWorkflowHostApi(h.ctx, h.deps);
@@ -487,8 +588,20 @@ describe('L1.1: falha nao-retryavel abre o gate failure:<nodeId> DENTRO do agent
   });
 
   it('helpers puros: buildFailurePendingDecision, parseFailureGateAction, failureGateId', () => {
-    const pd = buildFailurePendingDecision({ nodeId: 'cc:S1:u-1:0', failureClass: 'logic', nodeError: 'boom', retriesExhausted: false, attemptsMade: 1 });
-    expect(pd).toMatchObject({ type: 'provider', id: 'failure:cc:S1:u-1:0', gateId: 'failure:cc:S1:u-1:0', nodeId: 'cc:S1:u-1:0', actions: ['retry', 'switch-agent', 'skip', 'abort'] });
+    const pd = buildFailurePendingDecision({
+      nodeId: 'cc:S1:u-1:0',
+      failureClass: 'logic',
+      nodeError: 'boom',
+      retriesExhausted: false,
+      attemptsMade: 1,
+    });
+    expect(pd).toMatchObject({
+      type: 'provider',
+      id: 'failure:cc:S1:u-1:0',
+      gateId: 'failure:cc:S1:u-1:0',
+      nodeId: 'cc:S1:u-1:0',
+      actions: ['retry', 'switch-agent', 'skip', 'abort'],
+    });
     expect(pd.prompt).toContain('boom');
     expect(pd.prompt).toContain('retry');
     expect(isFailureGateId(failureGateId('x'))).toBe(true);
@@ -498,7 +611,6 @@ describe('L1.1: falha nao-retryavel abre o gate failure:<nodeId> DENTRO do agent
     expect(parseFailureGateAction(undefined)).toBeNull();
   });
 });
-
 
 describe('L1.2a: writer que falha commita WIP (wipSha no node-failed); skip reseta', () => {
   it('onWriterNodeFailed e chamado ANTES do node-failed e o sha vai no payload/gate; skip chama onNodeSkipped com o wipSha', async () => {
@@ -522,11 +634,21 @@ describe('L1.2a: writer que falha commita WIP (wipSha no node-failed); skip rese
       },
     });
     const api = createWorkflowHostApi(h.ctx, h.deps);
-    const out = await api.agent({ id: 'coder', agentId: 'dynamic-workflow-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'p' });
+    const out = await api.agent({
+      id: 'coder',
+      agentId: 'dynamic-workflow-coder',
+      access: 'workspace-write',
+      writeSet: ['src/**'],
+      prompt: 'p',
+    });
     expect(out).toBeNull();
     expect(calls).toEqual(['wip:coder#1', 'skip:coder:wip123']);
     const failed = h.events.find((e) => e.type === 'node-failed');
-    expect(failed?.payload).toMatchObject({ wipSha: 'wip123', access: 'workspace-write', agentId: 'dynamic-workflow-coder' });
+    expect(failed?.payload).toMatchObject({
+      wipSha: 'wip123',
+      access: 'workspace-write',
+      agentId: 'dynamic-workflow-coder',
+    });
     expect(h.events.find((e) => e.type === 'gate-blocked')?.payload).toMatchObject({ wipSha: 'wip123' });
     h.cleanup();
   });
@@ -549,17 +671,31 @@ describe('L1.2a: writer que falha commita WIP (wipSha no node-failed); skip rese
       },
     });
     const api = createWorkflowHostApi(h.ctx, h.deps);
-    const out = await api.agent({ id: 'coder', agentId: 'dynamic-workflow-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'p' });
+    const out = await api.agent({
+      id: 'coder',
+      agentId: 'dynamic-workflow-coder',
+      access: 'workspace-write',
+      writeSet: ['src/**'],
+      prompt: 'p',
+    });
     expect(out).toBe('RESUMO: feito');
     expect(calls).toEqual(['wip']);
-    expect(h.events.find((e) => e.type === 'node-completed')?.payload).toMatchObject({ worktreeCommitSha: 'node1', touchedFiles: ['src/a.ts'] });
+    expect(h.events.find((e) => e.type === 'node-completed')?.payload).toMatchObject({
+      worktreeCommitSha: 'node1',
+      touchedFiles: ['src/a.ts'],
+    });
     h.cleanup();
   });
 });
 
-
 describe('L1.2b: agent({ maxTurns }) clampado 1..400, CONDICIONAL no hash e propagado ao adapter', () => {
-  const CANONICAL = { agentId: 'a-reader', prompt: 'p', access: 'read-only', schemaRef: undefined, writeSet: [] as string[] };
+  const CANONICAL = {
+    agentId: 'a-reader',
+    prompt: 'p',
+    access: 'read-only',
+    schemaRef: undefined,
+    writeSet: [] as string[],
+  };
   const BASELINE = 'cd730d9cd5de867e317c2a8c526d82a2a02c4161698883cf77ad9cc2da33eb1c';
 
   it('sem maxTurns o hash e BYTE-IDENTICO ao baseline; com maxTurns muda e e deterministico', () => {
@@ -595,7 +731,13 @@ describe('L1.2b: agent({ maxTurns }) clampado 1..400, CONDICIONAL no hash e prop
     await api.agent({ id: 'scout', agentId: 'a-scout', access: 'read-only', prompt: 'p', maxTurns: 1000 });
     expect(received?.effectiveMaxTurns).toBe(400);
     expect(h.nodeRuns[0]!.inputHash).toBe(
-      computeNodeInputHash({ agentId: 'a-scout', prompt: 'p', access: 'read-only', writeSet: [], effectiveMaxTurns: 400 }),
+      computeNodeInputHash({
+        agentId: 'a-scout',
+        prompt: 'p',
+        access: 'read-only',
+        writeSet: [],
+        effectiveMaxTurns: 400,
+      }),
     );
     h.cleanup();
   });
@@ -616,7 +758,6 @@ describe('L1.2b: agent({ maxTurns }) clampado 1..400, CONDICIONAL no hash e prop
   });
 });
 
-
 describe('L1.3: pausa/abort do run durante o node = attempt INTERROMPIDA', () => {
   it('resultado recebido com abortSignal.aborted (mesmo ok:true) => node-interrupted, sem node-completed/checkpoint/journal/commit, fatal run-aborted', async () => {
     const abort = new AbortController();
@@ -636,7 +777,13 @@ describe('L1.3: pausa/abort do run durante o node = attempt INTERROMPIDA', () =>
     });
     const api = createWorkflowHostApi(h.ctx, h.deps);
     await expect(
-      api.agent({ id: 'coder', agentId: 'dynamic-workflow-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'p' }),
+      api.agent({
+        id: 'coder',
+        agentId: 'dynamic-workflow-coder',
+        access: 'workspace-write',
+        writeSet: ['src/**'],
+        prompt: 'p',
+      }),
     ).rejects.toMatchObject({ code: 'run-aborted' } as Partial<WorkflowHostFatalError>);
     const types = h.events.map((e) => e.type);
     expect(types).toContain('node-interrupted');
@@ -646,11 +793,14 @@ describe('L1.3: pausa/abort do run durante o node = attempt INTERROMPIDA', () =>
     expect(h.journal).toHaveLength(0);
     expect(JSON.parse(h.checkpointJson())).toEqual({});
     expect(h.nodeRuns[0]!.status).toBe('running');
-    expect(h.events.find((e) => e.type === 'node-interrupted')?.payload).toMatchObject({ attempt: 1, reason: 'run-aborted', costUsd: 0.5 });
+    expect(h.events.find((e) => e.type === 'node-interrupted')?.payload).toMatchObject({
+      attempt: 1,
+      reason: 'run-aborted',
+      costUsd: 0.5,
+    });
     h.cleanup();
   });
 });
-
 
 describe('L1.6: greenCheck re-detecta scripts.build no workspace a cada chamada', () => {
   function fakeChecks(captured: GateCheckSpec[][]) {
@@ -673,7 +823,10 @@ describe('L1.6: greenCheck re-detecta scripts.build no workspace a cada chamada'
     const ids = (i: number) => captured[i]!.map((s) => s.id.replace(/^green-check:/, ''));
     expect(ids(0)).toEqual(['typecheck', 'test']);
     expect(h.events.at(-1)?.payload).toMatchObject({ final: false, buildScriptDetected: null });
-    writeFileSync(join(h.ctx.workspaceRoot, 'package.json'), JSON.stringify({ scripts: { build: 'next build', test: 'vitest' } }));
+    writeFileSync(
+      join(h.ctx.workspaceRoot, 'package.json'),
+      JSON.stringify({ scripts: { build: 'next build', test: 'vitest' } }),
+    );
     await api.greenCheck({ final: true });
     expect(ids(1)).toEqual(['typecheck', 'test', 'build']);
     expect(h.events.at(-1)?.payload).toMatchObject({ final: true, buildScriptDetected: true });
@@ -695,14 +848,16 @@ describe('L1.6: greenCheck re-detecta scripts.build no workspace a cada chamada'
   });
 });
 
-
 describe('L2.1a: node SEM schema devolve STRING ao .js; COM schema, objeto; replay desembrulha o envelope legado', () => {
   it('writer sem schema: typeof === string (texto cru, mesmo quando parece JSON); o payload ainda le o JSON', async () => {
     const h = makeHarness({ adapter: (input) => Promise.resolve(okResult(input, '{"verdict":"pass","findings":[]}')) });
     const api = createWorkflowHostApi(h.ctx, h.deps);
     const out = await api.agent({ id: 'scout', agentId: 'a-scout', access: 'read-only', prompt: 'p' });
     expect(out).toBe('{"verdict":"pass","findings":[]}');
-    expect(h.events.find((e) => e.type === 'node-completed')?.payload).toMatchObject({ validatorVerdict: { verdict: 'pass' }, p1Count: 0 });
+    expect(h.events.find((e) => e.type === 'node-completed')?.payload).toMatchObject({
+      validatorVerdict: { verdict: 'pass' },
+      p1Count: 0,
+    });
     const cp = JSON.parse(h.checkpointJson()) as { nodes?: Record<string, unknown> };
     expect(cp.nodes?.scout).toBeDefined();
     h.cleanup();
@@ -711,7 +866,8 @@ describe('L2.1a: node SEM schema devolve STRING ao .js; COM schema, objeto; repl
   it('validador COM schema devolve o objeto estruturado', async () => {
     const structured = { verdict: 'fail', findings: [{ severity: 'P1', where: 'a', problem: 'b' }] };
     const h = makeHarness({
-      adapter: (input) => Promise.resolve({ ...okResult(input, JSON.stringify(structured)), structuredOutput: structured }),
+      adapter: (input) =>
+        Promise.resolve({ ...okResult(input, JSON.stringify(structured)), structuredOutput: structured }),
       ctx: { resolveSchemaRef: () => ({ name: 'validator', type: 'object', required: ['verdict', 'findings'] }) },
     });
     const api = createWorkflowHostApi(h.ctx, h.deps);
@@ -765,10 +921,10 @@ describe('L2.1a: node SEM schema devolve STRING ao .js; COM schema, objeto; repl
       checkpoint: legacyCheckpoint,
       journal,
       ctx: {
-        readNodeCheckpoint: () => ({ state: { output: 'ARQUIVOS TOCADOS:\n- src/a.ts' } } as never),
+        readNodeCheckpoint: () => ({ state: { output: 'ARQUIVOS TOCADOS:\n- src/a.ts' } }) as never,
       },
     });
-    journal[0]!.policyHash = computeNodeInputHash({ agentId: 'ignored', prompt: 'ignored' }); // placeholder, ajustado abaixo
+    journal[0]!.policyHash = computeNodeInputHash({ agentId: 'ignored', prompt: 'ignored' });
     const api = createWorkflowHostApi(h.ctx, h.deps);
     const out = await api.agent({ id: 'scout', agentId: 'a-scout', access: 'read-only', prompt: 'p' });
     expect(typeof out).toBe('string');

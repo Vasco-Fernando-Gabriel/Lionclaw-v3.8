@@ -2,11 +2,9 @@ import crypto from 'crypto';
 import { createLogger } from '../logger';
 import type { OpenDesignSessionConfig } from '../../../src/types/open-design';
 
-
 const logger = createLogger('open-design-adapter-http');
 
 const DEFAULT_TIMEOUT_MS = 10_000;
-
 
 export interface AdapterConfig {
   baseUrl: string;
@@ -71,12 +69,7 @@ export interface Adapter {
   health(): Promise<boolean>;
   createProject(payload: CreateProjectPayload): Promise<{ projectId: string; conversationId: string }>;
   createConversation(projectId: string, title?: string): Promise<{ conversationId: string }>;
-  putMessage(
-    projectId: string,
-    conversationId: string,
-    messageId: string,
-    message: ChatMessageShape,
-  ): Promise<void>;
+  putMessage(projectId: string, conversationId: string, messageId: string, message: ChatMessageShape): Promise<void>;
   startRun(payload: ChatRunCreateRequest): Promise<{ runId: string }>;
   getAppConfig(): Promise<{ config: OpenDesignAppConfigPrefs }>;
   updateAppConfig(payload: OpenDesignAppConfigPrefs): Promise<{ config: OpenDesignAppConfigPrefs }>;
@@ -95,13 +88,15 @@ export interface Adapter {
   listFiles(projectId: string): Promise<FileEntry[]>;
   readFile(projectId: string, filePath: string): Promise<string>;
   fetchFinalArtifact(projectId: string): Promise<{ html: string; fileName: string; hash: string }>;
-  waitForRunComplete(runId: string, opts?: { timeoutMs?: number; pollIntervalMs?: number }): Promise<{
+  waitForRunComplete(
+    runId: string,
+    opts?: { timeoutMs?: number; pollIntervalMs?: number },
+  ): Promise<{
     status: 'completed' | 'failed' | 'cancelled' | 'timeout';
     raw: unknown;
   }>;
   callRaw(method: string, urlPath: string, body?: unknown): Promise<unknown>;
 }
-
 
 export function isForbiddenPath(urlPath: string): boolean {
   const p = urlPath.toLowerCase();
@@ -118,7 +113,6 @@ function assertAllowed(method: string, urlPath: string): void {
     );
   }
 }
-
 
 function joinUrl(baseUrl: string, urlPath: string): string {
   const trimmedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
@@ -169,9 +163,7 @@ async function callHttp<T = unknown>(
         return { ok: true, value: JSON.parse(text) as T };
       }
       const text = await res.text().catch(() => '');
-      const error = new Error(
-        `Adapter HTTP ${method} ${urlPath} -> ${res.status} ${res.statusText}: ${text}`,
-      );
+      const error = new Error(`Adapter HTTP ${method} ${urlPath} -> ${res.status} ${res.statusText}: ${text}`);
       const retryable = res.status >= 500 && res.status < 600;
       return { ok: false, retryable, error };
     } catch (err) {
@@ -198,7 +190,6 @@ async function callHttp<T = unknown>(
   if (second.ok) return second.value;
   throw second.error;
 }
-
 
 export function createAdapter(cfg: AdapterConfig): Adapter {
   const timeoutMs = cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -353,7 +344,7 @@ export function createAdapter(cfg: AdapterConfig): Adapter {
     },
 
     async waitForRunComplete(runId, opts) {
-      const totalTimeoutMs = opts?.timeoutMs ?? 180_000; // 3min
+      const totalTimeoutMs = opts?.timeoutMs ?? 180_000;
       const pollIntervalMs = opts?.pollIntervalMs ?? 1_500;
       const start = Date.now();
 

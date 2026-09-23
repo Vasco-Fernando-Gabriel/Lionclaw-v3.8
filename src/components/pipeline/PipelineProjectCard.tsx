@@ -13,17 +13,14 @@ import {
 import { usePipelineStore } from '@/stores/pipeline-store';
 import { HandoffButton } from '@/components/common/HandoffButton';
 
-
 const PIPELINE_TYPE_BADGE: Record<PipelineType, { label: string; color: string }> = {
-  development:            { label: 'DEV',      color: 'bg-blue-500/15 text-blue-300 border border-blue-500/30' },
-  'development-v2':       { label: 'DEV 2.0',  color: 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30' },
-  security:               { label: 'SEC',      color: 'bg-red-500/15 text-red-300 border border-red-500/30' },
-  feature:                { label: 'FEAT',     color: 'bg-purple-500/15 text-purple-300 border border-purple-500/30' },
-  'architecture-review':  { label: 'ARCH',     color: 'bg-amber-500/15 text-amber-300 border border-amber-500/30' },
-  bug:                    { label: 'Bug',      color: 'bg-rose-500/15 text-rose-300 border border-rose-500/30' },
+  development: { label: 'DEV', color: 'bg-blue-500/15 text-blue-300 border border-blue-500/30' },
+  'development-v2': { label: 'DEV 2.0', color: 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30' },
+  security: { label: 'SEC', color: 'bg-red-500/15 text-red-300 border border-red-500/30' },
+  feature: { label: 'FEAT', color: 'bg-purple-500/15 text-purple-300 border border-purple-500/30' },
+  'architecture-review': { label: 'ARCH', color: 'bg-amber-500/15 text-amber-300 border border-amber-500/30' },
+  bug: { label: 'Bug', color: 'bg-rose-500/15 text-rose-300 border border-rose-500/30' },
 };
-
-
 
 const PHASES_BY_TYPE: Record<PipelineType, PhaseDefinition[]> = {
   development: PIPELINE_PHASES,
@@ -38,46 +35,50 @@ function phasesForType(pipelineType: string | undefined): PhaseDefinition[] {
   return PHASES_BY_TYPE[(pipelineType ?? 'development') as PipelineType] ?? PIPELINE_PHASES;
 }
 
-
 function getPhaseName(phaseNumber: number, phases: PhaseDefinition[]): string {
   return phases.find((p) => p.number === phaseNumber)?.name ?? `Fase ${phaseNumber}`;
 }
 
-
 type PipelineStatus = 'running' | 'paused' | 'done' | 'failed' | 'idle' | 'aborted' | 'interrupted';
 
 const STATUS_COLORS: Record<PipelineStatus, string> = {
-  running:     'bg-blue-500/20 text-blue-400',
-  paused:      'bg-yellow-500/20 text-yellow-400',
-  done:        'bg-green-500/20 text-green-400',
-  failed:      'bg-red-500/20 text-red-400',
-  idle:        'bg-zinc-500/20 text-zinc-400',
-  aborted:     'bg-orange-500/20 text-orange-400',
+  running: 'bg-blue-500/20 text-blue-400',
+  paused: 'bg-yellow-500/20 text-yellow-400',
+  done: 'bg-green-500/20 text-green-400',
+  failed: 'bg-red-500/20 text-red-400',
+  idle: 'bg-zinc-500/20 text-zinc-400',
+  aborted: 'bg-orange-500/20 text-orange-400',
   interrupted: 'bg-purple-500/20 text-purple-400',
 };
 
 const STATUS_LABELS: Record<PipelineStatus, string> = {
-  running:     'Executando',
-  paused:      'Pausado',
-  done:        'Concluido',
-  failed:      'Falhou',
-  idle:        'Pendente',
-  aborted:     'Abortado',
+  running: 'Executando',
+  paused: 'Pausado',
+  done: 'Concluido',
+  failed: 'Falhou',
+  idle: 'Pendente',
+  aborted: 'Abortado',
   interrupted: 'Interrompido',
 };
 
 function resolveStatus(status: string): PipelineStatus {
   switch (status) {
-    case 'running':     return 'running';
-    case 'paused':      return 'paused';
-    case 'done':        return 'done';
-    case 'failed':      return 'failed';
-    case 'aborted':     return 'aborted';
-    case 'interrupted': return 'interrupted';
-    default:            return 'idle';
+    case 'running':
+      return 'running';
+    case 'paused':
+      return 'paused';
+    case 'done':
+      return 'done';
+    case 'failed':
+      return 'failed';
+    case 'aborted':
+      return 'aborted';
+    case 'interrupted':
+      return 'interrupted';
+    default:
+      return 'idle';
   }
 }
-
 
 interface PhaseIndicatorProps {
   phase: number;
@@ -135,7 +136,6 @@ function PhaseIndicator({ phase, currentPhase, projectStatus, startPhase, phases
   );
 }
 
-
 interface ProgressBarProps {
   currentPhase: number | null;
   projectStatus: PipelineStatus;
@@ -165,22 +165,14 @@ function ProgressBar({ currentPhase, projectStatus, startPhase, totalPhases }: P
   const pct = nonSkipped > 0 ? Math.round((completed / nonSkipped) * 100) : 0;
 
   const barColor =
-    projectStatus === 'failed'
-      ? 'bg-red-500'
-      : projectStatus === 'paused'
-      ? 'bg-yellow-500'
-      : 'bg-amber-500';
+    projectStatus === 'failed' ? 'bg-red-500' : projectStatus === 'paused' ? 'bg-yellow-500' : 'bg-amber-500';
 
   return (
     <div className="h-1 rounded-full bg-zinc-800 overflow-hidden mt-2">
-      <div
-        className={`h-full rounded-full transition-all ${barColor}`}
-        style={{ width: `${pct}%` }}
-      />
+      <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
     </div>
   );
 }
-
 
 interface DeleteDialogProps {
   projectName: string;
@@ -193,13 +185,15 @@ function DeleteDialog({ projectName, onCancel, onConfirm, isDeleting }: DeleteDi
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
     >
       <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm mx-4 shadow-2xl p-5">
         <h3 className="text-sm font-bold text-zinc-100 mb-2">Deletar pipeline</h3>
         <p className="text-xs text-zinc-400 mb-5 leading-relaxed">
-          Deletar pipeline <span className="font-semibold text-zinc-200">{projectName}</span>?
-          Dados, metricas e historico serao perdidos permanentemente.
+          Deletar pipeline <span className="font-semibold text-zinc-200">{projectName}</span>? Dados, metricas e
+          historico serao perdidos permanentemente.
         </p>
         <div className="flex justify-end gap-2">
           <button
@@ -228,7 +222,6 @@ function DeleteDialog({ projectName, onCancel, onConfirm, isDeleting }: DeleteDi
     </div>
   );
 }
-
 
 interface PipelineProjectCardProps {
   project: PipelineProject;
@@ -323,11 +316,7 @@ export function PipelineProjectCard({ project, onSelect }: PipelineProjectCardPr
         </div>
 
         {/* Current phase */}
-        {phaseLabel !== null && (
-          <p className="text-xs text-zinc-500 mt-1">
-            {phaseLabel}
-          </p>
-        )}
+        {phaseLabel !== null && <p className="text-xs text-zinc-500 mt-1">{phaseLabel}</p>}
 
         {/* Mini pipeline bar: one inline indicator per phase of this pipeline type */}
         <div className="flex items-center gap-0.5 mt-2.5">
@@ -360,37 +349,27 @@ export function PipelineProjectCard({ project, onSelect }: PipelineProjectCardPr
           )}
           {totalCost !== null && (
             <span>
-              Custo{' '}
-              <span className="text-zinc-400 font-medium">
-                ${totalCost.toFixed(4)}
-              </span>
+              Custo <span className="text-zinc-400 font-medium">${totalCost.toFixed(4)}</span>
             </span>
           )}
           {/* Security pipeline: findings badge */}
-          {project.pipelineType === 'security' && meta.securitySummary !== undefined && meta.securitySummary !== null && (() => {
-            const ss = meta.securitySummary as SecuritySummary;
-            const total = ss.totalFindings ?? 0;
-            const confirmed = ss.confirmedFindings;
-            const headline = (typeof confirmed === 'number' && confirmed > 0) ? confirmed : total;
-            return (
-              <span className="text-[10px] text-red-400 font-medium">
-                {headline} findings
-              </span>
-            );
-          })()}
+          {project.pipelineType === 'security' &&
+            meta.securitySummary !== undefined &&
+            meta.securitySummary !== null &&
+            (() => {
+              const ss = meta.securitySummary as SecuritySummary;
+              const total = ss.totalFindings ?? 0;
+              const confirmed = ss.confirmedFindings;
+              const headline = typeof confirmed === 'number' && confirmed > 0 ? confirmed : total;
+              return <span className="text-[10px] text-red-400 font-medium">{headline} findings</span>;
+            })()}
           {/* Bug Pipe: badge do DESFECHO. Sem ele, um pipe encerrado sem
               correcao fica visualmente identico a um que entregou a correcao
               (os dois terminam com status 'done' — D16, sem status novo no DB). */}
           {bugOutcome === 'no-bug' && (
-            <span className="text-[10px] text-zinc-400 font-medium">
-              Encerrado sem correcao
-            </span>
+            <span className="text-[10px] text-zinc-400 font-medium">Encerrado sem correcao</span>
           )}
-          {bugOutcome === 'fix' && (
-            <span className="text-[10px] text-green-400 font-medium">
-              Correcao aprovada
-            </span>
-          )}
+          {bugOutcome === 'fix' && <span className="text-[10px] text-green-400 font-medium">Correcao aprovada</span>}
           {totalSprints === null && totalFeatures === null && totalCost === null && phaseLabel === null && (
             <span className="text-zinc-600 text-[11px]">Sem execucao iniciada</span>
           )}
@@ -428,7 +407,9 @@ export function PipelineProjectCard({ project, onSelect }: PipelineProjectCardPr
         <DeleteDialog
           projectName={project.name}
           onCancel={() => setShowDeleteDialog(false)}
-          onConfirm={() => { void handleConfirmDelete(); }}
+          onConfirm={() => {
+            void handleConfirmDelete();
+          }}
           isDeleting={isDeleting}
         />
       )}

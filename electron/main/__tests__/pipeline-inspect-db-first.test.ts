@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -62,8 +61,7 @@ function seed(over: Partial<FakeProject> = {}): FakeProject {
     name: over.name ?? 'Demo',
     pipelineType: over.pipelineType ?? 'development',
     status: over.status ?? 'running',
-    pipelineCurrentPhase:
-      'pipelineCurrentPhase' in over ? over.pipelineCurrentPhase : 1,
+    pipelineCurrentPhase: 'pipelineCurrentPhase' in over ? over.pipelineCurrentPhase : 1,
     pipelineStartPhase: 'pipelineStartPhase' in over ? over.pipelineStartPhase : 1,
     projectPath: over.projectPath ?? '/tmp/demo',
     specPath: over.specPath ?? null,
@@ -134,7 +132,6 @@ describe('inspect/list DB-first (W5)', () => {
     }
   });
 });
-
 
 describe('B-AC20: inspect do Bug Pipe na fase 3 (gate de 2 desfechos)', () => {
   beforeEach(() => {

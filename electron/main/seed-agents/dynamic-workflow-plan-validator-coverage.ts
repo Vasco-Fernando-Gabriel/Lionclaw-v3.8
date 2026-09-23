@@ -1,14 +1,9 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { PT_BR_BLOCK } from './_shared/language-pt-br';
 
-export const DYNAMIC_WORKFLOW_PLAN_VALIDATOR_COVERAGE_ID =
-  'dynamic-workflow-plan-validator-coverage';
+export const DYNAMIC_WORKFLOW_PLAN_VALIDATOR_COVERAGE_ID = 'dynamic-workflow-plan-validator-coverage';
 
-export const dynamicWorkflowPlanValidatorCoverage: Omit<
-  AgentConfig,
-  'sortOrder'
-> = {
+export const dynamicWorkflowPlanValidatorCoverage: Omit<AgentConfig, 'sortOrder'> = {
   id: DYNAMIC_WORKFLOW_PLAN_VALIDATOR_COVERAGE_ID,
   name: 'Dynamic Workflow Plan Validator (Cobertura)',
   description:

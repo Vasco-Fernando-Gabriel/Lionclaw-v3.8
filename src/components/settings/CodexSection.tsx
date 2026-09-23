@@ -58,8 +58,7 @@ export function CodexSection() {
   const handleOpenLogin = async () => {
     try {
       await window.lionclaw.codex.openLogin();
-    } catch {
-    }
+    } catch {}
   };
 
   const handleSavePath = async () => {
@@ -124,12 +123,15 @@ export function CodexSection() {
       </h2>
 
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-4 space-y-4">
-
         {/* Tooltip / explanation */}
         <p className="text-xs text-zinc-500">
-          O Codex e coberto pela sua assinatura ChatGPT. O LionClaw usa o token OAuth do CLI sem precisar de API key separada. Instale o CLI via{' '}
-          <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">npm install -g @openai/codex</code>{' '}
-          e autentique com <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">codex login</code>.
+          O Codex e coberto pela sua assinatura ChatGPT. O LionClaw usa o token OAuth do CLI sem precisar de API key
+          separada. Instale o CLI via{' '}
+          <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">
+            npm install -g @openai/codex
+          </code>{' '}
+          e autentique com{' '}
+          <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">codex login</code>.
         </p>
 
         {/* Status indicator */}
@@ -162,9 +164,8 @@ export function CodexSection() {
               Conectar Codex
             </button>
             <p className="text-[10px] text-zinc-600 max-w-xs">
-              Abre um terminal externo com{' '}
-              <code className="text-zinc-500">codex login</code>{' '}
-              para autenticacao OAuth via browser. Depois clique em "Testar conexao".
+              Abre um terminal externo com <code className="text-zinc-500">codex login</code> para autenticacao OAuth
+              via browser. Depois clique em "Testar conexao".
             </p>
           </div>
 
@@ -199,9 +200,7 @@ export function CodexSection() {
 
         {/* Custom binary path */}
         <div className="pt-2 border-t border-zinc-800 space-y-2">
-          <label className="block text-xs text-zinc-400">
-            Path customizado do binario (opcional)
-          </label>
+          <label className="block text-xs text-zinc-400">Path customizado do binario (opcional)</label>
           <div className="flex gap-2">
             <input
               type="text"
@@ -218,9 +217,7 @@ export function CodexSection() {
               {pathSaved ? 'Salvo!' : savingPath ? 'Salvando...' : 'Salvar'}
             </button>
           </div>
-          <p className="text-[10px] text-zinc-600">
-            Deixe vazio para usar o binario encontrado no PATH do sistema.
-          </p>
+          <p className="text-[10px] text-zinc-600">Deixe vazio para usar o binario encontrado no PATH do sistema.</p>
         </div>
 
         {/* Driver unico e saude do App Server */}
@@ -231,18 +228,10 @@ export function CodexSection() {
             <span className="text-zinc-300 font-mono">official-app-server</span>
             <span className="text-zinc-600">App Server</span>
             <span
-              className={`font-mono ${
-                status?.appServerSupported
-                  ? 'text-green-400'
-                  : 'text-yellow-400'
-              }`}
+              className={`font-mono ${status?.appServerSupported ? 'text-green-400' : 'text-yellow-400'}`}
               title={status?.error}
             >
-              {loadingStatus
-                ? '...'
-                : status?.appServerSupported
-                  ? 'OK'
-                  : (status?.error ?? 'indisponivel')}
+              {loadingStatus ? '...' : status?.appServerSupported ? 'OK' : (status?.error ?? 'indisponivel')}
             </span>
           </div>
         </div>

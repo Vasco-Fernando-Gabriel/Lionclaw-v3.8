@@ -69,7 +69,8 @@ export function CartesiaVoiceSelector({ selectedVoiceId, onSelect }: CartesiaVoi
       voice.language === 'en'
         ? 'Hi! I am a Cartesia voice for real-time conversations.'
         : 'Ola! Eu sou uma voz da Cartesia para conversas em tempo real.';
-    window.lionclaw.voice.speakCartesia(previewText, voice.id, voice.language)
+    window.lionclaw.voice
+      .speakCartesia(previewText, voice.id, voice.language)
       .then((result) => {
         const audio = new Audio(`data:audio/mpeg;base64,${result.base64}`);
         audio.onended = () => setPlayingId(null);
@@ -92,18 +93,18 @@ export function CartesiaVoiceSelector({ selectedVoiceId, onSelect }: CartesiaVoi
           />
         </div>
         <div className="grid grid-cols-3 rounded-lg border border-zinc-800 bg-zinc-950 p-0.5 text-xs">
-          {([
-            ['all', 'Todas'],
-            ['pt', 'PT'],
-            ['en', 'EN'],
-          ] as const).map(([value, label]) => (
+          {(
+            [
+              ['all', 'Todas'],
+              ['pt', 'PT'],
+              ['en', 'EN'],
+            ] as const
+          ).map(([value, label]) => (
             <button
               key={value}
               onClick={() => setLanguage(value)}
               className={`px-2.5 rounded-md transition-colors ${
-                language === value
-                  ? 'bg-amber-600 text-white'
-                  : 'text-zinc-500 hover:text-zinc-200'
+                language === value ? 'bg-amber-600 text-white' : 'text-zinc-500 hover:text-zinc-200'
               }`}
             >
               {label}
@@ -119,11 +120,7 @@ export function CartesiaVoiceSelector({ selectedVoiceId, onSelect }: CartesiaVoi
         </div>
       )}
 
-      {error && (
-        <div className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
-          {error}
-        </div>
-      )}
+      {error && <div className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{error}</div>}
 
       {!loading && !error && voices.length === 0 && (
         <div className="text-xs text-zinc-500 bg-zinc-900 rounded-lg border border-zinc-800 px-3 py-2">
@@ -145,18 +142,14 @@ export function CartesiaVoiceSelector({ selectedVoiceId, onSelect }: CartesiaVoi
               }`}
             >
               <div className="flex items-center gap-2 min-w-0">
-                {selectedVoiceId === voice.id && (
-                  <Check size={14} className="text-amber-500 shrink-0" />
-                )}
+                {selectedVoiceId === voice.id && <Check size={14} className="text-amber-500 shrink-0" />}
                 <div className="min-w-0">
                   <p className="text-sm text-zinc-200 truncate">{voice.name}</p>
                   <p className="text-[10px] text-zinc-500 truncate">
                     {[voice.language, voice.country, voice.gender].filter(Boolean).join(' - ')}
                   </p>
                   {voice.description && (
-                    <p className="text-[10px] text-zinc-600 truncate max-w-md">
-                      {voice.description}
-                    </p>
+                    <p className="text-[10px] text-zinc-600 truncate max-w-md">{voice.description}</p>
                   )}
                 </div>
               </div>

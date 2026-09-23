@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   runNodeAgent,
@@ -6,10 +5,7 @@ import {
   type ClaudeCompatBackend,
   type WorkflowAdapterDeps,
 } from '../dynamic-workflows/workflow-agent-adapter';
-import {
-  createSdkUsageTap,
-  runClaudeCompatNode,
-} from '../dynamic-workflows/workflow-claude-compat-executor';
+import { createSdkUsageTap, runClaudeCompatNode } from '../dynamic-workflows/workflow-claude-compat-executor';
 import type { AgentQueryConfig } from '../agent-config-resolver';
 
 const ROOT = process.cwd();
@@ -40,7 +36,10 @@ function baseInput(abortSignal?: AbortSignal) {
   };
 }
 
-async function* stream(messages: Array<Record<string, unknown>>, thenThrow?: Error): AsyncGenerator<Record<string, unknown>> {
+async function* stream(
+  messages: Array<Record<string, unknown>>,
+  thenThrow?: Error,
+): AsyncGenerator<Record<string, unknown>> {
   for (const m of messages) yield m;
   if (thenThrow) throw thenThrow;
 }
@@ -51,10 +50,22 @@ describe('createSdkUsageTap (L1.1)', () => {
     const wrapped = tap.wrap(
       stream(
         [
-          { type: 'assistant', message: { id: 'm1', usage: { input_tokens: 100, output_tokens: 10, cache_read_input_tokens: 50 } } },
-          { type: 'assistant', message: { id: 'm1', usage: { input_tokens: 100, output_tokens: 40, cache_read_input_tokens: 50 } } },
+          {
+            type: 'assistant',
+            message: { id: 'm1', usage: { input_tokens: 100, output_tokens: 10, cache_read_input_tokens: 50 } },
+          },
+          {
+            type: 'assistant',
+            message: { id: 'm1', usage: { input_tokens: 100, output_tokens: 40, cache_read_input_tokens: 50 } },
+          },
           { type: 'assistant', message: { id: 'm2', usage: { input_tokens: 200, output_tokens: 20 } } },
-          { type: 'result', subtype: 'error_max_turns', is_error: true, usage: { input_tokens: 300, output_tokens: 60, cache_read_input_tokens: 50 }, total_cost_usd: 0.9 },
+          {
+            type: 'result',
+            subtype: 'error_max_turns',
+            is_error: true,
+            usage: { input_tokens: 300, output_tokens: 60, cache_read_input_tokens: 50 },
+            total_cost_usd: 0.9,
+          },
         ],
         new Error('Claude Code returned an error result: Reached maximum number of turns (80)'),
       ),
@@ -66,7 +77,13 @@ describe('createSdkUsageTap (L1.1)', () => {
       })(),
     ).rejects.toThrow(/maximum number of turns/);
     expect(seen).toEqual(['assistant', 'assistant', 'assistant', 'result']);
-    expect(tap.snapshot()).toEqual({ inputTokens: 350, outputTokens: 60, cacheReadTokens: 50, cacheCreationTokens: 0, apiRequests: 2 });
+    expect(tap.snapshot()).toEqual({
+      inputTokens: 350,
+      outputTokens: 60,
+      cacheReadTokens: 50,
+      cacheCreationTokens: 0,
+      apiRequests: 2,
+    });
   });
 
   it('sem usage visto => snapshot null', async () => {
@@ -95,14 +112,29 @@ describe('runClaudeCompatNode anexa partialUsage ao erro do iterador (L1.1)', ()
           stream(
             [
               { type: 'assistant', message: { id: 'm1', usage: { input_tokens: 1000, output_tokens: 100 } } },
-              { type: 'result', subtype: 'error_max_turns', is_error: true, usage: { input_tokens: 1000, output_tokens: 100 } },
+              {
+                type: 'result',
+                subtype: 'error_max_turns',
+                is_error: true,
+                usage: { input_tokens: 1000, output_tokens: 100 },
+              },
             ],
             err,
           ),
         buildCloudOptions: () => ({}),
         processStream: async (q) => {
           for await (const _m of q) void _m;
-          return { output: '', metrics: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, toolUses: 0, apiRequests: 0 } };
+          return {
+            output: '',
+            metrics: {
+              inputTokens: 0,
+              outputTokens: 0,
+              cacheReadTokens: 0,
+              cacheCreationTokens: 0,
+              toolUses: 0,
+              apiRequests: 0,
+            },
+          };
         },
         calculateCost: (_m, inT, outT) => inT * 0.001 + outT * 0.002,
         resolveCliPath: () => '/cli',
@@ -123,8 +155,17 @@ describe('runClaudeCompatNode anexa partialUsage ao erro do iterador (L1.1)', ()
 describe('runNodeAgent: custo do node falho e `aborted` (L1.1/L1.3)', () => {
   it('backend lanca COM partialUsage => cost real (known) no NodeRunResult de falha', async () => {
     const backend: ClaudeCompatBackend = async () => {
-      const e = new Error('Claude Code returned an error result: Reached maximum number of turns (80)') as Error & { partialUsage?: unknown };
-      e.partialUsage = { inputTokens: 5000, outputTokens: 300, cacheReadTokens: 0, cacheCreationTokens: 0, costUsd: 0.42, apiRequests: 7 };
+      const e = new Error('Claude Code returned an error result: Reached maximum number of turns (80)') as Error & {
+        partialUsage?: unknown;
+      };
+      e.partialUsage = {
+        inputTokens: 5000,
+        outputTokens: 300,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        costUsd: 0.42,
+        apiRequests: 7,
+      };
       throw e;
     };
     const deps: WorkflowAdapterDeps = { resolveConfig: async () => fakeResolved(), claudeCompat: backend };
@@ -162,7 +203,10 @@ describe('runNodeAgent: custo do node falho e `aborted` (L1.1/L1.3)', () => {
       abort2.abort();
       throw new Error('The operation was aborted');
     };
-    const r2 = await runNodeAgent(baseInput(abort2.signal), { resolveConfig: async () => fakeResolved(), claudeCompat: failBackend });
+    const r2 = await runNodeAgent(baseInput(abort2.signal), {
+      resolveConfig: async () => fakeResolved(),
+      claudeCompat: failBackend,
+    });
     expect(r2.ok).toBe(false);
     expect(r2.aborted).toBe(true);
     expect(r2.failureClass).toBe('cancelled');

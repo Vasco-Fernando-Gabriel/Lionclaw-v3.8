@@ -1,10 +1,5 @@
-
 import { describe, it, expect } from 'vitest';
-import {
-  CODEX_SDK_SYSTEM_PROMPT_V1,
-  CODEX_SDK_SYSTEM_PROMPT_V2,
-  CODEX_SDK_SYSTEM_PROMPT_V3,
-} from '../prompt';
+import { CODEX_SDK_SYSTEM_PROMPT_V1, CODEX_SDK_SYSTEM_PROMPT_V2, CODEX_SDK_SYSTEM_PROMPT_V3 } from '../prompt';
 
 describe('AC-61 — anuncio de agent_details no CODEX_SDK_SYSTEM_PROMPT_V2', () => {
   it('bloco Capabilities (lionclaw-agents MCP) anuncia a tool com assinatura', () => {
@@ -14,9 +9,7 @@ describe('AC-61 — anuncio de agent_details no CODEX_SDK_SYSTEM_PROMPT_V2', () 
   });
 
   it('bloco ## Subagents orienta a consultar a ficha antes de despachar', () => {
-    const subagentsBlock = CODEX_SDK_SYSTEM_PROMPT_V2.split('## Subagents')[1]!.split(
-      '## Skills',
-    )[0]!;
+    const subagentsBlock = CODEX_SDK_SYSTEM_PROMPT_V2.split('## Subagents')[1]!.split('## Skills')[0]!;
     expect(subagentsBlock).toContain('agent_details({ agent_id })');
     expect(subagentsBlock).toContain('compact index');
   });

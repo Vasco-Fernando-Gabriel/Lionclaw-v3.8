@@ -25,7 +25,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
   const mountedRef = useRef(true);
 
   const cleanupStream = useCallback(() => {
-    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
   }, []);
 
@@ -37,7 +37,7 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (cancelRef.current || generationRef.current !== generation || disabled || !mountedRef.current) {
-        stream.getTracks().forEach(t => t.stop());
+        stream.getTracks().forEach((t) => t.stop());
         if (generationRef.current === generation) {
           cancelRef.current = false;
         }
@@ -143,10 +143,14 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
     };
   }, [cancelRecording]);
 
-  useImperativeHandle(ref, () => ({
-    cancel: cancelRecording,
-    isRecording: () => isRecording,
-  }), [cancelRecording, isRecording]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      cancel: cancelRecording,
+      isRecording: () => isRecording,
+    }),
+    [cancelRecording, isRecording],
+  );
 
   if (isTranscribing) {
     return (

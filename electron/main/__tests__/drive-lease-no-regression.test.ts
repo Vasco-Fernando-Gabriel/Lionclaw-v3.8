@@ -1,7 +1,5 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { DriveState } from '../../../src/types';
-
 
 const h = vi.hoisted(() => ({
   buildSystemPromptMock: vi.fn((_agentId?: string, _opts?: Record<string, unknown>) => ''),
@@ -10,7 +8,6 @@ const h = vi.hoisted(() => ({
   ),
   getSettingMock: vi.fn((_key: string): string | undefined => undefined),
 }));
-
 
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
@@ -57,6 +54,8 @@ function fakeSetDriveState(projectId: string, patch: Partial<DriveState>): Drive
 }
 
 vi.mock('../db', () => ({
+  threadIdOf: (s: { id: string; sdkSessionId?: string | null }) => s.sdkSessionId ?? s.id,
+  getSessionOrchestrator: () => null,
   getAllAgents: vi.fn(() => [] as unknown[]),
   getAgent: vi.fn(() => undefined),
   insertMessage: vi.fn(() => 1),
@@ -78,7 +77,27 @@ vi.mock('../db', () => ({
   insertRepoGraphTurnUsage: vi.fn(),
   clearSessionPendingSeed: vi.fn(),
   listHarnessProjects: vi.fn(() => [...projects.values()]),
+  listHarnessProjectsBySession: vi.fn((sessionId: string) =>
+    [...projects.values()].filter((p) => p.config.drive?.sessionId === sessionId),
+  ),
+  findEngagedDriveBySession: vi.fn(
+    (sessionId: string) =>
+      [...projects.values()].find(
+        (p) =>
+          p.config.drive?.sessionId === sessionId &&
+          p.config.drive.driver === 'orchestrator' &&
+          p.config.drive.status !== 'stopped',
+      ) ?? null,
+  ),
   getDriveState: vi.fn((id: string) => projects.get(id)?.config.drive ?? null),
+  getDriveSessionId: vi.fn((id: string) => projects.get(id)?.config.drive?.sessionId ?? null),
+  isDriveEngaged: vi.fn((id: string) => {
+    const drive = projects.get(id)?.config.drive;
+    return !!drive && drive.driver === 'orchestrator' && drive.status !== 'stopped';
+  }),
+  getOpenLaneSessionById: vi.fn((id: string) =>
+    id ? { id, laneBadge: Number(id.replace(/\D/g, '')) || 1, title: id } : null,
+  ),
   setDriveState: vi.fn((id: string, patch: Partial<DriveState>) => fakeSetDriveState(id, patch)),
   getDynamicWorkflowRun: vi.fn(() => null),
   getDynamicWorkflowDefinition: vi.fn(() => null),
@@ -210,18 +229,15 @@ vi.mock('../telegram-bridge', () => ({
   notifyDriveHandoff: vi.fn(async () => {}),
 }));
 vi.mock('../pipeline-control-core', async () => {
-  const actual = await vi.importActual<typeof import('../pipeline-control-core')>(
-    '../pipeline-control-core',
-  );
+  const actual = await vi.importActual<typeof import('../pipeline-control-core')>('../pipeline-control-core');
   return {
     ...actual,
     resolvePendingQuestion: vi.fn(() => null),
   };
 });
 
-
 import { submitMessage, type QueryOptions } from '../orchestrator';
-import { messageQueue } from '../message-queue';
+import { clearDesktopQueuesForTests, listDesktopLanes } from '../desktop-lanes';
 import { PipelineDriveCoordinator } from '../pipeline-drive-coordinator';
 import {
   scanBlockedRunsForIgnition,
@@ -230,7 +246,7 @@ import {
 } from '../dynamic-workflows/workflow-ignition';
 import { _resetDriveLockForTesting } from '../drive-lock';
 import {
-  getActiveChatTurnByLane,
+  listActiveDesktopTurns,
   getChatCapabilityTurn,
   computeEffectiveCapabilitiesForTurn,
   CHAT_TURN_CONTEXT_TTL_SETTING_KEY,
@@ -243,14 +259,10 @@ import {
   CHAT_CAPABILITY_GATE_MODE_SETTING_KEY,
   type ChatCapabilityGateResult,
 } from '../chat-capability-gate';
-import type {
-  DynamicWorkflowRun,
-  DynamicWorkflowDefinition,
-} from '../../../src/types/dynamic-workflow';
+import type { DynamicWorkflowRun, DynamicWorkflowDefinition } from '../../../src/types/dynamic-workflow';
 import type { ChatFeatureToggles } from '../../../src/types';
 
 const OFF: ChatFeatureToggles = { pipelineControl: false, dynamicWorkflows: false };
-
 
 interface TurnCapture {
   ctx: ChatCapabilityTurnContext | undefined;
@@ -266,7 +278,7 @@ let captured: TurnCapture | undefined;
 function armCapture(): void {
   captured = undefined;
   h.getMCPConfigForAgentMock.mockImplementation(async () => {
-    const active = getActiveChatTurnByLane('desktop');
+    const active = listActiveDesktopTurns()[0];
     const ctx = active ? getChatCapabilityTurn(active) : undefined;
     captured = {
       ctx,
@@ -274,22 +286,22 @@ function armCapture(): void {
       gateChatPipeline: assertChatCapability({
         serverId: 'lionclaw-pipeline-control',
         toolName: 'pipeline_reply',
-        context: { surface: 'chat' },
+        context: { surface: 'chat', ...(active ?? {}) },
       }),
       gateChatWorkflow: assertChatCapability({
         serverId: 'lionclaw-dynamic-workflows',
         toolName: 'dynamic_workflow_inspect',
-        context: { surface: 'chat' },
+        context: { surface: 'chat', ...(active ?? {}) },
       }),
       gateSystemEventPipeline: assertChatCapability({
         serverId: 'lionclaw-pipeline-control',
         toolName: 'pipeline_approve',
-        context: { surface: 'system-event' },
+        context: { surface: 'system-event', ...(active ?? {}) },
       }),
       gateSystemEventWorkflow: assertChatCapability({
         serverId: 'lionclaw-dynamic-workflows',
         toolName: 'dynamic_workflow_approve_gate',
-        context: { surface: 'system-event' },
+        context: { surface: 'system-event', ...(active ?? {}) },
       }),
     };
     return {};
@@ -316,10 +328,9 @@ async function waitTurnDone(): Promise<void> {
     expect(h.buildSystemPromptMock).toHaveBeenCalled();
   });
   await vi.waitFor(() => {
-    expect(messageQueue.isProcessing).toBe(false);
+    expect(listDesktopLanes().some((lane) => lane.queue.isProcessing)).toBe(false);
   });
 }
-
 
 function seedProject(over: Partial<FakeProject> = {}): FakeProject {
   const p: FakeProject = {
@@ -400,7 +411,7 @@ const noopGetWindow = () => null;
 beforeEach(() => {
   vi.clearAllMocks();
   projects.clear();
-  messageQueue.clear();
+  clearDesktopQueuesForTests();
   __resetChatCapabilityContextForTests();
   __resetInternalCapabilityLeasesForTests();
   _resetIgnitionForTesting();
@@ -418,13 +429,11 @@ afterEach(() => {
     for (const id of projects.keys()) {
       try {
         coord.stopDrive(id);
-      } catch {
-      }
+      } catch {}
     }
   }
-  messageQueue.clear();
+  clearDesktopQueuesForTests();
 });
-
 
 describe('AC-A22 (a): turno de drive de pipeline com sessao OFF/OFF sobrevive via lease', () => {
   it('fireOrchestratorTurn cria a lease; turn-context system-event carrega token+coordinator+capability; prompt+composicao recebem pipelineControl ON; gate ENFORCE passa', async () => {
@@ -461,7 +470,6 @@ describe('AC-A22 (a): turno de drive de pipeline com sessao OFF/OFF sobrevive vi
   });
 });
 
-
 describe('AC-A22 (b): wake de workflow blocked com sessao OFF/OFF sobrevive via lease dynamic-workflow-ignition', () => {
   it('fireIgnition (boot re-ignition, mesmo seam do wake por gate-blocked) cria a lease; dynamicWorkflows forcado ON; pipelineControl continua OFF; gate ENFORCE passa', async () => {
     const deps = makeIgnitionDeps(makeRun());
@@ -491,7 +499,6 @@ describe('AC-A22 (b): wake de workflow blocked com sessao OFF/OFF sobrevive via 
     expect(captured?.gateSystemEventPipeline.ok).toBe(false);
   });
 });
-
 
 describe('AC-A22 (c): system-event sem lease valida NAO forca capability (fail-closed)', () => {
   it('token FORJADO (nao emitido pelo create): efetivas ficam OFF e o gate em enforce NEGA', async () => {
@@ -544,14 +551,9 @@ describe('AC-A22 (c): system-event sem lease valida NAO forca capability (fail-c
   });
 });
 
-
 describe('AC-A22 (d): turno de usuario comum com toggles OFF continua OFF', () => {
   it('origin user + featureToggles OFF: efetivas = OFF; gate em enforce nega pipeline_*', async () => {
-    submitMessage(
-      'oi',
-      { sessionId: 'sess-user', featureToggles: { ...OFF } } as QueryOptions,
-      noopGetWindow,
-    );
+    submitMessage('oi', { sessionId: 'sess-user', featureToggles: { ...OFF } } as QueryOptions, noopGetWindow);
 
     await waitTurnDone();
 
@@ -563,7 +565,6 @@ describe('AC-A22 (d): turno de usuario comum com toggles OFF continua OFF', () =
     expect(captured?.gateChatWorkflow.ok).toBe(false);
   });
 });
-
 
 describe('S6a bonus: fail-safe do getSetting(TTL) no hook do orchestrator', () => {
   it('getSetting lancando para o TTL: o turno RODA e o turn-context e registrado com TTL default', async () => {

@@ -7,7 +7,6 @@ import {
   architectureSpecEnricher,
 } from '../seed-agents';
 
-
 const ARCHITECTURE_REVIEW_SEEDS = [
   architectureMapper,
   architectureTargetTriage,

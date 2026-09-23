@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import { createLogger } from './logger';
@@ -8,7 +7,6 @@ import { getClaudeSdkProcessOptions } from './pipeline-shared/sdk-bootstrap';
 import { SDK_DISALLOWED_TOOLS, toSdkToolNames } from './agent-runtime/sdk-tool-names';
 
 const logger = createLogger('repo-profiler');
-
 
 export interface PhaseCallbacks {
   onText?: (chunk: string) => void;
@@ -29,7 +27,6 @@ export interface RepoManifest {
   skippedLargeFiles?: Array<{ path: string; sizeBytes: number }>;
 }
 
-
 const IGNORED_DIRS = new Set([
   'node_modules',
   'vendor',
@@ -45,12 +42,46 @@ const IGNORED_DIRS = new Set([
 ]);
 
 const BINARY_EXTENSIONS = new Set([
-  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp',
-  '.ico', '.svg', '.pdf', '.zip', '.tar', '.gz', '.bz2', '.xz',
-  '.7z', '.rar', '.woff', '.woff2', '.ttf', '.otf', '.eot',
-  '.mp4', '.mp3', '.wav', '.ogg', '.avi', '.mov', '.mkv',
-  '.so', '.dll', '.exe', '.wasm', '.dylib', '.a', '.lib',
-  '.class', '.jar', '.pyc', '.pyo',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.bmp',
+  '.tiff',
+  '.webp',
+  '.ico',
+  '.svg',
+  '.pdf',
+  '.zip',
+  '.tar',
+  '.gz',
+  '.bz2',
+  '.xz',
+  '.7z',
+  '.rar',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.otf',
+  '.eot',
+  '.mp4',
+  '.mp3',
+  '.wav',
+  '.ogg',
+  '.avi',
+  '.mov',
+  '.mkv',
+  '.so',
+  '.dll',
+  '.exe',
+  '.wasm',
+  '.dylib',
+  '.a',
+  '.lib',
+  '.class',
+  '.jar',
+  '.pyc',
+  '.pyo',
 ]);
 
 const DEFAULT_MAX_FILE_SIZE_BYTES = 5_242_880;
@@ -64,48 +95,79 @@ export function setRepoProfilerMaxFileSize(bytes: number): void {
 const MAX_FILES_SCANNED = 10_000;
 
 const ALL_ROLES = [
-  'auth', 'query', 'crypto', 'route', 'middleware',
-  'template', 'async', 'error-handling', 'config', 'migration',
+  'auth',
+  'query',
+  'crypto',
+  'route',
+  'middleware',
+  'template',
+  'async',
+  'error-handling',
+  'config',
+  'migration',
 ] as const;
 
-export type Role = typeof ALL_ROLES[number];
-
+export type Role = (typeof ALL_ROLES)[number];
 
 const CONTENT_ROLE_PATTERNS: Record<Exclude<Role, 'config' | 'migration'>, string[]> = {
-  auth: [
-    'session', 'token', 'authenticate', 'passport',
-    'jwt.verify', 'jwt.sign', 'login', 'bcrypt', 'argon2',
-  ],
+  auth: ['session', 'token', 'authenticate', 'passport', 'jwt.verify', 'jwt.sign', 'login', 'bcrypt', 'argon2'],
   query: [
-    'SELECT ', 'INSERT ', 'UPDATE ', 'DELETE ',
-    '.query(', '.execute(', 'prepare(', 'findOne', 'findMany', 'where(',
-    'prisma.', 'knex', 'sequelize',
+    'SELECT ',
+    'INSERT ',
+    'UPDATE ',
+    'DELETE ',
+    '.query(',
+    '.execute(',
+    'prepare(',
+    'findOne',
+    'findMany',
+    'where(',
+    'prisma.',
+    'knex',
+    'sequelize',
   ],
   crypto: [
-    'crypto.', 'createHash', 'createCipher', 'encrypt', 'decrypt',
-    'randomBytes', 'pbkdf2', 'scrypt', 'bcrypt', 'argon2', 'hashlib',
+    'crypto.',
+    'createHash',
+    'createCipher',
+    'encrypt',
+    'decrypt',
+    'randomBytes',
+    'pbkdf2',
+    'scrypt',
+    'bcrypt',
+    'argon2',
+    'hashlib',
   ],
   route: [
-    'router.', 'app.get(', 'app.post(', 'app.put(', 'app.delete(',
-    '@Get(', '@Post(', '@Route', 'Route.', '@app.get', 'controller',
+    'router.',
+    'app.get(',
+    'app.post(',
+    'app.put(',
+    'app.delete(',
+    '@Get(',
+    '@Post(',
+    '@Route',
+    'Route.',
+    '@app.get',
+    'controller',
   ],
-  middleware: [
-    'middleware', 'next()', 'req,', 'req.headers', 'cors(', 'helmet(',
-    'interceptor', 'guard', '@UseGuards',
-  ],
+  middleware: ['middleware', 'next()', 'req,', 'req.headers', 'cors(', 'helmet(', 'interceptor', 'guard', '@UseGuards'],
   template: [
-    '.erb', '.ejs', '.pug', '.hbs', '.mustache',
-    'innerHTML', 'dangerouslySetInnerHTML', 'v-html', '{{{',
-    '<%', '{{',
+    '.erb',
+    '.ejs',
+    '.pug',
+    '.hbs',
+    '.mustache',
+    'innerHTML',
+    'dangerouslySetInnerHTML',
+    'v-html',
+    '{{{',
+    '<%',
+    '{{',
   ],
-  async: [
-    'setTimeout', 'setInterval', 'async ', 'await ', 'Promise.',
-    '.then(', 'queueMicrotask',
-  ],
-  'error-handling': [
-    'try {', 'catch (', 'throw new', 'Error(', '.catch(', 'onerror',
-    'catch(',
-  ],
+  async: ['setTimeout', 'setInterval', 'async ', 'await ', 'Promise.', '.then(', 'queueMicrotask'],
+  'error-handling': ['try {', 'catch (', 'throw new', 'Error(', '.catch(', 'onerror', 'catch('],
 };
 
 export const ROLE_MIN_HITS: Record<Role, number> = {
@@ -138,12 +200,15 @@ export function stripCommentsAndStrings(content: string): string {
     .replace(/`(?:[^`\\]|\\.)*`/g, '``');
 }
 
-export const ROLE_METADATA: Record<Role, {
-  label: string;
-  description: string;
-  threshold: number;
-  samplePatterns: string[];
-}> = {
+export const ROLE_METADATA: Record<
+  Role,
+  {
+    label: string;
+    description: string;
+    threshold: number;
+    samplePatterns: string[];
+  }
+> = {
   auth: {
     label: 'Auth',
     description: 'Arquivos com logica de autenticacao',
@@ -220,7 +285,6 @@ const CONFIG_NAME_PATTERNS = [
   /^(docker-compose|docker\.compose)\.(yml|yaml)$/i,
   /^(\.gitlab-ci|\.travis|circle\.ci)\.(yml|yaml)$/i,
 ];
-
 
 interface LangFramework {
   language: string;
@@ -314,8 +378,7 @@ function detectLanguageFramework(projectPath: string): LangFramework {
       if (fs.existsSync(pyprojectPath)) {
         content += fs.readFileSync(pyprojectPath, 'utf-8').toLowerCase();
       }
-    } catch {
-    }
+    } catch {}
 
     let framework = 'unknown';
     if (content.includes('django')) {
@@ -355,17 +418,13 @@ function detectLanguageFramework(projectPath: string): LangFramework {
       if (fs.existsSync(pomPath)) content += fs.readFileSync(pomPath, 'utf-8').toLowerCase();
       if (fs.existsSync(gradlePath)) content += fs.readFileSync(gradlePath, 'utf-8').toLowerCase();
       if (fs.existsSync(gradleKtsPath)) content += fs.readFileSync(gradleKtsPath, 'utf-8').toLowerCase();
-    } catch {
-    }
-    const framework = content.includes('spring-boot') || content.includes('spring.boot')
-      ? 'spring-boot'
-      : 'unknown';
+    } catch {}
+    const framework = content.includes('spring-boot') || content.includes('spring.boot') ? 'spring-boot' : 'unknown';
     return { language: 'java', framework };
   }
 
   return { language: 'unknown', framework: 'unknown' };
 }
-
 
 function isConfigFile(basename: string): boolean {
   return CONFIG_NAME_PATTERNS.some((re) => re.test(basename));
@@ -373,25 +432,18 @@ function isConfigFile(basename: string): boolean {
 
 function isMigrationFile(relativePath: string, content: string | null): boolean {
   const lowerPath = relativePath.toLowerCase();
-  const inMigrationFolder =
-    lowerPath.includes('/migration') || lowerPath.includes('/migrate');
+  const inMigrationFolder = lowerPath.includes('/migration') || lowerPath.includes('/migrate');
 
   if (!inMigrationFolder) return false;
   if (content === null) return false;
 
   const upperContent = content.toUpperCase();
   return (
-    upperContent.includes('CREATE TABLE') ||
-    upperContent.includes('ALTER TABLE') ||
-    upperContent.includes('DROP TABLE')
+    upperContent.includes('CREATE TABLE') || upperContent.includes('ALTER TABLE') || upperContent.includes('DROP TABLE')
   );
 }
 
-export function classifyByContent(
-  relativePath: string,
-  basename: string,
-  content: string | null,
-): Role[] {
+export function classifyByContent(relativePath: string, basename: string, content: string | null): Role[] {
   const roles = new Set<Role>();
 
   if (isConfigFile(basename)) {
@@ -437,7 +489,6 @@ export function classifyByContent(
   return Array.from(roles);
 }
 
-
 interface ScanResult {
   totalFiles: number;
   classifiedFiles: number;
@@ -446,10 +497,7 @@ interface ScanResult {
   skippedLargeFiles: Array<{ path: string; sizeBytes: number }>;
 }
 
-function scanDirectory(
-  projectPath: string,
-  callbacks: PhaseCallbacks,
-): ScanResult {
+function scanDirectory(projectPath: string, callbacks: PhaseCallbacks): ScanResult {
   const filesByRole: Record<Role, string[]> = {
     auth: [],
     query: [],
@@ -560,7 +608,6 @@ function scanDirectory(
   };
 }
 
-
 function findPreviousScan(projectPath: string): string | null {
   const securityDir = path.join(projectPath, '.lionclaw', 'Security');
 
@@ -576,16 +623,13 @@ function findPreviousScan(projectPath: string): string | null {
     return null;
   }
 
-  const scanFiles = entries
-    .filter((name) => /^SecurityScan-.+\.json$/i.test(name))
-    .sort(); // ordem lexicografica funciona pois nomes sao YYYYMMDD-HHmm
+  const scanFiles = entries.filter((name) => /^SecurityScan-.+\.json$/i.test(name)).sort();
 
   if (scanFiles.length === 0) return null;
 
   const latest = scanFiles[scanFiles.length - 1];
   return path.join(securityDir, latest);
 }
-
 
 const STACK_DETECTION_SYSTEM_PROMPT = `Voce e um detector de stack tecnico para auditoria de seguranca.
 
@@ -605,10 +649,7 @@ Regras:
 Valores validos para language: typescript, javascript, python, ruby, go, rust, java, kotlin, php, csharp, swift, elixir, scala, unknown.
 Valores validos para framework: string curta lowercase (fastapi, django, flask, nextjs, express, rails, spring-boot, gin, axum, ...) ou "unknown".`;
 
-async function detectStackWithAgent(
-  projectPath: string,
-  current: LangFramework,
-): Promise<LangFramework> {
+async function detectStackWithAgent(projectPath: string, current: LangFramework): Promise<LangFramework> {
   try {
     const runtime = (getSetting('orchestrator_runtime') || '').trim();
     if (runtime !== 'claude-sdk') {
@@ -662,8 +703,10 @@ async function detectStackWithAgent(
     }
 
     const parsed = JSON.parse(rawJson) as { language?: unknown; framework?: unknown };
-    const lang = typeof parsed.language === 'string' && parsed.language.trim() ? parsed.language.trim() : current.language;
-    const fw = typeof parsed.framework === 'string' && parsed.framework.trim() ? parsed.framework.trim() : current.framework;
+    const lang =
+      typeof parsed.language === 'string' && parsed.language.trim() ? parsed.language.trim() : current.language;
+    const fw =
+      typeof parsed.framework === 'string' && parsed.framework.trim() ? parsed.framework.trim() : current.framework;
 
     logger.info({ projectPath, detected: { language: lang, framework: fw } }, 'Stack detection agent: success');
     return { language: lang, framework: fw };
@@ -673,11 +716,7 @@ async function detectStackWithAgent(
   }
 }
 
-
-export async function runRepoProfiler(
-  projectPath: string,
-  callbacks: PhaseCallbacks,
-): Promise<RepoManifest> {
+export async function runRepoProfiler(projectPath: string, callbacks: PhaseCallbacks): Promise<RepoManifest> {
   logger.info({ projectPath }, 'Iniciando Repo Profiler');
 
   callbacks.onText?.('Detectando linguagem e framework...');
@@ -715,18 +754,9 @@ export async function runRepoProfiler(
 
   const scanResult = scanDirectory(projectPath, callbacks);
 
-  const {
-    totalFiles,
-    classifiedFiles,
-    ignoredDirsFound,
-    filesByRole,
-    skippedLargeFiles,
-  } = scanResult;
+  const { totalFiles, classifiedFiles, ignoredDirsFound, filesByRole, skippedLargeFiles } = scanResult;
 
-  logger.info(
-    { totalFiles, classifiedFiles, ignoredDirs: ignoredDirsFound },
-    'Varredura concluida',
-  );
+  logger.info({ totalFiles, classifiedFiles, ignoredDirs: ignoredDirsFound }, 'Varredura concluida');
 
   const manifest: RepoManifest = {
     projectPath,

@@ -1,4 +1,3 @@
-
 import { spawn, type ChildProcess } from 'child_process';
 import { createLogger } from '../../logger';
 import {
@@ -17,7 +16,6 @@ const DEFAULT_KILL_GRACE_MS = 8_000;
 const DEFAULT_HEALTH_PING_INTERVAL_MS = 15_000;
 const DEFAULT_HEALTH_PONG_TIMEOUT_MS = 10_000;
 const SHUTDOWN_GRACE_MS = 2_000;
-
 
 export interface CursorToolInvocation {
   executionId: string;
@@ -53,13 +51,7 @@ export interface CursorSidecarExecutionResult {
 }
 
 export type CursorSidecarFailureKind =
-  | 'spawn-failed'
-  | 'ready-timeout'
-  | 'sidecar-crash'
-  | 'sidecar-fatal'
-  | 'health-timeout'
-  | 'aborted'
-  | 'execute-error';
+  'spawn-failed' | 'ready-timeout' | 'sidecar-crash' | 'sidecar-fatal' | 'health-timeout' | 'aborted' | 'execute-error';
 
 export class CursorSidecarError extends Error {
   constructor(
@@ -86,7 +78,6 @@ export interface CursorSidecarExecutionOptions {
   extraEnv?: Record<string, string>;
 }
 
-
 interface ActiveSidecarEntry {
   executionId: string;
   child: ChildProcess;
@@ -105,8 +96,7 @@ export async function shutdownCursorSidecars(reason: string): Promise<void> {
   for (const entry of entries) {
     try {
       writeHostMessage(entry.child, { type: 'shutdown' });
-    } catch {
-    }
+    } catch {}
   }
   await new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, SHUTDOWN_GRACE_MS);
@@ -116,13 +106,11 @@ export async function shutdownCursorSidecars(reason: string): Promise<void> {
     if (entry.child.exitCode === null && !entry.child.killed) {
       try {
         entry.child.kill();
-      } catch {
-      }
+      } catch {}
     }
     activeSidecars.delete(entry.executionId);
   }
 }
-
 
 function writeHostMessage(child: ChildProcess, msg: CursorSidecarHostMessage): void {
   if (!child.stdin || child.stdin.destroyed) return;
@@ -137,20 +125,13 @@ export async function runCursorSidecarExecution(
   const signal = abortController.signal;
 
   if (signal.aborted) {
-    throw new CursorSidecarError(
-      `Execucao cursor ${executionId} abortada antes do spawn do sidecar`,
-      'aborted',
-    );
+    throw new CursorSidecarError(`Execucao cursor ${executionId} abortada antes do spawn do sidecar`, 'aborted');
   }
   if (activeSidecars.has(executionId)) {
-    throw new CursorSidecarError(
-      `Ja existe um sidecar vivo para a execucao ${executionId}`,
-      'spawn-failed',
-    );
+    throw new CursorSidecarError(`Ja existe um sidecar vivo para a execucao ${executionId}`, 'spawn-failed');
   }
 
-  const nodePath =
-    opts.nodePathOverride ?? (await resolveCursorSidecarNode()).nodePath;
+  const nodePath = opts.nodePathOverride ?? (await resolveCursorSidecarNode()).nodePath;
   const entryPath = opts.entryPathOverride ?? resolveCursorSidecarEntry();
 
   const readyTimeoutMs = opts.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS;
@@ -168,10 +149,7 @@ export async function runCursorSidecarExecution(
     });
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    throw new CursorSidecarError(
-      `Falha ao spawnar o sidecar Cursor (${nodePath}): ${detail}`,
-      'spawn-failed',
-    );
+    throw new CursorSidecarError(`Falha ao spawnar o sidecar Cursor (${nodePath}): ${detail}`, 'spawn-failed');
   }
 
   activeSidecars.set(executionId, { executionId, child });
@@ -205,8 +183,7 @@ export async function runCursorSidecarExecution(
       logger.warn({ executionId, why }, 'Matando sidecar Cursor (ultima linha)');
       try {
         child.kill();
-      } catch {
-      }
+      } catch {}
     };
 
     const cleanup = (): void => {
@@ -215,8 +192,7 @@ export async function runCursorSidecarExecution(
       activeSidecars.delete(executionId);
       try {
         writeHostMessage(child, { type: 'shutdown' });
-      } catch {
-      }
+      } catch {}
       const graceTimer = setTimeout(() => killSidecar('shutdown-grace'), SHUTDOWN_GRACE_MS);
       graceTimer.unref?.();
     };
@@ -353,8 +329,7 @@ export async function runCursorSidecarExecution(
             break;
           }
           case 'execute-error': {
-            const message =
-              typeof raw['message'] === 'string' ? (raw['message'] as string) : 'erro desconhecido';
+            const message = typeof raw['message'] === 'string' ? (raw['message'] as string) : 'erro desconhecido';
             settleReject(
               new CursorSidecarError(
                 `Execucao cursor ${executionId} falhou no sidecar: ${message}`,
@@ -397,10 +372,7 @@ export async function runCursorSidecarExecution(
 
     child.on('error', (err) => {
       settleReject(
-        new CursorSidecarError(
-          `Falha no processo sidecar Cursor (${nodePath}): ${err.message}`,
-          'spawn-failed',
-        ),
+        new CursorSidecarError(`Falha no processo sidecar Cursor (${nodePath}): ${err.message}`, 'spawn-failed'),
       );
     });
 
@@ -446,8 +418,7 @@ export function _resetCursorSidecarsForTesting(): void {
   for (const entry of activeSidecars.values()) {
     try {
       entry.child.kill();
-    } catch {
-    }
+    } catch {}
   }
   activeSidecars.clear();
 }

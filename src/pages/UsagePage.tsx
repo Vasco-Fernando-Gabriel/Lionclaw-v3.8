@@ -67,8 +67,7 @@ export function UsagePage() {
         const rect = container.getBoundingClientRect();
         if (rect.width < 50 || rect.height < 50) return;
         fit.fit();
-      } catch {
-      }
+      } catch {}
     };
 
     const raf = requestAnimationFrame(() => {
@@ -101,8 +100,7 @@ export function UsagePage() {
         safeFit();
         try {
           void window.lionclaw.codeburn.resize(term.cols, term.rows);
-        } catch {
-        }
+        } catch {}
       });
       ro.observe(container);
     });
@@ -117,8 +115,7 @@ export function UsagePage() {
       void window.lionclaw.codeburn.kill();
       try {
         term.dispose();
-      } catch {
-      }
+      } catch {}
       termRef.current = null;
       fitRef.current = null;
     };
@@ -163,9 +160,7 @@ export function UsagePage() {
         </div>
       </div>
       {error && (
-        <div className="px-4 py-2 text-xs font-mono text-red-400 bg-red-950/40 border-b border-red-900/60">
-          {error}
-        </div>
+        <div className="px-4 py-2 text-xs font-mono text-red-400 bg-red-950/40 border-b border-red-900/60">{error}</div>
       )}
       <div ref={containerRef} onClick={focusTerm} className="flex-1 min-h-0" />
     </div>

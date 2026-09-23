@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('electron', () => ({
@@ -14,7 +13,6 @@ describe('pipeline-event-bus (SPEC 4.0 / B1)', () => {
   beforeEach(() => {
     pipelineEventBus._resetForTesting();
   });
-
 
   describe('emit chama os listeners', () => {
     it('chama o unico listener do canal com o payload', () => {
@@ -56,12 +54,9 @@ describe('pipeline-event-bus (SPEC 4.0 / B1)', () => {
     });
 
     it('emit sem listeners e no-op (nao lanca)', () => {
-      expect(() =>
-        pipelineEventBus.emit('pipeline:agent-completed', { projectId: 'x' }),
-      ).not.toThrow();
+      expect(() => pipelineEventBus.emit('pipeline:agent-completed', { projectId: 'x' })).not.toThrow();
     });
   });
-
 
   describe('off remove a assinatura', () => {
     it('off para de notificar o listener removido', () => {
@@ -73,7 +68,7 @@ describe('pipeline-event-bus (SPEC 4.0 / B1)', () => {
 
       pipelineEventBus.off('pipeline:agent-completed', listener);
       pipelineEventBus.emit('pipeline:agent-completed', { projectId: 'a' });
-      expect(listener).toHaveBeenCalledTimes(1); // nao subiu
+      expect(listener).toHaveBeenCalledTimes(1);
     });
 
     it('o cleanup retornado por on() tambem remove', () => {
@@ -99,12 +94,9 @@ describe('pipeline-event-bus (SPEC 4.0 / B1)', () => {
     });
 
     it('off de listener inexistente e no-op (nao lanca)', () => {
-      expect(() =>
-        pipelineEventBus.off('pipeline:stream', () => {}),
-      ).not.toThrow();
+      expect(() => pipelineEventBus.off('pipeline:stream', () => {})).not.toThrow();
     });
   });
-
 
   describe('isolamento de erro (SPEC 4.0)', () => {
     it('um listener que joga NAO impede os demais nem derruba o emit', () => {
@@ -118,9 +110,7 @@ describe('pipeline-event-bus (SPEC 4.0 / B1)', () => {
       pipelineEventBus.on('pipeline:stream', throwing);
       pipelineEventBus.on('pipeline:stream', after);
 
-      expect(() =>
-        pipelineEventBus.emit('pipeline:stream', { projectId: 'a', phase: 1, type: 'done' }),
-      ).not.toThrow();
+      expect(() => pipelineEventBus.emit('pipeline:stream', { projectId: 'a', phase: 1, type: 'done' })).not.toThrow();
 
       expect(before).toHaveBeenCalledTimes(1);
       expect(throwing).toHaveBeenCalledTimes(1);
@@ -145,7 +135,6 @@ describe('pipeline-event-bus (SPEC 4.0 / B1)', () => {
       expect(other).toHaveBeenCalledTimes(2);
     });
   });
-
 
   describe('emitIPC publica pipeline:* no bus e NAO publica nao-pipeline', () => {
     it('emitIPC("pipeline:...") chega no bus', () => {
@@ -176,9 +165,7 @@ describe('pipeline-event-bus (SPEC 4.0 / B1)', () => {
       pipelineEventBus.on('pipeline:error', () => {
         throw new Error('boom no bus');
       });
-      expect(() =>
-        emitIPC('pipeline:error', { projectId: 'a', error: 'x' }),
-      ).not.toThrow();
+      expect(() => emitIPC('pipeline:error', { projectId: 'a', error: 'x' })).not.toThrow();
     });
   });
 });

@@ -20,10 +20,7 @@ interface SprintCardProps {
   projectId: string;
 }
 
-const STATUS_CONFIG: Record<
-  HarnessSprint['status'],
-  { icon: React.ReactNode; badge: string; label: string }
-> = {
+const STATUS_CONFIG: Record<HarnessSprint['status'], { icon: React.ReactNode; badge: string; label: string }> = {
   pending: {
     icon: <Circle size={14} className="text-zinc-500" />,
     badge: 'bg-zinc-700/60 text-zinc-400',
@@ -116,15 +113,11 @@ export function SprintCard({ sprint, projectId }: SprintCardProps) {
             {sprint.roundsUsed}/{sprint.maxRounds} rodadas
           </span>
 
-          <span
-            className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${config.badge}`}
-          >
+          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${config.badge}`}>
             {config.label}
           </span>
 
-          <span className="text-zinc-600">
-            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          </span>
+          <span className="text-zinc-600">{expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
         </div>
       </button>
 
@@ -138,9 +131,7 @@ export function SprintCard({ sprint, projectId }: SprintCardProps) {
             </div>
           )}
 
-          {jsonError && (
-            <p className="text-xs text-red-400">{jsonError}</p>
-          )}
+          {jsonError && <p className="text-xs text-red-400">{jsonError}</p>}
 
           {sprintJson && (
             <>
@@ -155,19 +146,16 @@ export function SprintCard({ sprint, projectId }: SprintCardProps) {
                 </span>
                 <span className="flex items-center gap-1">
                   <Layers size={12} />
-                  Complexidade: <span className={COMPLEXITY_COLORS[sprintJson.complexity]}>{sprintJson.complexity}</span>
+                  Complexidade:{' '}
+                  <span className={COMPLEXITY_COLORS[sprintJson.complexity]}>{sprintJson.complexity}</span>
                 </span>
                 <span>Rounds estimados: {sprintJson.estimated_rounds}</span>
-                {sprintJson.stack.length > 0 && (
-                  <span>Stack: {sprintJson.stack.join(', ')}</span>
-                )}
+                {sprintJson.stack.length > 0 && <span>Stack: {sprintJson.stack.join(', ')}</span>}
               </div>
 
               {/* Dependencies */}
               {sprintJson.dependencies.length > 0 && (
-                <div className="text-xs text-zinc-500">
-                  Dependencias: {sprintJson.dependencies.join(', ')}
-                </div>
+                <div className="text-xs text-zinc-500">Dependencias: {sprintJson.dependencies.join(', ')}</div>
               )}
 
               {/* Features */}
@@ -199,31 +187,32 @@ export function SprintCard({ sprint, projectId }: SprintCardProps) {
               </div>
 
               {/* Hints */}
-              {sprintJson.hints && (sprintJson.hints.architecture_notes || sprintJson.hints.existing_files.length > 0) && (
-                <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 space-y-1">
-                  <span className="text-[10px] text-zinc-500 uppercase font-semibold">Hints para o Coder</span>
-                  {sprintJson.hints.architecture_notes && (
-                    <p className="text-xs text-zinc-400">{sprintJson.hints.architecture_notes}</p>
-                  )}
-                  {sprintJson.hints.existing_files.length > 0 && (
-                    <p className="text-xs text-zinc-500">
-                      Arquivos: <span className="text-zinc-400 font-mono">{sprintJson.hints.existing_files.join(', ')}</span>
-                    </p>
-                  )}
-                  {sprintJson.hints.key_interfaces.length > 0 && (
-                    <p className="text-xs text-zinc-500">
-                      Interfaces: <span className="text-zinc-400 font-mono">{sprintJson.hints.key_interfaces.join(', ')}</span>
-                    </p>
-                  )}
-                </div>
-              )}
+              {sprintJson.hints &&
+                (sprintJson.hints.architecture_notes || sprintJson.hints.existing_files.length > 0) && (
+                  <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 space-y-1">
+                    <span className="text-[10px] text-zinc-500 uppercase font-semibold">Hints para o Coder</span>
+                    {sprintJson.hints.architecture_notes && (
+                      <p className="text-xs text-zinc-400">{sprintJson.hints.architecture_notes}</p>
+                    )}
+                    {sprintJson.hints.existing_files.length > 0 && (
+                      <p className="text-xs text-zinc-500">
+                        Arquivos:{' '}
+                        <span className="text-zinc-400 font-mono">{sprintJson.hints.existing_files.join(', ')}</span>
+                      </p>
+                    )}
+                    {sprintJson.hints.key_interfaces.length > 0 && (
+                      <p className="text-xs text-zinc-500">
+                        Interfaces:{' '}
+                        <span className="text-zinc-400 font-mono">{sprintJson.hints.key_interfaces.join(', ')}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
             </>
           )}
 
           {/* Execution criteria (for completed/running sprints) */}
-          {hasExecutionData && (
-            <CriteriaList projectId={projectId} sprintId={sprint.id} />
-          )}
+          {hasExecutionData && <CriteriaList projectId={projectId} sprintId={sprint.id} />}
         </div>
       )}
     </div>

@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import fs from 'fs';
 import path from 'path';
@@ -15,15 +12,10 @@ const client = new ElevenLabsClient();
 const DEFAULT_ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'RGymW84CSmfVugnA5tvA';
 
 function resolveVoiceId(value: unknown): string {
-  return typeof value === 'string' && value.trim()
-    ? value.trim()
-    : DEFAULT_ELEVENLABS_VOICE_ID;
+  return typeof value === 'string' && value.trim() ? value.trim() : DEFAULT_ELEVENLABS_VOICE_ID;
 }
 
-const server = new Server(
-  { name: 'elevenlabs', version: '1.0.0' },
-  { capabilities: { tools: {} } },
-);
+const server = new Server({ name: 'elevenlabs', version: '1.0.0' }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
@@ -51,7 +43,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'text_to_speech',
-      description: 'Gerar audio a partir de texto. Salva em arquivo e retorna o path. O usuario vai ouvir o audio no chat.',
+      description:
+        'Gerar audio a partir de texto. Salva em arquivo e retorna o path. O usuario vai ouvir o audio no chat.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -135,13 +128,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const voices = await client.voices.search({
           search: a.search as string | undefined,
         });
-        const formatted = voices.voices?.map(v => ({
-          voice_id: v.voiceId,
-          name: v.name,
-          category: v.category,
-          labels: v.labels,
-          preview_url: v.previewUrl,
-        })) || [];
+        const formatted =
+          voices.voices?.map((v) => ({
+            voice_id: v.voiceId,
+            name: v.name,
+            category: v.category,
+            labels: v.labels,
+            preview_url: v.previewUrl,
+          })) || [];
         return { content: [{ type: 'text' as const, text: JSON.stringify(formatted, null, 2) }] };
       }
 
@@ -165,10 +159,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         fs.writeFileSync(tmpPath, Buffer.concat(chunks));
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: `Audio gerado com sucesso.\nARQUIVO_AUDIO: ${tmpPath}\nDuracao estimada: ${Math.round(Buffer.concat(chunks).length / 16000)}s`,
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: `Audio gerado com sucesso.\nARQUIVO_AUDIO: ${tmpPath}\nDuracao estimada: ${Math.round(Buffer.concat(chunks).length / 16000)}s`,
+            },
+          ],
         };
       }
 
@@ -188,10 +184,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         fs.writeFileSync(tmpPath, Buffer.concat(chunks));
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: `Preview de voz gerado.\nARQUIVO_AUDIO: ${tmpPath}`,
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: `Preview de voz gerado.\nARQUIVO_AUDIO: ${tmpPath}`,
+            },
+          ],
         };
       }
 

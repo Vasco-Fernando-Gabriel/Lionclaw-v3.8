@@ -143,12 +143,7 @@ vi.mock('../agent-runtime/runtime-capabilities', () => ({
 }));
 vi.mock('../smoke-audit', () => ({ smokeAudit: vi.fn() }));
 
-import {
-  __telegramInternal,
-  isTelegramRunning,
-  startTelegramBot,
-  stopTelegramBot,
-} from '../telegram-bridge';
+import { __telegramInternal, isTelegramRunning, startTelegramBot, stopTelegramBot } from '../telegram-bridge';
 
 const getWindow = () => null;
 
@@ -231,11 +226,7 @@ describe('Telegram polling lifecycle', () => {
     expect(pollingInstances()).toHaveLength(1);
     expect(first.isPolling()).toBe(true);
     expect(isTelegramRunning()).toBe(false);
-    expect(h.updateChannelStatus).toHaveBeenCalledWith(
-      'telegram',
-      'error',
-      'Nao foi possivel parar o Telegram',
-    );
+    expect(h.updateChannelStatus).toHaveBeenCalledWith('telegram', 'error', 'Nao foi possivel parar o Telegram');
   });
 
   it('409 e terminal, deduplicado e nao cria reconnect', async () => {
@@ -249,7 +240,11 @@ describe('Telegram polling lifecycle', () => {
 
     expect(instance.stopPolling).toHaveBeenCalledTimes(1);
     expect(h.logger.error).toHaveBeenCalledTimes(1);
-    expect(h.updateChannelStatus).toHaveBeenCalledWith('telegram', 'error', 'Conflict: polling ativo em outra instancia');
+    expect(h.updateChannelStatus).toHaveBeenCalledWith(
+      'telegram',
+      'error',
+      'Conflict: polling ativo em outra instancia',
+    );
     expect(pollingInstances()).toHaveLength(1);
     expect(isTelegramRunning()).toBe(false);
   });
@@ -430,11 +425,8 @@ describe('Telegram polling lifecycle', () => {
     await startTelegramBot(getWindow);
     const instance = pollingInstances()[0]!;
 
-    const response = __telegramInternal.sendTelegramResponse(
-      42,
-      'a'.repeat(9_000),
-      instance as never,
-      () => isTelegramRunning(),
+    const response = __telegramInternal.sendTelegramResponse(42, 'a'.repeat(9_000), instance as never, () =>
+      isTelegramRunning(),
     );
     await settleLifecycle();
 

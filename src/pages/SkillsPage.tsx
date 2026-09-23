@@ -1,5 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Zap, Plus, Pencil, Trash2, FileCode, GitFork, Bot, Wrench, Wand2, ChevronDown, ChevronRight } from 'lucide-react';
+import {
+  Zap,
+  Plus,
+  Pencil,
+  Trash2,
+  FileCode,
+  GitFork,
+  Bot,
+  Wrench,
+  Wand2,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
 import { SkillFormModal } from '@/components/skills/SkillFormModal';
 import { SkillEditor } from '@/components/skills/SkillEditor';
 import { useAppStore } from '@/stores/app-store';
@@ -23,7 +35,9 @@ export function SkillsPage() {
     setIsLoading(false);
   };
 
-  useEffect(() => { loadSkills(); }, []);
+  useEffect(() => {
+    loadSkills();
+  }, []);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Skill[]>();
@@ -49,7 +63,7 @@ export function SkillsPage() {
   }, [skills]);
 
   const toggleCategory = (cat: string) => {
-    setCollapsedCategories(prev => {
+    setCollapsedCategories((prev) => {
       const next = new Set(prev);
       if (next.has(cat)) next.delete(cat);
       else next.add(cat);
@@ -127,7 +141,7 @@ export function SkillsPage() {
             <div className="flex items-center gap-1.5 mt-2">
               <Wrench size={10} className="text-zinc-600" />
               <div className="flex flex-wrap gap-1">
-                {skill.allowedTools.map(tool => (
+                {skill.allowedTools.map((tool) => (
                   <span key={tool} className="px-1.5 py-0.5 text-[10px] bg-zinc-800 text-zinc-400 rounded">
                     {tool}
                   </span>
@@ -135,9 +149,7 @@ export function SkillsPage() {
               </div>
             </div>
           )}
-          {skill.agent && (
-            <p className="text-[10px] text-zinc-600 mt-1">Agent: {skill.agent}</p>
-          )}
+          {skill.agent && <p className="text-[10px] text-zinc-600 mt-1">Agent: {skill.agent}</p>}
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -148,7 +160,10 @@ export function SkillsPage() {
             <FileCode size={14} />
           </button>
           <button
-            onClick={() => { setEditingSkill(skill); setShowModal(true); }}
+            onClick={() => {
+              setEditingSkill(skill);
+              setShowModal(true);
+            }}
             className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300"
             title="Editar"
           >
@@ -176,7 +191,10 @@ export function SkillsPage() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { setEditingSkill(undefined); setShowModal(true); }}
+              onClick={() => {
+                setEditingSkill(undefined);
+                setShowModal(true);
+              }}
               className="flex items-center gap-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
             >
               <Plus size={16} />
@@ -187,7 +205,7 @@ export function SkillsPage() {
                 const { setPendingChat, setPage } = useAppStore.getState();
                 setPendingChat(
                   'Quero criar uma nova skill para o LionClaw. Inicie o processo de criacao assistida - me faca perguntas sobre o que a skill deve fazer, quando ativar, formato de saida, etc.',
-                  'skill-creator'
+                  'skill-creator',
                 );
                 setPage('chat');
               }}
@@ -219,22 +237,17 @@ export function SkillsPage() {
                     onClick={() => toggleCategory(category)}
                     className="flex items-center gap-2 mb-2 group w-full text-left"
                   >
-                    {isCollapsed
-                      ? <ChevronRight size={14} className="text-zinc-500 group-hover:text-zinc-300" />
-                      : <ChevronDown size={14} className="text-zinc-500 group-hover:text-zinc-300" />
-                    }
+                    {isCollapsed ? (
+                      <ChevronRight size={14} className="text-zinc-500 group-hover:text-zinc-300" />
+                    ) : (
+                      <ChevronDown size={14} className="text-zinc-500 group-hover:text-zinc-300" />
+                    )}
                     <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider group-hover:text-zinc-300">
                       {category}
                     </span>
-                    <span className="text-[10px] text-zinc-600 ml-1">
-                      {categorySkills.length}
-                    </span>
+                    <span className="text-[10px] text-zinc-600 ml-1">{categorySkills.length}</span>
                   </button>
-                  {!isCollapsed && (
-                    <div className="space-y-2 ml-5">
-                      {categorySkills.map(renderSkillCard)}
-                    </div>
-                  )}
+                  {!isCollapsed && <div className="space-y-2 ml-5">{categorySkills.map(renderSkillCard)}</div>}
                 </div>
               );
             })}
@@ -248,11 +261,12 @@ export function SkillsPage() {
           skill={editingSkill}
           existingCategories={existingCategories}
           onSave={editingSkill ? handleUpdate : handleCreate}
-          onClose={() => { setShowModal(false); setEditingSkill(undefined); }}
+          onClose={() => {
+            setShowModal(false);
+            setEditingSkill(undefined);
+          }}
         />
       )}
-
-
     </div>
   );
 }

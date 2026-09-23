@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { PT_BR_BLOCK } from './_shared/language-pt-br';
 
@@ -7,7 +6,8 @@ export const SECURITY_SKEPTIC_QUALITY_ID = 'security-skeptic-quality';
 export const securitySkepticQuality: Omit<AgentConfig, 'sortOrder'> = {
   id: SECURITY_SKEPTIC_QUALITY_ID,
   name: 'Validador Cetico (Qualidade)',
-  description: 'Valida findings de qualidade (duplication, logic, standards) contra codigo real. Remove falsos positivos.',
+  description:
+    'Valida findings de qualidade (duplication, logic, standards) contra codigo real. Remove falsos positivos.',
   model: 'claude-sonnet-4-6',
   effort: 'high' as const,
   thinking: 'enabled' as const,

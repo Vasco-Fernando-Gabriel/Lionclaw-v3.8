@@ -1,6 +1,4 @@
-
 import { describe, it, expect } from 'vitest';
-
 
 const MIGRATION_V43 = `
   CREATE TABLE agents_new (
@@ -47,7 +45,6 @@ const MIGRATION_V43 = `
   ALTER TABLE agents_new RENAME TO agents;
 `;
 
-
 describe('db-migration-v43: analise estrutural do SQL', () => {
   it('MIGRATION_V43 contem coluna external_config', () => {
     expect(MIGRATION_V43).toContain('external_config');
@@ -69,11 +66,28 @@ describe('db-migration-v43: analise estrutural do SQL', () => {
 
   it('MIGRATION_V43 copia colunas pre-existentes no INSERT INTO', () => {
     const requiredCols = [
-      'id', 'name', 'description', 'system_prompt', 'model',
-      'allowed_tools', 'mcp_servers', 'is_active', 'sort_order',
-      'effort', 'thinking', 'thinking_budget', 'max_turns',
-      'skills', 'kb_enabled', 'runtime', 'local_config',
-      'local_mode', 'max_tool_rounds', 'squad', 'created_at', 'updated_at',
+      'id',
+      'name',
+      'description',
+      'system_prompt',
+      'model',
+      'allowed_tools',
+      'mcp_servers',
+      'is_active',
+      'sort_order',
+      'effort',
+      'thinking',
+      'thinking_budget',
+      'max_turns',
+      'skills',
+      'kb_enabled',
+      'runtime',
+      'local_config',
+      'local_mode',
+      'max_tool_rounds',
+      'squad',
+      'created_at',
+      'updated_at',
     ];
     for (const col of requiredCols) {
       expect(MIGRATION_V43).toContain(col);
@@ -96,41 +110,16 @@ describe('db-migration-v43: analise estrutural do SQL', () => {
   });
 });
 
-
 describe('db-migration-v43: execucao em banco in-memory', () => {
-  it.skip(
-    'preserva o numero total de agentes (100) apos migration',
-    () => {
-    },
-  );
+  it.skip('preserva o numero total de agentes (100) apos migration', () => {});
 
-  it.skip(
-    'preserva todos os campos campo a campo (name, model, runtime, kb_enabled, local_config, squad, created_at)',
-    () => {
-    },
-  );
+  it.skip('preserva todos os campos campo a campo (name, model, runtime, kb_enabled, local_config, squad, created_at)', () => {});
 
-  it.skip(
-    'nova coluna external_config existe e e NULL para agentes pre-existentes',
-    () => {
-    },
-  );
+  it.skip('nova coluna external_config existe e e NULL para agentes pre-existentes', () => {});
 
-  it.skip(
-    'permite inserir agente com runtime "external" apos migration',
-    () => {
-    },
-  );
+  it.skip('permite inserir agente com runtime "external" apos migration', () => {});
 
-  it.skip(
-    'rejeita runtime invalido (CHECK constraint ativo apos migration)',
-    () => {
-    },
-  );
+  it.skip('rejeita runtime invalido (CHECK constraint ativo apos migration)', () => {});
 
-  it.skip(
-    'aceita runtime "cloud", "local", "external" apos migration',
-    () => {
-    },
-  );
+  it.skip('aceita runtime "cloud", "local", "external" apos migration', () => {});
 });

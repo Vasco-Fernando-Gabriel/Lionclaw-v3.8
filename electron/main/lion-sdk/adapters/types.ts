@@ -1,4 +1,3 @@
-
 import type { LionToolSchema } from '../tool-registry';
 import type { AnthropicContentBlock, NativeToolCall } from '../tool-parser';
 

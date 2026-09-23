@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import pino from 'pino';
 
@@ -148,19 +147,14 @@ describe('SB-1 — serializer do pino (logger.ts)', () => {
   });
 
   it('AC-B1/B3: rootLogger real registra os serializers err/error/reason (herdados pelos child loggers de index.ts)', () => {
-    const serializersSym = (pino as unknown as { symbols: { serializersSym: symbol } }).symbols
-      .serializersSym;
-    const registered = (rootLogger as unknown as Record<symbol, Record<string, unknown>>)[
-      serializersSym
-    ];
+    const serializersSym = (pino as unknown as { symbols: { serializersSym: symbol } }).symbols.serializersSym;
+    const registered = (rootLogger as unknown as Record<symbol, Record<string, unknown>>)[serializersSym];
     expect(registered.err).toBe(pino.stdSerializers.err);
     expect(registered.error).toBe(pino.stdSerializers.err);
     expect(registered.reason).toBe(pino.stdSerializers.err);
 
     const child = createLogger('main');
-    const childRegistered = (child as unknown as Record<symbol, Record<string, unknown>>)[
-      serializersSym
-    ];
+    const childRegistered = (child as unknown as Record<symbol, Record<string, unknown>>)[serializersSym];
     expect(childRegistered.err).toBe(pino.stdSerializers.err);
     expect(childRegistered.error).toBe(pino.stdSerializers.err);
     expect(childRegistered.reason).toBe(pino.stdSerializers.err);

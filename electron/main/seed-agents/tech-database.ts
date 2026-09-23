@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const TECH_DATABASE_ID = 'tech-database';
@@ -6,8 +5,7 @@ export const TECH_DATABASE_ID = 'tech-database';
 export const techDatabase: Omit<AgentConfig, 'sortOrder'> = {
   id: TECH_DATABASE_ID,
   name: 'Tech Database',
-  description:
-    'Agente responsavel pelas decisoes tecnicas de Database e persistencia do projeto.',
+  description: 'Agente responsavel pelas decisoes tecnicas de Database e persistencia do projeto.',
   model: 'claude-sonnet-4-6',
   effort: 'high' as const,
   thinking: 'enabled' as const,

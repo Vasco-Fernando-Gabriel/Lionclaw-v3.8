@@ -34,7 +34,7 @@ test('login + barrinha hidrata com contexto real + slider em 55%', async () => {
   await win.screenshot({ path: path.join(ART, '02-after-login.png') });
 
   await win.getByText('Sessao E2E contexto').click();
-  await win.waitForTimeout(1500); // hidratacao da barrinha (chat:get-context-usage)
+  await win.waitForTimeout(1500);
   await win.screenshot({ path: path.join(ART, '03-session-open.png') });
 
   const ctx = win.getByText(/ctx:/i);

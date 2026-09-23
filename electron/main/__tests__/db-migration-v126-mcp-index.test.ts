@@ -1,10 +1,8 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { applyMigrationV126, __V126_INTERNAL } from '../db-migrations/v126-mcp-index';
-
 
 interface MockDbHarness {
   mockDb: import('better-sqlite3').Database;
@@ -151,7 +149,6 @@ describe('applyMigrationV126 - seed mcp_prompt_mode', () => {
     }
   });
 });
-
 
 describe('guardrail estatico - runner da V126 em db.ts', () => {
   const dbSource = readFileSync(join(__dirname, '..', 'db.ts'), 'utf-8');

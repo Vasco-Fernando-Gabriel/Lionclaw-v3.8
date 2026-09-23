@@ -1,10 +1,21 @@
 import { useState, useEffect } from 'react';
 import {
-  Server, Plus, RotateCw, Trash2, TestTube, Circle,
-  Cloud, HardDrive, RefreshCw, ToggleLeft, ToggleRight,
-  ChevronDown, ChevronRight,
+  Server,
+  Plus,
+  RotateCw,
+  Trash2,
+  TestTube,
+  Circle,
+  Cloud,
+  HardDrive,
+  RefreshCw,
+  ToggleLeft,
+  ToggleRight,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import type { MCPServerConfig, SDKMcpServer } from '@/types';
+import { MCP_DIST_STALE_TITLE, mcpDistStaleBody, useMcpDistStaleStore } from '@/stores/mcp-dist-stale-store';
 
 export function MCPServersPage() {
   const [localServers, setLocalServers] = useState<MCPServerConfig[]>([]);
@@ -12,6 +23,7 @@ export function MCPServersPage() {
   const [isLoadingLocal, setIsLoadingLocal] = useState(true);
   const [isLoadingSDK, setIsLoadingSDK] = useState(true);
   const [expandedSDK, setExpandedSDK] = useState<Set<string>>(new Set());
+  const distStale = useMcpDistStaleStore((s) => s.stale);
 
   const loadLocal = async () => {
     setIsLoadingLocal(true);
@@ -25,8 +37,7 @@ export function MCPServersPage() {
     try {
       const result = await window.lionclaw.mcp.listSDK();
       setSdkServers(result);
-    } catch {
-    }
+    } catch {}
     setIsLoadingSDK(false);
   };
 
@@ -47,11 +58,7 @@ export function MCPServersPage() {
 
   const handleToggleSDK = async (name: string, currentlyEnabled: boolean) => {
     await window.lionclaw.mcp.toggleSDK(name, !currentlyEnabled);
-    setSdkServers((prev) =>
-      prev.map((s) =>
-        s.name === name ? { ...s, isDisabledLocally: currentlyEnabled } : s,
-      ),
-    );
+    setSdkServers((prev) => prev.map((s) => (s.name === name ? { ...s, isDisabledLocally: currentlyEnabled } : s)));
   };
 
   const toggleExpanded = (name: string) => {
@@ -134,9 +141,7 @@ export function MCPServersPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-xl font-semibold text-zinc-100">MCP Servers</h1>
-            <p className="text-sm text-zinc-500 mt-1">
-              Servidores MCP para ferramentas externas
-            </p>
+            <p className="text-sm text-zinc-500 mt-1">Servidores MCP para ferramentas externas</p>
           </div>
           <button className="flex items-center gap-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors">
             <Plus size={16} />
@@ -144,17 +149,23 @@ export function MCPServersPage() {
           </button>
         </div>
 
+        {distStale && (
+          <div
+            className="mb-6 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+            data-testid="mcp-dist-stale-banner"
+          >
+            <div className="font-medium">{MCP_DIST_STALE_TITLE}</div>
+            <div className="mt-1 text-amber-100/90">{mcpDistStaleBody(distStale)}</div>
+          </div>
+        )}
+
         {/* Secao SDK (Herdados) */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Cloud size={16} className="text-blue-400" />
-              <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">
-                Claude Code
-              </h2>
-              <span className="text-[10px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full">
-                herdados
-              </span>
+              <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Claude Code</h2>
+              <span className="text-[10px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full">herdados</span>
             </div>
             <button
               onClick={handleRefreshSDK}
@@ -172,23 +183,16 @@ export function MCPServersPage() {
           ) : sdkServers.length === 0 ? (
             <div className="text-center py-6 text-zinc-600 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
               <p className="text-sm">Nenhum MCP herdado encontrado</p>
-              <p className="text-xs mt-1">
-                Configure MCPs no Claude Code para ve-los aqui
-              </p>
+              <p className="text-xs mt-1">Configure MCPs no Claude Code para ve-los aqui</p>
             </div>
           ) : (
             <div className="space-y-2">
               {sdkServers.map((server) => (
-                <div
-                  key={server.name}
-                  className="bg-zinc-900 border border-zinc-800 rounded-xl p-4"
-                >
+                <div key={server.name} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
                   <div className="flex items-center gap-3">
                     {/* Toggle */}
                     <button
-                      onClick={() =>
-                        handleToggleSDK(server.name, !server.isDisabledLocally)
-                      }
+                      onClick={() => handleToggleSDK(server.name, !server.isDisabledLocally)}
                       className="flex-shrink-0"
                     >
                       {server.isDisabledLocally ? (
@@ -202,11 +206,7 @@ export function MCPServersPage() {
                     <Circle
                       size={8}
                       fill="currentColor"
-                      className={
-                        server.isDisabledLocally
-                          ? 'text-zinc-600'
-                          : statusColor(server.status)
-                      }
+                      className={server.isDisabledLocally ? 'text-zinc-600' : statusColor(server.status)}
                     />
 
                     {/* Info */}
@@ -214,38 +214,24 @@ export function MCPServersPage() {
                       <div className="flex items-center gap-2">
                         <h3
                           className={`text-sm font-semibold ${
-                            server.isDisabledLocally
-                              ? 'text-zinc-500'
-                              : 'text-zinc-200'
+                            server.isDisabledLocally ? 'text-zinc-500' : 'text-zinc-200'
                           }`}
                         >
                           {server.name}
                         </h3>
                         <span
                           className={`text-[10px] px-1.5 py-0.5 rounded ${
-                            server.isDisabledLocally
-                              ? 'bg-zinc-800 text-zinc-600'
-                              : 'bg-zinc-800 text-zinc-400'
+                            server.isDisabledLocally ? 'bg-zinc-800 text-zinc-600' : 'bg-zinc-800 text-zinc-400'
                           }`}
                         >
-                          {statusLabel(
-                            server.isDisabledLocally ? 'disabled' : server.status,
-                          )}
+                          {statusLabel(server.isDisabledLocally ? 'disabled' : server.status)}
                         </span>
-                        {server.scope && (
-                          <span className="text-[10px] text-zinc-600">
-                            {server.scope}
-                          </span>
-                        )}
+                        {server.scope && <span className="text-[10px] text-zinc-600">{server.scope}</span>}
                         {server.serverInfo && (
-                          <span className="text-[10px] text-zinc-600">
-                            v{server.serverInfo.version}
-                          </span>
+                          <span className="text-[10px] text-zinc-600">v{server.serverInfo.version}</span>
                         )}
                       </div>
-                      {server.error && (
-                        <p className="text-xs text-red-400 mt-0.5">{server.error}</p>
-                      )}
+                      {server.error && <p className="text-xs text-red-400 mt-0.5">{server.error}</p>}
                     </div>
 
                     {/* Expand tools */}
@@ -254,47 +240,31 @@ export function MCPServersPage() {
                         onClick={() => toggleExpanded(server.name)}
                         className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300"
                       >
-                        {expandedSDK.has(server.name) ? (
-                          <ChevronDown size={14} />
-                        ) : (
-                          <ChevronRight size={14} />
-                        )}
+                        {expandedSDK.has(server.name) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       </button>
                     )}
                   </div>
 
                   {/* Tools count summary */}
-                  {server.tools &&
-                    server.tools.length > 0 &&
-                    !expandedSDK.has(server.name) && (
-                      <p className="text-[11px] text-zinc-600 mt-2 ml-11">
-                        {server.tools.length} tool
-                        {server.tools.length > 1 ? 's' : ''}:{' '}
-                        {server.tools
-                          .slice(0, 3)
-                          .map((t) => t.name)
-                          .join(', ')}
-                        {server.tools.length > 3 &&
-                          ` (+${server.tools.length - 3} mais)`}
-                      </p>
-                    )}
+                  {server.tools && server.tools.length > 0 && !expandedSDK.has(server.name) && (
+                    <p className="text-[11px] text-zinc-600 mt-2 ml-11">
+                      {server.tools.length} tool
+                      {server.tools.length > 1 ? 's' : ''}:{' '}
+                      {server.tools
+                        .slice(0, 3)
+                        .map((t) => t.name)
+                        .join(', ')}
+                      {server.tools.length > 3 && ` (+${server.tools.length - 3} mais)`}
+                    </p>
+                  )}
 
                   {/* Expanded tools list */}
                   {expandedSDK.has(server.name) && server.tools && (
                     <div className="mt-3 ml-11 space-y-1">
                       {server.tools.map((tool) => (
-                        <div
-                          key={tool.name}
-                          className="flex items-start gap-2 text-xs"
-                        >
-                          <span className="text-zinc-400 font-mono shrink-0">
-                            {tool.name}
-                          </span>
-                          {tool.description && (
-                            <span className="text-zinc-600 truncate">
-                              {tool.description}
-                            </span>
-                          )}
+                        <div key={tool.name} className="flex items-start gap-2 text-xs">
+                          <span className="text-zinc-400 font-mono shrink-0">{tool.name}</span>
+                          {tool.description && <span className="text-zinc-600 truncate">{tool.description}</span>}
                           {tool.annotations?.destructive && (
                             <span className="text-[9px] bg-red-500/10 text-red-400 px-1 rounded shrink-0">
                               destrutivo
@@ -319,12 +289,8 @@ export function MCPServersPage() {
         <div>
           <div className="flex items-center gap-2 mb-3">
             <HardDrive size={16} className="text-amber-400" />
-            <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">
-              LionClaw
-            </h2>
-            <span className="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full">
-              locais
-            </span>
+            <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">LionClaw</h2>
+            <span className="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full">locais</span>
           </div>
 
           {isLoadingLocal ? (
@@ -335,23 +301,15 @@ export function MCPServersPage() {
             <div className="text-center py-6 text-zinc-600 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
               <Server size={32} className="mx-auto mb-3 opacity-50" />
               <p className="text-sm">Nenhum MCP server local configurado</p>
-              <p className="text-xs mt-1">
-                Adicione servidores para Gmail, Calendar, etc.
-              </p>
+              <p className="text-xs mt-1">Adicione servidores para Gmail, Calendar, etc.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {localServers.map((server) => (
-                <div
-                  key={server.id}
-                  className="bg-zinc-900 border border-zinc-800 rounded-xl p-4"
-                >
+                <div key={server.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
                   <div className="flex items-center gap-3">
                     {/* Toggle */}
-                    <button
-                      onClick={() => handleToggle(server.id, server.isActive)}
-                      className="flex-shrink-0"
-                    >
+                    <button onClick={() => handleToggle(server.id, server.isActive)} className="flex-shrink-0">
                       {server.isActive ? (
                         <ToggleRight size={20} className="text-green-400" />
                       ) : (
@@ -369,9 +327,7 @@ export function MCPServersPage() {
                         <h3 className={`text-sm font-semibold ${server.isActive ? 'text-zinc-200' : 'text-zinc-500'}`}>
                           {server.name}
                         </h3>
-                        <span className="text-[10px] text-zinc-600 font-mono">
-                          {server.id}
-                        </span>
+                        <span className="text-[10px] text-zinc-600 font-mono">{server.id}</span>
                       </div>
                       <p className="text-xs text-zinc-500 font-mono mt-0.5">
                         {server.command} {server.args.join(' ')}
@@ -382,10 +338,7 @@ export function MCPServersPage() {
                       <select
                         value={server.indexMode ?? 'tools'}
                         onChange={(e) =>
-                          handleIndexModeChange(
-                            server.id,
-                            e.target.value === 'server' ? 'server' : 'tools',
-                          )
+                          handleIndexModeChange(server.id, e.target.value === 'server' ? 'server' : 'tools')
                         }
                         title="Como o server aparece no indice compacto de MCPs"
                         className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-[11px] text-zinc-300 outline-none focus:border-amber-500/50"
@@ -419,10 +372,7 @@ export function MCPServersPage() {
                   {server.envKeys.length > 0 && (
                     <div className="mt-2 flex gap-1">
                       {server.envKeys.map((key) => (
-                        <span
-                          key={key}
-                          className="px-2 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400 font-mono"
-                        >
+                        <span key={key} className="px-2 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400 font-mono">
                           {key}
                         </span>
                       ))}

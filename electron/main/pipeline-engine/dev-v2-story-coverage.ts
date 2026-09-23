@@ -1,4 +1,3 @@
-
 export function buildDevV2StoryCoverageMap(stories: string | null): string {
   if (!stories?.trim()) return '- (user stories ausentes)';
   const lines = stories.split(/\r?\n/);

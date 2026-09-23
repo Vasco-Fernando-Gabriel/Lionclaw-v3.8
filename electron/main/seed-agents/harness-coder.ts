@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { BASH_VALIDATION_BLOCK } from './_shared/bash-validation';
 
@@ -14,10 +13,7 @@ export const harnessCoder: Omit<AgentConfig, 'sortOrder'> = {
   thinking: 'adaptive' as const,
   maxTurns: 80,
   maxToolRounds: 50,
-  allowedTools: [
-    'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep',
-    'WebSearch', 'WebFetch',
-  ],
+  allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch'],
   mcpServers: [],
   isActive: true,
   skills: [],

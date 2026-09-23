@@ -1,4 +1,3 @@
-
 import { createLogger } from '../logger';
 import { ollamaChatWithTools } from '../ollama-client';
 import type { LocalLLMProvider } from '../ollama-client';
@@ -11,11 +10,8 @@ import { emptyResponseExecutionError } from './llm-error';
 
 const logger = createLogger('local-executor');
 
-async function run(
-  req: AgentExecutionRequest,
-  config: AgentQueryConfig,
-): Promise<AgentExecutionResult> {
-  const agentRecord = getAgent(req.agentId);
+async function run(req: AgentExecutionRequest, config: AgentQueryConfig): Promise<AgentExecutionResult> {
+  const agentRecord = req.executionAgent ?? getAgent(req.agentId);
   if (!agentRecord?.localConfig) {
     throw new Error(`Agent ${req.agentId} has runtime=local but no localConfig`);
   }
@@ -37,12 +33,21 @@ async function run(
     ollamaTools,
     {
       cwd: req.cwd,
+      signal: req.abortController.signal,
+      onActivity: req.onActivity,
+      toolDispatch: req.swarmToolDispatch,
+      disableTaskRetry: Boolean(req.executionAgent),
+      externallyManagedTimeout: Boolean(req.swarmLifecycle),
       onText: req.onText,
       onToolUse: (record) => {
         req.onToolUse?.(record.tool);
         let parsedInput: unknown = record.input;
         if (typeof record.input === 'string') {
-          try { parsedInput = JSON.parse(record.input); } catch { parsedInput = null; }
+          try {
+            parsedInput = JSON.parse(record.input);
+          } catch {
+            parsedInput = null;
+          }
         }
         req.onToolUseComplete?.(record.tool, parsedInput);
       },
@@ -51,13 +56,7 @@ async function run(
   );
 
   const durationMs = Date.now() - startedAt;
-  const costUsd = calculateCost(
-    localCfg.model,
-    ollamaResult.promptTokens,
-    ollamaResult.tokensUsed,
-    0,
-    0,
-  );
+  const costUsd = calculateCost(localCfg.model, ollamaResult.promptTokens, ollamaResult.tokensUsed, 0, 0);
 
   const resultError = emptyResponseExecutionError({
     content: ollamaResult.content,

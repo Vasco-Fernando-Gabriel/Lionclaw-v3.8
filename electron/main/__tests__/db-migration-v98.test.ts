@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -76,9 +75,7 @@ describe('applyMigrationV98 - integracao no runner de db.ts (F7, guardrail estat
   const dbSrc = readMainSource('db.ts');
 
   it('db.ts importa applyMigrationV98 do arquivo da migration', () => {
-    expect(dbSrc).toContain(
-      "import { applyMigrationV98 } from './db-migrations/v98-dynamic-workflow-narrator-delta'",
-    );
+    expect(dbSrc).toContain("import { applyMigrationV98 } from './db-migrations/v98-dynamic-workflow-narrator-delta'");
   });
 
   it('runMigrations tem o bloco if (currentVersion < 98) que aplica e versiona', () => {
@@ -86,9 +83,7 @@ describe('applyMigrationV98 - integracao no runner de db.ts (F7, guardrail estat
     expect(start).toBeGreaterThan(-1);
     const block = dbSrc.slice(start, start + 500);
     expect(block).toContain('applyMigrationV98(db)');
-    expect(block).toContain(
-      "db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(98)",
-    );
+    expect(block).toContain("db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(98)");
     expect(block).toMatch(/Applied migration v98/);
   });
 });

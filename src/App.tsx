@@ -1,8 +1,8 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Sidebar } from '@/components/common/Sidebar';
 import { useAppStore } from '@/stores/app-store';
 import { useAuthStore } from '@/stores/auth-store';
-import { useChatStore } from '@/stores/chat-store';
+import { selectNextPopup, useChatStore } from '@/stores/chat-store';
 import { usePipelineStore } from '@/stores/pipeline-store';
 import { useDriveStore } from '@/stores/drive-store';
 import { useDynamicWorkflowStore } from '@/stores/dynamic-workflow-store';
@@ -24,17 +24,13 @@ import PipelinePage from '@/pages/PipelinePage';
 import { DynamicWorkflowPage } from '@/pages/DynamicWorkflowPage';
 import RepositoriesPage from '@/pages/RepositoriesPage';
 import { ConfirmDialog } from '@/components/chat/ConfirmDialog';
-// SPEC robustez-chat SB-3: sink universal de erros (toast global, AC-B7/B8).
+import { AskQuestionDialog } from '@/components/chat/AskQuestionDialog';
+import { useMcpDistStaleStore } from '@/stores/mcp-dist-stale-store';
+import { LaneClearDialog } from '@/components/chat/LaneClearDialog';
 import { ErrorToastHost } from '@/components/common/ErrorToastHost';
 import { CodexAuthRequiredModal } from '@/components/pipeline/CodexAuthRequiredModal';
-// SPEC terminal-chat DN-8: dock montado ACIMA do switch de paginas (shells
-// sobrevivem a navegacao); visivel so no chat.
 import { TerminalDock } from '@/components/chat/TerminalDock';
-import type { ConfirmAction } from '@/types';
 
-// Diferenciacao visual do ambiente de DESENVOLVIMENTO (npm run dev) vs o app
-// instalado: titulo da janela/barra de tarefas ganha sufixo DEV. Em build de
-// producao import.meta.env.DEV e false e nada muda.
 if (import.meta.env.DEV) {
   document.title = 'LionClaw · DEV';
 }
@@ -49,12 +45,10 @@ function MissingPreloadScreen() {
       <div className="max-w-md rounded-lg border border-red-900/60 bg-zinc-900 p-5 shadow-xl">
         <h1 className="text-base font-semibold text-red-300">Preload indisponivel</h1>
         <p className="mt-2 text-sm text-zinc-400">
-          O renderer iniciou sem a API segura do LionClaw. Recarregue a janela.
-          Se continuar, reinicie o app para restaurar a comunicacao IPC.
+          O renderer iniciou sem a API segura do LionClaw. Recarregue a janela. Se continuar, reinicie o app para
+          restaurar a comunicacao IPC.
         </p>
-        <p className="mt-3 font-mono text-xs text-zinc-500">
-          window.lionclaw nao foi carregado
-        </p>
+        <p className="mt-3 font-mono text-xs text-zinc-500">window.lionclaw nao foi carregado</p>
         <button
           type="button"
           onClick={reloadWindow}
@@ -76,13 +70,24 @@ export function App() {
 }
 
 function LionClawApp() {
-  const { isAuthenticated, isFirstRun, isLoading, checkAuth, onboardingCompleted, checkOnboarding, orchestratorSetupCompleted } = useAuthStore();
+  const {
+    isAuthenticated,
+    isFirstRun,
+    isLoading,
+    checkAuth,
+    onboardingCompleted,
+    checkOnboarding,
+    orchestratorSetupCompleted,
+  } = useAuthStore();
   const { currentPage, setPage } = useAppStore();
   const { handleStreamChunk, loadSessions } = useChatStore();
+  const openLanes = useChatStore((s) => s.openLanes);
+  const compactions = useChatStore((s) => s.compactions);
+  const newChatDialogOpen = useChatStore((s) => s.newChatDialogOpen);
+  const nextPopup = useChatStore(selectNextPopup);
   const { init: pipelineInit } = usePipelineStore();
   const { init: driveInit } = useDriveStore();
   const dynamicWorkflowInit = useDynamicWorkflowStore((s) => s.init);
-  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const pipelineCleanupRef = useRef<(() => void) | null>(null);
   const driveCleanupRef = useRef<(() => void) | null>(null);
   const dynamicWorkflowCleanupRef = useRef<(() => void) | null>(null);
@@ -91,7 +96,6 @@ function LionClawApp() {
     checkAuth();
   }, [checkAuth]);
 
-  // Subscribe to auto-lock events (sleep, lid close)
   useEffect(() => {
     const unsubLock = window.lionclaw.auth.onLocked(() => {
       checkAuth();
@@ -99,69 +103,70 @@ function LionClawApp() {
     return unsubLock;
   }, [checkAuth]);
 
-  // Check onboarding status after authentication
   useEffect(() => {
     if (!isAuthenticated) return;
     checkOnboarding();
   }, [isAuthenticated, checkOnboarding]);
 
-  // Force chat page during onboarding
   useEffect(() => {
     if (isAuthenticated && !onboardingCompleted) {
       setPage('chat');
     }
   }, [isAuthenticated, onboardingCompleted, setPage]);
 
-  // Register pipeline IPC listeners once at app-level so stream chunks are
-  // never lost when the user navigates away from PipelinePage.
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (pipelineCleanupRef.current) return; // already registered
+    if (pipelineCleanupRef.current) return;
     const cleanup = pipelineInit();
     pipelineCleanupRef.current = cleanup;
     // No return cleanup: listeners persist for the app lifetime.
   }, [isAuthenticated, pipelineInit]);
 
-  // Register drive `drive:state-changed` listener once at app-level (SPEC S8) so
-  // the driver badge/state stays live regardless of which page is mounted.
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (driveCleanupRef.current) return; // already registered
+    if (driveCleanupRef.current) return;
     const cleanup = driveInit();
     driveCleanupRef.current = cleanup;
     // No return cleanup: listener persists for the app lifetime.
   }, [isAuthenticated, driveInit]);
 
-  // Register the dynamic-workflow `dynamic-workflow:stream` listener once at
-  // app-level so the run view / pipezinho / stream stay live no matter which
-  // page is mounted. Antes so o ChatPage montava (cockpit); na pagina de
-  // Workflows o run congelava apesar dos eventos chegarem. init() e idempotente
-  // (refcount no store), entao coexiste com o mount do ChatPage sem duplicar.
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (dynamicWorkflowCleanupRef.current) return; // already registered
+    if (dynamicWorkflowCleanupRef.current) return;
     const cleanup = dynamicWorkflowInit();
     dynamicWorkflowCleanupRef.current = cleanup;
     // No return cleanup: listener persists for the app lifetime.
   }, [isAuthenticated, dynamicWorkflowInit]);
 
-  // Subscribe to chat stream events
   useEffect(() => {
     if (!isAuthenticated) return;
     const unsubStream = window.lionclaw.chat.onStream(handleStreamChunk);
     const unsubConfirm = window.lionclaw.chat.onConfirmRequest((action) => {
-      setConfirmAction(action);
+      useChatStore.getState().enqueueConfirmation(action);
     });
-    const unsubCompaction = window.lionclaw.chat.onCompactionActive((payload) => useChatStore.getState().setCompactionActive(payload));
+    const unsubAsk = window.lionclaw.chat.onAskQuestion((request) => {
+      useChatStore.getState().enqueueAskQuestion(request);
+    });
+    const unsubCompaction = window.lionclaw.chat.onCompactionActive((payload) =>
+      useChatStore.getState().setCompactionActive(payload),
+    );
+    const unsubSessionUpdated = window.lionclaw.chat.onSessionUpdated((event) =>
+      useChatStore.getState().applySessionUpdated(event),
+    );
     loadSessions();
+    window.lionclaw.settings
+      .get()
+      .then((settings) => useChatStore.getState().setStaleLaneDays(settings.chatStaleLaneDays))
+      .catch(() => {});
     return () => {
       unsubStream();
       unsubConfirm();
+      unsubAsk();
       unsubCompaction();
+      unsubSessionUpdated();
     };
   }, [isAuthenticated, handleStreamChunk, loadSessions]);
 
-  // Subscribe to sessions-updated events (title generation, etc.)
   useEffect(() => {
     if (!isAuthenticated) return;
     const unsub = window.lionclaw.chat.onSessionsUpdated(() => {
@@ -169,6 +174,14 @@ function LionClawApp() {
     });
     return unsub;
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    return useMcpDistStaleStore.getState().init();
+  }, [isAuthenticated]);
+
+  const confirmPopup = nextPopup?.kind === 'confirm' ? nextPopup : null;
+  const askPopup = nextPopup?.kind === 'ask' ? nextPopup : null;
 
   if (isLoading) {
     return (
@@ -181,7 +194,6 @@ function LionClawApp() {
     );
   }
 
-  // Three-way gate (SPEC-onboarding §11 mudanca 6).
   if (isFirstRun) {
     return <AuthPage mode="setup" />;
   }
@@ -194,31 +206,48 @@ function LionClawApp() {
 
   const pageContent = () => {
     switch (currentPage) {
-      case 'chat': return <ChatPage />;
-      case 'agents': return <SubAgentsPage />;
-      case 'logs': return <LogsPage />;
-      case 'settings': return <SettingsPage />;
-      case 'skills': return <SkillsPage />;
-      case 'mcp': return <MCPServersPage />;
-      case 'scheduler': return <SchedulerPage />;
-      case 'kanban': return <KanbanPage />;
-      case 'knowledge': return <KnowledgePage />;
-      case 'rules': return <MemoryPage />;
-      case 'memory': return <MemoryPage />;
-      case 'usage': return <UsagePage />;
-      case 'vault': return <VaultPage />;
-      case 'harness': return <HarnessPage />;
-      case 'pipeline': return <PipelinePage />;
-      case 'dynamic-workflow': return <DynamicWorkflowPage />;
-      case 'repositories': return <RepositoriesPage />;
-      default: return <ChatPage />;
+      case 'chat':
+        return <ChatPage />;
+      case 'agents':
+        return <SubAgentsPage />;
+      case 'logs':
+        return <LogsPage />;
+      case 'settings':
+        return <SettingsPage />;
+      case 'skills':
+        return <SkillsPage />;
+      case 'mcp':
+        return <MCPServersPage />;
+      case 'scheduler':
+        return <SchedulerPage />;
+      case 'kanban':
+        return <KanbanPage />;
+      case 'knowledge':
+        return <KnowledgePage />;
+      case 'rules':
+        return <MemoryPage />;
+      case 'memory':
+        return <MemoryPage />;
+      case 'usage':
+        return <UsagePage />;
+      case 'vault':
+        return <VaultPage />;
+      case 'harness':
+        return <HarnessPage />;
+      case 'pipeline':
+        return <PipelinePage />;
+      case 'dynamic-workflow':
+        return <DynamicWorkflowPage />;
+      case 'repositories':
+        return <RepositoriesPage />;
+      default:
+        return <ChatPage />;
     }
   };
 
   const handleConfirmResponse = (approved: boolean) => {
-    if (confirmAction) {
-      window.lionclaw.chat.confirmResponse(confirmAction.id, approved);
-      setConfirmAction(null);
+    if (confirmPopup) {
+      void useChatStore.getState().resolveConfirmation(confirmPopup.action.id, approved);
     }
   };
 
@@ -226,16 +255,38 @@ function LionClawApp() {
     <div className="flex h-screen bg-zinc-950 text-zinc-100">
       <Sidebar />
       <main className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          {pageContent()}
-        </div>
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">{pageContent()}</div>
         <TerminalDock visible={currentPage === 'chat'} />
       </main>
-      {confirmAction && (
+      {confirmPopup && (
         <ConfirmDialog
-          action={confirmAction}
+          key={confirmPopup.action.id}
+          action={confirmPopup.action}
+          laneLabel={confirmPopup.label}
           onApprove={() => handleConfirmResponse(true)}
           onDeny={() => handleConfirmResponse(false)}
+        />
+      )}
+      {askPopup && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+          <div className="w-full">
+            <AskQuestionDialog
+              key={askPopup.request.id}
+              request={askPopup.request}
+              laneLabel={askPopup.label}
+              onSubmit={(response) => void useChatStore.getState().resolveAskQuestion(response)}
+            />
+          </div>
+        </div>
+      )}
+      {newChatDialogOpen && (
+        <LaneClearDialog
+          lanes={openLanes.slice().sort((a, b) => a.laneBadge - b.laneBadge)}
+          compactions={compactions}
+          onSelect={(sessionId) => {
+            void useChatStore.getState().clearLane(sessionId);
+          }}
+          onCancel={() => useChatStore.getState().closeNewChatDialog()}
         />
       )}
       {/* SB-3: sink universal de erros (alimentado por qualquer store). */}

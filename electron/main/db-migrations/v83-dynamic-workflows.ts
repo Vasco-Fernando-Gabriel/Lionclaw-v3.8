@@ -6,7 +6,6 @@ import {
   DYNAMIC_WORKFLOW_MESSAGE_SOURCES,
 } from '../../../src/types/dynamic-workflow';
 
-
 function checkIn(column: string, values: readonly string[]): string {
   return `CHECK (${column} IN (${values.map((v) => `'${v}'`).join(', ')}))`;
 }

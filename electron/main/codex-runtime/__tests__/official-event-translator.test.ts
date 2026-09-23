@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
@@ -17,11 +16,7 @@ import {
   approvalToWire,
   approvalFromWire,
 } from '../official-event-translator';
-import type {
-  AppServerEvent,
-  TurnOutcome,
-  TranslatorAccumulator,
-} from '../official-event-translator';
+import type { AppServerEvent, TurnOutcome, TranslatorAccumulator } from '../official-event-translator';
 import type { CodexResponse } from '../types';
 
 const FIX = path.join(__dirname, '__fixtures__', 'app-server');
@@ -60,8 +55,7 @@ function makeRecorder(): { rec: Recorder; cb: Parameters<typeof translateEvent>[
         onText: (c: string) => rec.text.push(c),
         onReasoning: (c: string) => rec.reasoning.push(c),
         onToolUse: (tool: string, meta?: unknown) => rec.toolUse.push({ tool, meta }),
-        onToolUseComplete: (tool: string, result: unknown) =>
-          rec.toolUseComplete.push({ tool, result }),
+        onToolUseComplete: (tool: string, result: unknown) => rec.toolUseComplete.push({ tool, result }),
         onActivity: () => {
           rec.activity += 1;
         },
@@ -109,9 +103,7 @@ describe('official-event-translator golden fixtures', () => {
       tool: 'Bash',
       result: { command: 'npm test', exitCode: 0, durationMs: 4200 },
     });
-    expect(response.commandsRun).toEqual([
-      { cmd: 'npm test', exitCode: 0, durationMs: 4200 },
-    ]);
+    expect(response.commandsRun).toEqual([{ cmd: 'npm test', exitCode: 0, durationMs: 4200 }]);
   });
 
   it('file-change -> filesChanged + apply-patch-failure sample', () => {
@@ -170,7 +162,7 @@ describe('official-event-translator golden fixtures', () => {
     const { cb } = makeRecorder();
     const acc = createAccumulator();
     for (const ev of events) translateEvent(ev, acc, cb);
-    acc.timedOut = true; // driver's T4b timer flips this before finalize
+    acc.timedOut = true;
     const response = finalizeResponse(acc, 'timeout');
     expect(response.status).toBe('timeout');
     expect(response.content).toBe('working');

@@ -1,27 +1,16 @@
-
 import { executeLocalTool } from '../local-tool-executor';
 import { WorkflowPathGuard } from './workflow-path-guard';
 import type { WorkflowNodeExecutionPolicy } from '../../../src/types/dynamic-workflow';
 import type { OllamaToolSchema } from '../ollama-client';
 
-const LOCAL_BUILTIN_TOOLS = [
-  'Read',
-  'Write',
-  'Edit',
-  'Glob',
-  'Grep',
-  'Bash',
-] as const;
+const LOCAL_BUILTIN_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash'] as const;
 
 export type LocalBuiltinTool = (typeof LOCAL_BUILTIN_TOOLS)[number];
 
 const WRITE_TOOLS: ReadonlySet<string> = new Set(['Write', 'Edit']);
 const BASH_TOOL = 'Bash';
 
-
-export function deriveOfferedTools(
-  policy: WorkflowNodeExecutionPolicy,
-): LocalBuiltinTool[] {
+export function deriveOfferedTools(policy: WorkflowNodeExecutionPolicy): LocalBuiltinTool[] {
   const wanted = new Set(policy.effectiveTools);
   const readOnly = policy.access === 'read-only';
   return LOCAL_BUILTIN_TOOLS.filter((tool) => {
@@ -31,9 +20,7 @@ export function deriveOfferedTools(
   });
 }
 
-export function offeredToolSchemas(
-  offered: LocalBuiltinTool[],
-): OllamaToolSchema[] {
+export function offeredToolSchemas(offered: LocalBuiltinTool[]): OllamaToolSchema[] {
   return offered.map((name) => LOCAL_BUILTIN_SCHEMAS[name]);
 }
 
@@ -97,8 +84,7 @@ export interface LocalDispatcherResult {
 
 const DEFAULT_MAX_ROUNDS = 10;
 
-const defaultToolExecutor: LocalToolExecutor = (toolName, args, cwd) =>
-  executeLocalTool(toolName, args, cwd);
+const defaultToolExecutor: LocalToolExecutor = (toolName, args, cwd) => executeLocalTool(toolName, args, cwd);
 
 function refusalMessage(toolName: string, offered: string[]): string {
   return (
@@ -108,10 +94,7 @@ function refusalMessage(toolName: string, offered: string[]): string {
   );
 }
 
-function writeTargetOf(
-  toolName: string,
-  args: Record<string, unknown>,
-): string | null {
+function writeTargetOf(toolName: string, args: Record<string, unknown>): string | null {
   if (WRITE_TOOLS.has(toolName)) {
     const fp = args.file_path;
     return typeof fp === 'string' ? fp : null;
@@ -119,9 +102,7 @@ function writeTargetOf(
   return null;
 }
 
-export async function runLocalDispatcher(
-  options: LocalDispatcherOptions,
-): Promise<LocalDispatcherResult> {
+export async function runLocalDispatcher(options: LocalDispatcherOptions): Promise<LocalDispatcherResult> {
   const maxRounds = Math.max(1, options.maxRounds ?? DEFAULT_MAX_ROUNDS);
   const offered = deriveOfferedTools(options.policy);
   const offeredSet = new Set<string>(offered);
@@ -245,7 +226,6 @@ export async function runLocalDispatcher(
     maxRoundsReached: true,
   };
 }
-
 
 const LOCAL_BUILTIN_SCHEMAS: Record<LocalBuiltinTool, OllamaToolSchema> = {
   Read: {

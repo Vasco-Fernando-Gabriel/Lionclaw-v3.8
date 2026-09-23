@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../logger', () => ({
@@ -34,10 +33,7 @@ function sessionNewResult(): Record<string, unknown> {
       {
         id: 'model',
         currentValue: 'kimi-code/kimi-for-coding',
-        options: [
-          { value: 'kimi-code/kimi-for-coding' },
-          { value: 'kimi-code/k3' },
-        ],
+        options: [{ value: 'kimi-code/kimi-for-coding' }, { value: 'kimi-code/k3' }],
       },
       { id: 'thinking', currentValue: 'on', options: [{ value: 'on' }] },
       {

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Terminal, RefreshCw } from 'lucide-react';
 import type { KimiAvailability } from '@/types';
@@ -62,8 +61,7 @@ export function KimiSection() {
       if (result.url) {
         setLoginUrl(result.url);
       }
-    } catch {
-    }
+    } catch {}
   };
 
   const handleSavePath = async () => {
@@ -136,14 +134,13 @@ export function KimiSection() {
       </h2>
 
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-4 space-y-4">
-
         {/* Tooltip / explicacao */}
         <p className="text-xs text-zinc-500">
           O Kimi nativo roda pela sua assinatura via CLI: o LionClaw usa a sessao do{' '}
-          <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">/login</code>{' '}
-          sem precisar de API key separada. Instale o CLI do Kimi e autentique com{' '}
-          <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">/login</code>.
-          Full assinatura: nao usa API key.
+          <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">/login</code> sem precisar de API
+          key separada. Instale o CLI do Kimi e autentique com{' '}
+          <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">/login</code>. Full assinatura:
+          nao usa API key.
         </p>
 
         {/* Indicador de status */}
@@ -163,9 +160,7 @@ export function KimiSection() {
             <RefreshCw size={13} className={loadingStatus ? 'animate-spin' : ''} />
           </button>
         </div>
-        {status?.reason && !status.usable && (
-          <p className="text-[10px] text-zinc-500">{status.reason}</p>
-        )}
+        {status?.reason && !status.usable && <p className="text-[10px] text-zinc-500">{status.reason}</p>}
 
         {/* Botoes de acao */}
         <div className="flex flex-wrap items-start gap-3">
@@ -220,9 +215,7 @@ export function KimiSection() {
 
         {/* Path customizado do binario */}
         <div className="pt-2 border-t border-zinc-800 space-y-2">
-          <label className="block text-xs text-zinc-400">
-            Path customizado do binario (opcional)
-          </label>
+          <label className="block text-xs text-zinc-400">Path customizado do binario (opcional)</label>
           <div className="flex gap-2">
             <input
               type="text"
@@ -239,9 +232,7 @@ export function KimiSection() {
               {pathSaved ? 'Salvo!' : savingPath ? 'Salvando...' : 'Salvar'}
             </button>
           </div>
-          <p className="text-[10px] text-zinc-600">
-            Deixe vazio para usar o binario encontrado no PATH do sistema.
-          </p>
+          <p className="text-[10px] text-zinc-600">Deixe vazio para usar o binario encontrado no PATH do sistema.</p>
         </div>
       </div>
     </section>

@@ -1,10 +1,7 @@
 import { getHiggsfieldRemoteMcpDescriptor } from './higgsfield-auth';
 import { getBlotatoRemoteMcpDescriptor, BLOTATO_API_KEY_SECRET } from './blotato-auth';
 import { ensureRemoteMcpWrapperSync } from './remote-mcp-wrapper';
-import {
-  isPackagedDistributionRuntime,
-  resolveInternalNodeBinary,
-} from './distribution-runtime';
+import { isPackagedDistributionRuntime, resolveInternalNodeBinary } from './distribution-runtime';
 
 export interface RemoteSeedMcp {
   id: string;
@@ -16,9 +13,7 @@ export interface RemoteSeedMcp {
 }
 
 export function getRemoteSeedMcps(): RemoteSeedMcp[] {
-  const nodeCommand = isPackagedDistributionRuntime()
-    ? resolveInternalNodeBinary()
-    : 'node';
+  const nodeCommand = isPackagedDistributionRuntime() ? resolveInternalNodeBinary() : 'node';
   return [
     {
       id: 'higgsfield',

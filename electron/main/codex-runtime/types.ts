@@ -1,4 +1,3 @@
-
 export interface CodexSessionOptions {
   model: string;
   cwd: string;
@@ -8,6 +7,9 @@ export interface CodexSessionOptions {
   reasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
   timeoutMs?: number;
   idleTimeoutMs?: number;
+  turnSettleMs?: number;
+  externallyManagedWatchdog?: boolean;
+  swarmOwnerDirectory?: string;
   projectId?: string;
   ownerKind?: 'chat' | 'pipeline';
   ownerId?: string;
@@ -50,44 +52,31 @@ export interface CodexResponse {
   applyPatchFailures: number;
   applyPatchFailureSamples: CodexPatchFailureSample[];
   errorCode?: string;
+  errorDetail?: string;
   lastUsage?: CodexTokenUsage;
   modelContextWindow?: number;
 }
 
 export interface CodexSession {
   threadId: string | null;
-  send(
-    prompt: string,
-    cb?: CodexStreamCallbacks,
-    abortSignal?: AbortSignal,
-  ): Promise<CodexResponse>;
-  reply(
-    message: string,
-    cb?: CodexStreamCallbacks,
-    abortSignal?: AbortSignal,
-  ): Promise<CodexResponse>;
+  send(prompt: string, cb?: CodexStreamCallbacks, abortSignal?: AbortSignal): Promise<CodexResponse>;
+  reply(message: string, cb?: CodexStreamCallbacks, abortSignal?: AbortSignal): Promise<CodexResponse>;
   close(): void;
+  closeConfirmed?(): Promise<void>;
   setReasoningEffort?(effort: NonNullable<CodexSessionOptions['reasoningEffort']>): void;
+  setModel?(model: string): void;
+  isClosed?(): boolean;
 }
-
 
 export type CodexImplementation = 'official-app-server';
 
-export type CodexSurface =
-  | 'chat'
-  | 'pipeline'
-  | 'one-shot'
-  | 'codex-agents-mcp';
+export type CodexSurface = 'chat' | 'pipeline' | 'one-shot' | 'codex-agents-mcp';
 
 export type CodexSelectableSurface = CodexSurface | 'agent-scoped';
 
 export type CodexOwnerKind = 'chat' | 'pipeline';
 
-export type CodexMcpProfile =
-  | 'chat'
-  | 'pipeline'
-  | 'one-shot'
-  | 'agent-scoped';
+export type CodexMcpProfile = 'chat' | 'pipeline' | 'one-shot' | 'agent-scoped';
 
 export interface CodexRunSessionKey {
   surface: CodexSurface;
@@ -106,6 +95,7 @@ export interface CodexRunSessionKey {
 }
 
 export interface CodexRunOptions {
+  swarmSpawnEnv?: Record<string, string>;
   key: CodexRunSessionKey;
   model: string;
   cwd: string;
@@ -115,6 +105,9 @@ export interface CodexRunOptions {
   reasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
   timeoutMs?: number;
   idleTimeoutMs?: number;
+  turnSettleMs?: number;
+  externallyManagedWatchdog?: boolean;
+  swarmOwnerDirectory?: string;
   disableGlobalMcp?: boolean;
   extraArgs?: string[];
 }
@@ -132,16 +125,8 @@ export interface CodexRunHandle {
 
   hasStartedTurn?: boolean;
 
-  send(
-    prompt: string,
-    cb?: CodexStreamCallbacks,
-    abortSignal?: AbortSignal,
-  ): Promise<CodexResponse>;
-  reply(
-    message: string,
-    cb?: CodexStreamCallbacks,
-    abortSignal?: AbortSignal,
-  ): Promise<CodexResponse>;
+  send(prompt: string, cb?: CodexStreamCallbacks, abortSignal?: AbortSignal): Promise<CodexResponse>;
+  reply(message: string, cb?: CodexStreamCallbacks, abortSignal?: AbortSignal): Promise<CodexResponse>;
 
   interrupt(reason?: string): Promise<void>;
   close(): Promise<void>;
@@ -168,19 +153,13 @@ export interface CodexDriver {
   shutdown(): Promise<void>;
 }
 
-
 export interface SyncCodexSession {
   threadId: string | null;
-  send(
-    prompt: string,
-    cb?: CodexStreamCallbacks,
-    abortSignal?: AbortSignal,
-  ): Promise<CodexResponse>;
-  reply(
-    message: string,
-    cb?: CodexStreamCallbacks,
-    abortSignal?: AbortSignal,
-  ): Promise<CodexResponse>;
+  send(prompt: string, cb?: CodexStreamCallbacks, abortSignal?: AbortSignal): Promise<CodexResponse>;
+  reply(message: string, cb?: CodexStreamCallbacks, abortSignal?: AbortSignal): Promise<CodexResponse>;
   close(): void;
+  closeConfirmed?(): Promise<void>;
   setReasoningEffort?(effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'): void;
+  setModel?(model: string): void;
+  isClosed?(): boolean;
 }

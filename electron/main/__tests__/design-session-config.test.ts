@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -10,11 +9,14 @@ vi.mock('../logger', () => ({
   }),
 }));
 
-
 const getHarnessProjectMock = vi.fn<(id: string) => Record<string, unknown> | null>();
 const getDriveStateMock = vi.fn<(id: string) => Record<string, unknown> | null>(() => null);
 const getActiveChatSessionMock = vi.fn<() => { id: string } | null>(() => ({ id: 'chat-1' }));
 
+vi.mock('../in-flight-desktop-session', () => ({
+  getInFlightDesktopSession: () => getActiveChatSessionMock()?.id ?? null,
+  setInFlightDesktopSession: () => {},
+}));
 vi.mock('../db', () => ({
   getAllAgents: vi.fn(() => []),
   insertAuditEntry: vi.fn(),
@@ -26,13 +28,11 @@ vi.mock('../db', () => ({
   getDriveState: (id: string) => getDriveStateMock(id),
 }));
 
-
 vi.mock('../pipeline-create', () => ({ createPipelineProject: vi.fn() }));
 vi.mock('../pipeline-engine-ref', () => ({ getPipelineEngineRef: vi.fn(() => null) }));
 vi.mock('../pipeline-drive-coordinator', () => ({ getPipelineDriveCoordinator: vi.fn(() => null) }));
 vi.mock('../pipeline-event-bus', () => ({ pipelineEventBus: { on: vi.fn(), emit: vi.fn() } }));
 vi.mock('../pipeline-shared/ipc-emitter', () => ({ emitIPC: vi.fn() }));
-
 
 vi.mock('../mcp-manager', () => ({ getAllMCPServers: vi.fn(() => []) }));
 vi.mock('../secrets-vault', () => ({ getSecret: vi.fn(async () => null) }));
@@ -51,7 +51,6 @@ const lionAgentDispatchMock = vi.fn(async (_params: unknown) => ({ ok: true, sum
 vi.mock('../lion-sdk/tools/agent', () => ({
   lionAgentDispatch: (params: unknown) => lionAgentDispatchMock(params),
 }));
-
 
 const getSessionConfigMock = vi.fn<(id: string) => Record<string, unknown> | null>();
 const setSessionConfigMock = vi.fn<(id: string, cfg: Record<string, unknown>) => void>();
@@ -81,10 +80,8 @@ vi.mock('../open-design/bootstrap', () => ({
 
 const setOpenDesignConfigMock = vi.fn<(id: string, patch: Record<string, unknown>) => void>();
 vi.mock('../open-design/config', () => ({
-  setOpenDesignConfig: (id: string, patch: Record<string, unknown>) =>
-    setOpenDesignConfigMock(id, patch),
+  setOpenDesignConfig: (id: string, patch: Record<string, unknown>) => setOpenDesignConfigMock(id, patch),
 }));
-
 
 import { applyDesignSessionConfig } from '../open-design/session-config-tool';
 import { designSessionConfigCore, PIPELINE_WRITE_ACTIONS } from '../pipeline-control-core';
@@ -98,6 +95,7 @@ const agentCtx: JsonRpcContext = {
   connection: { authenticatedHelper: true, serverId: 'lionclaw-agents', connectionId: 'design-session-agent-test' },
 };
 let activeTurn: ActiveChatTurnFixture;
+const activeBinding = () => ({ sessionId: activeTurn.sessionId, turnId: activeTurn.turnId });
 
 function devV2Project(partial: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -152,7 +150,6 @@ beforeEach(() => {
 });
 
 afterEach(() => activeTurn.dispose());
-
 
 describe('applyDesignSessionConfig — validacoes do handler', () => {
   it('projeto inexistente -> { error } sem tocar o setSessionConfig', async () => {
@@ -267,7 +264,6 @@ describe('applyDesignSessionConfig — validacoes do handler', () => {
   });
 });
 
-
 describe('applyDesignSessionConfig - briefing revertido (A-AC4)', () => {
   it('A-AC4: GO start-only (patch vazio) inicia a geracao SEM nenhum driverBriefing', async () => {
     const res = await applyDesignSessionConfig('p1', {});
@@ -314,7 +310,6 @@ describe('applyDesignSessionConfig - briefing revertido (A-AC4)', () => {
     expect(hasActiveDesignRunMock).not.toHaveBeenCalled();
   });
 });
-
 
 function drive(partial: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -380,13 +375,12 @@ describe('designSessionConfigCore — gate driveConductBlocked (enforcement Para
   });
 });
 
-
 describe('jsonrpc design_session_config — proxy + gates de caller/permissao', () => {
   it('roteia pro handler (end-to-end): result applied + gate de permissao consultado', async () => {
     const res = await dispatch(ctx, {
       method: 'design_session_config',
       id: 1,
-      params: { id: 'p1', agentId: 'claude', model: 'opus' },
+      params: { ...activeBinding(), id: 'p1', agentId: 'claude', model: 'opus' },
     });
     expect(res.error).toBeUndefined();
     expect(res.result).toMatchObject({ applied: true, agentId: 'claude', model: 'opus' });
@@ -403,24 +397,28 @@ describe('jsonrpc design_session_config — proxy + gates de caller/permissao', 
       const res = await dispatch(ctx, {
         method: 'design_session_config',
         id: 10,
-        params: { id: 'p1', model: 'opus' },
+        params: { ...activeBinding(), id: 'p1', model: 'opus' },
       });
       inner.push({ refused: !!res.error });
       return { ok: true, summary: 'done' };
     });
 
-    await handleCallAgent(agentCtx, { agent_id: 'sub-1', task: 'algo' });
+    await handleCallAgent(agentCtx, {
+      agent_id: 'sub-1',
+      task: 'algo',
+      binding: { lane: 'desktop', ...activeBinding() },
+    });
 
     expect(inner).toEqual([{ refused: true }]);
     expect(setSessionConfigMock).not.toHaveBeenCalled();
   });
 
   it('sem sessao de chat ativa: RECUSADO (sem orquestrador para dirigir)', async () => {
-    getActiveChatSessionMock.mockReturnValue(null);
+    activeTurn.dispose();
     const res = await dispatch(ctx, {
       method: 'design_session_config',
       id: 2,
-      params: { id: 'p1', model: 'opus' },
+      params: { ...activeBinding(), id: 'p1', model: 'opus' },
     });
     expect(res.result).toBeUndefined();
     expect(res.error).toBeDefined();
@@ -436,7 +434,7 @@ describe('jsonrpc design_session_config — proxy + gates de caller/permissao', 
     const res = await dispatch(ctx, {
       method: 'design_session_config',
       id: 3,
-      params: { id: 'p1', model: 'opus' },
+      params: { ...activeBinding(), id: 'p1', model: 'opus' },
     });
     expect(res.error).toBeDefined();
     expect(res.error?.message).toMatch(/negada/);

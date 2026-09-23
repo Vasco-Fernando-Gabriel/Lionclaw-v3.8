@@ -19,7 +19,9 @@ function transportFactory(responder: (method: string) => unknown): {
     onServerRequest: () => () => undefined,
     respond: () => undefined,
     onError: () => () => undefined,
-    kill: () => { killed.value = true; },
+    kill: () => {
+      killed.value = true;
+    },
     waitClosed: async () => true,
   };
   return { factory: async () => transport, methods, killed };
@@ -32,26 +34,30 @@ describe('probeKimiProvider', () => {
       if (method === 'session/new') {
         return {
           sessionId: 'probe-session',
-          configOptions: [{
-            id: 'model',
-            currentValue: 'kimi-code/kimi-for-coding',
-            options: [
-              { value: 'kimi-code/kimi-for-coding' },
-              { value: 'kimi-code/kimi-for-coding-highspeed' },
-              { value: 'kimi-code/k3' },
-            ],
-          }],
+          configOptions: [
+            {
+              id: 'model',
+              currentValue: 'kimi-code/kimi-for-coding',
+              options: [
+                { value: 'kimi-code/kimi-for-coding' },
+                { value: 'kimi-code/kimi-for-coding-highspeed' },
+                { value: 'kimi-code/k3' },
+              ],
+            },
+          ],
         };
       }
       throw new Error(`unexpected ${method}`);
     });
 
-    await expect(probeKimiProvider({
-      binary: '/fake/kimi',
-      home: '/tmp/kimi-home',
-      cwd: '/tmp/project',
-      transportFactory: fake.factory,
-    })).resolves.toMatchObject({
+    await expect(
+      probeKimiProvider({
+        binary: '/fake/kimi',
+        home: '/tmp/kimi-home',
+        cwd: '/tmp/project',
+        transportFactory: fake.factory,
+      }),
+    ).resolves.toMatchObject({
       ok: true,
       currentModel: 'kimi-code/kimi-for-coding',
       availableModels: ['kimi-code/kimi-for-coding', 'kimi-code/k3'],
@@ -61,19 +67,23 @@ describe('probeKimiProvider', () => {
   });
 
   it('falha quando a sessao nao anuncia modelo suportado', async () => {
-    const fake = transportFactory((method) => method === 'initialize'
-      ? { protocolVersion: 1 }
-      : {
-          sessionId: 'probe-session',
-          configOptions: [{ id: 'model', currentValue: 'outro', options: [{ value: 'outro' }] }],
-        });
+    const fake = transportFactory((method) =>
+      method === 'initialize'
+        ? { protocolVersion: 1 }
+        : {
+            sessionId: 'probe-session',
+            configOptions: [{ id: 'model', currentValue: 'outro', options: [{ value: 'outro' }] }],
+          },
+    );
 
-    await expect(probeKimiProvider({
-      binary: '/fake/kimi',
-      home: '/tmp/kimi-home',
-      cwd: '/tmp/project',
-      transportFactory: fake.factory,
-    })).resolves.toMatchObject({ ok: false, availableModels: [] });
+    await expect(
+      probeKimiProvider({
+        binary: '/fake/kimi',
+        home: '/tmp/kimi-home',
+        cwd: '/tmp/project',
+        transportFactory: fake.factory,
+      }),
+    ).resolves.toMatchObject({ ok: false, availableModels: [] });
     expect(fake.killed.value).toBe(true);
   });
 });

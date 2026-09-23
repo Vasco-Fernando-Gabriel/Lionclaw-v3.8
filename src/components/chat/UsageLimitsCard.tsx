@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, Gauge } from 'lucide-react';
 import type { ProviderUsageLimits, ProviderUsageWindow } from '@/types';
 
-
 const REFRESH_INTERVAL_MS = 5 * 60_000;
 
 function renewLabel(resetsAt: string | null): string | null {
@@ -29,7 +28,9 @@ function WindowRow({ window: w }: { window: ProviderUsageWindow }) {
     <div className="py-0.5">
       <div className="flex items-center justify-between text-[11px]">
         <span className="text-zinc-300">{w.label}</span>
-        <span className="text-amber-400 font-medium">{Math.round(w.usedPercent)}% <span className="text-zinc-500 font-normal">usado</span></span>
+        <span className="text-amber-400 font-medium">
+          {Math.round(w.usedPercent)}% <span className="text-zinc-500 font-normal">usado</span>
+        </span>
       </div>
       <div className="mt-1 h-1 rounded-full bg-zinc-800 overflow-hidden">
         <div
@@ -49,9 +50,7 @@ function ProviderCard({ limits }: { limits: ProviderUsageLimits }) {
         <span className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-200">
           {limits.provider}
           {limits.planType && (
-            <span className="ml-1.5 font-medium normal-case tracking-normal text-zinc-500">
-              {limits.planType}
-            </span>
+            <span className="ml-1.5 font-medium normal-case tracking-normal text-zinc-500">{limits.planType}</span>
           )}
         </span>
         <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -73,8 +72,7 @@ export function UsageLimitsCard() {
     try {
       const response = await window.lionclaw.usage.providerLimits();
       setProviders(response.providers);
-    } catch {
-    }
+    } catch {}
   }, []);
 
   useEffect(() => {

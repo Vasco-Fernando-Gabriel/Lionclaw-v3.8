@@ -1,7 +1,5 @@
-
 import { describe, it, expect } from 'vitest';
 import { PIPELINE_INTERNAL_SQUADS } from '../tools/agent';
-
 
 import { vi } from 'vitest';
 
@@ -69,8 +67,8 @@ describe('squad alignment: PIPELINE_INTERNAL_SQUADS == HIDDEN_SQUADS', () => {
     expect(PIPELINE_INTERNAL_SQUADS.has('dev')).toBe(false);
   });
 
-  it('PIPELINE_INTERNAL_SQUADS contains exactly harness, pipeline, security, feature, enrich', () => {
-    const expected = new Set(['harness', 'pipeline', 'security', 'feature', 'enrich']);
+  it('PIPELINE_INTERNAL_SQUADS contains internal squads including swarm', () => {
+    const expected = new Set(['harness', 'pipeline', 'security', 'feature', 'enrich', 'swarm']);
     expect(PIPELINE_INTERNAL_SQUADS).toEqual(expected);
   });
 });

@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import { createLogger } from './logger';
@@ -6,7 +5,6 @@ import { getPipelineMetrics, getHarnessProject, getHarnessSprints, getHarnessRou
 import type { PipelinePhaseMetricsRow } from './db';
 
 const logger = createLogger('pipeline-report');
-
 
 function formatMs(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -39,16 +37,7 @@ const RUNTIME_LABELS: Record<string, string> = {
   grok: 'Grok Build (assinatura)',
 };
 
-const RUNTIME_REPORT_ORDER = [
-  'cloud',
-  'local',
-  'external',
-  'codex',
-  'zai',
-  'minimax-tp',
-  'kimi',
-  'grok',
-];
+const RUNTIME_REPORT_ORDER = ['cloud', 'local', 'external', 'codex', 'zai', 'minimax-tp', 'kimi', 'grok'];
 
 const PAYG_EQUIVALENT_RUNTIMES = new Set(['minimax-tp', 'kimi', 'grok']);
 const SUBSCRIPTION_RUNTIMES = new Set(['zai', 'minimax-tp', 'kimi', 'grok']);
@@ -60,19 +49,24 @@ function formatRuntime(runtime: string | null | undefined): string {
 
 function statusEmoji(status: string): string {
   switch (status) {
-    case 'completed': return 'OK';
-    case 'failed': return 'FAIL';
-    case 'running': return 'RUN';
-    case 'interrupted': return 'INT';
-    case 'skipped': return 'SKIP';
-    default: return status.toUpperCase();
+    case 'completed':
+      return 'OK';
+    case 'failed':
+      return 'FAIL';
+    case 'running':
+      return 'RUN';
+    case 'interrupted':
+      return 'INT';
+    case 'skipped':
+      return 'SKIP';
+    default:
+      return status.toUpperCase();
   }
 }
 
 function hrLine(): string {
   return '\n---\n';
 }
-
 
 function buildSummarySection(metrics: ReturnType<typeof getPipelineMetrics>): string {
   const { totals, costByRuntime, costStatusByRuntime, subscriptionEquivalentCost } = metrics;
@@ -85,11 +79,7 @@ function buildSummarySection(metrics: ReturnType<typeof getPipelineMetrics>): st
   section += `| Tokens de entrada | ${formatTokens(totals.inputTokens)} |\n`;
   section += `| Tokens de saida | ${formatTokens(totals.outputTokens)} |\n`;
   section += `| Tokens de cache | ${formatTokens(totals.cacheTokens)} |\n`;
-  section += `| Custo total | ${formatTotalCost(
-    totals.costUsd,
-    subscriptionEquivalentCost,
-    totals.costStatus,
-  )} |\n`;
+  section += `| Custo total | ${formatTotalCost(totals.costUsd, subscriptionEquivalentCost, totals.costStatus)} |\n`;
   if (hasLocal) {
     if (hasCloud) {
       section += `| Custo cloud | ${formatRuntimeBreakdownCost(
@@ -117,11 +107,12 @@ function formatTotalCost(
   costStatus: 'known' | 'unknown' | 'estimated-partial' | undefined,
 ): string {
   const equivalent = Math.min(total, Math.max(0, subscriptionEquivalent));
-  const known = equivalent <= 0
-    ? formatCost(total)
-    : total - equivalent <= 1e-9
-      ? `~${formatCost(total)}`
-      : `${formatCost(total)} (incl. ~${formatCost(equivalent)})`;
+  const known =
+    equivalent <= 0
+      ? formatCost(total)
+      : total - equivalent <= 1e-9
+        ? `~${formatCost(total)}`
+        : `${formatCost(total)} (incl. ~${formatCost(equivalent)})`;
   if (costStatus === 'unknown') return total > 0 ? `${known} + nao estim.` : 'nao estimado';
   if (costStatus === 'estimated-partial' && equivalent <= 0) return `~${formatCost(total)}`;
   return known;
@@ -135,16 +126,13 @@ function formatRuntimeBreakdownCost(
   const equivalentPayg = PAYG_EQUIVALENT_RUNTIMES.has(runtime);
   if (costStatus === 'unknown') {
     if (cost <= 0) return 'nao estimado';
-    const known = equivalentPayg
-      ? `~${formatCost(cost)} (est. PAYG)`
-      : formatCost(cost);
+    const known = equivalentPayg ? `~${formatCost(cost)} (est. PAYG)` : formatCost(cost);
     return `${known} + nao estim.`;
   }
   if (equivalentPayg) return `~${formatCost(cost)} (est. PAYG)`;
   if (costStatus === 'estimated-partial') return `~${formatCost(cost)}`;
   return formatCost(cost);
 }
-
 
 const PHASE_LABELS: Record<number, string> = {
   1: 'Discovery',
@@ -170,10 +158,7 @@ function resolveProviderForReport(
   return (meta.provider as string | undefined) ?? runtime ?? 'cloud';
 }
 
-function formatCostWithMeta(
-  usd: number,
-  metadata: Record<string, unknown> | null | undefined,
-): string {
+function formatCostWithMeta(usd: number, metadata: Record<string, unknown> | null | undefined): string {
   const meta = metadata ?? {};
   if ((meta.costStatus as string | undefined) === 'unknown') return 'nao estimado';
   if ((meta.costEstimationKind as string | undefined) === 'subscription-equivalent-payg') {
@@ -202,7 +187,6 @@ function buildPhasesSection(phases: PipelinePhaseMetricsRow[]): string {
 
   return section;
 }
-
 
 function buildSprintsSection(projectId: string): string {
   const sprints = getHarnessSprints(projectId);
@@ -246,7 +230,6 @@ function buildSprintsSection(projectId: string): string {
   return section;
 }
 
-
 function buildArtifactsSection(projectPath: string): string {
   const ARTIFACT_FILES = [
     'discovery-notes.md',
@@ -269,8 +252,7 @@ function buildArtifactsSection(projectPath: string): string {
       try {
         const stat = fs.statSync(fullPath);
         found.push({ name: filename, sizeBytes: stat.size });
-      } catch {
-      }
+      } catch {}
     }
   }
 
@@ -288,7 +270,6 @@ function buildArtifactsSection(projectPath: string): string {
   return section;
 }
 
-
 function buildRuntimeSection(metrics: ReturnType<typeof getPipelineMetrics>): string {
   const { costByRuntime, costStatusByRuntime, phases } = metrics;
   const presentRuntimes = Object.keys(costByRuntime);
@@ -296,20 +277,14 @@ function buildRuntimeSection(metrics: ReturnType<typeof getPipelineMetrics>): st
 
   const orderedRuntimes = [
     ...RUNTIME_REPORT_ORDER.filter((runtime) => Object.hasOwn(costByRuntime, runtime)),
-    ...presentRuntimes
-      .filter((runtime) => !RUNTIME_REPORT_ORDER.includes(runtime))
-      .sort(),
+    ...presentRuntimes.filter((runtime) => !RUNTIME_REPORT_ORDER.includes(runtime)).sort(),
   ];
 
   let section = '## Custo por Runtime\n\n';
   section += `| Runtime | Custo |\n`;
   section += `|---|---|\n`;
   for (const runtime of orderedRuntimes) {
-    const displayCost = formatRuntimeBreakdownCost(
-      runtime,
-      costByRuntime[runtime] ?? 0,
-      costStatusByRuntime[runtime],
-    );
+    const displayCost = formatRuntimeBreakdownCost(runtime, costByRuntime[runtime] ?? 0, costStatusByRuntime[runtime]);
     section += `| ${formatRuntime(runtime)} | ${displayCost} |\n`;
   }
   section += '\n';
@@ -328,7 +303,6 @@ function buildRuntimeSection(metrics: ReturnType<typeof getPipelineMetrics>): st
 
   return section;
 }
-
 
 export function generatePipelineReport(projectId: string): string {
   const project = getHarnessProject(projectId);
@@ -394,7 +368,6 @@ export function generatePipelineReport(projectId: string): string {
 
   return report;
 }
-
 
 export function exportReport(projectId: string, format: 'md'): string {
   const project = getHarnessProject(projectId);

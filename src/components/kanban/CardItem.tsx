@@ -1,13 +1,7 @@
 import { useDraggable } from '@dnd-kit/core';
 import { Paperclip, Check, Clock, Archive } from 'lucide-react';
 import type { KanbanCard } from '@/types/kanban';
-import {
-  TYPE_BADGE_CLASS,
-  PRIORITY_BADGE_CLASS,
-  SEVERITY_BADGE_CLASS,
-  isOverdue,
-  formatShortDate,
-} from './kanban-ui';
+import { TYPE_BADGE_CLASS, PRIORITY_BADGE_CLASS, SEVERITY_BADGE_CLASS, isOverdue, formatShortDate } from './kanban-ui';
 
 interface CardItemProps {
   card: KanbanCard;
@@ -29,11 +23,7 @@ export function CardItem({ card, onOpen }: CardItemProps) {
       {...listeners}
       {...attributes}
       onClick={() => onOpen(card)}
-      style={
-        transform
-          ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 40 }
-          : undefined
-      }
+      style={transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 40 } : undefined}
       className={`rounded-[10px] border bg-zinc-900 px-3 py-2.5 transition-colors relative
         ${isDragging ? 'opacity-40 cursor-grabbing border-amber-500/50' : 'cursor-grab border-zinc-800 hover:border-zinc-700'}
         ${card.archived ? 'opacity-60' : ''}`}
@@ -52,12 +42,16 @@ export function CardItem({ card, onOpen }: CardItemProps) {
       {(card.type || card.priority || card.severity) && (
         <div className="flex flex-wrap items-center gap-1.5">
           {card.type && (
-            <span className={`text-[10.5px] font-semibold px-2 py-0.5 rounded-full ${TYPE_BADGE_CLASS[card.type] ?? 'bg-zinc-500/20 text-zinc-400'}`}>
+            <span
+              className={`text-[10.5px] font-semibold px-2 py-0.5 rounded-full ${TYPE_BADGE_CLASS[card.type] ?? 'bg-zinc-500/20 text-zinc-400'}`}
+            >
               {card.type}
             </span>
           )}
           {card.priority && (
-            <span className={`text-[10.5px] font-semibold px-2 py-0.5 rounded-full ${PRIORITY_BADGE_CLASS[card.priority] ?? 'bg-zinc-500/20 text-zinc-400'}`}>
+            <span
+              className={`text-[10.5px] font-semibold px-2 py-0.5 rounded-full ${PRIORITY_BADGE_CLASS[card.priority] ?? 'bg-zinc-500/20 text-zinc-400'}`}
+            >
               {card.priority}
             </span>
           )}

@@ -9,7 +9,6 @@ import {
   getPhasesForProject,
 } from '../types/pipeline';
 
-
 describe('getPhaseLabel (I3)', () => {
   it('deriva "Fase N - nome" da fase corrente no pipeline dev', () => {
     expect(getPhaseLabel(1, 'running', PIPELINE_PHASES)).toBe('Fase 1 - Discovery');
@@ -18,15 +17,9 @@ describe('getPhaseLabel (I3)', () => {
 
   it('deriva o nome certo por tipo de pipeline (security/feature/arch-review/dev-v2)', () => {
     expect(getPhaseLabel(2, 'running', SECURITY_PIPELINE_PHASES)).toBe('Fase 2 - Security Audit');
-    expect(getPhaseLabel(1, 'running', FEATURE_PIPELINE_PHASES)).toBe(
-      'Fase 1 - Feature Discovery',
-    );
-    expect(getPhaseLabel(3, 'running', ARCHITECTURE_REVIEW_PIPELINE_PHASES)).toBe(
-      'Fase 3 - Diagnostico Arquitetural',
-    );
-    expect(getPhaseLabel(5, 'running', DEVELOPMENT_V2_PIPELINE_PHASES)).toBe(
-      'Fase 5 - LionDesign Studio',
-    );
+    expect(getPhaseLabel(1, 'running', FEATURE_PIPELINE_PHASES)).toBe('Fase 1 - Feature Discovery');
+    expect(getPhaseLabel(3, 'running', ARCHITECTURE_REVIEW_PIPELINE_PHASES)).toBe('Fase 3 - Diagnostico Arquitetural');
+    expect(getPhaseLabel(5, 'running', DEVELOPMENT_V2_PIPELINE_PHASES)).toBe('Fase 5 - LionDesign Studio');
   });
 
   it('usa as fases resolvidas via getPhasesForProject pelo pipelineType do projeto', () => {

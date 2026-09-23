@@ -3,9 +3,7 @@ import { dynamicWorkflowNarrator } from '../seed-agents/dynamic-workflow-narrato
 
 export function applyMigrationV86(db: Database.Database): void {
   const seed = dynamicWorkflowNarrator;
-  const maxOrder = db
-    .prepare('SELECT COALESCE(MAX(sort_order), 0) AS m FROM agents')
-    .get() as { m: number };
+  const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), 0) AS m FROM agents').get() as { m: number };
 
   db.prepare(
     `INSERT OR IGNORE INTO agents (

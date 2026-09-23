@@ -1,10 +1,5 @@
-
 import { createHash } from 'node:crypto';
-import type {
-  DynamicWorkflowEvent,
-  OutcomeDigest,
-  OutcomeVerdict,
-} from '../../../src/types/dynamic-workflow';
+import type { DynamicWorkflowEvent, OutcomeDigest, OutcomeVerdict } from '../../../src/types/dynamic-workflow';
 import { isBoundaryGateId, isFailureGateId, failureGateId, CC_DELIVERY_GATE_ID } from './types';
 import { toLocalShort } from './local-time';
 
@@ -51,12 +46,7 @@ export function worstWakeReason(a: WakeReason, b: WakeReason): WakeReason {
   return WAKE_REASON_RANK[a] >= WAKE_REASON_RANK[b] ? a : b;
 }
 
-export type BoundarySemaphore =
-  | 'VERDE'
-  | 'ATENCAO'
-  | 'SEM VEREDITO'
-  | 'DECISAO NECESSARIA'
-  | 'DECISAO HUMANA';
+export type BoundarySemaphore = 'VERDE' | 'ATENCAO' | 'SEM VEREDITO' | 'DECISAO NECESSARIA' | 'DECISAO HUMANA';
 
 export interface SinceStats {
   nodes: number;
@@ -90,7 +80,6 @@ export interface FindingLedgerEntry {
   problem: string;
 }
 
-
 function parsePayload(event: DynamicWorkflowEvent): Record<string, unknown> {
   try {
     const parsed: unknown = JSON.parse(event.payloadJson || '{}');
@@ -111,7 +100,6 @@ function num(value: unknown): number | undefined {
 export function findingKey(where: string, problem: string): string {
   return createHash('sha256').update(`${where}|${problem}`).digest('hex').slice(0, 8);
 }
-
 
 export function extractValidatorFindings(
   value: unknown,
@@ -218,7 +206,6 @@ export function summarizeParsedOutput(parsed: unknown): string {
   return clip(`{${keys.join(', ')}}`);
 }
 
-
 const OUTCOME_EVENT_TYPES: ReadonlySet<string> = new Set<string>([
   'node-completed',
   'node-cache-hit',
@@ -233,10 +220,7 @@ const OUTCOME_EVENT_TYPES: ReadonlySet<string> = new Set<string>([
   'wake-runaway',
 ]);
 
-export const BOUNDARY_EVENT_TYPES: ReadonlySet<string> = new Set<string>([
-  'phase-changed',
-  'coordinator-finished',
-]);
+export const BOUNDARY_EVENT_TYPES: ReadonlySet<string> = new Set<string>(['phase-changed', 'coordinator-finished']);
 
 export interface WakeSignal {
   reason: WakeReason;
@@ -307,9 +291,7 @@ export function deriveOutcome(event: DynamicWorkflowEvent): OutcomeDigest | null
       base.verdict = ok ? 'green' : 'attention';
       if (!ok) {
         const red = Array.isArray(payload.redChecks)
-          ? (payload.redChecks as Array<Record<string, unknown>>)
-              .map((c) => str(c.id) ?? '?')
-              .join(', ')
+          ? (payload.redChecks as Array<Record<string, unknown>>).map((c) => str(c.id) ?? '?').join(', ')
           : '';
         base.errorExcerpt = excerpt(
           payload.inconclusive === true ? 'green-check inconclusivo' : `green-check vermelho: ${red}`,
@@ -354,9 +336,8 @@ export function deriveOutcome(event: DynamicWorkflowEvent): OutcomeDigest | null
 
 function countP1(findings: unknown): number {
   if (!Array.isArray(findings)) return 0;
-  return findings.filter(
-    (f) => !!f && typeof f === 'object' && (f as Record<string, unknown>).severity === 'P1',
-  ).length;
+  return findings.filter((f) => !!f && typeof f === 'object' && (f as Record<string, unknown>).severity === 'P1')
+    .length;
 }
 
 function excerpt(value: string | undefined): string | undefined {
@@ -364,7 +345,6 @@ function excerpt(value: string | undefined): string | undefined {
   const flat = value.replace(/\s+/g, ' ').trim();
   return flat.length > 160 ? `${flat.slice(0, 157)}...` : flat;
 }
-
 
 export function findWindowStartSeq(events: DynamicWorkflowEvent[]): number {
   let start = 0;
@@ -396,10 +376,7 @@ export function eventsSince(events: DynamicWorkflowEvent[], afterSeq: number): D
   return events.filter((e) => e.seq > afterSeq).sort((a, b) => a.seq - b.seq);
 }
 
-export function deriveOutcomesSince(
-  events: DynamicWorkflowEvent[],
-  lastAckSeq: number,
-): OutcomeDigest[] {
+export function deriveOutcomesSince(events: DynamicWorkflowEvent[], lastAckSeq: number): OutcomeDigest[] {
   const out: OutcomeDigest[] = [];
   for (const ev of eventsSince(events, lastAckSeq)) {
     const o = deriveOutcome(ev);
@@ -408,11 +385,7 @@ export function deriveOutcomesSince(
   return out;
 }
 
-const NODE_OUTCOME_TYPES: ReadonlySet<string> = new Set<string>([
-  'node-completed',
-  'node-cache-hit',
-  'node-failed',
-]);
+const NODE_OUTCOME_TYPES: ReadonlySet<string> = new Set<string>(['node-completed', 'node-cache-hit', 'node-failed']);
 
 export function computeSinceStats(outcomes: OutcomeDigest[]): SinceStats {
   const stats: SinceStats = {
@@ -441,7 +414,6 @@ export function computeSinceStats(outcomes: OutcomeDigest[]): SinceStats {
   stats.costUsd = Math.round(stats.costUsd * 10000) / 10000;
   return stats;
 }
-
 
 export function buildFindingLedger(windowEvents: DynamicWorkflowEvent[]): Map<string, FindingLedgerEntry> {
   const ledger = new Map<string, FindingLedgerEntry>();
@@ -501,9 +473,7 @@ export function buildFindingLedger(windowEvents: DynamicWorkflowEvent[]): Map<st
 }
 
 export function openP1Findings(ledger: Map<string, FindingLedgerEntry>): FindingLedgerEntry[] {
-  return [...ledger.values()].filter(
-    (e) => e.severity === 'P1' && (e.status === 'open' || e.status === 'open-real'),
-  );
+  return [...ledger.values()].filter((e) => e.severity === 'P1' && (e.status === 'open' || e.status === 'open-real'));
 }
 
 const DECISION_RESOLVER_TYPES: ReadonlySet<string> = new Set<string>([
@@ -532,9 +502,7 @@ export function assessBoundary(
   },
 ): BoundaryAssessment {
   void opts;
-  const events = [...windowEvents]
-    .sort((a, b) => a.seq - b.seq)
-    .filter((e) => e.type !== 'node-cache-hit');
+  const events = [...windowEvents].sort((a, b) => a.seq - b.seq).filter((e) => e.type !== 'node-cache-hit');
   const outcomes: OutcomeDigest[] = [];
   for (const ev of events) {
     const o = deriveOutcome(ev);
@@ -564,10 +532,7 @@ export function assessBoundary(
 
   const completedAfter = (nodeId: string, seq: number): boolean =>
     events.some(
-      (e) =>
-        e.seq > seq &&
-        e.nodeId === nodeId &&
-        (e.type === 'node-completed' || e.type === 'node-cache-hit'),
+      (e) => e.seq > seq && e.nodeId === nodeId && (e.type === 'node-completed' || e.type === 'node-cache-hit'),
     );
   const rescheduledAfter = (nodeId: string, seq: number): boolean =>
     events.some((e) => {
@@ -585,11 +550,7 @@ export function assessBoundary(
     if (!o.nodeId) continue;
     if (o.type === 'node-retry-scheduled' && !completedAfter(o.nodeId, o.seq)) {
       pendingRetries.push(o.nodeId);
-    } else if (
-      o.type === 'node-failed' &&
-      !completedAfter(o.nodeId, o.seq) &&
-      !rescheduledAfter(o.nodeId, o.seq)
-    ) {
+    } else if (o.type === 'node-failed' && !completedAfter(o.nodeId, o.seq) && !rescheduledAfter(o.nodeId, o.seq)) {
       unresolvedFailures.push(o.nodeId);
     }
   }
@@ -646,7 +607,6 @@ export function assessBoundary(
 export function computeBoundarySemaphore(windowEvents: DynamicWorkflowEvent[]): BoundarySemaphore {
   return assessBoundary(windowEvents).semaphore;
 }
-
 
 export interface WakePromptInput {
   runId: string;
@@ -776,7 +736,6 @@ export function buildWakePrompt(input: WakePromptInput): string {
   return lines.join('\n');
 }
 
-
 export interface WakeRunawayCounters {
   wakesTotal: number;
   wakesSinceProgress: number;
@@ -793,8 +752,7 @@ export const DEFAULT_WAKE_RUNAWAY_LIMITS: WakeRunawayLimits = {
 };
 
 export type WakeRunawayVerdict =
-  | { runaway: false }
-  | { runaway: true; reason: 'max-wakes-per-run' | 'max-wakes-sem-progresso' };
+  { runaway: false } | { runaway: true; reason: 'max-wakes-per-run' | 'max-wakes-sem-progresso' };
 
 export function checkWakeRunaway(
   counters: WakeRunawayCounters,

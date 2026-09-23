@@ -1,12 +1,5 @@
-
 import { createHash } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { createLogger } from '../logger';
 import type {
@@ -97,20 +90,14 @@ function readPackageScripts(
   try {
     raw = readTextFile(pkgPath);
   } catch (err) {
-    logger.warn(
-      { projectPath, err: (err as Error).message },
-      'package.json ilegivel; build-detection desligada',
-    );
+    logger.warn({ projectPath, err: (err as Error).message }, 'package.json ilegivel; build-detection desligada');
     return empty;
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch (err) {
-    logger.warn(
-      { projectPath, err: (err as Error).message },
-      'package.json malformado; build-detection desligada',
-    );
+    logger.warn({ projectPath, err: (err as Error).message }, 'package.json malformado; build-detection desligada');
     return empty;
   }
   if (typeof parsed !== 'object' || parsed === null) {
@@ -140,10 +127,7 @@ function defaultGenerateId(specSha256: string): string {
   return `dwfb_${sha256Hex(`${specSha256}:${Date.now()}`).slice(0, 24)}`;
 }
 
-function resolveSpecText(
-  input: BuildContextBundleInput,
-  readTextFile: (path: string) => string,
-): string {
+function resolveSpecText(input: BuildContextBundleInput, readTextFile: (path: string) => string): string {
   if (typeof input.specText === 'string' && input.specText.length > 0) {
     return input.specText;
   }
@@ -151,9 +135,7 @@ function resolveSpecText(
     try {
       return readTextFile(input.specPath);
     } catch (err) {
-      throw new ContextBundleSpecError(
-        `falha ao ler specPath ${input.specPath}: ${(err as Error).message}`,
-      );
+      throw new ContextBundleSpecError(`falha ao ler specPath ${input.specPath}: ${(err as Error).message}`);
     }
   }
   throw new ContextBundleSpecError('nem specText nem specPath fornecidos');
@@ -162,25 +144,16 @@ function resolveSpecText(
 function resolveWithinRunDir(runDir: string, fileName: string): string {
   const canonicalRoot = existsSync(runDir) ? realpathSync(runDir) : resolve(runDir);
   const absoluteTarget = resolve(canonicalRoot, fileName);
-  const canonicalTarget = existsSync(absoluteTarget)
-    ? realpathSync(absoluteTarget)
-    : absoluteTarget;
+  const canonicalTarget = existsSync(absoluteTarget) ? realpathSync(absoluteTarget) : absoluteTarget;
   const rel = relative(canonicalRoot, canonicalTarget);
-  const within =
-    canonicalTarget === canonicalRoot ||
-    (rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel));
+  const within = canonicalTarget === canonicalRoot || (rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel));
   if (!within) {
-    throw new Error(
-      `context bundle fora do run dir (runDir=${canonicalRoot}, alvo=${fileName})`,
-    );
+    throw new Error(`context bundle fora do run dir (runDir=${canonicalRoot}, alvo=${fileName})`);
   }
   return canonicalTarget;
 }
 
-export function buildContextBundle(
-  input: BuildContextBundleInput,
-  deps: ContextBundleDeps,
-): BuildContextBundleResult {
+export function buildContextBundle(input: BuildContextBundleInput, deps: ContextBundleDeps): BuildContextBundleResult {
   if (!isAbsolute(input.projectPath)) {
     throw new Error(`projectPath deve ser absoluto: ${input.projectPath}`);
   }
@@ -193,11 +166,7 @@ export function buildContextBundle(
   const specSource = resolveSpecText(input, readTextFile);
   const specSha256 = sha256Hex(specSource);
 
-  const { packageScripts, hasBuildScript } = readPackageScripts(
-    input.projectPath,
-    readTextFile,
-    pathExists,
-  );
+  const { packageScripts, hasBuildScript } = readPackageScripts(input.projectPath, readTextFile, pathExists);
 
   const git: ContextBundleGitInfo = deps.probeGit
     ? deps.probeGit(input.projectPath)
@@ -257,11 +226,7 @@ export interface BundleFreshnessReport {
 }
 
 export type BundleFreshnessReason =
-  | 'project-missing'
-  | 'spec-changed'
-  | 'commit-changed'
-  | 'relevant-file-missing'
-  | 'agent-missing';
+  'project-missing' | 'spec-changed' | 'commit-changed' | 'relevant-file-missing' | 'agent-missing';
 
 export interface BundleFreshnessInput {
   bundle: DynamicWorkflowContextBundle;
@@ -269,10 +234,7 @@ export interface BundleFreshnessInput {
   currentSpecPath?: string | null;
 }
 
-export function checkBundleFreshness(
-  input: BundleFreshnessInput,
-  deps: ContextBundleDeps,
-): BundleFreshnessReport {
+export function checkBundleFreshness(input: BundleFreshnessInput, deps: ContextBundleDeps): BundleFreshnessReport {
   const readTextFile = deps.readTextFile ?? defaultReadTextFile;
   const pathExists = deps.pathExists ?? ((p: string) => existsSync(p));
   const reasons: BundleFreshnessReason[] = [];

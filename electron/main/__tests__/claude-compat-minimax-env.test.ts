@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const capturedQueryArgs: Array<{
@@ -143,15 +142,10 @@ vi.mock('../title-generator', () => ({
 }));
 
 vi.mock('../sdk-session-id', () => ({
-  makeScopedSdkSessionId: (scope: string, sessionId: string) =>
-    `${scope}:${sessionId}`,
+  makeScopedSdkSessionId: (scope: string, sessionId: string) => `${scope}:${sessionId}`,
 }));
 
-import {
-  buildAgentDefinitions,
-  buildCompatEnv,
-  executeClaudeCompatSdkQuery,
-} from '../claude-compat-sdk';
+import { buildAgentDefinitions, buildCompatEnv, executeClaudeCompatSdkQuery } from '../claude-compat-sdk';
 import { getAllAgents } from '../db';
 import type { OrchestratorSelection } from '../orchestrator-selection';
 import type { QueryOptions } from '../orchestrator';
@@ -159,9 +153,7 @@ import type { AgentConfig } from '../../../src/types';
 
 const noopGetWindow = () => null;
 
-function makeSelection(
-  overrides: Partial<OrchestratorSelection> = {},
-): OrchestratorSelection {
+function makeSelection(overrides: Partial<OrchestratorSelection> = {}): OrchestratorSelection {
   return {
     runtime: 'claude-compat-sdk',
     provider: 'zai',
@@ -172,9 +164,7 @@ function makeSelection(
   };
 }
 
-function makeQueryOptions(
-  overrides: Partial<QueryOptions> = {},
-): QueryOptions {
+function makeQueryOptions(overrides: Partial<QueryOptions> = {}): QueryOptions {
   return {
     sessionId: 'test-session-1',
     silent: true,
@@ -220,16 +210,18 @@ describe('ledger V138 para Task nativa compat', () => {
 
     expect(ledgerMocks.start).toHaveBeenCalledTimes(2);
     const child = ledgerMocks.start.mock.calls[1][0] as Record<string, unknown>;
-    expect(child).toEqual(expect.objectContaining({
-      executionKind: 'native-task',
-      ownerKind: 'chat',
-      ownerId: 'compat-native-1',
-      sessionId: 'compat-native-1',
-      toolUseId: 'tool-compat-1',
-      taskId: 'task-compat-1',
-      runtime: 'zai',
-      provider: 'zai',
-    }));
+    expect(child).toEqual(
+      expect.objectContaining({
+        executionKind: 'native-task',
+        ownerKind: 'chat',
+        ownerId: 'compat-native-1',
+        sessionId: 'compat-native-1',
+        toolUseId: 'tool-compat-1',
+        taskId: 'task-compat-1',
+        runtime: 'zai',
+        provider: 'zai',
+      }),
+    );
     expect(ledgerMocks.finalize).toHaveBeenCalledWith(
       child.executionId,
       expect.objectContaining({
@@ -346,18 +338,12 @@ describe('ledger V138 para Task nativa compat', () => {
       makeSelection({ provider: 'zai', model: 'glm-4.7' }),
     );
 
-    expect(ledgerMocks.updateSession).toHaveBeenCalledWith(
-      'compat-native-inseparable',
-      0,
-      5,
-      0,
-      {
-        costStatus: 'unknown',
-        tokenStatus: 'not_reported',
-        costUnknownReason: 'no-usage-reported',
-        runtime: 'zai',
-      },
-    );
+    expect(ledgerMocks.updateSession).toHaveBeenCalledWith('compat-native-inseparable', 0, 5, 0, {
+      costStatus: 'unknown',
+      tokenStatus: 'not_reported',
+      costUnknownReason: 'no-usage-reported',
+      runtime: 'zai',
+    });
     const child = ledgerMocks.start.mock.calls[1][0] as Record<string, unknown>;
     expect(ledgerMocks.finalize).toHaveBeenCalledWith(
       child.executionId,
@@ -514,27 +500,22 @@ describe('SPEC-008 §13.2 — buildCompatEnv sanitizes inherited Anthropic env',
 
 describe('SPEC agent-sdk-0.3 D9 — buildCompatEnv injeta CLAUDE_CODE_MAX_CONTEXT_TOKENS', () => {
   it('Z.ai glm-5.2 (janela 1M conhecida) -> "1000000"', () => {
-    const env = buildCompatEnv(
-      makeSelection({ provider: 'zai', model: 'glm-5.2' }),
-      { PATH: '/usr/bin' } as NodeJS.ProcessEnv,
-    );
+    const env = buildCompatEnv(makeSelection({ provider: 'zai', model: 'glm-5.2' }), {
+      PATH: '/usr/bin',
+    } as NodeJS.ProcessEnv);
     expect(env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe('1000000');
   });
 
   it('MiniMax MiniMax-M3 (janela 1M conhecida) -> "1000000"', () => {
-    const env = buildCompatEnv(
-      makeSelection({ provider: 'minimax', model: 'MiniMax-M3' }),
-      { PATH: '/usr/bin' } as NodeJS.ProcessEnv,
-    );
+    const env = buildCompatEnv(makeSelection({ provider: 'minimax', model: 'MiniMax-M3' }), {
+      PATH: '/usr/bin',
+    } as NodeJS.ProcessEnv);
     expect(env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe('1000000');
     expect(env.ANTHROPIC_MODEL).toBe('MiniMax-M3');
   });
 
   it('janela conhecida < 1M -> valor real (glm-5.1 -> "200000", MiniMax-M2.7 -> "204800")', () => {
-    const zai = buildCompatEnv(
-      makeSelection({ provider: 'zai', model: 'glm-5.1' }),
-      {} as NodeJS.ProcessEnv,
-    );
+    const zai = buildCompatEnv(makeSelection({ provider: 'zai', model: 'glm-5.1' }), {} as NodeJS.ProcessEnv);
     expect(zai.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe('200000');
 
     const minimax = buildCompatEnv(
@@ -545,17 +526,14 @@ describe('SPEC agent-sdk-0.3 D9 — buildCompatEnv injeta CLAUDE_CODE_MAX_CONTEX
   });
 
   it('modelo desconhecido -> chave AUSENTE mesmo com override/compact knobs no baseEnv', () => {
-    const env = buildCompatEnv(
-      makeSelection({ provider: 'zai', model: 'totally-unknown-model-x' }),
-      {
-        PATH: '/usr/bin',
-        CLAUDE_CODE_MAX_CONTEXT_TOKENS: '999999',
-        CLAUDE_CODE_AUTO_COMPACT_WINDOW: '150000',
-        CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: '50',
-        DISABLE_AUTO_COMPACT: '1',
-        DISABLE_COMPACT: '1',
-      } as NodeJS.ProcessEnv,
-    );
+    const env = buildCompatEnv(makeSelection({ provider: 'zai', model: 'totally-unknown-model-x' }), {
+      PATH: '/usr/bin',
+      CLAUDE_CODE_MAX_CONTEXT_TOKENS: '999999',
+      CLAUDE_CODE_AUTO_COMPACT_WINDOW: '150000',
+      CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: '50',
+      DISABLE_AUTO_COMPACT: '1',
+      DISABLE_COMPACT: '1',
+    } as NodeJS.ProcessEnv);
     expect(env.PATH).toBe('/usr/bin');
     expect(env).not.toHaveProperty('CLAUDE_CODE_MAX_CONTEXT_TOKENS');
     expect(env).not.toHaveProperty('CLAUDE_CODE_AUTO_COMPACT_WINDOW');
@@ -565,10 +543,9 @@ describe('SPEC agent-sdk-0.3 D9 — buildCompatEnv injeta CLAUDE_CODE_MAX_CONTEX
   });
 
   it('modelo conhecido: o valor do LionClaw vence o override herdado', () => {
-    const env = buildCompatEnv(
-      makeSelection({ provider: 'zai', model: 'glm-5.2' }),
-      { CLAUDE_CODE_MAX_CONTEXT_TOKENS: '123' } as NodeJS.ProcessEnv,
-    );
+    const env = buildCompatEnv(makeSelection({ provider: 'zai', model: 'glm-5.2' }), {
+      CLAUDE_CODE_MAX_CONTEXT_TOKENS: '123',
+    } as NodeJS.ProcessEnv);
     expect(env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe('1000000');
   });
 

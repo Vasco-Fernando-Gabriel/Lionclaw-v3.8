@@ -50,19 +50,14 @@ function makeConfig(overrides: Partial<AgentQueryConfig> = {}): AgentQueryConfig
 
 describe('zai-executor', () => {
   it('buildZaiEnv strips Anthropic env and injects Z.ai compat variables', () => {
-    const env = buildZaiEnv(
-      'sk-zai',
-      'glm-5-turbo',
-      'https://api.z.ai/api/anthropic',
-      {
-        PATH: '/bin',
-        HOME: '/home/me',
-        ANTHROPIC_API_KEY: 'sk-anthropic',
-        ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
-        ANTHROPIC_AUTH_TOKEN: 'old-token',
-        API_TIMEOUT_MS: '1000',
-      },
-    );
+    const env = buildZaiEnv('sk-zai', 'glm-5-turbo', 'https://api.z.ai/api/anthropic', {
+      PATH: '/bin',
+      HOME: '/home/me',
+      ANTHROPIC_API_KEY: 'sk-anthropic',
+      ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
+      ANTHROPIC_AUTH_TOKEN: 'old-token',
+      API_TIMEOUT_MS: '1000',
+    });
 
     expect(env.PATH).toBe('/bin');
     expect(env.HOME).toBe('/home/me');
@@ -164,4 +159,3 @@ describe('zai-executor: CLAUDE_CODE_MAX_CONTEXT_TOKENS (D9)', () => {
     expect((opts.env as Record<string, string>).CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe('1000000');
   });
 });
-

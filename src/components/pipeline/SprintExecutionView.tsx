@@ -23,12 +23,7 @@ import { StreamingMarkdown } from './StreamingMarkdown';
 import { shortenModel } from '@/utils/model-display';
 import { StreamTimeline } from '@/components/common/StreamTimeline';
 import { timelineFromOrderedStream, timelineFromPersisted } from '@/lib/stream-timeline';
-import {
-  getPhaseNumberForAgent,
-  isCoderPhaseForProject,
-  isEvaluatorPhaseForProject,
-} from '@/types/pipeline';
-
+import { getPhaseNumberForAgent, isCoderPhaseForProject, isEvaluatorPhaseForProject } from '@/types/pipeline';
 
 function isCoderPhase(pipelineType: string | undefined, phase: number | null): boolean {
   return isCoderPhaseForProject(pipelineType, phase);
@@ -42,7 +37,6 @@ function coderPhaseNumberOf(pipelineType: string | undefined): number {
 function evaluatorPhaseNumberOf(pipelineType: string | undefined): number {
   return getPhaseNumberForAgent(pipelineType, 'harness-evaluator') ?? 14;
 }
-
 
 function formatDuration(ms: number): string {
   if (ms <= 0) return '0s';
@@ -68,7 +62,6 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-
 function getCoderColor(): string {
   return 'text-amber-400';
 }
@@ -84,7 +77,6 @@ function getCoderBg(): string {
 function getEvaluatorBg(): string {
   return 'bg-blue-500/10 border-blue-500/20';
 }
-
 
 interface PersistedRoundData {
   roundIndex: number;
@@ -129,7 +121,6 @@ function buildRoundsFromHistory(
   return Array.from(roundMap.values()).sort((a, b) => a.roundIndex - b.roundIndex);
 }
 
-
 interface PersistedRoundPanelProps {
   round: PersistedRoundData;
   roundNumber: number;
@@ -149,10 +140,8 @@ function PersistedRoundPanel({
   const [evaluatorExpanded, setEvaluatorExpanded] = useState(true);
 
   const roundVerdict = isLastRound ? sprintVerdict : 'rejected';
-  const isPass =
-    roundVerdict === 'pass' || roundVerdict === 'passed' || roundVerdict === 'accepted';
-  const isFail =
-    roundVerdict === 'fail' || roundVerdict === 'failed' || roundVerdict === 'rejected';
+  const isPass = roundVerdict === 'pass' || roundVerdict === 'passed' || roundVerdict === 'accepted';
+  const isFail = roundVerdict === 'fail' || roundVerdict === 'failed' || roundVerdict === 'rejected';
 
   return (
     <div className="border border-zinc-800 rounded-xl overflow-hidden">
@@ -186,9 +175,7 @@ function PersistedRoundPanel({
             onClick={() => setCoderExpanded(!coderExpanded)}
             className="w-full flex items-center justify-between px-4 py-2 text-left"
           >
-            <span className={`text-[11px] font-semibold uppercase tracking-wide ${getCoderColor()}`}>
-              Coder
-            </span>
+            <span className={`text-[11px] font-semibold uppercase tracking-wide ${getCoderColor()}`}>Coder</span>
             <ChevronDown
               size={13}
               className={`text-zinc-500 transition-transform ${coderExpanded ? 'rotate-180' : ''}`}
@@ -197,7 +184,11 @@ function PersistedRoundPanel({
           {coderExpanded && (
             <div className="px-4 pb-3">
               <StreamTimeline
-                blocks={timelineFromPersisted(round.coderContent, round.coderToolCalls, `round-${round.roundIndex}-coder`)}
+                blocks={timelineFromPersisted(
+                  round.coderContent,
+                  round.coderToolCalls,
+                  `round-${round.roundIndex}-coder`,
+                )}
                 className="space-y-2"
                 renderText={(block) => (
                   <div className="text-xs text-zinc-300 leading-relaxed chat-markdown">
@@ -228,7 +219,11 @@ function PersistedRoundPanel({
           {evaluatorExpanded && (
             <div className="px-4 pb-3">
               <StreamTimeline
-                blocks={timelineFromPersisted(round.evaluatorContent, round.evaluatorToolCalls, `round-${round.roundIndex}-evaluator`)}
+                blocks={timelineFromPersisted(
+                  round.evaluatorContent,
+                  round.evaluatorToolCalls,
+                  `round-${round.roundIndex}-evaluator`,
+                )}
                 className="space-y-2"
                 renderText={(block) => (
                   <div className="text-xs text-zinc-300 leading-relaxed chat-markdown">
@@ -246,7 +241,6 @@ function PersistedRoundPanel({
 
 const MemoizedPersistedRoundPanel = memo(PersistedRoundPanel);
 
-
 interface LiveStreamPanelProps {
   phase: number;
   pipelineType: string | undefined;
@@ -254,8 +248,8 @@ interface LiveStreamPanelProps {
 }
 
 function LiveStreamPanel({ phase, pipelineType, stream }: LiveStreamPanelProps) {
-  const streamTimeline = useActiveProjectState(s => s.streamTimeline) ?? [];
-  const isStreaming = useActiveProjectState(s => s.isStreaming) ?? false;
+  const streamTimeline = useActiveProjectState((s) => s.streamTimeline) ?? [];
+  const isStreaming = useActiveProjectState((s) => s.isStreaming) ?? false;
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const followTailRef = useRef(true);
@@ -270,10 +264,7 @@ function LiveStreamPanel({ phase, pipelineType, stream }: LiveStreamPanelProps) 
       : `Fase ${phase}`;
   const agentColor = isCoderPhase(pipelineType, phase) ? getCoderColor() : getEvaluatorColor();
   const agentBg = isCoderPhase(pipelineType, phase) ? getCoderBg() : getEvaluatorBg();
-  const splitTimeline = useMemo(
-    () => timelineFromOrderedStream(stream ?? [], `split-${phase}`),
-    [phase, stream],
-  );
+  const splitTimeline = useMemo(() => timelineFromOrderedStream(stream ?? [], `split-${phase}`), [phase, stream]);
 
   useEffect(() => {
     if (!followTailRef.current || scrollRafRef.current !== null) return;
@@ -283,9 +274,12 @@ function LiveStreamPanel({ phase, pipelineType, stream }: LiveStreamPanelProps) 
     });
   }, [streamTimeline, splitTimeline]);
 
-  useEffect(() => () => {
-    if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current);
+    },
+    [],
+  );
 
   const handleScroll = () => {
     const element = scrollRef.current;
@@ -299,9 +293,7 @@ function LiveStreamPanel({ phase, pipelineType, stream }: LiveStreamPanelProps) 
     return (
       <div className={`rounded-xl border p-4 ${agentBg}`}>
         <div className="flex items-center gap-2 mb-3">
-          <span className={`text-[11px] font-semibold uppercase tracking-wide ${agentColor}`}>
-            {agentLabel}
-          </span>
+          <span className={`text-[11px] font-semibold uppercase tracking-wide ${agentColor}`}>{agentLabel}</span>
           {isStreaming && (
             <div className="flex items-center gap-1.5">
               <span className="relative flex h-2 w-2">
@@ -313,13 +305,20 @@ function LiveStreamPanel({ phase, pipelineType, stream }: LiveStreamPanelProps) 
           )}
         </div>
         {hasContent ? (
-          <div ref={scrollRef} onScroll={handleScroll} className="text-xs text-zinc-300 leading-relaxed max-h-64 overflow-y-auto chat-markdown">
+          <div
+            ref={scrollRef}
+            onScroll={handleScroll}
+            className="text-xs text-zinc-300 leading-relaxed max-h-64 overflow-y-auto chat-markdown"
+          >
             <StreamTimeline
               blocks={splitTimeline}
               className="space-y-2"
               renderText={(block) => (
                 <>
-                  <StreamingMarkdown content={block.content} isStreaming={block.status === 'streaming' && isStreaming} />
+                  <StreamingMarkdown
+                    content={block.content}
+                    isStreaming={block.status === 'streaming' && isStreaming}
+                  />
                   {block.status === 'streaming' && isStreaming && <span className="sprint-exec-cursor" />}
                 </>
               )}
@@ -341,9 +340,7 @@ function LiveStreamPanel({ phase, pipelineType, stream }: LiveStreamPanelProps) 
     <div className={`rounded-xl border p-4 ${agentBg}`}>
       {/* Agent header */}
       <div className="flex items-center gap-2 mb-3">
-        <span className={`text-[11px] font-semibold uppercase tracking-wide ${agentColor}`}>
-          {agentLabel}
-        </span>
+        <span className={`text-[11px] font-semibold uppercase tracking-wide ${agentColor}`}>{agentLabel}</span>
         {isStreaming && (
           <div className="flex items-center gap-1.5">
             <span className="relative flex h-2 w-2">
@@ -357,7 +354,11 @@ function LiveStreamPanel({ phase, pipelineType, stream }: LiveStreamPanelProps) 
 
       {/* Stream content */}
       {hasContent ? (
-        <div ref={scrollRef} onScroll={handleScroll} className="text-xs text-zinc-300 leading-relaxed max-h-64 overflow-y-auto chat-markdown">
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="text-xs text-zinc-300 leading-relaxed max-h-64 overflow-y-auto chat-markdown"
+        >
           <StreamTimeline
             blocks={streamTimeline}
             className="space-y-2"
@@ -379,7 +380,6 @@ function LiveStreamPanel({ phase, pipelineType, stream }: LiveStreamPanelProps) 
     </div>
   );
 }
-
 
 interface RoundBadgeProps {
   roundNumber: number;
@@ -405,9 +405,7 @@ function RoundBadge({ roundNumber, totalRounds, isCurrent, phase, pipelineType }
           : 'bg-zinc-800/60 border border-zinc-700/60 text-zinc-500'
       }`}
     >
-      <span className={`font-semibold ${isCurrent ? 'text-amber-300' : agentColor}`}>
-        {agentLabel}
-      </span>
+      <span className={`font-semibold ${isCurrent ? 'text-amber-300' : agentColor}`}>{agentLabel}</span>
       <ChevronRight size={10} className="text-zinc-600" />
       <span className={isCurrent ? 'text-zinc-300' : 'text-zinc-600'}>
         Round {roundNumber}/{totalRounds}
@@ -416,7 +414,6 @@ function RoundBadge({ roundNumber, totalRounds, isCurrent, phase, pipelineType }
     </div>
   );
 }
-
 
 interface VerdictBadgeProps {
   verdict: string;
@@ -461,7 +458,6 @@ function VerdictBadge({ verdict }: VerdictBadgeProps) {
   );
 }
 
-
 interface RoundStatusBarProps {
   rounds: number;
   maxRounds: number;
@@ -472,7 +468,15 @@ interface RoundStatusBarProps {
   pipelineType: string | undefined;
 }
 
-function RoundStatusBar({ rounds, maxRounds, verdict, isActive, isStreaming: _isStreaming, currentPhase, pipelineType }: RoundStatusBarProps) {
+function RoundStatusBar({
+  rounds,
+  maxRounds,
+  verdict,
+  isActive,
+  isStreaming: _isStreaming,
+  currentPhase,
+  pipelineType,
+}: RoundStatusBarProps) {
   if (rounds === 0 && !isActive) return null;
 
   const isPass = verdict === 'pass' || verdict === 'passed' || verdict === 'accepted';
@@ -483,7 +487,7 @@ function RoundStatusBar({ rounds, maxRounds, verdict, isActive, isStreaming: _is
   return (
     <div className="flex items-center gap-1 flex-wrap">
       {Array.from({ length: totalSlots }, (_, idx) => {
-        const roundNum = idx + 1; // 1-indexed
+        const roundNum = idx + 1;
         const isCompleted = roundNum <= rounds;
         const isCurrent =
           isActive &&
@@ -515,14 +519,8 @@ function RoundStatusBar({ rounds, maxRounds, verdict, isActive, isStreaming: _is
 
         return (
           <div key={idx} className="flex items-center gap-0.5">
-            <div
-              className={`w-5 h-5 rounded-full flex items-center justify-center border ${circleClass}`}
-            >
-              {icon}
-            </div>
-            {idx < totalSlots - 1 && (
-              <div className={`w-2.5 h-px ${isCompleted ? 'bg-zinc-600' : 'bg-zinc-800'}`} />
-            )}
+            <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${circleClass}`}>{icon}</div>
+            {idx < totalSlots - 1 && <div className={`w-2.5 h-px ${isCompleted ? 'bg-zinc-600' : 'bg-zinc-800'}`} />}
           </div>
         );
       })}
@@ -532,7 +530,6 @@ function RoundStatusBar({ rounds, maxRounds, verdict, isActive, isStreaming: _is
     </div>
   );
 }
-
 
 type SprintInnerTab = 'coder' | 'evaluator' | 'metricas';
 
@@ -545,8 +542,15 @@ interface SprintMetricsTabProps {
   pipelineType: string | undefined;
 }
 
-function SprintMetricsTab({ sprint, maxRounds, currentPhase, isActive, isStreaming, pipelineType }: SprintMetricsTabProps) {
-  const phaseMetrics = useActiveProjectState(s => s.phaseMetrics) ?? null;
+function SprintMetricsTab({
+  sprint,
+  maxRounds,
+  currentPhase,
+  isActive,
+  isStreaming,
+  pipelineType,
+}: SprintMetricsTabProps) {
+  const phaseMetrics = useActiveProjectState((s) => s.phaseMetrics) ?? null;
 
   const raw = sprint.metrics as { coder?: Record<string, number>; evaluator?: Record<string, number> } | undefined;
   const coder = raw?.coder;
@@ -590,9 +594,7 @@ function SprintMetricsTab({ sprint, maxRounds, currentPhase, isActive, isStreami
               <span className="text-zinc-300 font-mono">{formatTokens(totalOutputDisplay)}</span>
             </div>
           </div>
-          {isActive && liveTokensIn > 0 && (
-            <p className="text-[10px] text-amber-400">ao vivo</p>
-          )}
+          {isActive && liveTokensIn > 0 && <p className="text-[10px] text-amber-400">ao vivo</p>}
         </div>
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 space-y-1">
@@ -600,9 +602,7 @@ function SprintMetricsTab({ sprint, maxRounds, currentPhase, isActive, isStreami
             <DollarSign size={11} />
             Custo
           </div>
-          <p className="text-lg font-bold text-zinc-100 font-mono leading-none">
-            {formatCost(totalCostDisplay)}
-          </p>
+          <p className="text-lg font-bold text-zinc-100 font-mono leading-none">{formatCost(totalCostDisplay)}</p>
           {durationMs > 0 && (
             <p className="text-[10px] text-zinc-500 flex items-center gap-1">
               <Clock size={9} />
@@ -628,9 +628,7 @@ function SprintMetricsTab({ sprint, maxRounds, currentPhase, isActive, isStreami
                   style={{ width: `${costUsd > 0 ? (coderCost / costUsd) * 100 : 0}%` }}
                 />
               </div>
-              <span className="text-[11px] text-zinc-400 font-mono w-14 text-right">
-                {formatCost(coderCost)}
-              </span>
+              <span className="text-[11px] text-zinc-400 font-mono w-14 text-right">{formatCost(coderCost)}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-blue-400 w-20 shrink-0">Evaluator</span>
@@ -640,9 +638,7 @@ function SprintMetricsTab({ sprint, maxRounds, currentPhase, isActive, isStreami
                   style={{ width: `${costUsd > 0 ? (evaluatorCost / costUsd) * 100 : 0}%` }}
                 />
               </div>
-              <span className="text-[11px] text-zinc-400 font-mono w-14 text-right">
-                {formatCost(evaluatorCost)}
-              </span>
+              <span className="text-[11px] text-zinc-400 font-mono w-14 text-right">{formatCost(evaluatorCost)}</span>
             </div>
           </div>
         </div>
@@ -672,20 +668,14 @@ function SprintMetricsTab({ sprint, maxRounds, currentPhase, isActive, isStreami
       {/* Verdicts per round */}
       {rounds > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 space-y-2">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium">
-            Resultado por round
-          </p>
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wide font-medium">Resultado por round</p>
           <div className="space-y-1">
             {Array.from({ length: rounds }, (_, idx) => {
               const roundNum = idx + 1;
               const isLastRound = roundNum === rounds;
-              const roundVerdict = isLastRound
-                ? sprint.verdict
-                : 'fail'; // Intermediate rounds were failures (coder had to retry)
-              const roundIsPass =
-                roundVerdict === 'pass' || roundVerdict === 'passed' || roundVerdict === 'accepted';
-              const roundIsFail =
-                roundVerdict === 'fail' || roundVerdict === 'failed' || roundVerdict === 'rejected';
+              const roundVerdict = isLastRound ? sprint.verdict : 'fail';
+              const roundIsPass = roundVerdict === 'pass' || roundVerdict === 'passed' || roundVerdict === 'accepted';
+              const roundIsFail = roundVerdict === 'fail' || roundVerdict === 'failed' || roundVerdict === 'rejected';
 
               return (
                 <div key={idx} className="flex items-center gap-2 text-xs">
@@ -713,7 +703,6 @@ function SprintMetricsTab({ sprint, maxRounds, currentPhase, isActive, isStreami
   );
 }
 
-
 type VerdictOverlayType = 'pass' | 'fail_with_rounds' | 'fail_max_rounds' | 'sprint_transition' | null;
 
 interface VerdictOverlayProps {
@@ -739,17 +728,17 @@ function VerdictOverlay({
 
   if (type === 'pass') {
     return (
-      <div className="absolute inset-0 flex items-center justify-center rounded-xl z-20"
-           style={{ background: 'rgba(0,0,0,0.75)' }}>
+      <div
+        className="absolute inset-0 flex items-center justify-center rounded-xl z-20"
+        style={{ background: 'rgba(0,0,0,0.75)' }}
+      >
         <div className="flex flex-col items-center gap-3">
           <div className="w-14 h-14 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center">
             <CheckCircle2 size={28} className="text-green-400" />
           </div>
           <span className="text-xl font-bold text-green-400 tracking-widest">APROVADO</span>
           {sprintIndex + 1 < totalSprints && (
-            <span className="text-xs text-zinc-400">
-              Avancando para Sprint {sprintIndex + 2}...
-            </span>
+            <span className="text-xs text-zinc-400">Avancando para Sprint {sprintIndex + 2}...</span>
           )}
         </div>
       </div>
@@ -758,15 +747,15 @@ function VerdictOverlay({
 
   if (type === 'sprint_transition') {
     return (
-      <div className="absolute inset-0 flex items-center justify-center rounded-xl z-20"
-           style={{ background: 'rgba(0,0,0,0.75)' }}>
+      <div
+        className="absolute inset-0 flex items-center justify-center rounded-xl z-20"
+        style={{ background: 'rgba(0,0,0,0.75)' }}
+      >
         <div className="flex flex-col items-center gap-3 text-center px-6">
           <div className="w-14 h-14 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center">
             <CheckCircle2 size={28} className="text-amber-400" />
           </div>
-          <p className="text-sm font-semibold text-amber-300">
-            Sprint {sprintIndex + 1} concluido.
-          </p>
+          <p className="text-sm font-semibold text-amber-300">Sprint {sprintIndex + 1} concluido.</p>
           {nextSprintName ? (
             <p className="text-xs text-zinc-400">
               Iniciando Sprint {sprintIndex + 2}: {nextSprintName}...
@@ -782,8 +771,10 @@ function VerdictOverlay({
 
   if (type === 'fail_with_rounds') {
     return (
-      <div className="absolute inset-0 flex items-center justify-center rounded-xl z-20"
-           style={{ background: 'rgba(0,0,0,0.75)' }}>
+      <div
+        className="absolute inset-0 flex items-center justify-center rounded-xl z-20"
+        style={{ background: 'rgba(0,0,0,0.75)' }}
+      >
         <div className="flex flex-col items-center gap-3">
           <div className="w-14 h-14 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center">
             <XCircle size={28} className="text-red-400" />
@@ -792,9 +783,7 @@ function VerdictOverlay({
           <span className="text-xs text-zinc-400">
             Round {currentRound} de {maxRounds}
           </span>
-          <span className="text-[11px] text-zinc-500 mt-1">
-            Iniciando proximo round...
-          </span>
+          <span className="text-[11px] text-zinc-500 mt-1">Iniciando proximo round...</span>
         </div>
       </div>
     );
@@ -802,8 +791,10 @@ function VerdictOverlay({
 
   if (type === 'fail_max_rounds') {
     return (
-      <div className="absolute inset-0 flex items-center justify-center rounded-xl z-20"
-           style={{ background: 'rgba(0,0,0,0.82)' }}>
+      <div
+        className="absolute inset-0 flex items-center justify-center rounded-xl z-20"
+        style={{ background: 'rgba(0,0,0,0.82)' }}
+      >
         <div className="flex flex-col items-center gap-4 text-center px-6 max-w-xs">
           <div className="w-14 h-14 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center">
             <XCircle size={28} className="text-red-400" />
@@ -831,7 +822,6 @@ function VerdictOverlay({
   return null;
 }
 
-
 interface SprintSummaryCardProps {
   sprint: SprintStatus;
 }
@@ -858,9 +848,7 @@ function SprintSummaryCard({ sprint }: SprintSummaryCardProps) {
           <RotateCcw size={10} />
           {rounds} {rounds === 1 ? 'round' : 'rounds'}
         </span>
-        {costUsd > 0 && (
-          <span>{formatCost(costUsd)}</span>
-        )}
+        {costUsd > 0 && <span>{formatCost(costUsd)}</span>}
         {durationMs > 0 && (
           <span className="flex items-center gap-1">
             <Clock size={10} />
@@ -874,7 +862,8 @@ function SprintSummaryCard({ sprint }: SprintSummaryCardProps) {
         <div className="flex items-center gap-1 flex-wrap">
           {Array.from({ length: rounds }).map((_, idx) => {
             const isLast = idx === rounds - 1;
-            const isPass = isLast && (sprint.verdict === 'pass' || sprint.verdict === 'passed' || sprint.verdict === 'accepted');
+            const isPass =
+              isLast && (sprint.verdict === 'pass' || sprint.verdict === 'passed' || sprint.verdict === 'accepted');
             return (
               <div key={idx} className="flex items-center gap-1">
                 <div
@@ -882,15 +871,13 @@ function SprintSummaryCard({ sprint }: SprintSummaryCardProps) {
                     isPass
                       ? 'bg-green-500/20 text-green-400 border border-green-500/40'
                       : isLast
-                      ? 'bg-red-500/20 text-red-400 border border-red-500/40'
-                      : 'bg-zinc-700 text-zinc-400 border border-zinc-600'
+                        ? 'bg-red-500/20 text-red-400 border border-red-500/40'
+                        : 'bg-zinc-700 text-zinc-400 border border-zinc-600'
                   }`}
                 >
                   {idx + 1}
                 </div>
-                {idx < rounds - 1 && (
-                  <div className="w-3 h-px bg-zinc-700" />
-                )}
+                {idx < rounds - 1 && <div className="w-3 h-px bg-zinc-700" />}
               </div>
             );
           })}
@@ -899,7 +886,6 @@ function SprintSummaryCard({ sprint }: SprintSummaryCardProps) {
     </div>
   );
 }
-
 
 function SprintEmptyState({ sprintIndex }: { sprintIndex: number }) {
   return (
@@ -911,7 +897,6 @@ function SprintEmptyState({ sprintIndex }: { sprintIndex: number }) {
     </div>
   );
 }
-
 
 interface SprintDefinitionProps {
   projectId: string;
@@ -926,7 +911,8 @@ function SprintDefinition({ projectId, sprintJsonId }: SprintDefinitionProps) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    window.lionclaw.harness.getSprintJson(projectId, sprintJsonId)
+    window.lionclaw.harness
+      .getSprintJson(projectId, sprintJsonId)
       .then((d) => {
         if (!cancelled) setDetail(d);
       })
@@ -936,7 +922,9 @@ function SprintDefinition({ projectId, sprintJsonId }: SprintDefinitionProps) {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [projectId, sprintJsonId]);
 
   if (loading) {
@@ -961,10 +949,7 @@ function SprintDefinition({ projectId, sprintJsonId }: SprintDefinitionProps) {
         className="w-full flex items-center justify-between px-4 py-2 text-xs text-zinc-300 hover:bg-zinc-800/50 transition-colors"
       >
         <span className="font-medium">Definicao da Sprint</span>
-        <ChevronDown
-          size={14}
-          className={`transition-transform ${expanded ? 'rotate-180' : ''}`}
-        />
+        <ChevronDown size={14} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
       </button>
 
       {expanded && (
@@ -977,25 +962,16 @@ function SprintDefinition({ projectId, sprintJsonId }: SprintDefinitionProps) {
             </span>
             <span>
               Complexidade:{' '}
-              <span className={complexityColors[detail.complexity] ?? 'text-zinc-300'}>
-                {detail.complexity}
-              </span>
+              <span className={complexityColors[detail.complexity] ?? 'text-zinc-300'}>{detail.complexity}</span>
             </span>
             <span>Rounds: {detail.estimated_rounds}</span>
-            {detail.stack.length > 0 && (
-              <span>Stack: {detail.stack.join(', ')}</span>
-            )}
+            {detail.stack.length > 0 && <span>Stack: {detail.stack.join(', ')}</span>}
           </div>
 
           <div className="space-y-2">
-            <h4 className="text-xs font-semibold text-zinc-300">
-              Features ({detail.features.length})
-            </h4>
+            <h4 className="text-xs font-semibold text-zinc-300">Features ({detail.features.length})</h4>
             {detail.features.map((f) => (
-              <div
-                key={f.id}
-                className="bg-zinc-950 border border-zinc-800 rounded p-3"
-              >
+              <div key={f.id} className="bg-zinc-950 border border-zinc-800 rounded p-3">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono text-zinc-500">{f.id}</span>
                   <span className="text-sm text-zinc-200">{f.name}</span>
@@ -1016,7 +992,6 @@ function SprintDefinition({ projectId, sprintJsonId }: SprintDefinitionProps) {
     </div>
   );
 }
-
 
 interface SprintTabContentProps {
   sprintIndex: number;
@@ -1039,11 +1014,11 @@ function SprintTabContent({
   projectId,
   pipelineType,
 }: SprintTabContentProps) {
-  const isStreaming = useActiveProjectState(s => s.isStreaming) ?? false;
-  const coderStream = useActiveProjectState(s => s.coderStream) ?? [];
-  const evaluatorStream = useActiveProjectState(s => s.evaluatorStream) ?? [];
-  const metrics = useActiveProjectState(s => s.metrics) ?? null;
-  const abortPipeline = usePipelineStore(s => s.abortPipeline);
+  const isStreaming = useActiveProjectState((s) => s.isStreaming) ?? false;
+  const coderStream = useActiveProjectState((s) => s.coderStream) ?? [];
+  const evaluatorStream = useActiveProjectState((s) => s.evaluatorStream) ?? [];
+  const metrics = useActiveProjectState((s) => s.metrics) ?? null;
+  const abortPipeline = usePipelineStore((s) => s.abortPipeline);
 
   const coderPhaseMetric = metrics?.phases.find(
     (p) => isCoderPhase(pipelineType, p.phaseNumber) && p.sprintIndex === sprintIndex,
@@ -1051,12 +1026,11 @@ function SprintTabContent({
   const evaluatorPhaseMetric = metrics?.phases.find(
     (p) => isEvaluatorPhase(pipelineType, p.phaseNumber) && p.sprintIndex === sprintIndex,
   );
-  const coderModel = coderPhaseMetric?.status === 'completed' ? coderPhaseMetric.model ?? null : null;
-  const evaluatorModel = evaluatorPhaseMetric?.status === 'completed' ? evaluatorPhaseMetric.model ?? null : null;
-  const loadSprintHistory = usePipelineStore(s => s.loadSprintHistory);
-  const sprintHistoryCache = usePipelineStore(s => s.sprintHistoryCache);
-  const isLoopPhase =
-    isCoderPhase(pipelineType, currentPhase) || isEvaluatorPhase(pipelineType, currentPhase);
+  const coderModel = coderPhaseMetric?.status === 'completed' ? (coderPhaseMetric.model ?? null) : null;
+  const evaluatorModel = evaluatorPhaseMetric?.status === 'completed' ? (evaluatorPhaseMetric.model ?? null) : null;
+  const loadSprintHistory = usePipelineStore((s) => s.loadSprintHistory);
+  const sprintHistoryCache = usePipelineStore((s) => s.sprintHistoryCache);
+  const isLoopPhase = isCoderPhase(pipelineType, currentPhase) || isEvaluatorPhase(pipelineType, currentPhase);
   const sprintRunning = isActive && isLoopPhase;
 
   const [innerTab, setInnerTab] = useState<SprintInnerTab>('coder');
@@ -1115,21 +1089,11 @@ function SprintTabContent({
 
     if (sprint === null || !isActive) return;
 
-    const isPass =
-      sprint.verdict === 'pass' ||
-      sprint.verdict === 'passed' ||
-      sprint.verdict === 'accepted';
-    const isFail =
-      sprint.verdict === 'fail' ||
-      sprint.verdict === 'failed' ||
-      sprint.verdict === 'rejected';
+    const isPass = sprint.verdict === 'pass' || sprint.verdict === 'passed' || sprint.verdict === 'accepted';
+    const isFail = sprint.verdict === 'fail' || sprint.verdict === 'failed' || sprint.verdict === 'rejected';
     const rounds = sprint.rounds ?? 0;
 
-    const wasRunning =
-      !prev ||
-      prev.verdict === 'running' ||
-      prev.verdict === '' ||
-      prev.verdict === 'pending';
+    const wasRunning = !prev || prev.verdict === 'running' || prev.verdict === '' || prev.verdict === 'pending';
 
     if (!wasRunning) return;
 
@@ -1176,19 +1140,16 @@ function SprintTabContent({
   const sprintName = sprint?.name ?? `Sprint ${sprintIndex + 1}`;
   const sprintVerdict = sprint?.verdict ?? '';
 
-  const showCoder = sprintRunning || (sprint !== null) || persistedRounds.some(r => r.coderContent !== '');
-  const showEvaluator = sprintRunning || (sprint !== null && (rounds > 0)) || persistedRounds.some(r => r.evaluatorContent !== '');
+  const showCoder = sprintRunning || sprint !== null || persistedRounds.some((r) => r.coderContent !== '');
+  const showEvaluator =
+    sprintRunning || (sprint !== null && rounds > 0) || persistedRounds.some((r) => r.evaluatorContent !== '');
   const showMetricas = sprint !== null;
 
   const resolvedTab: SprintInnerTab =
-    (innerTab === 'evaluator' && !showEvaluator) ||
-    (innerTab === 'metricas' && !showMetricas)
-      ? 'coder'
-      : innerTab;
+    (innerTab === 'evaluator' && !showEvaluator) || (innerTab === 'metricas' && !showMetricas) ? 'coder' : innerTab;
 
   const showLiveCoder = isActive && isLoopPhase;
-  const showLiveEvaluator =
-    isActive && (isEvaluatorPhase(pipelineType, currentPhase) || evaluatorStream.length > 0);
+  const showLiveEvaluator = isActive && (isEvaluatorPhase(pipelineType, currentPhase) || evaluatorStream.length > 0);
 
   const persistedRoundsToShow = persistedRounds;
 
@@ -1209,9 +1170,7 @@ function SprintTabContent({
       </div>
 
       {/* Sprint definition panel (UI-04) */}
-      {sprint?.sprintJsonId && (
-        <SprintDefinition projectId={projectId} sprintJsonId={sprint.sprintJsonId} />
-      )}
+      {sprint?.sprintJsonId && <SprintDefinition projectId={projectId} sprintJsonId={sprint.sprintJsonId} />}
 
       {/* Inner tab strip */}
       <div className="flex items-center gap-1 border-b border-zinc-800 pb-0">
@@ -1271,7 +1230,6 @@ function SprintTabContent({
 
       {/* Inner tab content */}
       <div className="relative">
-
         {/* Coder tab */}
         {resolvedTab === 'coder' && (
           <div className="space-y-3">
@@ -1323,9 +1281,7 @@ function SprintTabContent({
             )}
 
             {/* Completed sprint summary (only when not showing persisted rounds) */}
-            {sprint !== null && !sprintRunning && persistedRounds.length === 0 && (
-              <SprintSummaryCard sprint={sprint} />
-            )}
+            {sprint !== null && !sprintRunning && persistedRounds.length === 0 && <SprintSummaryCard sprint={sprint} />}
           </div>
         )}
 
@@ -1333,10 +1289,10 @@ function SprintTabContent({
         {resolvedTab === 'evaluator' && (
           <div className="space-y-3">
             {/* Persisted evaluator rounds from DB */}
-            {persistedRoundsToShow.filter(r => r.evaluatorContent !== '').length > 0 && (
+            {persistedRoundsToShow.filter((r) => r.evaluatorContent !== '').length > 0 && (
               <div className="space-y-3">
                 {persistedRoundsToShow
-                  .filter(r => r.evaluatorContent !== '')
+                  .filter((r) => r.evaluatorContent !== '')
                   .map((roundData, i, arr) => (
                     <MemoizedPersistedRoundPanel
                       key={roundData.roundIndex}
@@ -1360,9 +1316,12 @@ function SprintTabContent({
             )}
 
             {/* Completed sprint summary (only when not showing persisted rounds) */}
-            {sprint !== null && !sprintRunning && !isActive && persistedRounds.filter(r => r.evaluatorContent !== '').length === 0 && (
-              <SprintSummaryCard sprint={sprint} />
-            )}
+            {sprint !== null &&
+              !sprintRunning &&
+              !isActive &&
+              persistedRounds.filter((r) => r.evaluatorContent !== '').length === 0 && (
+                <SprintSummaryCard sprint={sprint} />
+              )}
           </div>
         )}
 
@@ -1407,27 +1366,20 @@ function SprintTabContent({
   );
 }
 
-
 export interface SprintExecutionViewProps {
   totalSprints: number;
   maxRounds?: number;
   projectId: string;
 }
 
-export function SprintExecutionView({
-  totalSprints,
-  maxRounds = 5,
-  projectId,
-}: SprintExecutionViewProps) {
-  const sprints = useActiveProjectState(s => s.sprints) ?? [];
-  const currentPhase = useActiveProjectState(s => s.currentPhase) ?? null;
-  const isStreaming = useActiveProjectState(s => s.isStreaming) ?? false;
-  const selectedSprintTab = useActiveProjectState(s => s.selectedSprintTab) ?? 0;
-  const pipelineSprintIndex = useActiveProjectState(s => s.pipelineSprintIndex) ?? null;
-  const setSelectedSprintTab = usePipelineStore(s => s.setSelectedSprintTab);
-  const pipelineType = usePipelineStore(
-    (s) => s.projects.find((p) => p.id === projectId)?.pipelineType,
-  );
+export function SprintExecutionView({ totalSprints, maxRounds = 5, projectId }: SprintExecutionViewProps) {
+  const sprints = useActiveProjectState((s) => s.sprints) ?? [];
+  const currentPhase = useActiveProjectState((s) => s.currentPhase) ?? null;
+  const isStreaming = useActiveProjectState((s) => s.isStreaming) ?? false;
+  const selectedSprintTab = useActiveProjectState((s) => s.selectedSprintTab) ?? 0;
+  const pipelineSprintIndex = useActiveProjectState((s) => s.pipelineSprintIndex) ?? null;
+  const setSelectedSprintTab = usePipelineStore((s) => s.setSelectedSprintTab);
+  const pipelineType = usePipelineStore((s) => s.projects.find((p) => p.id === projectId)?.pipelineType);
 
   const activeSprintIndex = (() => {
     if (pipelineSprintIndex !== null && pipelineSprintIndex !== undefined) {
@@ -1459,8 +1411,7 @@ export function SprintExecutionView({
 
   const clampedTab = Math.min(selectedSprintTab, sprintCount - 1);
 
-  const isExecuting =
-    isCoderPhase(pipelineType, currentPhase) || isEvaluatorPhase(pipelineType, currentPhase);
+  const isExecuting = isCoderPhase(pipelineType, currentPhase) || isEvaluatorPhase(pipelineType, currentPhase);
 
   return (
     <div className="flex gap-3">
@@ -1501,13 +1452,9 @@ export function SprintExecutionView({
                   <Circle size={12} className="text-zinc-600 shrink-0" />
                 )}
               </div>
-              <span className="block truncate mt-0.5">
-                {sprintData?.name ?? `Sprint ${sprintIdx + 1}`}
-              </span>
+              <span className="block truncate mt-0.5">{sprintData?.name ?? `Sprint ${sprintIdx + 1}`}</span>
               {sprintData?.coderAgentId && (
-                <span className="block text-[10px] text-zinc-600 truncate">
-                  {sprintData.coderAgentId}
-                </span>
+                <span className="block text-[10px] text-zinc-600 truncate">{sprintData.coderAgentId}</span>
               )}
             </button>
           );

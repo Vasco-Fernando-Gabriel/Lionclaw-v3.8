@@ -1,4 +1,3 @@
-
 import type { KimiExternalTool } from '../agent-runtime/kimi-external-tools';
 
 export const KIMI_MCP_MAX_ERROR_CHARS = 512;
@@ -17,9 +16,7 @@ export function redactKimiBridgeError(error: unknown): string {
     .replace(/(^|[\s("'`])\/(?:home|Users|root|tmp|var\/folders)\/[^\s"'`,;]+/g, '$1[REDACTED_PATH]')
     .trim();
   const safe = redacted || 'tool execution failed';
-  return safe.length <= KIMI_MCP_MAX_ERROR_CHARS
-    ? safe
-    : `${safe.slice(0, KIMI_MCP_MAX_ERROR_CHARS - 1)}…`;
+  return safe.length <= KIMI_MCP_MAX_ERROR_CHARS ? safe : `${safe.slice(0, KIMI_MCP_MAX_ERROR_CHARS - 1)}…`;
 }
 
 export interface McpToolListItem {
@@ -37,8 +34,7 @@ const EMPTY_OBJECT_SCHEMA: Record<string, unknown> = { type: 'object', propertie
 
 export function toListItem(tool: KimiExternalTool): McpToolListItem {
   const params = tool.parameters;
-  const hasSchema =
-    params !== null && typeof params === 'object' && Object.keys(params).length > 0;
+  const hasSchema = params !== null && typeof params === 'object' && Object.keys(params).length > 0;
   return {
     name: tool.name,
     description: tool.description,
@@ -52,16 +48,14 @@ export async function callTool(
   context?: Parameters<KimiExternalTool['handler']>[1],
 ): Promise<McpToolCallResult> {
   try {
-    const result = context
-      ? await tool.handler(args, context)
-      : await tool.handler(args);
+    const result = context ? await tool.handler(args, context) : await tool.handler(args);
     return {
-      content: [{
-        type: 'text',
-        text: result.isError
-          ? `bridge tool error: ${redactKimiBridgeError(result.output)}`
-          : result.output,
-      }],
+      content: [
+        {
+          type: 'text',
+          text: result.isError ? `bridge tool error: ${redactKimiBridgeError(result.output)}` : result.output,
+        },
+      ],
       ...(result.isError ? { isError: true } : {}),
     };
   } catch (err) {

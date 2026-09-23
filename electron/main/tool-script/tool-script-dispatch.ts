@@ -1,4 +1,3 @@
-
 import { spawn } from 'child_process';
 import path from 'path';
 import type { BrowserWindow } from 'electron';
@@ -20,12 +19,7 @@ import {
 
 const logger = createLogger('tool-script-dispatch');
 
-
-export const TOOL_SCRIPT_READONLY_TOOLS: ReadonlySet<string> = new Set([
-  'read_file',
-  'search_files',
-  'grep',
-]);
+export const TOOL_SCRIPT_READONLY_TOOLS: ReadonlySet<string> = new Set(['read_file', 'search_files', 'grep']);
 
 export const TOOL_SCRIPT_MUTATING_TOOLS: ReadonlySet<string> = new Set([
   'write_file',
@@ -45,16 +39,12 @@ const CODE_PREVIEW_MAX_CHARS = 4_000;
 
 const AUDIT_COMMAND_PREVIEW_CHARS = 80;
 
-
 export interface ToolScriptCodeClassification {
   mutating: boolean;
   matchedTools: string[];
 }
 
-export function classifyToolScriptCode(
-  code: string,
-  enabledTools: readonly string[],
-): ToolScriptCodeClassification {
+export function classifyToolScriptCode(code: string, enabledTools: readonly string[]): ToolScriptCodeClassification {
   const matchedTools: string[] = [];
   for (const tool of enabledTools) {
     if (!TOOL_SCRIPT_MUTATING_TOOLS.has(tool)) continue;
@@ -62,7 +52,6 @@ export function classifyToolScriptCode(
   }
   return { mutating: matchedTools.length > 0, matchedTools };
 }
-
 
 export interface ToolScriptToolCallAudit {
   sessionId: string;
@@ -73,7 +62,6 @@ export interface ToolScriptToolCallAudit {
   error?: string;
   durationMs: number;
 }
-
 
 export interface ToolScriptDispatcherOverrides {
   invokeMcp?: (req: McpInvokeRequest) => Promise<McpInvokeResult>;
@@ -93,14 +81,9 @@ export interface CreateToolScriptDispatcherInput {
   overrides?: ToolScriptDispatcherOverrides;
 }
 
-type ToolHandler = (
-  args: Record<string, unknown>,
-  ctx: ToolScriptDispatchContext,
-) => Promise<string>;
+type ToolHandler = (args: Record<string, unknown>, ctx: ToolScriptDispatchContext) => Promise<string>;
 
-export function createToolScriptDispatcher(
-  input: CreateToolScriptDispatcherInput,
-): ToolScriptRpcDispatcher {
+export function createToolScriptDispatcher(input: CreateToolScriptDispatcherInput): ToolScriptRpcDispatcher {
   const enabledTools = input.enabledTools ?? TOOL_SCRIPT_DEFAULT_TOOLS;
   const enabledSet = new Set(enabledTools);
   const invokeMcp = input.overrides?.invokeMcp ?? invokeMcpTool;
@@ -108,8 +91,7 @@ export function createToolScriptDispatcher(
   const confirmAction = input.overrides?.confirmAction ?? requestActionConfirmation;
   const isBypassEnabled = input.overrides?.isBypassEnabled ?? defaultIsBypassEnabled;
   const buildEnv = input.overrides?.buildEnv ?? buildToolScriptEnv;
-  const runCommandTimeoutMs =
-    input.overrides?.runCommandTimeoutMs ?? TOOL_SCRIPT_DEFAULT_RPC_TIMEOUT_MS;
+  const runCommandTimeoutMs = input.overrides?.runCommandTimeoutMs ?? TOOL_SCRIPT_DEFAULT_RPC_TIMEOUT_MS;
   const abortSignal = input.abortSignal;
 
   const classification = classifyToolScriptCode(input.code, enabledTools);
@@ -126,10 +108,7 @@ export function createToolScriptDispatcher(
     return isBypassEnabled();
   }
 
-  async function runEntryGuard(
-    ctx: ToolScriptDispatchContext,
-    trigger: string,
-  ): Promise<void> {
+  async function runEntryGuard(ctx: ToolScriptDispatchContext, trigger: string): Promise<void> {
     if (bypassActive(ctx)) {
       logger.debug(
         { sessionId: ctx.sessionId, turnId: ctx.turnId, trigger },
@@ -140,9 +119,7 @@ export function createToolScriptDispatcher(
     const action: Omit<ConfirmAction, 'id'> = {
       tool: 'run_tool_script',
       description: `Executar script com acoes potencialmente mutantes (${
-        classification.matchedTools.length > 0
-          ? classification.matchedTools.join(', ')
-          : trigger
+        classification.matchedTools.length > 0 ? classification.matchedTools.join(', ') : trigger
       })`,
       input: {
         script:
@@ -161,9 +138,7 @@ export function createToolScriptDispatcher(
         'confirmacao do guard de entrada',
       );
       if (!approved) {
-        throw new Error(
-          `script negado pelo guard de entrada${message ? ` (${message})` : ''}; nenhuma tool executa`,
-        );
+        throw new Error(`script negado pelo guard de entrada${message ? ` (${message})` : ''}; nenhuma tool executa`);
       }
       logger.info(
         { sessionId: ctx.sessionId, turnId: ctx.turnId, tools: classification.matchedTools },
@@ -174,16 +149,12 @@ export function createToolScriptDispatcher(
     }
   }
 
-  function ensureEntryApproval(
-    ctx: ToolScriptDispatchContext,
-    trigger: string,
-  ): Promise<void> {
+  function ensureEntryApproval(ctx: ToolScriptDispatchContext, trigger: string): Promise<void> {
     if (entryApproval === undefined) {
       entryApproval = runEntryGuard(ctx, trigger);
     }
     return entryApproval;
   }
-
 
   async function fileOpHandler(
     sdkTool: 'Read' | 'Write' | 'Edit' | 'Glob' | 'Grep',
@@ -197,10 +168,7 @@ export function createToolScriptDispatcher(
 
   const handlers: Record<string, ToolHandler> = {
     read_file: async (args, ctx) => {
-      const filePath = resolvePathArg(
-        ctx.cwd,
-        requireString(args, ['path', 'file_path'], 'read_file'),
-      );
+      const filePath = resolvePathArg(ctx.cwd, requireString(args, ['path', 'file_path'], 'read_file'));
       const executorArgs: Record<string, unknown> = { file_path: filePath };
       if (typeof args.offset === 'number') executorArgs.offset = args.offset;
       if (typeof args.limit === 'number') executorArgs.limit = args.limit;
@@ -214,25 +182,15 @@ export function createToolScriptDispatcher(
       return content;
     },
     write_file: (args, ctx) => {
-      const filePath = resolvePathArg(
-        ctx.cwd,
-        requireString(args, ['path', 'file_path'], 'write_file'),
-      );
+      const filePath = resolvePathArg(ctx.cwd, requireString(args, ['path', 'file_path'], 'write_file'));
       const content = requireString(args, ['content'], 'write_file');
       return fileOpHandler('Write', { file_path: filePath, content }, ctx);
     },
     edit: (args, ctx) => {
-      const filePath = resolvePathArg(
-        ctx.cwd,
-        requireString(args, ['path', 'file_path'], 'edit'),
-      );
+      const filePath = resolvePathArg(ctx.cwd, requireString(args, ['path', 'file_path'], 'edit'));
       const oldString = requireString(args, ['old_string'], 'edit');
       const newString = optionalString(args, ['new_string']) ?? '';
-      return fileOpHandler(
-        'Edit',
-        { file_path: filePath, old_string: oldString, new_string: newString },
-        ctx,
-      );
+      return fileOpHandler('Edit', { file_path: filePath, old_string: oldString, new_string: newString }, ctx);
     },
     search_files: (args, ctx) => {
       const pattern = requireString(args, ['pattern'], 'search_files');
@@ -302,9 +260,7 @@ export function createToolScriptDispatcher(
       normalizedTool === TOOL_SCRIPT_MATERIALIZED_TOOL ||
       normalizedTool.startsWith(TOOL_SCRIPT_MATERIALIZED_PREFIX);
     if (recursive) {
-      throw new Error(
-        'mcp_invoke recursivo bloqueado (B.3.3): um Tool Script nao pode chamar run_tool_script',
-      );
+      throw new Error('mcp_invoke recursivo bloqueado (B.3.3): um Tool Script nao pode chamar run_tool_script');
     }
   }
 
@@ -317,20 +273,14 @@ export function createToolScriptDispatcher(
     }
   }
 
-
-  return async function dispatchRpc(
-    call: ToolScriptRpcCall,
-    ctx: ToolScriptDispatchContext,
-  ): Promise<string> {
+  return async function dispatchRpc(call: ToolScriptRpcCall, ctx: ToolScriptDispatchContext): Promise<string> {
     const startedAt = Date.now();
     const displayName = formatDisplayName(call, ctx.cwd);
     try {
       const handler = handlers[call.tool];
       if (handler === undefined || !enabledSet.has(call.tool)) {
         throw new Error(
-          `tool "${call.tool}" desconhecida ou desabilitada no Tool Script. Habilitadas: ${
-            enabledTools.join(', ')
-          }`,
+          `tool "${call.tool}" desconhecida ou desabilitada no Tool Script. Habilitadas: ${enabledTools.join(', ')}`,
         );
       }
 
@@ -352,10 +302,7 @@ export function createToolScriptDispatcher(
       return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.warn(
-        { sessionId: ctx.sessionId, turnId: ctx.turnId, tool: call.tool, err },
-        'RPC do tool-script falhou',
-      );
+      logger.warn({ sessionId: ctx.sessionId, turnId: ctx.turnId, tool: call.tool, err }, 'RPC do tool-script falhou');
       emitAudit({
         sessionId: ctx.sessionId,
         turnId: ctx.turnId,
@@ -369,7 +316,6 @@ export function createToolScriptDispatcher(
     }
   };
 }
-
 
 interface RunCommandOptions {
   cwd: string;
@@ -449,8 +395,7 @@ function runCommandAsync(command: string, opts: RunCommandOptions): Promise<stri
       } catch {
         try {
           child.kill('SIGKILL');
-        } catch {
-        }
+        } catch {}
       }
     };
 
@@ -488,9 +433,7 @@ function runCommandAsync(command: string, opts: RunCommandOptions): Promise<stri
         }
         if (timedOut) {
           reject(
-            new Error(
-              `run_command excedeu o timeout de ${opts.timeoutMs}ms e foi morto (SIGKILL no process group)`,
-            ),
+            new Error(`run_command excedeu o timeout de ${opts.timeoutMs}ms e foi morto (SIGKILL no process group)`),
           );
           return;
         }
@@ -506,7 +449,6 @@ function runCommandAsync(command: string, opts: RunCommandOptions): Promise<stri
     });
   });
 }
-
 
 function defaultIsBypassEnabled(): boolean {
   try {
@@ -539,11 +481,7 @@ function raceAbort<T>(promise: Promise<T>, signal: AbortSignal, what: string): P
   });
 }
 
-function requireString(
-  args: Record<string, unknown>,
-  keys: readonly string[],
-  tool: string,
-): string {
+function requireString(args: Record<string, unknown>, keys: readonly string[], tool: string): string {
   for (const key of keys) {
     const value = args[key];
     if (typeof value === 'string' && value.length > 0) return value;
@@ -555,10 +493,7 @@ function resolvePathArg(cwd: string, target: string): string {
   return path.isAbsolute(target) ? target : path.resolve(cwd, target);
 }
 
-function optionalString(
-  args: Record<string, unknown>,
-  keys: readonly string[],
-): string | undefined {
+function optionalString(args: Record<string, unknown>, keys: readonly string[]): string | undefined {
   for (const key of keys) {
     const value = args[key];
     if (typeof value === 'string' && value.length > 0) return value;
@@ -573,9 +508,7 @@ function formatDisplayName(call: ToolScriptRpcCall, cwd: string): string {
     case 'write_file':
     case 'edit': {
       const target = optionalString(args, ['path', 'file_path']);
-      return target !== undefined
-        ? `${call.tool} ${resolvePathArg(cwd, target)}`
-        : call.tool;
+      return target !== undefined ? `${call.tool} ${resolvePathArg(cwd, target)}` : call.tool;
     }
     case 'search_files':
     case 'grep': {
@@ -586,9 +519,7 @@ function formatDisplayName(call: ToolScriptRpcCall, cwd: string): string {
       const command = optionalString(args, ['command']);
       if (command === undefined) return call.tool;
       const preview =
-        command.length > AUDIT_COMMAND_PREVIEW_CHARS
-          ? `${command.slice(0, AUDIT_COMMAND_PREVIEW_CHARS)}...`
-          : command;
+        command.length > AUDIT_COMMAND_PREVIEW_CHARS ? `${command.slice(0, AUDIT_COMMAND_PREVIEW_CHARS)}...` : command;
       return `run_command ${preview}`;
     }
     case 'mcp_invoke': {

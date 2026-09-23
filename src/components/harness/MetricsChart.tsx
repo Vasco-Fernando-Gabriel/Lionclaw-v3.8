@@ -37,11 +37,7 @@ export function MetricsChart({ data, maxValue, formatValue }: MetricsChartProps)
 
         return (
           <div key={item.label} className="flex items-center gap-3">
-            <span
-              className="text-xs text-zinc-400 truncate shrink-0"
-              style={{ width: '9rem' }}
-              title={item.label}
-            >
+            <span className="text-xs text-zinc-400 truncate shrink-0" style={{ width: '9rem' }} title={item.label}>
               {item.label}
             </span>
             <div className="flex-1 bg-zinc-800 rounded h-6 overflow-hidden">
@@ -50,10 +46,7 @@ export function MetricsChart({ data, maxValue, formatValue }: MetricsChartProps)
                 style={{ width: `${pct}%`, minWidth: pct > 0 ? '0.25rem' : '0' }}
               />
             </div>
-            <span
-              className="text-xs text-zinc-300 shrink-0 w-32 text-right"
-              title={item.title}
-            >
+            <span className="text-xs text-zinc-300 shrink-0 w-32 text-right" title={item.title}>
               {item.formattedValue ?? fmt(item.value)}
             </span>
           </div>

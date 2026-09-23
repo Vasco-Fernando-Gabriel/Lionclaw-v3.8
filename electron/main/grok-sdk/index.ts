@@ -1,10 +1,7 @@
-import crypto from 'crypto';
 import type { BrowserWindow } from 'electron';
 import { createLogger } from '../logger';
 import {
   clearSessionPendingSeed,
-  createSession,
-  getActiveChatSession,
   getSession,
   getSessionMessages,
   getSessionActiveRepository,
@@ -25,11 +22,13 @@ import {
   reconcileActiveContext,
 } from '../agent-runtime/context-measure';
 import { buildChatContextUsage } from '../chat-context-usage';
-import { maybeCompactChatSession } from '../chat-compaction-trigger';
+import { isChatTimelineReinjectEnabled, maybeCompactChatSession } from '../chat-compaction-trigger';
 import { ensureInitialSessionTitle, generateSessionTitle } from '../title-generator';
 import type { QueryOptions } from '../orchestrator';
 import type { OrchestratorSelection } from '../orchestrator-selection';
-import { type SdkLane, desktopLane } from '../sdk-lane';
+import type { SdkLane } from '../sdk-lane';
+import { resolveLaneForOptions, lanesOrAllDesktop } from '../desktop-lanes';
+import { SessionRequiredError } from '../lanes';
 import type { ArtifactData, AuditEntry, StreamChunk } from '../../../src/types';
 import type { GrokReasoningEffort } from '../../../src/constants/grok-models';
 import { emptyResponseExecutionError } from '../agent-runtime/llm-error';
@@ -38,8 +37,16 @@ import { createChatGrokSession } from './session';
 import { buildGrokUsageSnapshot, createGrokStreamTranslator } from './stream-translator';
 import { assertGrokWorkspaceUnchanged, resolveGrokWorkspaceGrant } from './workspace';
 import {
+  beginTimelineTurn,
+  buildToolsBlocksByAnchor,
+  computeTimelineMetrics,
+  logTimelineMetrics,
+  resolveCliTimelineOrigin,
+  resolveTimelineAnchor,
+} from '../session-timeline';
+import {
   computeEffectiveCapabilitiesForTurn,
-  getActiveChatTurnByLane,
+  getActiveChatTurnBinding,
   getChatCapabilityTurn,
 } from '../chat-capability-context';
 import { recordCompletedMainChatTurn } from '../dreaming-turn-engine';
@@ -48,86 +55,76 @@ import {
   extractAndProcessOnboardingData,
   resolveOnboardingCompletedFromState,
 } from '../onboarding';
-import {
-  isSubagentProviderAuthError,
-  subagentAuthFailure,
-} from '../agent-runtime/subagent-dispatch';
+import { isSubagentProviderAuthError, subagentAuthFailure } from '../agent-runtime/subagent-dispatch';
 
 const logger = createLogger('grok-sdk');
 
-export function stopGrokSdkQuery(lane: SdkLane = desktopLane): void {
-  lane.currentAbortController?.abort();
-  lane.currentAbortController = null;
+export function stopGrokSdkQuery(laneArg?: SdkLane): void {
+  for (const lane of lanesOrAllDesktop(laneArg)) {
+    lane.currentAbortController?.abort();
+    lane.currentAbortController = null;
+  }
 }
 
-export function isGrokSdkQueryActive(lane: SdkLane = desktopLane): boolean {
-  return lane.currentAbortController !== null;
+export function isGrokSdkQueryActive(laneArg?: SdkLane): boolean {
+  return lanesOrAllDesktop(laneArg).some((lane) => lane.currentAbortController !== null);
 }
 
-export function resetGrokSdkSessionState(lane: SdkLane = desktopLane): void {
-  stopGrokSdkQuery(lane);
+export function resetGrokSdkSessionState(laneArg?: SdkLane): void {
+  for (const lane of lanesOrAllDesktop(laneArg)) {
+    stopGrokSdkQuery(lane);
+  }
 }
 
-function sendStream(
-  getWindow: () => BrowserWindow | null,
-  silent: boolean | undefined,
-  chunk: StreamChunk,
-): void {
+function sendStream(getWindow: () => BrowserWindow | null, silent: boolean | undefined, chunk: StreamChunk): void {
   if (silent) return;
   try {
     const win = getWindow();
     if (win && !win.isDestroyed()) win.webContents.send('chat:stream', chunk);
-  } catch { /* renderer disposed */ }
+  } catch {
+    /* renderer disposed */
+  }
 }
 
-function sendLog(
-  getWindow: () => BrowserWindow | null,
-  entry: Omit<AuditEntry, 'id' | 'createdAt'>,
-): void {
+function sendLog(getWindow: () => BrowserWindow | null, entry: Omit<AuditEntry, 'id' | 'createdAt'>): void {
   try {
     const win = getWindow();
     if (win && !win.isDestroyed()) {
       win.webContents.send('logs:entry', { id: -1, createdAt: new Date().toISOString(), ...entry });
     }
-  } catch { /* renderer disposed */ }
+  } catch {
+    /* renderer disposed */
+  }
 }
 
-function audit(
-  getWindow: () => BrowserWindow | null,
-  entry: Omit<AuditEntry, 'id' | 'createdAt'>,
-): void {
+function audit(getWindow: () => BrowserWindow | null, entry: Omit<AuditEntry, 'id' | 'createdAt'>): void {
   insertAuditEntry(entry);
   sendLog(getWindow, entry);
 }
 
 function resolveSessionId(options: QueryOptions, lane: SdkLane): string {
   if (options.sessionId) return options.sessionId;
-  if (lane !== desktopLane) throw new Error(`Lane '${lane.name}' exige sessionId explicito.`);
-  const active = getActiveChatSession();
-  if (active) return active.id;
-  const id = crypto.randomUUID();
-  createSession(id, '');
-  return id;
+  throw new SessionRequiredError(lane.name, 'grok-sdk');
 }
 
 export async function executeGrokSdkQuery(
   message: string,
   options: QueryOptions,
   getWindow: () => BrowserWindow | null,
-  lane: SdkLane = desktopLane,
+  laneArg: SdkLane | undefined,
   selection: OrchestratorSelection,
 ): Promise<void> {
+  const lane = laneArg ?? resolveLaneForOptions(options, 'grok-sdk');
   const sessionId = resolveSessionId(options, lane);
-  const repoRootSnapshot = lane.name === 'desktop'
-    ? (() => {
-        const attachment = getSessionActiveRepository(sessionId);
-        return attachment
-          ? getLocalRepository(attachment.repositoryId)?.canonicalRootPath
-          : undefined;
-      })()
-    : undefined;
+  const repoRootSnapshot =
+    lane.kind === 'desktop'
+      ? (() => {
+          const attachment = getSessionActiveRepository(sessionId);
+          return attachment ? getLocalRepository(attachment.repositoryId)?.canonicalRootPath : undefined;
+        })()
+      : undefined;
   const workspaceGrant = resolveGrokWorkspaceGrant({
-    lane: lane.name as 'desktop' | 'telegram' | 'cron',
+    lane: lane.kind,
     repoRootSnapshot,
   });
   const emit = (chunk: StreamChunk): void => {
@@ -139,9 +136,11 @@ export async function executeGrokSdkQuery(
 
   const skipUser = options.origin === 'system-event' || options.skipUserMessagePersistence === true;
   let currentTurnIndex = 0;
+  let persistedUserMessageId: number | null = null;
   if (!skipUser) {
     const display = options.displayMessage ?? message;
     const userMessageId = persistUserChatMessage(sessionId, display, options.attachmentsMeta);
+    persistedUserMessageId = userMessageId;
     try {
       currentTurnIndex = getTurnIndexForUserMessage(sessionId, userMessageId);
     } catch {
@@ -163,13 +162,36 @@ export async function executeGrokSdkQuery(
     emit({ type: 'onboarding_completed' });
     isOnboarding = false;
   }
-  const capabilities = lane.name === 'desktop'
-    ? (() => {
-        const active = getActiveChatTurnByLane('desktop');
-        const context = active ? getChatCapabilityTurn(active) : undefined;
-        return context ? computeEffectiveCapabilitiesForTurn(context) : undefined;
-      })()
-    : undefined;
+  const capabilities =
+    lane.kind === 'desktop'
+      ? (() => {
+          const active = getActiveChatTurnBinding({ sessionId, lane: 'desktop' });
+          const context = active ? getChatCapabilityTurn(active) : undefined;
+          return context ? computeEffectiveCapabilitiesForTurn(context) : undefined;
+        })()
+      : undefined;
+  const timelineOrigin = resolveCliTimelineOrigin({
+    laneKind: lane.kind,
+    origin: options.origin,
+    swarmDelivery: options.swarmDelivery !== undefined,
+    forceNewSession: options._forceNewSession === true,
+    persistedUserMessageId,
+  });
+  const timelineAnchor = resolveTimelineAnchor({
+    origin: timelineOrigin,
+    persistedUserMessageId,
+    answeredUserMessageId: null,
+  });
+  const timeline = beginTimelineTurn({
+    sessionId,
+    turnIndex: currentTurnIndex,
+    anchorMessageId: timelineAnchor.anchorMessageId,
+    currentUserMessageId: timelineAnchor.currentUserMessageId,
+    origin: timelineOrigin,
+    runtime: 'grok',
+    fidelity: 'observed',
+    cwd: workspaceGrant.sessionCwd,
+  });
   const artifacts: ArtifactData[] = [];
   const translator = createGrokStreamTranslator({
     sessionId,
@@ -179,7 +201,22 @@ export async function executeGrokSdkQuery(
     turnIndex: currentTurnIndex,
     onArtifact: (artifact) => artifacts.push(artifact),
     onAuditEntry: (entry) => sendLog(getWindow, entry),
+    timeline,
   });
+  let timelineSettled = false;
+  const settleTimeline = (complete: boolean): void => {
+    if (timelineSettled) return;
+    timelineSettled = true;
+    const metrics = computeTimelineMetrics('grok', translator.timelineEvents());
+    timeline.metrics(metrics);
+    if (complete && !timeline.persistFailed) timeline.complete();
+    logTimelineMetrics({
+      runId: timeline.runId,
+      runtime: 'grok',
+      status: complete && !timeline.persistFailed ? 'complete' : 'interrupted',
+      ...metrics,
+    });
+  };
 
   let session;
   try {
@@ -189,29 +226,32 @@ export async function executeGrokSdkQuery(
       effort: (selection.effort ?? 'high') as GrokReasoningEffort,
       getWindow,
       abortSignal: abort.signal,
-      lane: lane.name as 'desktop' | 'telegram' | 'cron',
+      lane: lane.kind,
       agentId: options.agentId,
       isOnboarding,
       capabilities,
       workspaceGrant,
+      turnBinding: getActiveChatTurnBinding({ sessionId, lane: lane.kind }),
     });
   } catch (error) {
     translator.fail(error);
+    settleTimeline(false);
     lane.currentAbortController = null;
-    if (lane !== desktopLane) throw error;
+    if (lane.kind !== 'desktop') throw error;
     return;
   }
 
   const row = getSession(sessionId);
   const compactedUpTo = row?.compactedUpToMessageId ?? null;
   const allMessages = getSessionMessages(sessionId);
-  const priorMessages = compactedUpTo === null
-    ? allMessages
-    : allMessages.filter((item) => item.id > compactedUpTo);
-  const history = buildGrokHistoryPreamble(priorMessages, { dropLast: !skipUser });
-  const basePrompt = history
-    ? `Conversation so far:\n${history}\n\nNew user message:\n${message}`
-    : message;
+  const priorMessages = compactedUpTo === null ? allMessages : allMessages.filter((item) => item.id > compactedUpTo);
+  const history = buildGrokHistoryPreamble(priorMessages, {
+    dropLast: !skipUser,
+    ...(isChatTimelineReinjectEnabled()
+      ? { toolsByAnchor: buildToolsBlocksByAnchor(sessionId, priorMessages, compactedUpTo) }
+      : {}),
+  });
+  const basePrompt = history ? `Conversation so far:\n${history}\n\nNew user message:\n${message}` : message;
   const pendingSeed = row?.pendingSeed ?? null;
   const prompt = pendingSeed ? `${pendingSeed}\n\n${basePrompt}` : basePrompt;
   audit(getWindow, {
@@ -219,7 +259,12 @@ export async function executeGrokSdkQuery(
     subagent: options.agentId,
     eventType: 'tool_call',
     toolName: 'grok.context',
-    input: JSON.stringify({ runtime: 'grok-sdk', provider: 'grok', model: selection.model, historyChars: history.length }),
+    input: JSON.stringify({
+      runtime: 'grok-sdk',
+      provider: 'grok',
+      model: selection.model,
+      historyChars: history.length,
+    }),
   });
 
   let assistantText = '';
@@ -231,23 +276,24 @@ export async function executeGrokSdkQuery(
       assistantText += delta;
       translator.callbacks.onText?.(delta);
     },
-    onToolUse(name: string) {
+    onToolUse(name: string, driverToolCallId?: string) {
       toolUses += 1;
-      translator.callbacks.onToolUse?.(name);
+      translator.callbacks.onToolUse?.(name, driverToolCallId);
     },
-    onToolUseIO(tool: string, input: unknown, output: unknown) {
+    onToolUseIO(tool: string, input: unknown, output: unknown, driverToolCallId?: string) {
       agenticTokens += estimateAgenticContentTokens(input) + estimateAgenticContentTokens(output);
-      translator.callbacks.onToolUseIO?.(tool, input, output);
+      translator.callbacks.onToolUseIO?.(tool, input, output, driverToolCallId);
     },
   };
 
+  let turnOk = false;
+  let responseFinished = false;
   try {
     const response = await session.send(prompt, callbacks, abort.signal);
+    responseFinished = response.status === 'finished';
     if (abort.signal.aborted) return;
     if (response.status === 'cancelled') {
-      translator.fail(new Error(
-        'Turno Grok cancelado pelo CLI (permissao negada ou interrupcao externa).',
-      ));
+      translator.fail(new Error('Turno Grok cancelado pelo CLI (permissao negada ou interrupcao externa).'));
       return;
     }
     assertGrokWorkspaceUnchanged(workspaceGrant);
@@ -255,28 +301,25 @@ export async function executeGrokSdkQuery(
     if (finalText.trim()) {
       const cleaned = extractAndProcessOnboardingData(finalText, {
         sendStream: emit,
-        onAudit: ({ toolName, input, output }) => audit(getWindow, {
-          sessionId,
-          subagent: options.agentId,
-          eventType: 'tool_call',
-          toolName,
-          input,
-          output,
-        }),
+        onAudit: ({ toolName, input, output }) =>
+          audit(getWindow, {
+            sessionId,
+            subagent: options.agentId,
+            eventType: 'tool_call',
+            toolName,
+            input,
+            output,
+          }),
       });
       if (cleaned !== null) finalText = cleaned;
       else if (isOnboarding) {
         completeOnboardingFromPersistedProfile({ sendStream: emit });
       }
     }
-    const usageSnapshot = buildGrokUsageSnapshot(
-      response,
-      selection.model,
-      {
-        inputTokens: estimateTokens(prompt),
-        outputTokens: estimateTokens(finalText),
-      },
-    );
+    const usageSnapshot = buildGrokUsageSnapshot(response, selection.model, {
+      inputTokens: estimateTokens(prompt),
+      outputTokens: estimateTokens(finalText),
+    });
     const emptyError = emptyResponseExecutionError({
       content: finalText,
       toolUses,
@@ -347,16 +390,18 @@ export async function executeGrokSdkQuery(
         void generateSessionTitle(sessionId).catch((error) => logger.warn({ error }, 'grok title generation failed'));
       }
     }
+    turnOk = true;
     await maybeCompactChatSession(sessionId, emit, { model: selection.model, provider: 'grok' });
   } catch (error) {
     if (isSubagentProviderAuthError(error)) {
       emit({ type: 'error', sessionId, ...subagentAuthFailure(error) });
-      if (lane !== desktopLane) throw error;
+      if (lane.kind !== 'desktop') throw error;
     } else if (!abort.signal.aborted) {
       translator.fail(error);
-      if (lane !== desktopLane) throw error;
+      if (lane.kind !== 'desktop') throw error;
     }
   } finally {
+    settleTimeline(turnOk && responseFinished && !abort.signal.aborted);
     await session.close();
     if (lane.currentAbortController === abort) lane.currentAbortController = null;
   }

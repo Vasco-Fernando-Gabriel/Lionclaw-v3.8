@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { PT_BR_BLOCK } from './_shared/language-pt-br';
 
@@ -7,8 +6,9 @@ export const SECURITY_SKEPTIC_SECURITY_ID = 'security-skeptic-security';
 export const securitySkepticSecurity: Omit<AgentConfig, 'sortOrder'> = {
   id: SECURITY_SKEPTIC_SECURITY_ID,
   name: 'Validador Cetico (Seguranca)',
-  description: 'Valida findings de seguranca (secrets, auth, isolation, OWASP) contra codigo real. Remove falsos positivos.',
-  model: 'claude-opus-4-7',
+  description:
+    'Valida findings de seguranca (secrets, auth, isolation, OWASP) contra codigo real. Remove falsos positivos.',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'enabled' as const,
   thinkingBudget: 12000,

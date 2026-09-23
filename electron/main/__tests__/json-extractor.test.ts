@@ -1,18 +1,8 @@
-
 import { describe, it, expect } from 'vitest';
-import {
-  extractJSON,
-  extractBalancedJsonObjectCandidates,
-  unwrapKnownJsonWrappers,
-} from '../json-extractor';
+import { extractJSON, extractBalancedJsonObjectCandidates, unwrapKnownJsonWrappers } from '../json-extractor';
 import type { StreamProcessorResult } from '../stream-processor';
 
-
-function mockResult(
-  output: string,
-  accumulatedText: string,
-  textBlocks: string[],
-): StreamProcessorResult {
+function mockResult(output: string, accumulatedText: string, textBlocks: string[]): StreamProcessorResult {
   return {
     output,
     accumulatedText,
@@ -42,9 +32,7 @@ function parser(text: string): Payload {
 
 const OPTS = { parser, contextLabel: 'test-context' };
 
-
 describe('extractJSON: tier selection and fallback logic', () => {
-
   it('returns tier "result" when output contains valid JSON', () => {
     const result = mockResult('{"x":42}', '', []);
     const { value, tier } = extractJSON<Payload>(result, OPTS);
@@ -97,8 +85,8 @@ describe('extractJSON: tier selection and fallback logic', () => {
 
   it('finds valid block among multiple textBlocks iterating in reverse', () => {
     const result = mockResult('', '', [
-      '{"x":10}',   // block[0] - valid but tried last in reverse
-      '{bad}',      // block[1] - invalid, tried first in reverse
+      '{"x":10}', // block[0] - valid but tried last in reverse
+      '{bad}', // block[1] - invalid, tried first in reverse
     ]);
 
     const { value, tier } = extractJSON<Payload>(result, OPTS);
@@ -139,7 +127,6 @@ describe('extractJSON: tier selection and fallback logic', () => {
     expect(tier).toBe('jsonrepair');
   });
 });
-
 
 describe('extractBalancedJsonObjectCandidates', () => {
   it('returns empty array when no { is present', () => {
@@ -201,7 +188,6 @@ describe('extractBalancedJsonObjectCandidates', () => {
     expect(result[0]).toBe('{"a":1}');
   });
 });
-
 
 describe('unwrapKnownJsonWrappers', () => {
   it('unwraps { "plan": {...} }', () => {

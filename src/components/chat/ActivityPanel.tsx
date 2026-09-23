@@ -16,15 +16,13 @@ import {
   Eye,
   Pencil,
 } from 'lucide-react';
-import { useChatStore } from '@/stores/chat-store';
+import { useChatStore, useVisibleThread } from '@/stores/chat-store';
 import { usePipelineStore } from '@/stores/pipeline-store';
 import { useAppStore } from '@/stores/app-store';
+import { SwarmPanel } from '../swarm/SwarmPanel';
 import { PipelinesActiveSidebar } from '../common/PipelinesActiveSidebar';
 import { WorkflowRunRow } from '../dynamic-workflow/WorkflowRunRow';
-import {
-  useDynamicWorkflowStore,
-  type DynamicWorkflowUIStatus,
-} from '@/stores/dynamic-workflow-store';
+import { useDynamicWorkflowStore, type DynamicWorkflowUIStatus } from '@/stores/dynamic-workflow-store';
 
 const WORKFLOW_TERMINAL_UI: ReadonlySet<DynamicWorkflowUIStatus> = new Set<DynamicWorkflowUIStatus>([
   'completed',
@@ -33,13 +31,7 @@ const WORKFLOW_TERMINAL_UI: ReadonlySet<DynamicWorkflowUIStatus> = new Set<Dynam
   'interrupted',
 ]);
 import { UsageLimitsCard } from './UsageLimitsCard';
-import type {
-  ChatMessage,
-  LiveActivity,
-  LiveActivityKind,
-  LiveActivityStatus,
-} from '@/types';
-
+import type { ChatMessage, LiveActivity, LiveActivityKind, LiveActivityStatus } from '@/types';
 
 interface ActivityNode extends LiveActivity {
   children: ActivityNode[];
@@ -242,9 +234,7 @@ function SubagentRow({ node, now }: { node: ActivityNode; now: number }) {
         </div>
       )}
       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-5 font-mono text-[10px] text-zinc-600">
-        {clock && (
-          <span className={node.status === 'running' ? 'text-amber-400/80' : ''}>{clock}</span>
-        )}
+        {clock && <span className={node.status === 'running' ? 'text-amber-400/80' : ''}>{clock}</span>}
         {toolUses !== null && (
           <span>
             {toolUses}
@@ -308,9 +298,7 @@ function ToolRow({ node, now }: { node: ActivityNode; now: number }) {
       )}
       <div className="flex flex-wrap items-center gap-x-2 pl-4.5 font-mono text-[10px] text-zinc-600">
         {typeof node.exitCode === 'number' && (
-          <span className={node.exitCode === 0 ? 'text-zinc-600' : 'text-red-400'}>
-            exit {node.exitCode}
-          </span>
+          <span className={node.exitCode === 0 ? 'text-zinc-600' : 'text-red-400'}>exit {node.exitCode}</span>
         )}
         {clock && <span className={node.status === 'running' ? 'text-amber-400/80' : ''}>{clock}</span>}
       </div>
@@ -360,9 +348,7 @@ function PipelinePhaseRow({ node, now }: { node: ActivityNode; now: number }) {
       }
       title={clickable ? 'Abrir pipeline' : undefined}
       className={`rounded border px-2 py-1.5 ${
-        node.status === 'running'
-          ? 'border-amber-500/30 bg-amber-500/5'
-          : 'border-zinc-700/60 bg-zinc-900/60'
+        node.status === 'running' ? 'border-amber-500/30 bg-amber-500/5' : 'border-zinc-700/60 bg-zinc-900/60'
       }${clickable ? ' cursor-pointer transition-colors hover:bg-zinc-800/60' : ''}`}
     >
       <div className="flex items-center gap-1.5">
@@ -420,15 +406,7 @@ function BlockTotals({ totals }: { totals: TurnBlock['totals'] }) {
   );
 }
 
-function TurnBlockView({
-  block,
-  now,
-  hiddenIds,
-}: {
-  block: TurnBlock;
-  now: number;
-  hiddenIds?: ReadonlySet<string>;
-}) {
+function TurnBlockView({ block, now, hiddenIds }: { block: TurnBlock; now: number; hiddenIds?: ReadonlySet<string> }) {
   const [open, setOpen] = useState(block.status === 'running');
   const visibleRoots = hiddenIds ? block.roots.filter((n) => !hiddenIds.has(n.id)) : block.roots;
   const hiddenCount = block.roots.length - visibleRoots.length;
@@ -474,9 +452,7 @@ function TurnBlockView({
 }
 
 export function ActivityPanel() {
-  const activities = useChatStore((s) => s.activities);
-  const messages = useChatStore((s) => s.messages);
-  const open = useChatStore((s) => s.activitiesPanelOpen);
+  const { activities, messages, activitiesPanelOpen: open } = useVisibleThread();
   const toggle = useChatStore((s) => s.toggleActivitiesPanel);
 
   const running = useMemo(() => activities.some((a) => a.status === 'running'), [activities]);
@@ -533,9 +509,7 @@ export function ActivityPanel() {
           <Activity
             className={`w-4 h-4 transition-colors ${running ? 'text-amber-400' : 'text-zinc-500 group-hover:text-zinc-300'}`}
           />
-          {running && (
-            <span className="absolute right-1.5 top-2 h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
-          )}
+          {running && <span className="absolute right-1.5 top-2 h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />}
         </button>
         {/* Mobile: botao flutuante (overlay), nao ocupa coluna. */}
         <button
@@ -578,24 +552,29 @@ export function ActivityPanel() {
         <div className="shrink-0 border-b border-zinc-800">
           <UsageLimitsCard />
         </div>
-        {/* Workflow dinamico em execucao FIXO abaixo de Limites (pedido do dono):
-            fora do scroll dos turnos enquanto o run estiver vivo. */}
-        {pinnedWorkflows.length > 0 && (
-          <div
-            className="max-h-[45vh] shrink-0 space-y-1.5 overflow-y-auto border-b border-zinc-800 px-2 py-2"
-            data-testid="workflow-pinned"
-          >
-            {pinnedWorkflows.map((node) => (
-              <RootNode key={node.id} node={node} now={now} />
-            ))}
+        <div className="max-h-[60%] min-h-0 shrink-0 overflow-y-auto empty:hidden">
+          {/* Workflow dinamico em execucao FIXO abaixo de Limites (pedido do dono):
+              fora do scroll dos turnos enquanto o run estiver vivo. */}
+          {pinnedWorkflows.length > 0 && (
+            <div
+              className="max-h-[45vh] shrink-0 space-y-1.5 overflow-y-auto border-b border-zinc-800 px-2 py-2"
+              data-testid="workflow-pinned"
+            >
+              {pinnedWorkflows.map((node) => (
+                <RootNode key={node.id} node={node} now={now} />
+              ))}
+            </div>
+          )}
+          {/* Pipelines ativos pinned no topo do painel de Atividade (pedido do dono:
+              aqui, nao na sidebar esquerda). Fora do scroll dos turnos = sempre
+              visivel enquanto o pipe roda. empty:hidden esconde o wrapper quando o
+              componente renderiza null (sem pipeline ativo). */}
+          <div className="shrink-0 border-b border-zinc-800 empty:hidden">
+            <PipelinesActiveSidebar />
           </div>
-        )}
-        {/* Pipelines ativos pinned no topo do painel de Atividade (pedido do dono:
-            aqui, nao na sidebar esquerda). Fora do scroll dos turnos = sempre
-            visivel enquanto o pipe roda. empty:hidden esconde o wrapper quando o
-            componente renderiza null (sem pipeline ativo). */}
-        <div className="shrink-0 border-b border-zinc-800 empty:hidden">
-          <PipelinesActiveSidebar />
+          <div className="shrink-0 border-b border-zinc-800 empty:hidden">
+            <SwarmPanel />
+          </div>
         </div>
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
           {blocks.length === 0 ? (
@@ -603,9 +582,7 @@ export function ActivityPanel() {
               <span className="text-[11px] text-zinc-600">Nada por aqui ainda nesta conversa.</span>
             </div>
           ) : (
-            blocks.map((block) => (
-              <TurnBlockView key={block.turnIndex} block={block} now={now} hiddenIds={pinnedIds} />
-            ))
+            blocks.map((block) => <TurnBlockView key={block.turnIndex} block={block} now={now} hiddenIds={pinnedIds} />)
           )}
         </div>
       </aside>

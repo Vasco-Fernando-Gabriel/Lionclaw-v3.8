@@ -1,8 +1,9 @@
-
 export const TASK_TOOL_NAMES = ['TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList'] as const;
 
 export const SDK_DISALLOWED_TOOLS: readonly string[] = Object.freeze([
   'Artifact',
+  'ArtifactComments',
+  'ArtifactData',
   'DesignSync',
   'ListAgents',
   'ListSkills',

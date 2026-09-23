@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi } from 'vitest';
-
 
 import { applyMigrationV72, __V72_INTERNAL } from '../db-migrations/v72-unknown-cost-tracking';
 
@@ -16,7 +14,6 @@ describe('applyMigrationV72 - structural', () => {
     expect(__V72_INTERNAL.alters).toHaveLength(3);
   });
 });
-
 
 describe('applyMigrationV72 - mock DB (normal execution)', () => {
   it('calls db.exec exactly 3 times (one ALTER per table)', () => {
@@ -79,7 +76,6 @@ describe('applyMigrationV72 - mock DB (normal execution)', () => {
   });
 });
 
-
 describe('applyMigrationV72 - idempotency', () => {
   it('does NOT throw when db.exec raises "duplicate column name"', () => {
     const mockExec = vi.fn().mockImplementation(() => {
@@ -104,7 +100,6 @@ describe('applyMigrationV72 - idempotency', () => {
     expect(mockExec).toHaveBeenCalledTimes(3);
   });
 });
-
 
 describe('applyMigrationV72 - unexpected errors', () => {
   it('re-throws errors that are NOT duplicate column name', () => {

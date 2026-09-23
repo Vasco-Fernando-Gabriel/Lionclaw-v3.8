@@ -1,19 +1,13 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import {
-  computeRepoGraphSavings,
-  REPO_GRAPH_METRICS_MIN_TURNS,
-} from '../repo-graph/metrics';
+import { computeRepoGraphSavings, REPO_GRAPH_METRICS_MIN_TURNS } from '../repo-graph/metrics';
 import type { RepoGraphTurnSample } from '../repo-graph/types';
-
 
 function turns(count: number, toolCalls: number, tokens: number): RepoGraphTurnSample[] {
   return Array.from({ length: count }, () => ({ toolCalls, tokens }));
 }
-
 
 describe('computeRepoGraphSavings - medias por grupo', () => {
   it('grupos vazios: turns=0, medias null, percentuais null, windowMet=false', () => {
@@ -71,13 +65,13 @@ describe('computeRepoGraphSavings - percentuais de economia', () => {
   it('economia positiva: COM repo gasta menos (sinal positivo)', () => {
     const result = computeRepoGraphSavings(turns(60, 2, 1000), turns(60, 8, 4000));
     expect(result.windowMet).toBe(true);
-    expect(result.toolCallsSavingsPct).toBe(75); // (8-2)/8 = 75%
-    expect(result.tokensSavingsPct).toBe(75); // (4000-1000)/4000 = 75%
+    expect(result.toolCallsSavingsPct).toBe(75);
+    expect(result.tokensSavingsPct).toBe(75);
   });
 
   it('economia negativa: COM repo gasta MAIS (sinal preservado, sem clamp)', () => {
     const result = computeRepoGraphSavings(turns(60, 9, 6000), turns(60, 6, 4000));
-    expect(result.toolCallsSavingsPct).toBe(-50); // (6-9)/6 = -50%
+    expect(result.toolCallsSavingsPct).toBe(-50);
     expect(result.tokensSavingsPct).toBe(-50);
   });
 
@@ -93,7 +87,6 @@ describe('computeRepoGraphSavings - percentuais de economia', () => {
     expect(result.toolCallsSavingsPct).toBe(66.7);
   });
 });
-
 
 const MAIN_DIR = join(__dirname, '..');
 const ROOT_DIR = join(MAIN_DIR, '..', '..');
@@ -143,17 +136,13 @@ describe('D-5 - guardrail estatico do SQL em db.ts', () => {
   it('grupo SEM repo: exclui sessoes com attach E com uso historico do graph', () => {
     const start = dbSrc.indexOf('export function getRepoGraphSavingsMetrics');
     const block = dbSrc.slice(start, start + 2500);
-    expect(block).toContain(
-      'NOT IN (SELECT session_id FROM session_active_repository)',
-    );
-    expect(block).toContain(
-      'NOT IN (SELECT DISTINCT session_id FROM repo_graph_turn_usage)',
-    );
+    expect(block).toContain('NOT IN (SELECT session_id FROM session_active_repository)');
+    expect(block).toContain('NOT IN (SELECT DISTINCT session_id FROM repo_graph_turn_usage)');
   });
 });
 
 describe('D-5 - guardrail estatico do canal IPC e do preload', () => {
-  it("ipc/repo-graph.ts registra repo-graph:metrics com { error } sem throw", () => {
+  it('ipc/repo-graph.ts registra repo-graph:metrics com { error } sem throw', () => {
     const ipcSrc = readSource('ipc/repo-graph.ts');
     expect(ipcSrc).toContain("ipcMain.handle('repo-graph:metrics'");
     expect(ipcSrc).toContain('getRepoGraphSavingsMetrics()');
@@ -167,9 +156,8 @@ describe('D-5 - guardrail estatico do canal IPC e do preload', () => {
     expect(preloadSrc).toContain("metrics: () => ipcRenderer.invoke('repo-graph:metrics')");
   });
 
-  it('golden channel list inclui o canal novo com justificativa', () => {
+  it('golden channel list inclui o canal novo', () => {
     const listSrc = readSource(join('electron', 'main', '__tests__', 'ipc-channel-list.test.ts'), ROOT_DIR);
     expect(listSrc).toContain("'repo-graph:metrics',");
-    expect(listSrc).toContain('Sprint A4');
   });
 });

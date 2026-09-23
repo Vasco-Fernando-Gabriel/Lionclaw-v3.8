@@ -1,9 +1,4 @@
-export type StreamTimelineToolStatus =
-  | 'running'
-  | 'done'
-  | 'error'
-  | 'incomplete'
-  | 'stopped';
+export type StreamTimelineToolStatus = 'running' | 'done' | 'error' | 'incomplete' | 'stopped';
 
 export interface StreamTimelineTextBlock {
   id: string;

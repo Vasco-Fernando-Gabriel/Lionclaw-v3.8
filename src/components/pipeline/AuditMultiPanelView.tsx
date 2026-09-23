@@ -51,19 +51,21 @@ function AgentPanel({ agent }: AgentPanelProps) {
         <div className="px-3 py-2 border-b border-zinc-800/60 text-xs text-zinc-600 italic shrink-0">
           Aguardando agente
         </div>
-        <div className="flex-1 flex items-center justify-center text-zinc-700 text-xs italic">
-          slot vazio
-        </div>
+        <div className="flex-1 flex items-center justify-center text-zinc-700 text-xs italic">slot vazio</div>
       </div>
     );
   }
 
   const statusIcon = (() => {
     switch (agent.status) {
-      case 'completed': return <CheckCircle size={12} className="text-green-400 shrink-0" />;
-      case 'failed': return <XCircle size={12} className="text-red-400 shrink-0" />;
-      case 'running': return <Loader2 size={12} className="text-amber-400 animate-spin shrink-0" />;
-      default: return null;
+      case 'completed':
+        return <CheckCircle size={12} className="text-green-400 shrink-0" />;
+      case 'failed':
+        return <XCircle size={12} className="text-red-400 shrink-0" />;
+      case 'running':
+        return <Loader2 size={12} className="text-amber-400 animate-spin shrink-0" />;
+      default:
+        return null;
     }
   })();
 
@@ -73,9 +75,7 @@ function AgentPanel({ agent }: AgentPanelProps) {
       <div className="px-3 py-2 border-b border-zinc-800/60 shrink-0">
         <div className="flex items-center gap-2 mb-1">
           {statusIcon}
-          <span className="text-xs font-semibold text-zinc-200 truncate flex-1">
-            {agent.name}
-          </span>
+          <span className="text-xs font-semibold text-zinc-200 truncate flex-1">{agent.name}</span>
           {agent.model && (
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-300 border border-amber-800/50 shrink-0">
               {shortenModel(agent.model)}
@@ -116,20 +116,18 @@ function AgentPanel({ agent }: AgentPanelProps) {
 }
 
 export function AuditMultiPanelView({ isStreaming }: AuditMultiPanelViewProps) {
-  const auditAgents = useActiveProjectState(s => s.auditAgents) ?? new Map<string, AuditAgentState>();
-  const auditPanelSlots = useActiveProjectState(s => s.auditPanelSlots) ?? [null, null, null];
+  const auditAgents = useActiveProjectState((s) => s.auditAgents) ?? new Map<string, AuditAgentState>();
+  const auditPanelSlots = useActiveProjectState((s) => s.auditPanelSlots) ?? [null, null, null];
 
   const completedAgents = Array.from(auditAgents.values())
-    .filter(a => a.status === 'completed' || a.status === 'failed')
+    .filter((a) => a.status === 'completed' || a.status === 'failed')
     .sort((a, b) => (a.completedAt ?? 0) - (b.completedAt ?? 0));
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-zinc-950">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/60 shrink-0">
-        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
-          Security Audit (Fase 2)
-        </span>
+        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Security Audit (Fase 2)</span>
         <span className="text-[11px] text-zinc-500 font-mono">
           {completedAgents.length}/{TOTAL_AGENTS} concluidos
         </span>
@@ -150,14 +148,18 @@ export function AuditMultiPanelView({ isStreaming }: AuditMultiPanelViewProps) {
               </tr>
             </thead>
             <tbody>
-              {completedAgents.map(a => (
+              {completedAgents.map((a) => (
                 <tr key={a.agentId} className="text-zinc-400 border-t border-zinc-800/40">
                   <td className="pr-3 py-1 truncate max-w-[140px]">{a.name}</td>
                   <td className="pr-3 py-1 font-mono">{shortenModel(a.model)}</td>
                   <td className="pr-3 py-1 font-mono text-right">{a.filesAnalyzed}</td>
                   <td
                     className="pr-3 py-1 font-mono text-right"
-                    title={a.runtime === 'codex' ? 'Metrica de extras nao disponivel para runtime Codex (sem tool Read tipado)' : undefined}
+                    title={
+                      a.runtime === 'codex'
+                        ? 'Metrica de extras nao disponivel para runtime Codex (sem tool Read tipado)'
+                        : undefined
+                    }
                   >
                     {a.runtime === 'codex' ? '—' : a.additionalFilesAfterStart}
                   </td>
@@ -173,7 +175,7 @@ export function AuditMultiPanelView({ isStreaming }: AuditMultiPanelViewProps) {
       {/* 3 panels grid */}
       <div className="grid grid-cols-3 gap-3 p-3 flex-1 min-h-0">
         {auditPanelSlots.map((slotId, idx) => {
-          const agent = slotId ? auditAgents.get(slotId) ?? null : null;
+          const agent = slotId ? (auditAgents.get(slotId) ?? null) : null;
           return <AgentPanel key={idx} agent={agent} />;
         })}
       </div>

@@ -34,16 +34,18 @@ describe('D18: denylist de autoria', () => {
     expect(AUTHORED_WORKFLOW_AGENT_DENYLIST).toEqual(new Set(DYNAMIC_WORKFLOW_AGENT_DENYLIST));
   });
 
-  it.each(['dynamic-workflow-closer', 'dynamic-workflow-narrator', 'dynamic-workflow-maestro', 'dynamic-workflow-builder'])(
-    'rejeita %s mesmo estando na squad dynamic-workflow, nomeando o agente',
-    (agentType) => {
-      const r = validateAuthoredAgentTypes(js(agentType), { getAgent });
-      expect(r.ok).toBe(false);
-      if (r.ok) return;
-      expect(r.error).toContain(agentType);
-      expect(r.error).toMatch(/denylist/);
-    },
-  );
+  it.each([
+    'dynamic-workflow-closer',
+    'dynamic-workflow-narrator',
+    'dynamic-workflow-maestro',
+    'dynamic-workflow-builder',
+  ])('rejeita %s mesmo estando na squad dynamic-workflow, nomeando o agente', (agentType) => {
+    const r = validateAuthoredAgentTypes(js(agentType), { getAgent });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toContain(agentType);
+    expect(r.error).toMatch(/denylist/);
+  });
 
   it.each(['dynamic-workflow-scout', 'dynamic-workflow-coder', 'dynamic-workflow-refuter'])(
     'aceita %s (papel de node da squad)',

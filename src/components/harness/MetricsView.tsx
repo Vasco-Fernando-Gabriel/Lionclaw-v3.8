@@ -3,7 +3,6 @@ import { Loader2 } from 'lucide-react';
 import type { HarnessProjectMetrics, SprintMetrics } from '@/types';
 import { MetricsChart } from './MetricsChart';
 
-
 function formatDuration(ms: number): string {
   const totalMin = Math.floor(ms / 60000);
   const hours = Math.floor(totalMin / 60);
@@ -40,7 +39,6 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-
 interface StatCardProps {
   label: string;
   value: string;
@@ -62,12 +60,7 @@ interface PassRateCardProps {
 }
 
 function PassRateCard({ rate }: PassRateCardProps) {
-  const color =
-    rate >= 70
-      ? 'text-green-400'
-      : rate >= 50
-        ? 'text-yellow-400'
-        : 'text-red-400';
+  const color = rate >= 70 ? 'text-green-400' : rate >= 50 ? 'text-yellow-400' : 'text-red-400';
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 flex flex-col gap-1">
@@ -96,9 +89,7 @@ function CoderEvaluatorSplit({
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-3">
-      <h3 className="text-xs text-zinc-500 uppercase tracking-wide">
-        Distribuicao de custo
-      </h3>
+      <h3 className="text-xs text-zinc-500 uppercase tracking-wide">Distribuicao de custo</h3>
 
       <div className="space-y-2">
         {/* Coder bar */}
@@ -112,7 +103,9 @@ function CoderEvaluatorSplit({
           </div>
           <span
             className="text-xs text-zinc-300 w-40 text-right shrink-0"
-            title={coderSubscriptionEquivalentCost > 0 ? 'Equivalente da API; nao e cobranca da assinatura.' : undefined}
+            title={
+              coderSubscriptionEquivalentCost > 0 ? 'Equivalente da API; nao e cobranca da assinatura.' : undefined
+            }
           >
             {formatHarnessCost(coderCost, coderSubscriptionEquivalentCost)} ({coderPct.toFixed(0)}%)
           </span>
@@ -129,7 +122,9 @@ function CoderEvaluatorSplit({
           </div>
           <span
             className="text-xs text-zinc-300 w-40 text-right shrink-0"
-            title={evaluatorSubscriptionEquivalentCost > 0 ? 'Equivalente da API; nao e cobranca da assinatura.' : undefined}
+            title={
+              evaluatorSubscriptionEquivalentCost > 0 ? 'Equivalente da API; nao e cobranca da assinatura.' : undefined
+            }
           >
             {formatHarnessCost(evaluatorCost, evaluatorSubscriptionEquivalentCost)} ({evaluatorPct.toFixed(0)}%)
           </span>
@@ -168,9 +163,7 @@ function SprintTable({ sprints }: SprintTableProps) {
             {sprints.map((sprint, idx) => {
               const rowBg = idx % 2 === 0 ? 'bg-zinc-900' : 'bg-zinc-800/30';
               const verdictBadge =
-                sprint.verdict === 'passed'
-                  ? 'bg-green-500/20 text-green-400'
-                  : 'bg-red-500/20 text-red-400';
+                sprint.verdict === 'passed' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400';
               const verdictLabel = sprint.verdict === 'passed' ? 'Passou' : 'Falhou';
 
               return (
@@ -180,24 +173,40 @@ function SprintTable({ sprints }: SprintTableProps) {
                   </td>
                   <td className="px-4 py-2 text-zinc-300 text-right">{sprint.rounds}</td>
                   <td className="px-4 py-2 text-amber-400 text-right">
-                    <span title={sprint.coderSubscriptionEquivalentCost > 0 ? 'Equivalente da API; nao e cobranca da assinatura.' : undefined}>
+                    <span
+                      title={
+                        sprint.coderSubscriptionEquivalentCost > 0
+                          ? 'Equivalente da API; nao e cobranca da assinatura.'
+                          : undefined
+                      }
+                    >
                       {formatHarnessCost(sprint.coderCost, sprint.coderSubscriptionEquivalentCost)}
                     </span>
                   </td>
                   <td className="px-4 py-2 text-blue-400 text-right">
-                    <span title={sprint.evaluatorSubscriptionEquivalentCost > 0 ? 'Equivalente da API; nao e cobranca da assinatura.' : undefined}>
+                    <span
+                      title={
+                        sprint.evaluatorSubscriptionEquivalentCost > 0
+                          ? 'Equivalente da API; nao e cobranca da assinatura.'
+                          : undefined
+                      }
+                    >
                       {formatHarnessCost(sprint.evaluatorCost, sprint.evaluatorSubscriptionEquivalentCost)}
                     </span>
                   </td>
                   <td className="px-4 py-2 text-zinc-200 text-right font-medium">
                     <div className="flex flex-col items-end">
-                      <span title={sprint.subscriptionEquivalentCost > 0 ? 'Equivalente da API; nao e cobranca da assinatura.' : undefined}>
+                      <span
+                        title={
+                          sprint.subscriptionEquivalentCost > 0
+                            ? 'Equivalente da API; nao e cobranca da assinatura.'
+                            : undefined
+                        }
+                      >
                         {formatHarnessCost(sprint.totalCost, sprint.subscriptionEquivalentCost)}
                       </span>
                       {(sprint.unknownCostCount ?? 0) > 0 && (
-                        <span className="text-[9px] text-zinc-500">
-                          ({sprint.unknownCostCount} nao estimado)
-                        </span>
+                        <span className="text-[9px] text-zinc-500">({sprint.unknownCostCount} nao estimado)</span>
                       )}
                     </div>
                   </td>
@@ -207,13 +216,9 @@ function SprintTable({ sprints }: SprintTableProps) {
                   <td className="px-4 py-2 text-zinc-400 text-right">
                     {formatTokens(sprint.coderOutputTokens + sprint.evaluatorOutputTokens)}
                   </td>
-                  <td className="px-4 py-2 text-zinc-400 text-right">
-                    {formatDuration(sprint.duration)}
-                  </td>
+                  <td className="px-4 py-2 text-zinc-400 text-right">{formatDuration(sprint.duration)}</td>
                   <td className="px-4 py-2 text-center">
-                    <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${verdictBadge}`}
-                    >
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${verdictBadge}`}>
                       {verdictLabel}
                     </span>
                   </td>
@@ -224,15 +229,12 @@ function SprintTable({ sprints }: SprintTableProps) {
         </table>
 
         {sprints.length === 0 && (
-          <p className="text-center text-zinc-600 text-xs py-6">
-            Nenhum sprint executado ainda.
-          </p>
+          <p className="text-center text-zinc-600 text-xs py-6">Nenhum sprint executado ainda.</p>
         )}
       </div>
     </div>
   );
 }
-
 
 interface MetricsViewProps {
   projectId: string;
@@ -289,11 +291,7 @@ export function MetricsView({ projectId }: MetricsViewProps) {
   }
 
   if (error !== null) {
-    return (
-      <p className="text-xs text-red-400 bg-red-900/10 border border-red-900/30 rounded px-3 py-2">
-        {error}
-      </p>
-    );
+    return <p className="text-xs text-red-400 bg-red-900/10 border border-red-900/30 rounded px-3 py-2">{error}</p>;
   }
 
   if (metrics === null) return null;
@@ -302,15 +300,11 @@ export function MetricsView({ projectId }: MetricsViewProps) {
     label: s.name,
     value: s.totalCost,
     formattedValue: formatHarnessCost(s.totalCost, s.subscriptionEquivalentCost),
-    title: s.subscriptionEquivalentCost > 0
-      ? 'Equivalente da API; nao e cobranca da assinatura.'
-      : undefined,
+    title: s.subscriptionEquivalentCost > 0 ? 'Equivalente da API; nao e cobranca da assinatura.' : undefined,
   }));
 
   const maxChartValue =
-    metrics.sprintMetrics.length > 0
-      ? Math.max(...metrics.sprintMetrics.map((s) => s.totalCost), 0.0001)
-      : 0.0001;
+    metrics.sprintMetrics.length > 0 ? Math.max(...metrics.sprintMetrics.map((s) => s.totalCost), 0.0001) : 0.0001;
 
   const unknownCostCount = metrics.unknownCostCount ?? 0;
 
@@ -321,33 +315,33 @@ export function MetricsView({ projectId }: MetricsViewProps) {
         <StatCard
           label="Custo total"
           value={formatTotalCost(metrics)}
-          sub={[
-            metrics.subscriptionEquivalentCost > 0
-              ? 'Equivalente da API; nao e cobranca da assinatura.'
-              : null,
-            unknownCostCount > 0
-              ? `${unknownCostCount} round${unknownCostCount !== 1 ? 's' : ''} com custo nao estimado`
-              : null,
-          ].filter(Boolean).join(' ') || undefined}
+          sub={
+            [
+              metrics.subscriptionEquivalentCost > 0 ? 'Equivalente da API; nao e cobranca da assinatura.' : null,
+              unknownCostCount > 0
+                ? `${unknownCostCount} round${unknownCostCount !== 1 ? 's' : ''} com custo nao estimado`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' ') || undefined
+          }
         />
         <StatCard label="Duracao total" value={formatDuration(metrics.totalDuration)} />
         <StatCard label="Total rounds" value={String(metrics.totalRounds)} />
         <PassRateCard rate={metrics.passRate} />
-        <StatCard label="Tokens total" value={formatTokens(metrics.totalTokens)} sub={`In: ${formatTokens(metrics.totalInputTokens)} / Out: ${formatTokens(metrics.totalOutputTokens)}`} />
+        <StatCard
+          label="Tokens total"
+          value={formatTokens(metrics.totalTokens)}
+          sub={`In: ${formatTokens(metrics.totalInputTokens)} / Out: ${formatTokens(metrics.totalOutputTokens)}`}
+        />
         <StatCard label="API requests" value={String(metrics.totalApiRequests)} />
       </div>
 
       {/* Cost bar chart per sprint */}
       {metrics.sprintMetrics.length > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-3">
-          <h3 className="text-xs text-zinc-500 uppercase tracking-wide">
-            Custo por sprint
-          </h3>
-          <MetricsChart
-            data={chartData}
-            maxValue={maxChartValue}
-            formatValue={formatCost}
-          />
+          <h3 className="text-xs text-zinc-500 uppercase tracking-wide">Custo por sprint</h3>
+          <MetricsChart data={chartData} maxValue={maxChartValue} formatValue={formatCost} />
         </div>
       )}
 

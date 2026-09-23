@@ -33,10 +33,7 @@ import {
   selectRenderedPhases,
 } from '@/components/dynamic-workflow/WorkflowProgressBar';
 import { aggregateRunMetrics } from '@/components/dynamic-workflow/WorkflowMetricsFooter';
-import {
-  selectStreamLayout,
-  type WorkflowNodeStreamState,
-} from '@/components/dynamic-workflow/WorkflowStreamView';
+import { selectStreamLayout, type WorkflowNodeStreamState } from '@/components/dynamic-workflow/WorkflowStreamView';
 import {
   summarizeNodeRuns,
   enforcementForRuntime,
@@ -76,7 +73,6 @@ vi.mock('@/lib/handoff-to-orchestrator', async (importOriginal) => {
 });
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
 
 function makeNodeRun(
   nodeId: string,
@@ -122,11 +118,7 @@ function makeNodeRun(
   };
 }
 
-function makeNode(
-  nodeId: string,
-  phaseId: string,
-  patch: Partial<DynamicWorkflowNode> = {},
-): DynamicWorkflowNode {
+function makeNode(nodeId: string, phaseId: string, patch: Partial<DynamicWorkflowNode> = {}): DynamicWorkflowNode {
   return {
     id: `def-node-${nodeId}`,
     definitionId: 'def-1',
@@ -189,7 +181,6 @@ function makeRun(patch: Partial<DynamicWorkflowRun> = {}): DynamicWorkflowRun {
   };
 }
 
-
 describe('derivacao fase/rodada a partir de node_runs (SPEC 13.7.6)', () => {
   it('parseRoundIndex extrai o sufixo -rN, ou null', () => {
     expect(parseRoundIndex('validator-spec-r0')).toBe(0);
@@ -199,9 +190,7 @@ describe('derivacao fase/rodada a partir de node_runs (SPEC 13.7.6)', () => {
   });
 
   it('derivePhaseDisplayStatus: completa quando todos os nodes da fase terminam', () => {
-    const runs = [
-      makeNodeRun('scout', 'map', 'completed'),
-    ];
+    const runs = [makeNodeRun('scout', 'map', 'completed')];
     expect(derivePhaseDisplayStatus('map', runs)).toBe('completed');
     expect(derivePhaseDisplayStatus('implement', runs)).toBe('pending');
   });
@@ -215,10 +204,7 @@ describe('derivacao fase/rodada a partir de node_runs (SPEC 13.7.6)', () => {
   });
 
   it('isLoopPhase detecta fase de loop pelo sufixo -rN dos node_runs (nao por nome)', () => {
-    const runs = [
-      makeNodeRun('validator-spec-r0', 'validate', 'completed'),
-      makeNodeRun('scout', 'map', 'completed'),
-    ];
+    const runs = [makeNodeRun('validator-spec-r0', 'validate', 'completed'), makeNodeRun('scout', 'map', 'completed')];
     expect(isLoopPhase('validate', runs)).toBe(true);
     expect(isLoopPhase('map', runs)).toBe(false);
   });
@@ -310,7 +296,6 @@ describe('derivacao fase/rodada a partir de node_runs (SPEC 13.7.6)', () => {
   });
 });
 
-
 describe('enforcementForRuntime (mecanismo de enforcement por node)', () => {
   it('cloud / zai / minimax-tp -> canUseTool in-process', () => {
     for (const rt of ['cloud', 'zai', 'minimax-tp']) {
@@ -348,7 +333,6 @@ describe('enforcementForRuntime (mecanismo de enforcement por node)', () => {
     expect(enforcementForRuntime('marciano')).toBeNull();
   });
 });
-
 
 describe('deriveSprintGroups (sec 9.5, sem regex)', () => {
   it('agrupa por sprintId EXPLICITO depois roundIndex (nao colapsa s0-r0/s1-r0)', () => {
@@ -394,18 +378,13 @@ describe('deriveSprintGroups (sec 9.5, sem regex)', () => {
   });
 
   it('sem metadata de sprint retorna []', () => {
-    const nodes = [
-      makeNode('validator-spec-r0', 'validate'),
-      makeNode('fix-r0', 'fix'),
-    ];
+    const nodes = [makeNode('validator-spec-r0', 'validate'), makeNode('fix-r0', 'fix')];
     const runs = [makeNodeRun('validator-spec-r0', 'validate', 'completed')];
     expect(deriveSprintGroups(nodes, runs)).toEqual([]);
   });
 
   it('node sem roundIndex (legado) cai na rodada 0 da sua sprint', () => {
-    const nodes = [
-      makeNode('coder-s0', 'Desenvolvimento', { sprintId: 's0', roundIndex: null }),
-    ];
+    const nodes = [makeNode('coder-s0', 'Desenvolvimento', { sprintId: 's0', roundIndex: null })];
     const runs = [makeNodeRun('coder-s0', 'Desenvolvimento', 'running')];
     const groups = deriveSprintGroups(nodes, runs);
     expect(groups).toHaveLength(1);
@@ -413,7 +392,6 @@ describe('deriveSprintGroups (sec 9.5, sem regex)', () => {
     expect(groups[0].status).toBe('running');
   });
 });
-
 
 describe('deriveCurrentSprintChip (F6 sec 5.2)', () => {
   it('aponta a sprint em curso e a rodada running (Sprint 2/2 - R1)', () => {
@@ -451,7 +429,6 @@ describe('deriveCurrentSprintChip (F6 sec 5.2)', () => {
   });
 });
 
-
 describe('tooltipAlign (SM-13: clamp do balao nas bordas)', () => {
   it('uma fase so centraliza', () => {
     expect(tooltipAlign(0, 1)).toBe('center');
@@ -473,16 +450,29 @@ describe('tooltipAlign (SM-13: clamp do balao nas bordas)', () => {
   });
 });
 
-
 describe('rail agrupado por fase (F6 sec 5.3)', () => {
   it('aggregateNodeMetrics soma tokens/tools/tempo/custo e usa o status da ultima', () => {
     const runs = [
-      makeNodeRun('coder', 'impl', 'failed', { attempt: 0, toolUses: 2, durationMs: 500, costUsd: 0.01, inputTokens: 100, outputTokens: 50 }),
-      makeNodeRun('coder', 'impl', 'completed', { attempt: 1, toolUses: 3, durationMs: 700, costUsd: 0.02, inputTokens: 200, outputTokens: 100 }),
+      makeNodeRun('coder', 'impl', 'failed', {
+        attempt: 0,
+        toolUses: 2,
+        durationMs: 500,
+        costUsd: 0.01,
+        inputTokens: 100,
+        outputTokens: 50,
+      }),
+      makeNodeRun('coder', 'impl', 'completed', {
+        attempt: 1,
+        toolUses: 3,
+        durationMs: 700,
+        costUsd: 0.02,
+        inputTokens: 200,
+        outputTokens: 100,
+      }),
     ];
     const m = aggregateNodeMetrics('coder', runs);
     expect(m.status).toBe('completed');
-    expect(m.tokens).toBe(450); // 150 + 300
+    expect(m.tokens).toBe(450);
     expect(m.toolUses).toBe(5);
     expect(m.durationMs).toBe(1200);
     expect(m.costUsd).toBeCloseTo(0.03, 5);
@@ -610,11 +600,10 @@ describe('rail agrupado por fase (F6 sec 5.3)', () => {
     const flat = groups.flatMap((g) => g.nodes);
     const coder = flat.find((n) => n.nodeId === 'coder');
     const val = flat.find((n) => n.nodeId === 'val');
-    expect(coder?.liveTokens).toBe(20); // 80/4
+    expect(coder?.liveTokens).toBe(20);
     expect(val?.liveTokens).toBe(0);
   });
 });
-
 
 describe('deriveNodeRunsFromEvents (eventos -> node_runs)', () => {
   it('extrai node_run de payload valido e ignora payload sem forma', () => {
@@ -633,9 +622,42 @@ describe('deriveNodeRunsFromEvents (eventos -> node_runs)', () => {
 
   it('reduz eventos para o ULTIMO node_run por nodeId+attempt', () => {
     const events = [
-      { id: 1, runId: 'run-1', nodeId: 'scout', phaseId: 'map', seq: 1, type: 'node-started', payloadJson: JSON.stringify({ nodeId: 'scout', attempt: 0, status: 'running', phaseId: 'map' }), createdAt: '' },
-      { id: 2, runId: 'run-1', nodeId: 'scout', phaseId: 'map', seq: 2, type: 'node-finished', payloadJson: JSON.stringify({ nodeId: 'scout', attempt: 0, status: 'completed', phaseId: 'map', costUsd: 0.02 }), createdAt: '' },
-      { id: 3, runId: 'run-1', nodeId: null, phaseId: null, seq: 3, type: 'gate-pending', payloadJson: JSON.stringify({ gate: 'final' }), createdAt: '' },
+      {
+        id: 1,
+        runId: 'run-1',
+        nodeId: 'scout',
+        phaseId: 'map',
+        seq: 1,
+        type: 'node-started',
+        payloadJson: JSON.stringify({ nodeId: 'scout', attempt: 0, status: 'running', phaseId: 'map' }),
+        createdAt: '',
+      },
+      {
+        id: 2,
+        runId: 'run-1',
+        nodeId: 'scout',
+        phaseId: 'map',
+        seq: 2,
+        type: 'node-finished',
+        payloadJson: JSON.stringify({
+          nodeId: 'scout',
+          attempt: 0,
+          status: 'completed',
+          phaseId: 'map',
+          costUsd: 0.02,
+        }),
+        createdAt: '',
+      },
+      {
+        id: 3,
+        runId: 'run-1',
+        nodeId: null,
+        phaseId: null,
+        seq: 3,
+        type: 'gate-pending',
+        payloadJson: JSON.stringify({ gate: 'final' }),
+        createdAt: '',
+      },
     ];
     const runs = deriveNodeRunsFromEvents('run-1', events);
     expect(runs).toHaveLength(1);
@@ -643,7 +665,6 @@ describe('deriveNodeRunsFromEvents (eventos -> node_runs)', () => {
     expect(runs[0].costUsd).toBeCloseTo(0.02, 5);
   });
 });
-
 
 describe('selectStreamLayout (SPEC 13.5 / AC-8)', () => {
   function streamState(nodeId: string, isStreaming: boolean): WorkflowNodeStreamState {
@@ -671,7 +692,6 @@ describe('selectStreamLayout (SPEC 13.5 / AC-8)', () => {
   });
 });
 
-
 describe('deriveManifestFromNodes (topologia da barra)', () => {
   it('reconstroi fases na ordem da primeira aparicao do phaseId', () => {
     const nodes = [
@@ -690,7 +710,6 @@ describe('deriveManifestFromNodes (topologia da barra)', () => {
     expect(deriveManifestFromNodes([])).toBeNull();
   });
 });
-
 
 describe('DynamicWorkflowRunView render (layout F6)', () => {
   let container: HTMLDivElement;
@@ -730,12 +749,37 @@ describe('DynamicWorkflowRunView render (layout F6)', () => {
       manifest: deriveManifestFromNodes(nodes),
       events: [],
       artifacts: [
-        { id: 'a1', runId: 'run-1', nodeId: 'coder', kind: 'delivery', path: '/tmp/run-1/delivery.md', sha256: 'deadbeefcafe', metadataJson: '{}', createdAt: '' },
+        {
+          id: 'a1',
+          runId: 'run-1',
+          nodeId: 'coder',
+          kind: 'delivery',
+          path: '/tmp/run-1/delivery.md',
+          sha256: 'deadbeefcafe',
+          metadataJson: '{}',
+          createdAt: '',
+        },
       ],
       snapshot: null,
       nodeStreams: {
-        'validator-spec-r1': { nodeId: 'validator-spec-r1', label: 'validator-spec-r1', status: 'running', text: 'analisando...', toolCalls: [], timeline: [], isStreaming: true },
-        'validator-tests-r1': { nodeId: 'validator-tests-r1', label: 'validator-tests-r1', status: 'running', text: 'rodando testes...', toolCalls: [], timeline: [], isStreaming: true },
+        'validator-spec-r1': {
+          nodeId: 'validator-spec-r1',
+          label: 'validator-spec-r1',
+          status: 'running',
+          text: 'analisando...',
+          toolCalls: [],
+          timeline: [],
+          isStreaming: true,
+        },
+        'validator-tests-r1': {
+          nodeId: 'validator-tests-r1',
+          label: 'validator-tests-r1',
+          status: 'running',
+          text: 'rodando testes...',
+          toolCalls: [],
+          timeline: [],
+          isStreaming: true,
+        },
       },
       selectedRoundIndex: null,
       closerThread: [],
@@ -782,8 +826,7 @@ describe('DynamicWorkflowRunView render (layout F6)', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     if (typeof Element.prototype.scrollIntoView !== 'function') {
-      Element.prototype.scrollIntoView = function scrollIntoViewStub(): void {
-      };
+      Element.prototype.scrollIntoView = function scrollIntoViewStub(): void {};
     }
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     (window as unknown as Record<string, unknown>).lionclaw = {
@@ -852,10 +895,7 @@ describe('DynamicWorkflowRunView render (layout F6)', () => {
   });
 
   it('RAIL agrupado por fase: grupos por fase/sprint + estado por sprint', () => {
-    const devNodes = [
-      makeNode('planner', 'Planejamento'),
-      makeNode('coder-s0', 'Desenvolvimento', { sprintId: 's0' }),
-    ];
+    const devNodes = [makeNode('planner', 'Planejamento'), makeNode('coder-s0', 'Desenvolvimento', { sprintId: 's0' })];
     useDynamicWorkflowStore.setState({
       selectedRunId: 'run-1',
       selectedRun: makeRun({ currentPhaseId: 'Desenvolvimento', worktreeBranch: 'dynworkflow/run-1' }),
@@ -882,9 +922,7 @@ describe('DynamicWorkflowRunView render (layout F6)', () => {
     });
     mount();
     expect(container.querySelector('[data-testid="rail-group-phase:Planejamento"]')).not.toBeNull();
-    expect(
-      container.querySelector('[data-testid="rail-group-phase:Desenvolvimento:sprint:s0"]'),
-    ).not.toBeNull();
+    expect(container.querySelector('[data-testid="rail-group-phase:Desenvolvimento:sprint:s0"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="rail-sprint-state"]')).not.toBeNull();
     expect(container.textContent).toContain('dynworkflow/run-1/s0');
     expect(consoleErrorSpy).not.toHaveBeenCalled();
@@ -930,9 +968,7 @@ describe('DynamicWorkflowRunView render (layout F6)', () => {
     const block = container.querySelector('[data-testid="cockpit-gate-decisions"]');
     expect(block).not.toBeNull();
     expect(
-      container.querySelector(
-        '[data-testid="cockpit-gate-decision-gate-plan-review-orchestrator"]',
-      ),
+      container.querySelector('[data-testid="cockpit-gate-decision-gate-plan-review-orchestrator"]'),
     ).not.toBeNull();
     expect(block?.textContent).toContain('orchestrator');
     expect(block?.textContent).toContain('approved');
@@ -958,34 +994,24 @@ describe('DynamicWorkflowRunView render (layout F6)', () => {
       pendingQuestion: { nodeId: 'coder', prompt: 'Qual porta usar?' },
     });
     mount();
-    const input = container.querySelector(
-      '[data-testid="question-reply-input"]',
-    ) as HTMLTextAreaElement;
+    const input = container.querySelector('[data-testid="question-reply-input"]') as HTMLTextAreaElement;
     expect(input).not.toBeNull();
-    const setter = Object.getOwnPropertyDescriptor(
-      window.HTMLTextAreaElement.prototype,
-      'value',
-    )?.set;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
     act(() => {
       setter?.call(input, 'use a porta 8080');
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    const sendBtn = container.querySelector(
-      '[data-testid="question-reply-send"]',
-    ) as HTMLButtonElement;
+    const sendBtn = container.querySelector('[data-testid="question-reply-send"]') as HTMLButtonElement;
     await act(async () => {
       sendBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    const ipc = (window as unknown as Record<string, { dynamicWorkflow: { sendMessage: ReturnType<typeof vi.fn> } }>).lionclaw;
+    const ipc = (window as unknown as Record<string, { dynamicWorkflow: { sendMessage: ReturnType<typeof vi.fn> } }>)
+      .lionclaw;
     expect(ipc.dynamicWorkflow.sendMessage).toHaveBeenCalledWith('run-1', 'use a porta 8080');
-    expect(ipc.dynamicWorkflow.sendMessage).not.toHaveBeenCalledWith(
-      'run-1',
-      'use a porta 8080',
-      ['__lionclaw_maestro_chat__'],
-    );
-    const inputAfter = container.querySelector(
-      '[data-testid="question-reply-input"]',
-    ) as HTMLTextAreaElement;
+    expect(ipc.dynamicWorkflow.sendMessage).not.toHaveBeenCalledWith('run-1', 'use a porta 8080', [
+      '__lionclaw_maestro_chat__',
+    ]);
+    const inputAfter = container.querySelector('[data-testid="question-reply-input"]') as HTMLTextAreaElement;
     expect(inputAfter.value).toBe('');
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
@@ -994,38 +1020,28 @@ describe('DynamicWorkflowRunView render (layout F6)', () => {
     useDynamicWorkflowStore.setState({
       pendingQuestion: { nodeId: 'coder', prompt: 'Qual porta usar?' },
     });
-    const ipc = (window as unknown as Record<string, { dynamicWorkflow: { sendMessage: ReturnType<typeof vi.fn> } }>).lionclaw;
+    const ipc = (window as unknown as Record<string, { dynamicWorkflow: { sendMessage: ReturnType<typeof vi.fn> } }>)
+      .lionclaw;
     ipc.dynamicWorkflow.sendMessage.mockResolvedValueOnce({ error: 'run nao encontrado' });
     mount();
-    const input = container.querySelector(
-      '[data-testid="question-reply-input"]',
-    ) as HTMLTextAreaElement;
-    const setter = Object.getOwnPropertyDescriptor(
-      window.HTMLTextAreaElement.prototype,
-      'value',
-    )?.set;
+    const input = container.querySelector('[data-testid="question-reply-input"]') as HTMLTextAreaElement;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
     act(() => {
       setter?.call(input, 'texto que deve sobreviver');
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
-    const sendBtn = container.querySelector(
-      '[data-testid="question-reply-send"]',
-    ) as HTMLButtonElement;
+    const sendBtn = container.querySelector('[data-testid="question-reply-send"]') as HTMLButtonElement;
     await act(async () => {
       sendBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    const inputAfter = container.querySelector(
-      '[data-testid="question-reply-input"]',
-    ) as HTMLTextAreaElement;
+    const inputAfter = container.querySelector('[data-testid="question-reply-input"]') as HTMLTextAreaElement;
     expect(inputAfter.value).toBe('texto que deve sobreviver');
     expect(useDynamicWorkflowStore.getState().error).toBe('run nao encontrado');
   });
 
   it('aba secundaria lazy Custo lista node/attempt e marca custo desconhecido', () => {
     useDynamicWorkflowStore.setState({
-      nodeRuns: [
-        makeNodeRun('scout', 'map', 'completed', { costStatus: 'unknown', costUsd: 0 }),
-      ],
+      nodeRuns: [makeNodeRun('scout', 'map', 'completed', { costStatus: 'unknown', costUsd: 0 })],
     });
     mount();
     clickTab('Custo');
@@ -1043,7 +1059,6 @@ describe('DynamicWorkflowRunView render (layout F6)', () => {
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 });
-
 
 describe('deriveGateViews (Inc3, funcao pura)', () => {
   function blockedEv(seq: number, payload: object): DynamicWorkflowEvent {
@@ -1101,24 +1116,23 @@ describe('deriveGateViews (Inc3, funcao pura)', () => {
     expect(gateChecks.find((c) => c.id === 'typecheck')?.ok).toBe(true);
     expect(gateChecks.find((c) => c.id === 'tests')?.ok).toBe(false);
     expect(gateFindings).toHaveLength(1);
-    expect(gateFindings[0]).toMatchObject({ severity: 'P1', where: 'foo.test.ts', problem: '2 testes vermelhos', fix: 'corrija o reducer' });
+    expect(gateFindings[0]).toMatchObject({
+      severity: 'P1',
+      where: 'foo.test.ts',
+      problem: '2 testes vermelhos',
+      fix: 'corrija o reducer',
+    });
   });
 
   it('ignora gate-blocked de gate diferente; sem gate-blocked retorna vazio', () => {
-    const events = [
-      blockedEv(1, { gateId: 'outro', checks: [{ id: 'x', ok: true }] }),
-    ];
+    const events = [blockedEv(1, { gateId: 'outro', checks: [{ id: 'x', ok: true }] })];
     expect(deriveGateViews(events, 'final')).toEqual({ gateChecks: [], gateFindings: [] });
     expect(deriveGateViews([], 'final')).toEqual({ gateChecks: [], gateFindings: [] });
   });
 });
 
-
 describe('deriveTouchedFiles (Inc1c, funcao pura)', () => {
-  function ns(
-    nodeId: string,
-    toolCalls: { toolName: string; detail?: string }[],
-  ): WorkflowNodeStreamState {
+  function ns(nodeId: string, toolCalls: { toolName: string; detail?: string }[]): WorkflowNodeStreamState {
     return { nodeId, label: nodeId, status: 'running', text: '', toolCalls, timeline: [], isStreaming: true };
   }
 
@@ -1143,10 +1157,18 @@ describe('deriveTouchedFiles (Inc1c, funcao pura)', () => {
   });
 });
 
-
 describe('findPendingOpenedAtMs (Inc6, funcao pura)', () => {
   function ev(seq: number, type: string, at: string): DynamicWorkflowEvent {
-    return { id: seq, runId: 'r', nodeId: null, phaseId: null, seq, type, payloadJson: '{}', createdAt: at } as DynamicWorkflowEvent;
+    return {
+      id: seq,
+      runId: 'r',
+      nodeId: null,
+      phaseId: null,
+      seq,
+      type,
+      payloadJson: '{}',
+      createdAt: at,
+    } as DynamicWorkflowEvent;
   }
 
   it('retorna o ms do ULTIMO evento que casa o predicado', () => {
@@ -1164,7 +1186,6 @@ describe('findPendingOpenedAtMs (Inc6, funcao pura)', () => {
     expect(findPendingOpenedAtMs(events, (t) => t.includes('question'))).toBeNull();
   });
 });
-
 
 describe('deriveRecoveryView: stall (Inc5)', () => {
   it('paused COM stall registrado vira cenario stall com o motivo', () => {
@@ -1185,7 +1206,6 @@ describe('deriveRecoveryView: stall (Inc5)', () => {
     expect(deriveRecoveryView(run, null, { message: 'x', at: 'now' }).scenario).toBe('none');
   });
 });
-
 
 describe('RecoveryBanner: cenario failed e recuperavel (SM-51)', () => {
   let container: HTMLDivElement;
@@ -1236,11 +1256,7 @@ describe('RecoveryBanner: cenario failed e recuperavel (SM-51)', () => {
   }
 
   function buttonByLabel(label: string): HTMLButtonElement | null {
-    return (
-      Array.from(container.querySelectorAll('button')).find(
-        (b) => b.textContent?.trim() === label,
-      ) ?? null
-    );
+    return Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.trim() === label) ?? null;
   }
 
   it('deriveRecoveryView do failed traz o motivo com Retomar como acao primaria', () => {
@@ -1350,7 +1366,6 @@ describe('RecoveryBanner: cenario failed e recuperavel (SM-51)', () => {
   });
 });
 
-
 describe('RunView liveness render (Inc1 placeholder + Inc7 narrador)', () => {
   let container: HTMLDivElement;
   let root: Root | null = null;
@@ -1367,8 +1382,7 @@ describe('RunView liveness render (Inc1 placeholder + Inc7 narrador)', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     if (typeof Element.prototype.scrollIntoView !== 'function') {
-      Element.prototype.scrollIntoView = function stub(): void {
-      };
+      Element.prototype.scrollIntoView = function stub(): void {};
     }
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     (window as unknown as Record<string, unknown>).lionclaw = {
@@ -1457,7 +1471,6 @@ describe('RunView liveness render (Inc1 placeholder + Inc7 narrador)', () => {
   });
 });
 
-
 describe('SM-33: orfaos pre-expandidos nao contaminam status de fase/sprint', () => {
   function makeSprintNodes(sprintIdx: number, maxRounds: number): DynamicWorkflowNode[] {
     const out: DynamicWorkflowNode[] = [];
@@ -1519,14 +1532,11 @@ describe('SM-33: orfaos pre-expandidos nao contaminam status de fase/sprint', ()
       makeNode('validator-r0', 'validate', { phaseId: 'validate' }),
       makeNode('fix-r0', 'validate', { phaseId: 'validate' }),
       makeNode('validator-r1', 'validate', { phaseId: 'validate' }), // orfao
-      makeNode('fix-r1', 'validate', { phaseId: 'validate' }),       // orfao
+      makeNode('fix-r1', 'validate', { phaseId: 'validate' }), // orfao
       makeNode('validator-r2', 'validate', { phaseId: 'validate' }), // orfao
-      makeNode('fix-r2', 'validate', { phaseId: 'validate' }),       // orfao
+      makeNode('fix-r2', 'validate', { phaseId: 'validate' }), // orfao
     ];
-    const runs = [
-      makeNodeRun('validator-r0', 'validate', 'completed'),
-      makeNodeRun('fix-r0', 'validate', 'completed'),
-    ];
+    const runs = [makeNodeRun('validator-r0', 'validate', 'completed'), makeNodeRun('fix-r0', 'validate', 'completed')];
     const noNodesStatus = derivePhaseDisplayStatus('validate', runs);
     expect(noNodesStatus).toBe('completed');
 
@@ -1539,7 +1549,7 @@ describe('SM-33: orfaos pre-expandidos nao contaminam status de fase/sprint', ()
       makeNode('coder-s0-r0', 'Desenvolvimento', { sprintId: 's0', roundIndex: 0 }),
       makeNode('fix-s0-r0', 'Desenvolvimento', { sprintId: 's0', roundIndex: 0 }),
       makeNode('coder-s0-r1', 'Desenvolvimento', { sprintId: 's0', roundIndex: 1 }), // orfao
-      makeNode('fix-s0-r1', 'Desenvolvimento', { sprintId: 's0', roundIndex: 1 }),   // orfao
+      makeNode('fix-s0-r1', 'Desenvolvimento', { sprintId: 's0', roundIndex: 1 }), // orfao
     ];
     const runs = [
       makeNodeRun('coder-s0-r0', 'Desenvolvimento', 'completed'),
@@ -1557,16 +1567,12 @@ describe('SM-33: orfaos pre-expandidos nao contaminam status de fase/sprint', ()
       makeNode('fix-r0', 'validate', { phaseId: 'validate' }),
       makeNode('validator-r1', 'validate', { phaseId: 'validate' }),
     ];
-    const runs = [
-      makeNodeRun('validator-r0', 'validate', 'running'),
-    ];
+    const runs = [makeNodeRun('validator-r0', 'validate', 'running')];
     expect(derivePhaseDisplayStatus('validate', runs, phaseNodes)).toBe('running');
   });
 
   it('deriveRailGroups: grupo de sprint convergida mostra "completed" no cockpit', () => {
-    const nodes = [
-      ...makeSprintNodes(0, 3),
-    ];
+    const nodes = [...makeSprintNodes(0, 3)];
     const manifest = deriveManifestFromNodes(nodes);
     const runs = [
       makeNodeRun('coder-s0-r0', 'Desenvolvimento', 'completed'),
@@ -1588,7 +1594,6 @@ describe('SM-33: orfaos pre-expandidos nao contaminam status de fase/sprint', ()
     expect(sprintGroup?.status).toBe('running');
   });
 });
-
 
 describe('SM-44: fase de Entrega + gates orfaos refletem delivered/completed', () => {
   function makeSprintNodes(sprintIdx: number, maxRounds: number): DynamicWorkflowNode[] {
@@ -1671,7 +1676,7 @@ describe('SM-44: fase de Entrega + gates orfaos refletem delivered/completed', (
   });
 
   it('deriveSprintGroups: run entregue forca skip de orfao mesmo sem outro node concluido', () => {
-    const nodes = makeSprintNodes(0, 2); // s0 r0/r1, todos orfaos (sem run)
+    const nodes = makeSprintNodes(0, 2);
     const groupsDelivered = deriveSprintGroups(nodes, [], 'delivered');
     expect(groupsDelivered).toHaveLength(1);
     expect(groupsDelivered[0].status).toBe('passed');
@@ -1743,13 +1748,12 @@ describe('SM-44: fase de Entrega + gates orfaos refletem delivered/completed', (
     const groups = deriveRailGroups(nodes, runs, manifest, {}, 'running');
     const sprint = groups.find((g) => g.sprintId === 's0');
     const ids = sprint?.nodes.map((n) => n.nodeId) ?? [];
-    expect(ids).toContain('coder-s0-r0'); // rodou -> aparece
-    expect(ids).not.toContain('coder-s0-r1'); // rodada futura nunca iniciada -> escondida
-    expect(ids).not.toContain('coder-s0-redev1-r0'); // redev nao disparado -> escondido
-    expect(ids).not.toContain('validator-0-s0-r0'); // nunca iniciou -> escondido
+    expect(ids).toContain('coder-s0-r0');
+    expect(ids).not.toContain('coder-s0-r1');
+    expect(ids).not.toContain('coder-s0-redev1-r0');
+    expect(ids).not.toContain('validator-0-s0-r0');
   });
 });
-
 
 describe('UX-layout reqs 4+8: fase de Entrega vira GATE (header PLAN->DEV)', () => {
   function phase(id: string, order: number): DynamicWorkflowManifestPhase {
@@ -1853,8 +1857,7 @@ describe('UX-layout: barra de fase removida do RunView (render)', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     if (typeof Element.prototype.scrollIntoView !== 'function') {
-      Element.prototype.scrollIntoView = function scrollIntoViewStub(): void {
-      };
+      Element.prototype.scrollIntoView = function scrollIntoViewStub(): void {};
     }
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     (window as unknown as Record<string, unknown>).lionclaw = {
@@ -1943,8 +1946,7 @@ describe('UX-layout E6.3: cockpit puro ocupa a tela (sem coluna de chat)', () =>
     container = document.createElement('div');
     document.body.appendChild(container);
     if (typeof Element.prototype.scrollIntoView !== 'function') {
-      Element.prototype.scrollIntoView = function scrollIntoViewStub(): void {
-      };
+      Element.prototype.scrollIntoView = function scrollIntoViewStub(): void {};
     }
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     (window as unknown as Record<string, unknown>).lionclaw = {
@@ -1979,7 +1981,6 @@ describe('UX-layout E6.3: cockpit puro ocupa a tela (sem coluna de chat)', () =>
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 });
-
 
 describe('HANDOFF: fim do run passa o contexto pro orquestrador (render + efeito)', () => {
   let container: HTMLDivElement;
@@ -2016,9 +2017,7 @@ describe('HANDOFF: fim do run passa o contexto pro orquestrador (render + efeito
       snapshot: null,
       nodeStreams: {},
       selectedRoundIndex: null,
-      closerThread: [
-        { id: 'c1', role: 'closer', content: 'Entrega pronta. Rode `npm install` e `npm run dev`.' },
-      ],
+      closerThread: [{ id: 'c1', role: 'closer', content: 'Entrega pronta. Rode `npm install` e `npm run dev`.' }],
       maestroThread: [],
       maestroBusyRunIds: new Set(),
       closerBusyRunIds: new Set(),
@@ -2031,8 +2030,7 @@ describe('HANDOFF: fim do run passa o contexto pro orquestrador (render + efeito
     } as Partial<ReturnType<typeof useDynamicWorkflowStore.getState>>);
     useAppStore.setState({
       currentPage: 'dynamic-workflow',
-      pendingChatMessage: null,
-      pendingChatAgent: null,
+      pendingChatByTarget: {},
     } as Partial<ReturnType<typeof useAppStore.getState>>);
   }
 
@@ -2047,16 +2045,12 @@ describe('HANDOFF: fim do run passa o contexto pro orquestrador (render + efeito
     container = document.createElement('div');
     document.body.appendChild(container);
     if (typeof Element.prototype.scrollIntoView !== 'function') {
-      Element.prototype.scrollIntoView = function stub(): void {
-      };
+      Element.prototype.scrollIntoView = function stub(): void {};
     }
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     handoffMock.handoffToOrchestrator.mockReset();
     handoffMock.handoffToOrchestrator.mockImplementation(
-      async (
-        _req: unknown,
-        beforeHandoff?: () => Promise<{ ok: true } | { error: string }>,
-      ) => {
+      async (_req: unknown, beforeHandoff?: () => Promise<{ ok: true } | { error: string }>) => {
         if (beforeHandoff) {
           const r = await beforeHandoff();
           if ('error' in r) return r;
@@ -2106,9 +2100,7 @@ describe('HANDOFF: fim do run passa o contexto pro orquestrador (render + efeito
   it('Encerrar: delega ao seam central com request (run.projectPath/run.baseBranch) + beforeHandoff = finalizeWorkflow', async () => {
     seedClosing('delivered');
     mount();
-    const btn = container.querySelector(
-      '[data-testid="handoff-to-orchestrator"]',
-    ) as HTMLButtonElement;
+    const btn = container.querySelector('[data-testid="handoff-to-orchestrator"]') as HTMLButtonElement;
     await act(async () => {
       btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -2117,8 +2109,7 @@ describe('HANDOFF: fim do run passa o contexto pro orquestrador (render + efeito
       await Promise.resolve();
     });
     expect(handoffMock.handoffToOrchestrator).toHaveBeenCalledTimes(1);
-    const [request, beforeHandoff] =
-      handoffMock.handoffToOrchestrator.mock.calls[0];
+    const [request, beforeHandoff] = handoffMock.handoffToOrchestrator.mock.calls[0];
     expect(request).toMatchObject({
       source: 'workflow',
       projectId: 'run-1',
@@ -2130,7 +2121,7 @@ describe('HANDOFF: fim do run passa o contexto pro orquestrador (render + efeito
     expect(typeof beforeHandoff).toBe('function');
     expect(finalizeWorkflowMock).toHaveBeenCalledWith('run-1');
     expect(useAppStore.getState().currentPage).toBe('chat');
-    expect(useAppStore.getState().pendingChatMessage).toBe('prompt-de-handoff');
+    expect(useAppStore.getState().pendingChatByTarget['sess-1']?.message).toBe('prompt-de-handoff');
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
@@ -2138,9 +2129,7 @@ describe('HANDOFF: fim do run passa o contexto pro orquestrador (render + efeito
     seedClosing('delivered');
     finalizeWorkflowMock.mockResolvedValueOnce({ error: 'falhou ao finalizar' });
     mount();
-    const btn = container.querySelector(
-      '[data-testid="handoff-to-orchestrator"]',
-    ) as HTMLButtonElement;
+    const btn = container.querySelector('[data-testid="handoff-to-orchestrator"]') as HTMLButtonElement;
     await act(async () => {
       btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -2150,7 +2139,7 @@ describe('HANDOFF: fim do run passa o contexto pro orquestrador (render + efeito
     });
     expect(finalizeWorkflowMock).toHaveBeenCalledWith('run-1');
     expect(useAppStore.getState().currentPage).not.toBe('chat');
-    expect(useAppStore.getState().pendingChatMessage).toBeNull();
+    expect(useAppStore.getState().pendingChatByTarget).toEqual({});
   });
 
   it('completed: handoff em somente leitura (preservado, nao deletado), sem botao de encerrar', () => {
@@ -2162,7 +2151,6 @@ describe('HANDOFF: fim do run passa o contexto pro orquestrador (render + efeito
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 });
-
 
 function authoredNodeRun(
   nodeId: string,
@@ -2228,10 +2216,31 @@ describe('S4 cockpit em run autorado (nodes: [] + nodeRuns; D20-D26)', () => {
   const structural: DynamicWorkflowEvent[] = [
     structuralEv(1, 'run-started', null, null, {}, '2026-09-02 04:29:00'),
     structuralEv(2, 'phase-changed', null, 'Documentos', { phase: 'Documentos' }, '2026-09-02 04:29:30'),
-    structuralEv(3, 'node-started', 'scout', 'Documentos', { attempt: 0, agentId: 'dynamic-workflow-scout' }, '2026-09-02 04:30:00'),
-    structuralEv(4, 'node-completed', 'scout', 'Documentos', { attempt: 0, agentId: 'dynamic-workflow-scout', costUsd: 0, durationMs: 60000 }, '2026-09-02 04:31:00'),
+    structuralEv(
+      3,
+      'node-started',
+      'scout',
+      'Documentos',
+      { attempt: 0, agentId: 'dynamic-workflow-scout' },
+      '2026-09-02 04:30:00',
+    ),
+    structuralEv(
+      4,
+      'node-completed',
+      'scout',
+      'Documentos',
+      { attempt: 0, agentId: 'dynamic-workflow-scout', costUsd: 0, durationMs: 60000 },
+      '2026-09-02 04:31:00',
+    ),
     structuralEv(5, 'phase-changed', null, 'Sprint 1', { phase: 'Sprint 1' }, '2026-09-02 04:39:00'),
-    structuralEv(6, 'node-started', CODER_ID, 'Sprint 1', { attempt: 0, agentId: 'dynamic-workflow-coder', label: 'u-s1-ac1', startedAt: '2026-09-02T04:40:00.000Z' }, '2026-09-02 04:40:00'),
+    structuralEv(
+      6,
+      'node-started',
+      CODER_ID,
+      'Sprint 1',
+      { attempt: 0, agentId: 'dynamic-workflow-coder', label: 'u-s1-ac1', startedAt: '2026-09-02T04:40:00.000Z' },
+      '2026-09-02 04:40:00',
+    ),
     structuralEv(
       7,
       'node-completed',
@@ -2251,7 +2260,14 @@ describe('S4 cockpit em run autorado (nodes: [] + nodeRuns; D20-D26)', () => {
       },
       '2026-09-02 04:42:52',
     ),
-    structuralEv(8, 'green-check', null, 'Sprint 1', { ok: false, inconclusive: false, redCount: 1 }, '2026-09-02 04:42:55'),
+    structuralEv(
+      8,
+      'green-check',
+      null,
+      'Sprint 1',
+      { ok: false, inconclusive: false, redCount: 1 },
+      '2026-09-02 04:42:55',
+    ),
   ];
 
   function seed(patch: Partial<ReturnType<typeof useDynamicWorkflowStore.getState>> = {}): void {
@@ -2304,8 +2320,7 @@ describe('S4 cockpit em run autorado (nodes: [] + nodeRuns; D20-D26)', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     if (typeof Element.prototype.scrollIntoView !== 'function') {
-      Element.prototype.scrollIntoView = function stub(): void {
-      };
+      Element.prototype.scrollIntoView = function stub(): void {};
     }
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     (window as unknown as Record<string, unknown>).lionclaw = {
@@ -2334,7 +2349,9 @@ describe('S4 cockpit em run autorado (nodes: [] + nodeRuns; D20-D26)', () => {
     mount();
     const labels = Array.from(container.querySelectorAll('button'))
       .map((b) => b.textContent?.trim() ?? '')
-      .filter((t) => ['Stream', 'Execucao', 'Custo', 'Saidas', 'Linha do tempo', 'Nodes', 'Artefatos', 'Manifest'].includes(t));
+      .filter((t) =>
+        ['Stream', 'Execucao', 'Custo', 'Saidas', 'Linha do tempo', 'Nodes', 'Artefatos', 'Manifest'].includes(t),
+      );
     expect(labels).toEqual(['Stream', 'Execucao', 'Custo', 'Saidas', 'Linha do tempo']);
   });
 
@@ -2371,7 +2388,15 @@ describe('S4 cockpit em run autorado (nodes: [] + nodeRuns; D20-D26)', () => {
     });
     const fields = container.querySelector('[data-testid="execution-environment-fields"]');
     expect(fields).not.toBeNull();
-    for (const label of ['Definition', 'Modo de workspace', 'Branch base', 'Commit base', 'Worktree', 'Ultimo checkpoint', 'Nodes']) {
+    for (const label of [
+      'Definition',
+      'Modo de workspace',
+      'Branch base',
+      'Commit base',
+      'Worktree',
+      'Ultimo checkpoint',
+      'Nodes',
+    ]) {
       expect(fields?.textContent).toContain(label);
     }
     expect(fields?.textContent).toContain('def-1');
@@ -2434,11 +2459,20 @@ describe('S4 cockpit em run autorado (nodes: [] + nodeRuns; D20-D26)', () => {
   it('D25c: com getRunBundle/openRunDir no preload, Saidas lista o pacote e oferece abrir a pasta', async () => {
     const getRunBundle = vi.fn(async () => [
       { name: 'workflow.js', relativePath: 'workflow.js', sizeBytes: 2048, mtime: '2026-09-02 04:20:00' },
-      { name: 'events.jsonl', relativePath: 'logs/events.jsonl', sizeBytes: 1024 * 1024 * 3, mtime: '2026-09-02 04:42:52' },
+      {
+        name: 'events.jsonl',
+        relativePath: 'logs/events.jsonl',
+        sizeBytes: 1024 * 1024 * 3,
+        mtime: '2026-09-02 04:42:52',
+      },
     ]);
     const openRunDir = vi.fn(async () => ({ ok: true as const }));
-    (window as unknown as Record<string, { dynamicWorkflow: Record<string, unknown> }>).lionclaw.dynamicWorkflow.getRunBundle = getRunBundle;
-    (window as unknown as Record<string, { dynamicWorkflow: Record<string, unknown> }>).lionclaw.dynamicWorkflow.openRunDir = openRunDir;
+    (
+      window as unknown as Record<string, { dynamicWorkflow: Record<string, unknown> }>
+    ).lionclaw.dynamicWorkflow.getRunBundle = getRunBundle;
+    (
+      window as unknown as Record<string, { dynamicWorkflow: Record<string, unknown> }>
+    ).lionclaw.dynamicWorkflow.openRunDir = openRunDir;
     mount();
     clickTab('Saidas');
     await act(async () => {
@@ -2610,14 +2644,22 @@ describe('S4 funcoes puras: deriveRailGroups fallback, deriveExecutionGroups, no
 
   it("findPendingOpenedAtMs le 'YYYY-MM-DD HH:MM:SS' como UTC (D22)", () => {
     const events: DynamicWorkflowEvent[] = [
-      { id: 1, runId: 'r', nodeId: null, phaseId: null, seq: 1, type: 'gate-blocked', payloadJson: '{}', createdAt: '2026-09-02 04:42:52' },
+      {
+        id: 1,
+        runId: 'r',
+        nodeId: null,
+        phaseId: null,
+        seq: 1,
+        type: 'gate-blocked',
+        payloadJson: '{}',
+        createdAt: '2026-09-02 04:42:52',
+      },
     ];
     expect(findPendingOpenedAtMs(events, (t) => t === 'gate-blocked')).toBe(Date.parse('2026-09-02T04:42:52.000Z'));
     const bad: DynamicWorkflowEvent[] = [{ ...events[0], createdAt: 'nao-e-data' }];
     expect(findPendingOpenedAtMs(bad, (t) => t === 'gate-blocked')).toBeNull();
   });
 });
-
 
 describe('WorkflowOutputsTab: contagem de arquivos tocados (dedup + so truncamento real)', () => {
   let container: HTMLDivElement;

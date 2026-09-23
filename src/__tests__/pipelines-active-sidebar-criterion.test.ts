@@ -31,9 +31,7 @@ describe('isActiveSidebarEntry', () => {
   });
 
   it('returns false when phaseStatus is pipeline-completed', () => {
-    expect(isActiveSidebarEntry({ isStreaming: false, phaseStatus: 'pipeline-completed' })).toBe(
-      false,
-    );
+    expect(isActiveSidebarEntry({ isStreaming: false, phaseStatus: 'pipeline-completed' })).toBe(false);
   });
 
   it('returns false when phaseStatus is idle', () => {

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const state = vi.hoisted(() => ({
@@ -57,16 +56,23 @@ vi.mock('../ask-question', () => ({ sendAskQuestion: vi.fn() }));
 
 import { initMcpInvoke, _resetMcpInvokeForTesting } from '../mcp-invoke';
 import { dispatch, type JsonRpcContext } from '../local-ipc/jsonrpc-methods';
+import { setActiveChatTurn } from '../chat-capability-context';
 
 const ctx: JsonRpcContext = { getWindow: () => null };
 
 function rpc(params: Record<string, unknown>) {
-  return dispatch(ctx, { jsonrpc: '2.0', id: 11, method: 'mcp_invoke', params });
+  return dispatch(ctx, {
+    jsonrpc: '2.0',
+    id: 11,
+    method: 'mcp_invoke',
+    params: { sessionId: 'sess-guard', turnId: 'turn-guard', ...params },
+  });
 }
 
 const SCHEMA = JSON.stringify({ type: 'object', properties: { path: { type: 'string' } } });
 
 beforeEach(() => {
+  setActiveChatTurn({ sessionId: 'sess-guard', lane: 'desktop', turnId: 'turn-guard' });
   vi.clearAllMocks();
   _resetMcpInvokeForTesting();
   state.bypass = true;

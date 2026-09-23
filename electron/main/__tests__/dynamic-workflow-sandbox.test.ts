@@ -1,4 +1,3 @@
-
 import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -10,12 +9,8 @@ import {
   type SandboxProcessHandle,
   type WorkflowSandboxResult,
 } from '../dynamic-workflows/workflow-sandbox';
-import type {
-  SandboxParentMessage,
-  SandboxChildMessage,
-} from '../dynamic-workflows/sandbox-protocol';
+import type { SandboxParentMessage, SandboxChildMessage } from '../dynamic-workflows/sandbox-protocol';
 import { normalizeAgentArgs } from '../dynamic-workflows/workflow-sandbox-child';
-
 
 interface FakeChild extends SandboxProcessHandle {
   readonly outbox: SandboxParentMessage[];
@@ -69,7 +64,6 @@ function childMsg(msg: SandboxChildMessage): SandboxChildMessage {
   return msg;
 }
 
-
 describe('AC-2.1: blast radius - wall timeout (loop infinito)', () => {
   it('estoura o wall timeout e o pai mata o filho, sobrevivendo', async () => {
     let captured: FakeChild | null = null;
@@ -98,7 +92,6 @@ describe('AC-2.1: blast radius - wall timeout (loop infinito)', () => {
     expect(typeof process.pid).toBe('number');
   });
 });
-
 
 describe('AC-2.1: blast radius - idle timeout (sem heartbeat)', () => {
   it('estoura o idle timeout quando o filho para de bater e o pai mata o filho', async () => {
@@ -156,7 +149,6 @@ describe('AC-2.1: blast radius - idle timeout (sem heartbeat)', () => {
   });
 });
 
-
 describe('AC-2.1: blast radius - crash do filho', () => {
   it('exit nao-zero antes do resultado vira erro tipado crash', async () => {
     let captured: FakeChild | null = null;
@@ -174,7 +166,7 @@ describe('AC-2.1: blast radius - crash do filho', () => {
 
     const child = captured as unknown as FakeChild;
     child.emit(childMsg({ t: 'hello', protocol: 1 }));
-    child.exit(1, null); // crash
+    child.exit(1, null);
 
     const result = await promise;
     expect(result.status).toBe('failed');
@@ -210,7 +202,6 @@ describe('AC-2.1: blast radius - crash do filho', () => {
     }
   });
 });
-
 
 describe('protocolo allowlist (SPEC 8.0 P0)', () => {
   it('mensagem fora do protocolo mata o filho', async () => {
@@ -300,7 +291,6 @@ describe('protocolo allowlist (SPEC 8.0 P0)', () => {
     await promise;
   });
 });
-
 
 describe('host API e guards de primitiva', () => {
   it('roteia call -> handler -> primitive-result', async () => {
@@ -399,7 +389,6 @@ describe('host API e guards de primitiva', () => {
     await promise;
   });
 });
-
 
 describe('ctx.input no run message (sec 6; autonomy fora do fio)', () => {
   it('forwarda input no run message quando presente, SEM campo autonomy (removido do fio)', async () => {
@@ -511,7 +500,6 @@ describe('ctx.input no run message (sec 6; autonomy fora do fio)', () => {
   });
 });
 
-
 const tmpFiles: string[] = [];
 function writeTmpChild(name: string, contents: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-wf-sandbox-'));
@@ -526,8 +514,7 @@ afterEach(() => {
     const f = tmpFiles.pop();
     try {
       if (f) fs.rmSync(path.dirname(f), { recursive: true, force: true });
-    } catch {
-    }
+    } catch {}
   }
 });
 
@@ -584,7 +571,7 @@ process.on('message', (m) => {
       expect(value.results['typeof require']).toBe('undefined');
       expect(value.results['typeof globalThis.process']).toBe('undefined');
       expect(value.results['typeof Buffer']).toBe('undefined');
-      expect(value.fsReachable).toBe(false); // sem require, fs e inalcancavel
+      expect(value.fsReachable).toBe(false);
     }
   });
 
@@ -733,7 +720,6 @@ process.on('message', (m) => {
   });
 });
 
-
 describe('F1b: normalizeAgentArgs (assinatura dupla do agent)', () => {
   it('agent(prompt, opts) -> { prompt, ...opts }', () => {
     const out = normalizeAgentArgs(['faca X', { agentType: 'typescript-pro', label: 'coder', schema: 's' }]);
@@ -864,7 +850,6 @@ describe('F1b: o arg normalizado de agent cruza o protocolo ate o host (e nao ma
     await promise;
   });
 });
-
 
 describe('D11: wallTimeoutMs opcional em runWorkflowSandbox', () => {
   it('AUSENTE: o filho sobrevive alem de qualquer teto curto e conclui normalmente (idle continua armado)', async () => {

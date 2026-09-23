@@ -14,9 +14,7 @@ type PresetId = OpenAiCompatiblePreset;
 export function OpenAiCompatSubPanel({ onComplete }: OpenAiCompatSubPanelProps) {
   const initialPreset = OPENAI_COMPATIBLE_PRESETS.find((p) => p.id === 'kimi');
   const [presetId, setPresetId] = useState<PresetId>('kimi');
-  const [baseUrl, setBaseUrl] = useState<string>(
-    initialPreset?.baseUrl ?? '',
-  );
+  const [baseUrl, setBaseUrl] = useState<string>(initialPreset?.baseUrl ?? '');
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [model, setModel] = useState(initialPreset?.defaultModel ?? '');
@@ -29,8 +27,7 @@ export function OpenAiCompatSubPanel({ onComplete }: OpenAiCompatSubPanelProps) 
   const selectedModel = modelOptions.find((entry) => entry.id === model);
   const isCustomPreset = presetId === 'custom';
 
-  const canContinue =
-    apiKey.trim() !== '' && baseUrl.trim() !== '' && model.trim() !== '' && !isSubmitting;
+  const canContinue = apiKey.trim() !== '' && baseUrl.trim() !== '' && model.trim() !== '' && !isSubmitting;
 
   const handlePresetChange = (id: PresetId) => {
     setPresetId(id);
@@ -57,9 +54,7 @@ export function OpenAiCompatSubPanel({ onComplete }: OpenAiCompatSubPanelProps) 
       } else {
         setTestStatus('fail');
         const msg =
-          result && typeof result === 'object' && 'error' in result
-            ? String(result.error)
-            : 'Falha ao conectar.';
+          result && typeof result === 'object' && 'error' in result ? String(result.error) : 'Falha ao conectar.';
         setTestMessage(msg);
       }
     } catch (e) {
@@ -122,9 +117,7 @@ export function OpenAiCompatSubPanel({ onComplete }: OpenAiCompatSubPanelProps) 
           placeholder={presetId === 'custom' ? 'https://api.exemplo.com' : ''}
           autoComplete="off"
         />
-        {!isCustomPreset && (
-          <p className="text-xs text-zinc-600 mt-1">Pre-preenchido pelo preset. Editavel.</p>
-        )}
+        {!isCustomPreset && <p className="text-xs text-zinc-600 mt-1">Pre-preenchido pelo preset. Editavel.</p>}
       </div>
 
       {/* API Key */}
@@ -149,9 +142,7 @@ export function OpenAiCompatSubPanel({ onComplete }: OpenAiCompatSubPanelProps) 
             {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         </div>
-        <p className="text-xs text-zinc-600 mt-1.5">
-          Armazenada no keychain do SO, nunca em plaintext.
-        </p>
+        <p className="text-xs text-zinc-600 mt-1.5">Armazenada no keychain do SO, nunca em plaintext.</p>
       </div>
 
       {/* Modelo */}
@@ -186,9 +177,7 @@ export function OpenAiCompatSubPanel({ onComplete }: OpenAiCompatSubPanelProps) 
             ? 'Use apenas quando o provedor nao estiver na lista.'
             : `Slug enviado: ${model || 'selecione um modelo'}`}
         </p>
-        {selectedModel?.notes && (
-          <p className="text-xs text-zinc-500 mt-1 leading-snug">{selectedModel.notes}</p>
-        )}
+        {selectedModel?.notes && <p className="text-xs text-zinc-500 mt-1 leading-snug">{selectedModel.notes}</p>}
       </div>
 
       {/* Botao testar */}

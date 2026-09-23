@@ -6,9 +6,7 @@ export const PERM_BYPASS_NO_GUARD: AgentPermissionProfile = {
   dangerouslySkipPermissions: true,
 };
 
-export const PERM_DEFAULT_WITH_GUARD = (
-  guard: CanUseTool,
-): AgentPermissionProfile => ({
+export const PERM_DEFAULT_WITH_GUARD = (guard: CanUseTool): AgentPermissionProfile => ({
   mode: 'default',
   dangerouslySkipPermissions: false,
   canUseTool: guard,

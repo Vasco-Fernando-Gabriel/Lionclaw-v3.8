@@ -1,4 +1,3 @@
-
 import { spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
@@ -41,8 +40,7 @@ export async function resolveKimiBinary(): Promise<string | null> {
     if (settingPath && fs.existsSync(settingPath)) {
       return settingPath;
     }
-  } catch {
-  }
+  } catch {}
   try {
     return await which('kimi');
   } catch {
@@ -84,8 +82,7 @@ async function resolveKimiVersion(binary: string): Promise<string | null> {
       const timer = setTimeout(() => {
         try {
           proc.kill();
-        } catch {
-        }
+        } catch {}
         resolve(null);
       }, 5000);
 
@@ -120,13 +117,27 @@ export function ensureKimiHome(): string {
 }
 
 const KIMI_CHILD_ENV_KEYS = new Set([
-  'PATH', 'HOME', 'USERPROFILE', 'SystemRoot', 'WINDIR', 'ComSpec', 'PATHEXT',
-  'TEMP', 'TMP', 'TMPDIR', 'LANG', 'LANGUAGE', 'LC_ALL', 'LC_CTYPE',
-  'APPDATA', 'LOCALAPPDATA', 'XDG_RUNTIME_DIR', 'SSL_CERT_FILE', 'SSL_CERT_DIR',
+  'PATH',
+  'HOME',
+  'USERPROFILE',
+  'SystemRoot',
+  'WINDIR',
+  'ComSpec',
+  'PATHEXT',
+  'TEMP',
+  'TMP',
+  'TMPDIR',
+  'LANG',
+  'LANGUAGE',
+  'LC_ALL',
+  'LC_CTYPE',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'XDG_RUNTIME_DIR',
+  'SSL_CERT_FILE',
+  'SSL_CERT_DIR',
 ]);
-const KIMI_PROXY_ENV_KEYS = new Set([
-  'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy',
-]);
+const KIMI_PROXY_ENV_KEYS = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy']);
 
 export interface BuildKimiChildEnvOptions {
   baseEnv?: NodeJS.ProcessEnv | Record<string, string>;
@@ -185,8 +196,10 @@ function hasOfficialKimiCredentials(home: string): boolean {
   if (!fs.existsSync(credentialsPath)) return false;
   try {
     const value = JSON.parse(fs.readFileSync(credentialsPath, 'utf8')) as Record<string, unknown>;
-    return (typeof value['access_token'] === 'string' && value['access_token'].length > 0)
-      || (typeof value['refresh_token'] === 'string' && value['refresh_token'].length > 0);
+    return (
+      (typeof value['access_token'] === 'string' && value['access_token'].length > 0) ||
+      (typeof value['refresh_token'] === 'string' && value['refresh_token'].length > 0)
+    );
   } catch {
     return false;
   }
@@ -203,16 +216,15 @@ export function inspectKimiManagedConfig(home: string = resolveKimiHome()): Kimi
     }
   }
   const oauthBody = sectionBody(content, '[providers."managed:kimi-code".oauth]');
-  const hasLegacyOauthReference = oauthBody !== null &&
-    /^\s*(?:key|access_token|refresh_token)\s*=\s*"[^"]+"\s*$/m.test(oauthBody);
+  const hasLegacyOauthReference =
+    oauthBody !== null && /^\s*(?:key|access_token|refresh_token)\s*=\s*"[^"]+"\s*$/m.test(oauthBody);
   const authenticated = hasOfficialKimiCredentials(home) || hasLegacyOauthReference;
-  const configuredModels = KIMI_MODELS
-    .filter((model) => configuredManagedModel(content, model.slug))
-    .map((model) => model.slug);
+  const configuredModels = KIMI_MODELS.filter((model) => configuredManagedModel(content, model.slug)).map(
+    (model) => model.slug,
+  );
 
-  const availableModels = authenticated && configuredModels.length === 0
-    ? KIMI_MODELS.map((model) => model.slug)
-    : configuredModels;
+  const availableModels =
+    authenticated && configuredModels.length === 0 ? KIMI_MODELS.map((model) => model.slug) : configuredModels;
   return {
     authenticated,
     managedProviderVerified: authenticated,
@@ -227,9 +239,7 @@ export function detectKimiLoginFromConfig(home: string = resolveKimiHome()): boo
 export async function isKimiAvailable(model?: string): Promise<KimiAvailability> {
   const binary = await resolveKimiBinary();
   const config = inspectKimiManagedConfig(resolveKimiHome());
-  const modelAvailable = model
-    ? config.availableModels.includes(model)
-    : config.availableModels.length > 0;
+  const modelAvailable = model ? config.availableModels.includes(model) : config.availableModels.length > 0;
   const authenticated = config.authenticated;
 
   if (!binary) {

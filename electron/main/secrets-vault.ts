@@ -9,9 +9,9 @@ import { getLionClawHome } from './paths';
 const logger = createLogger('secrets');
 const SERVICE_NAME = 'LionClaw';
 const KEYTAR_TIMEOUT_MS = 3000;
+export const KEYTAR_MAX_SECRET_BYTES = 2500;
 const SECRETS_FILE_DIR = path.join(getLionClawHome(), 'data');
 const SECRETS_FILE_PATH = path.join(SECRETS_FILE_DIR, '.secrets');
-
 
 let cachedEncryptionKey: Buffer | null = null;
 
@@ -32,15 +32,13 @@ interface EncryptedStore {
 }
 
 type SecretStoreReadResult =
-  | { status: 'ok'; store: EncryptedStore }
-  | { status: 'error'; reason: string; backupPath: string | null };
+  { status: 'ok'; store: EncryptedStore } | { status: 'error'; reason: string; backupPath: string | null };
 
 export type SecretNonInteractiveResult =
   | { status: 'found'; value: string }
   | { status: 'absent' }
   | { status: 'error'; code: 'VAULT-CORRUPT'; reason: string; backupPath: string | null }
   | { status: 'error'; code: 'SECRET-UNREADABLE'; reason: string };
-
 
 export interface SecretsHealth {
   keytarDegraded: boolean;
@@ -140,7 +138,6 @@ function decryptValue(entry: { iv: string; authTag: string; ciphertext: string }
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
 }
 
-
 function fileSetSecret(key: string, value: string): void {
   const store = readSecretStore();
   store[key] = encryptValue(value);
@@ -159,11 +156,8 @@ function fileDeleteSecret(key: string): void {
   unreadableSecrets.delete(key);
 }
 
-
 function keytarTimeout(): Promise<never> {
-  return new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('keytar timed out')), KEYTAR_TIMEOUT_MS),
-  );
+  return new Promise((_, reject) => setTimeout(() => reject(new Error('keytar timed out')), KEYTAR_TIMEOUT_MS));
 }
 
 async function keytarGet(key: string): Promise<string | null> {
@@ -177,7 +171,6 @@ async function keytarSet(key: string, value: string): Promise<void> {
 async function keytarDelete(key: string): Promise<void> {
   await Promise.race([keytar.deletePassword(SERVICE_NAME, key), keytarTimeout()]);
 }
-
 
 export async function getSecretNonInteractive(key: string): Promise<SecretNonInteractiveResult> {
   const storeResult = readSecretStoreResult();
@@ -227,19 +220,13 @@ export async function getSecret(key: string): Promise<string | null> {
       try {
         fileSetSecret(key, value);
       } catch (fileError) {
-        logger.warn(
-          { key, fileError },
-          'secrets-file: failed to mirror legacy Keychain secret',
-        );
+        logger.warn({ key, fileError }, 'secrets-file: failed to mirror legacy Keychain secret');
       }
     }
     return value;
   } catch (error) {
     keytarDegraded = true;
-    logger.warn(
-      { key, error, code: 'KEYTAR-DEGRADED' },
-      'keytar unavailable for get, falling back to encrypted file',
-    );
+    logger.warn({ key, error, code: 'KEYTAR-DEGRADED' }, 'keytar unavailable for get, falling back to encrypted file');
   }
 
   return null;
@@ -247,18 +234,26 @@ export async function getSecret(key: string): Promise<string | null> {
 
 export async function setSecret(key: string, value: string): Promise<void> {
   let keytarOk = false;
+  const bytes = Buffer.byteLength(value, 'utf8');
 
-  try {
-    await keytarSet(key, value);
-    keytarOk = true;
-    keytarDegraded = false;
-    logger.info({ key }, 'keytar: secret stored');
-  } catch (error) {
-    keytarDegraded = true;
-    logger.warn(
-      { key, error, code: 'KEYTAR-DEGRADED' },
-      'keytar unavailable for set, falling back to encrypted file',
+  if (bytes > KEYTAR_MAX_SECRET_BYTES) {
+    logger.info(
+      { key, bytes, limit: KEYTAR_MAX_SECRET_BYTES },
+      'secret acima do limite do keychain; so no arquivo criptografado',
     );
+  } else {
+    try {
+      await keytarSet(key, value);
+      keytarOk = true;
+      keytarDegraded = false;
+      logger.info({ key }, 'keytar: secret stored');
+    } catch (error) {
+      keytarDegraded = true;
+      logger.warn(
+        { key, error, code: 'KEYTAR-DEGRADED' },
+        'keytar unavailable for set, falling back to encrypted file',
+      );
+    }
   }
 
   try {
@@ -279,10 +274,7 @@ export async function deleteSecret(key: string): Promise<void> {
     logger.info({ key }, 'keytar: secret deleted');
   } catch (error) {
     keytarDegraded = true;
-    logger.warn(
-      { key, error, code: 'KEYTAR-DEGRADED' },
-      'keytar unavailable for delete, proceeding with file cleanup',
-    );
+    logger.warn({ key, error, code: 'KEYTAR-DEGRADED' }, 'keytar unavailable for delete, proceeding with file cleanup');
   }
 
   try {

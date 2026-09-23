@@ -1,4 +1,3 @@
-
 import type { KimiMcpBridge } from './mcp-http-bridge';
 import { createLogger } from '../logger';
 
@@ -40,7 +39,6 @@ export class KimiBridgeRegistry {
     this.bridges.clear();
   }
 }
-
 
 let cachedRegistry: KimiBridgeRegistry | null = null;
 

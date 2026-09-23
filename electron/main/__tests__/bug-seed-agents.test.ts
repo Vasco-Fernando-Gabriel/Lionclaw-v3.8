@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
@@ -17,7 +16,6 @@ import {
 } from '../seed-agents';
 import { applyMigrationV143, __V143_INTERNAL } from '../db-migrations/v143-bug-pipeline';
 import { LATEST_SCHEMA_VERSION } from '../db-migration-safety';
-
 
 const BUG_IDS = [
   'bug-discovery',
@@ -115,11 +113,8 @@ interface AgentRow {
 }
 
 function readBugRows(db: Database.Database): AgentRow[] {
-  return db
-    .prepare("SELECT * FROM agents WHERE id LIKE 'bug-%' ORDER BY id")
-    .all() as AgentRow[];
+  return db.prepare("SELECT * FROM agents WHERE id LIKE 'bug-%' ORDER BY id").all() as AgentRow[];
 }
-
 
 describe('B-AC2/TB-19 - os 6 seed agents do Bug Pipe no registry', () => {
   it('os 6 ids estao em ALL_SEED_AGENTS, cada um exatamente uma vez', () => {
@@ -134,20 +129,17 @@ describe('B-AC2/TB-19 - os 6 seed agents do Bug Pipe no registry', () => {
     expect(BUG_SEED_AGENTS.map((a) => a.id).sort()).toEqual([...BUG_IDS].sort());
   });
 
-  it.each([...BUG_IDS])(
-    '%s: squad pipeline, description/systemPrompt nao-vazios e mcpServers vazio (D23)',
-    (id) => {
-      const seed = ALL_SEED_AGENTS.find((a) => a.id === id);
-      expect(seed).toBeDefined();
-      expect(seed!.squad).toBe('pipeline');
-      expect(seed!.description.trim().length).toBeGreaterThan(0);
-      expect(seed!.systemPrompt.trim().length).toBeGreaterThan(0);
-      expect(seed!.mcpServers).toEqual([]);
-      expect(seed!.mcpServers.length).toBe(0);
-      expect(seed!.runtime).toBe('cloud');
-      expect(seed!.isActive).toBe(true);
-    },
-  );
+  it.each([...BUG_IDS])('%s: squad pipeline, description/systemPrompt nao-vazios e mcpServers vazio (D23)', (id) => {
+    const seed = ALL_SEED_AGENTS.find((a) => a.id === id);
+    expect(seed).toBeDefined();
+    expect(seed!.squad).toBe('pipeline');
+    expect(seed!.description.trim().length).toBeGreaterThan(0);
+    expect(seed!.systemPrompt.trim().length).toBeGreaterThan(0);
+    expect(seed!.mcpServers).toEqual([]);
+    expect(seed!.mcpServers.length).toBe(0);
+    expect(seed!.runtime).toBe('cloud');
+    expect(seed!.isActive).toBe(true);
+  });
 
   it('os 3 ANALISTAS da fase 2 NAO tem Write/Edit (quem grava e o runner)', () => {
     for (const seed of ANALYSTS) {
@@ -166,11 +158,11 @@ describe('B-AC2/TB-19 - os 6 seed agents do Bug Pipe no registry', () => {
 
   it('modelo/effort/thinking batem com a tabela da secao 4.3', () => {
     const expected: Record<string, { model: string; budget: number; turns: number; rounds: number }> = {
-      'bug-discovery': { model: 'claude-opus-4-7', budget: 8000, turns: 80, rounds: 25 },
-      'bug-root-cause-analyst': { model: 'claude-opus-4-7', budget: 10000, turns: 80, rounds: 30 },
-      'bug-context-historian': { model: 'claude-opus-4-7', budget: 10000, turns: 80, rounds: 30 },
-      'bug-hypothesis-refuter': { model: 'claude-opus-4-7', budget: 10000, turns: 80, rounds: 30 },
-      'bug-solution-consolidator': { model: 'claude-opus-4-7', budget: 8000, turns: 100, rounds: 25 },
+      'bug-discovery': { model: 'claude-opus-5-5', budget: 8000, turns: 80, rounds: 25 },
+      'bug-root-cause-analyst': { model: 'claude-opus-5-5', budget: 10000, turns: 80, rounds: 30 },
+      'bug-context-historian': { model: 'claude-opus-5-5', budget: 10000, turns: 80, rounds: 30 },
+      'bug-hypothesis-refuter': { model: 'claude-opus-5-5', budget: 10000, turns: 80, rounds: 30 },
+      'bug-solution-consolidator': { model: 'claude-opus-5-5', budget: 8000, turns: 100, rounds: 25 },
       'bug-spec-validator': { model: 'claude-sonnet-4-6', budget: 6000, turns: 80, rounds: 25 },
     };
     for (const seed of BUG_SEED_AGENTS) {
@@ -206,7 +198,6 @@ describe('B-AC2/TB-19 - os 6 seed agents do Bug Pipe no registry', () => {
     }
   });
 });
-
 
 describe('TB-8/B-AC4 - as 3 lentes sao genuinamente distintas (D11)', () => {
   it('SANIDADE: nenhuma ancora existe nos blocos compartilhados de _shared/*', () => {
@@ -253,9 +244,7 @@ describe('TB-8/B-AC4 - as 3 lentes sao genuinamente distintas (D11)', () => {
   it('assert NEGATIVO: nenhuma ancora aparece nos outros 3 agentes do pipe', () => {
     for (const seed of NON_ANALYSTS) {
       for (const needle of ALL_NEEDLES) {
-        expect(`${seed.id}:${needle}:${seed.systemPrompt.includes(needle)}`).toBe(
-          `${seed.id}:${needle}:false`,
-        );
+        expect(`${seed.id}:${needle}:${seed.systemPrompt.includes(needle)}`).toBe(`${seed.id}:${needle}:false`);
       }
     }
   });
@@ -268,7 +257,6 @@ describe('TB-8/B-AC4 - as 3 lentes sao genuinamente distintas (D11)', () => {
     }
   });
 });
-
 
 describe('TB-30 - R10: os 6 seeds existem no .ts E na V143', () => {
   it('a V143 insere exatamente os 6 ids do registry', () => {
@@ -312,11 +300,10 @@ describe('TB-30 - R10: os 6 seeds existem no .ts E na V143', () => {
   });
 });
 
-
 describe('TB-29 - V143 aplica em DB existente e e idempotente', () => {
-  it('LATEST_SCHEMA_VERSION acompanha a maior migration (>= 143, hoje 151)', () => {
+  it('LATEST_SCHEMA_VERSION acompanha a maior migration (>= 143, hoje 153)', () => {
     expect(LATEST_SCHEMA_VERSION).toBeGreaterThanOrEqual(143);
-    expect(LATEST_SCHEMA_VERSION).toBe(151);
+    expect(LATEST_SCHEMA_VERSION).toBe(153);
   });
 
   it('a V143 esta plugada no runner de db.ts (import + gate + INSERT da versao)', () => {
@@ -329,9 +316,13 @@ describe('TB-29 - V143 aplica em DB existente e e idempotente', () => {
 
   it('aplica em DB EXISTENTE (com agents ja populados) sem lancar', () => {
     const db = makeDb();
-    db.prepare(
-      "INSERT INTO agents (id, name, description, system_prompt, squad) VALUES (?, ?, ?, ?, ?)",
-    ).run('harness-coder', 'Harness Coder', 'legado', 'prompt legado', 'harness');
+    db.prepare('INSERT INTO agents (id, name, description, system_prompt, squad) VALUES (?, ?, ?, ?, ?)').run(
+      'harness-coder',
+      'Harness Coder',
+      'legado',
+      'prompt legado',
+      'harness',
+    );
     expect(() => applyMigrationV143(db)).not.toThrow();
     expect(readBugRows(db)).toHaveLength(6);
     const legacy = db.prepare("SELECT system_prompt FROM agents WHERE id = 'harness-coder'").get() as {
@@ -343,9 +334,13 @@ describe('TB-29 - V143 aplica em DB existente e e idempotente', () => {
 
   it('INSERT OR IGNORE: customizacao do usuario num id bug-* sobrevive', () => {
     const db = makeDb();
-    db.prepare(
-      "INSERT INTO agents (id, name, description, system_prompt, squad) VALUES (?, ?, ?, ?, ?)",
-    ).run('bug-discovery', 'Meu Discovery', 'custom', 'PROMPT CUSTOMIZADO', 'pipeline');
+    db.prepare('INSERT INTO agents (id, name, description, system_prompt, squad) VALUES (?, ?, ?, ?, ?)').run(
+      'bug-discovery',
+      'Meu Discovery',
+      'custom',
+      'PROMPT CUSTOMIZADO',
+      'pipeline',
+    );
     applyMigrationV143(db);
     const row = db.prepare("SELECT * FROM agents WHERE id = 'bug-discovery'").get() as AgentRow;
     expect(row.system_prompt).toBe('PROMPT CUSTOMIZADO');
@@ -368,9 +363,9 @@ describe('TB-29 - V143 aplica em DB existente e e idempotente', () => {
   it('cria bug_analysis_agent_status com as colunas da secao 4.7.1 (a)', () => {
     const db = makeDb();
     applyMigrationV143(db);
-    const cols = (
-      db.prepare('PRAGMA table_info(bug_analysis_agent_status)').all() as { name: string }[]
-    ).map((c) => c.name);
+    const cols = (db.prepare('PRAGMA table_info(bug_analysis_agent_status)').all() as { name: string }[]).map(
+      (c) => c.name,
+    );
     expect(cols).toEqual([
       'id',
       'project_id',
@@ -423,16 +418,16 @@ describe('TB-29 - V143 aplica em DB existente e e idempotente', () => {
         insert.run('p1', 'run-1', seed.id, seed.name, seed.id.replace(/^bug-/, ''));
       }
     }
-    const count = db
-      .prepare("SELECT COUNT(*) AS n FROM bug_analysis_agent_status WHERE project_id = 'p1'")
-      .get() as { n: number };
+    const count = db.prepare("SELECT COUNT(*) AS n FROM bug_analysis_agent_status WHERE project_id = 'p1'").get() as {
+      n: number;
+    };
     expect(count.n).toBe(3);
     for (const seed of ANALYSTS) {
       insert.run('p1', 'run-2', seed.id, seed.name, seed.id.replace(/^bug-/, ''));
     }
-    const after = db
-      .prepare("SELECT COUNT(*) AS n FROM bug_analysis_agent_status WHERE project_id = 'p1'")
-      .get() as { n: number };
+    const after = db.prepare("SELECT COUNT(*) AS n FROM bug_analysis_agent_status WHERE project_id = 'p1'").get() as {
+      n: number;
+    };
     expect(after.n).toBe(6);
     db.close();
   });

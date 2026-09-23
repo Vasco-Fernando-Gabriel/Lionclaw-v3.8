@@ -1,7 +1,5 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AgentExecutionResult } from '../agent-runtime/types';
-
 
 const H = vi.hoisted(() => {
   type Rt = 'cloud' | 'local' | 'external' | 'codex' | 'zai' | 'minimax-tp';
@@ -95,14 +93,7 @@ function baseReq() {
 }
 
 type ExistingRuntime = Exclude<AgentExecutionResult['runtime'], 'kimi' | 'grok' | 'cursor'>;
-const EXISTING_RUNTIMES: ExistingRuntime[] = [
-  'cloud',
-  'local',
-  'external',
-  'codex',
-  'zai',
-  'minimax-tp',
-];
+const EXISTING_RUNTIMES: ExistingRuntime[] = ['cloud', 'local', 'external', 'codex', 'zai', 'minimax-tp'];
 
 const EXECUTOR_BY_RUNTIME: Record<string, { run: ReturnType<typeof vi.fn> }> = {
   cloud: cloudExecutor,

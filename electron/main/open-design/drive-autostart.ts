@@ -1,16 +1,10 @@
-
 import { createLogger } from '../logger';
-import { getSetting, isDriveEngaged } from '../db';
-import {
-  getSessionConfig,
-  setSessionConfig,
-  LAST_SESSION_CONFIG_SETTINGS_KEY,
-} from './session-config';
+import { getDriveState, getSetting, isDriveEngaged } from '../db';
+import { getSessionConfig, setSessionConfig, LAST_SESSION_CONFIG_SETTINGS_KEY } from './session-config';
 import { getOpenDesignConfig } from './config';
 import type { OpenDesignSessionConfig } from '../../../src/types/open-design';
 
 const logger = createLogger('od-drive-autostart');
-
 
 function readLastSessionConfig(): OpenDesignSessionConfig | null {
   try {
@@ -27,10 +21,7 @@ function readLastSessionConfig(): OpenDesignSessionConfig | null {
     }
     return parsed as OpenDesignSessionConfig;
   } catch (err) {
-    logger.warn(
-      { error: (err as Error).message },
-      'openDesign.lastSessionConfig ilegivel; sem config utilizavel',
-    );
+    logger.warn({ error: (err as Error).message }, 'openDesign.lastSessionConfig ilegivel; sem config utilizavel');
     return null;
   }
 }
@@ -46,15 +37,11 @@ export function isDriveStartPending(projectId: string): boolean {
     !!od &&
     (typeof od.conversationId === 'string' && od.conversationId.length > 0
       ? true
-      : typeof od.initialPromptSentAt === 'string' &&
-        od.initialPromptSentAt.length > 0);
+      : typeof od.initialPromptSentAt === 'string' && od.initialPromptSentAt.length > 0);
   return !started;
 }
 
-export async function maybeAutostartDesignSession(
-  projectId: string,
-  startGeneration = true,
-): Promise<void> {
+export async function maybeAutostartDesignSession(projectId: string, startGeneration = true): Promise<void> {
   try {
     const existing = getSessionConfig(projectId);
     if (existing) {
@@ -86,12 +73,13 @@ export async function maybeAutostartDesignSession(
           '(agente/modelo) na UI antes de dirigir esta fase; nenhum default e assumido.',
       );
       const { recordSystemActivity } = await import('../activity-log');
+      const driveSessionId = getDriveState(projectId)?.sessionId;
       recordSystemActivity({
         id: `od-autostart-abort-${projectId}-${Date.now()}`,
         label: 'LionDesign autostart abortado',
-        description:
-          'sem sessionConfig salvo; configure agente/modelo no Studio (nenhum default assumido)',
+        description: 'sem sessionConfig salvo; configure agente/modelo no Studio (nenhum default assumido)',
         status: 'error',
+        ...(driveSessionId ? { sessionId: driveSessionId } : {}),
       });
       return;
     }
@@ -107,10 +95,7 @@ export async function maybeAutostartDesignSession(
     const { ensureSession } = await import('./bootstrap');
     const result = await ensureSession(projectId);
     if ('error' in result) {
-      logger.error(
-        { projectId, error: result.error },
-        'autostart: ensureSession falhou (fase fica para o humano)',
-      );
+      logger.error({ projectId, error: result.error }, 'autostart: ensureSession falhou (fase fica para o humano)');
       return;
     }
     logger.info(

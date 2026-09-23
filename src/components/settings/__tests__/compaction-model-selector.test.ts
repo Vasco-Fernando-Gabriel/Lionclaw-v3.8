@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import type {
   AppSettings,
@@ -14,9 +13,14 @@ import {
   compactionProviderMissingCredential,
 } from '../CompactionModelSelector';
 
-
 function makeModels(...ids: string[]): ProviderModelEntry[] {
-  return ids.map((id) => ({ id, displayName: id }));
+  return ids.map((id) => ({
+    id,
+    displayName: id,
+    label: id,
+    reasoningOptions: [],
+    defaultReasoning: null,
+  }));
 }
 
 function makeStatus(overrides: {
@@ -29,6 +33,7 @@ function makeStatus(overrides: {
     runtime: overrides.runtime,
     provider: overrides.provider,
     connected: overrides.connected,
+    available: overrides.connected,
     models: overrides.models,
   };
 }
@@ -43,7 +48,6 @@ function makeSettings(overrides: Partial<AppSettings>): AppSettings {
     ...overrides,
   } as AppSettings;
 }
-
 
 describe('buildCompactionGroups - Grupo 1 (provedores de assinatura)', () => {
   it('lista todos os provedores de assinatura conectados, independente do orquestrador ativo', () => {
@@ -81,15 +85,9 @@ describe('buildCompactionGroups - Grupo 1 (provedores de assinatura)', () => {
 
     const { subscriptionGroups } = buildCompactionGroups(statuses, settings);
 
-    const byProvider = (p: OrchestratorProvider) =>
-      subscriptionGroups.find((g) => g.provider === p);
+    const byProvider = (p: OrchestratorProvider) => subscriptionGroups.find((g) => g.provider === p);
 
-    expect(subscriptionGroups.map((g) => g.provider).sort()).toEqual([
-      'anthropic',
-      'kimi',
-      'minimax',
-      'zai',
-    ]);
+    expect(subscriptionGroups.map((g) => g.provider).sort()).toEqual(['anthropic', 'kimi', 'minimax', 'zai']);
     expect(byProvider('anthropic')?.runtime).toBe('claude-sdk');
     expect(byProvider('zai')?.runtime).toBe('claude-compat-sdk');
     expect(byProvider('zai')?.models.map((m) => m.id)).toEqual(['glm-4.7', 'glm-4.6']);
@@ -116,10 +114,7 @@ describe('buildCompactionGroups - Grupo 1 (provedores de assinatura)', () => {
       }),
     ];
 
-    const { subscriptionGroups, orchestratorDisconnected } = buildCompactionGroups(
-      statuses,
-      settings,
-    );
+    const { subscriptionGroups, orchestratorDisconnected } = buildCompactionGroups(statuses, settings);
 
     const zai = subscriptionGroups.find((g) => g.provider === 'zai');
     expect(zai).toBeDefined();
@@ -138,10 +133,7 @@ describe('buildCompactionGroups - Grupo 1 (provedores de assinatura)', () => {
       makeStatus({ runtime: 'claude-compat-sdk', provider: 'zai', connected: false }),
     ];
 
-    const { subscriptionGroups, orchestratorDisconnected } = buildCompactionGroups(
-      statuses,
-      settings,
-    );
+    const { subscriptionGroups, orchestratorDisconnected } = buildCompactionGroups(statuses, settings);
 
     expect(subscriptionGroups.find((g) => g.provider === 'codex')).toBeUndefined();
     expect(subscriptionGroups.find((g) => g.provider === 'zai')).toBeUndefined();
@@ -171,12 +163,9 @@ describe('buildCompactionGroups - Grupo 1 (provedores de assinatura)', () => {
     const { subscriptionGroups } = buildCompactionGroups(statuses, settings);
 
     expect(subscriptionGroups.filter((g) => g.provider === 'codex')).toHaveLength(1);
-    expect(
-      subscriptionGroups.find((g) => g.provider === 'codex-official'),
-    ).toBeUndefined();
+    expect(subscriptionGroups.find((g) => g.provider === 'codex-official')).toBeUndefined();
   });
 });
-
 
 describe('buildCompactionGroups - Grupo 2 (locais / Lion)', () => {
   it('ollama conectado aparece em lionGroups mesmo com orquestrador anthropic', () => {
@@ -208,9 +197,7 @@ describe('buildCompactionGroups - Grupo 2 (locais / Lion)', () => {
 
   it('provider lion desconectado NAO aparece em lionGroups', () => {
     const settings = makeSettings({});
-    const statuses = [
-      makeStatus({ runtime: 'lion-sdk', provider: 'lmstudio', connected: false }),
-    ];
+    const statuses = [makeStatus({ runtime: 'lion-sdk', provider: 'lmstudio', connected: false })];
 
     const { lionGroups } = buildCompactionGroups(statuses, settings);
 
@@ -238,7 +225,6 @@ describe('buildCompactionGroups - Grupo 2 (locais / Lion)', () => {
   });
 });
 
-
 describe('buildClearPatch - Auto (chat) limpa os tres campos', () => {
   it('seta os tres campos de compactacao para vazio', () => {
     const patch = buildClearPatch();
@@ -247,7 +233,6 @@ describe('buildClearPatch - Auto (chat) limpa os tres campos', () => {
     expect(patch.orchestratorCompactionModel).toBe('');
   });
 });
-
 
 describe('reconcileCompactionSelection - pick de assinatura nao-ativo', () => {
   it('escolha de assinatura != orquestrador atual PERMANECE selecionada (regra stale removida)', () => {
@@ -282,9 +267,7 @@ describe('reconcileCompactionSelection - pick de assinatura nao-ativo', () => {
       orchestratorCompactionProvider: 'zai',
       orchestratorCompactionModel: 'glm-4.6',
     });
-    const statuses = [
-      makeStatus({ runtime: 'claude-compat-sdk', provider: 'zai', connected: true }),
-    ];
+    const statuses = [makeStatus({ runtime: 'claude-compat-sdk', provider: 'zai', connected: true })];
 
     const { selectedProvider, offline } = reconcileCompactionSelection(settings, statuses);
 
@@ -312,7 +295,6 @@ describe('reconcileCompactionSelection - pick de assinatura nao-ativo', () => {
   });
 });
 
-
 describe('reconcileCompactionSelection - lion permanece selecionado', () => {
   it('escolha lion desconectada permanece selecionada com offline=true (NAO vira Auto)', () => {
     const settings = makeSettings({
@@ -322,9 +304,7 @@ describe('reconcileCompactionSelection - lion permanece selecionado', () => {
       orchestratorCompactionProvider: 'ollama',
       orchestratorCompactionModel: 'qwen2.5:14b',
     });
-    const statuses = [
-      makeStatus({ runtime: 'lion-sdk', provider: 'ollama', connected: false }),
-    ];
+    const statuses = [makeStatus({ runtime: 'lion-sdk', provider: 'ollama', connected: false })];
 
     const { selectedProvider, offline } = reconcileCompactionSelection(settings, statuses);
 
@@ -378,7 +358,6 @@ describe('reconcileCompactionSelection - lion permanece selecionado', () => {
   });
 });
 
-
 describe('buildCompactionGroups - orquestrador lion-sdk', () => {
   it('orquestrador lion-sdk/ollama: ollama aparece so no Grupo 2, sem chip de assinatura', () => {
     const settings = makeSettings({
@@ -428,15 +407,13 @@ describe('buildCompactionGroups - orquestrador lion-sdk', () => {
       }),
     ];
 
-    const { subscriptionGroups, lionGroups, orchestratorDisconnected } =
-      buildCompactionGroups(statuses, settings);
+    const { subscriptionGroups, lionGroups, orchestratorDisconnected } = buildCompactionGroups(statuses, settings);
 
     expect(subscriptionGroups.find((g) => g.provider === 'anthropic')).toBeDefined();
     expect(orchestratorDisconnected).toBe(false);
     expect(lionGroups.map((g) => g.provider).sort()).toEqual(['lmstudio', 'ollama']);
   });
 });
-
 
 describe('compactionProviderMissingCredential - aviso pre-flight (SPEC 4.1)', () => {
   it('Auto (nada salvo) -> false (nao ha provider explicito para avisar)', () => {

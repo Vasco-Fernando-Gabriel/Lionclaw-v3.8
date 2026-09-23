@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { applyMigrationV125, __V125_INTERNAL } from '../db-migrations/v125-vision-settings';
 import { VISION_DEFAULT } from '../../../src/constants/vision-models';

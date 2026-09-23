@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 interface CapturedCount {
@@ -33,10 +32,12 @@ vi.mock('../logger', () => ({
 }));
 vi.mock('electron', () => ({
   BrowserWindow: {
-    getAllWindows: vi.fn(() => [{
-      isDestroyed: () => false,
-      webContents: { send: (channel: string, data: unknown) => capturedEvents.push({ channel, data }) },
-    }]),
+    getAllWindows: vi.fn(() => [
+      {
+        isDestroyed: () => false,
+        webContents: { send: (channel: string, data: unknown) => capturedEvents.push({ channel, data }) },
+      },
+    ]),
   },
   app: { on: vi.fn() },
 }));
@@ -114,17 +115,41 @@ vi.mock('../db', () => ({
   ) => {
     const fields: string[] = [];
     const values: unknown[] = [];
-    if (columns.pipelineCurrentPhase !== undefined) { fields.push('pipeline_current_phase = ?'); values.push(columns.pipelineCurrentPhase); }
-    if (columns.pipelineStartPhase !== undefined) { fields.push('pipeline_start_phase = ?'); values.push(columns.pipelineStartPhase); }
-    if (columns.discoveryNotesPath !== undefined) { fields.push('discovery_notes_path = ?'); values.push(columns.discoveryNotesPath); }
-    if (columns.prdPath !== undefined) { fields.push('prd_path = ?'); values.push(columns.prdPath); }
-    if (columns.status !== undefined) { fields.push('status = ?'); values.push(columns.status); }
-    if (columns.pipelineSprintIndex !== undefined) { fields.push('pipeline_sprint_index = ?'); values.push(columns.pipelineSprintIndex); }
-    if (columns.pipelineDiscoveryBlock !== undefined) { fields.push('pipeline_discovery_block = ?'); values.push(columns.pipelineDiscoveryBlock); }
+    if (columns.pipelineCurrentPhase !== undefined) {
+      fields.push('pipeline_current_phase = ?');
+      values.push(columns.pipelineCurrentPhase);
+    }
+    if (columns.pipelineStartPhase !== undefined) {
+      fields.push('pipeline_start_phase = ?');
+      values.push(columns.pipelineStartPhase);
+    }
+    if (columns.discoveryNotesPath !== undefined) {
+      fields.push('discovery_notes_path = ?');
+      values.push(columns.discoveryNotesPath);
+    }
+    if (columns.prdPath !== undefined) {
+      fields.push('prd_path = ?');
+      values.push(columns.prdPath);
+    }
+    if (columns.status !== undefined) {
+      fields.push('status = ?');
+      values.push(columns.status);
+    }
+    if (columns.pipelineSprintIndex !== undefined) {
+      fields.push('pipeline_sprint_index = ?');
+      values.push(columns.pipelineSprintIndex);
+    }
+    if (columns.pipelineDiscoveryBlock !== undefined) {
+      fields.push('pipeline_discovery_block = ?');
+      values.push(columns.pipelineDiscoveryBlock);
+    }
     if (fields.length > 0) {
       fields.push(`updated_at = datetime('now')`);
       values.push(projectId);
-      capturedUpdates.push({ sql: norm(`UPDATE harness_projects SET ${fields.join(', ')} WHERE id = ?`), args: values });
+      capturedUpdates.push({
+        sql: norm(`UPDATE harness_projects SET ${fields.join(', ')} WHERE id = ?`),
+        args: values,
+      });
     }
   },
   updateHarnessSprint: vi.fn(),
@@ -145,7 +170,8 @@ vi.mock('../db', () => ({
   setProjectStatus: vi.fn(),
   deleteBugAnalysisAgentStatuses: vi.fn(),
 }));
-vi.mock('../agent-runtime', () => ({ executeAgent: vi.fn() }));vi.mock('../harness-engine', () => {
+vi.mock('../agent-runtime', () => ({ executeAgent: vi.fn() }));
+vi.mock('../harness-engine', () => {
   const HarnessEngine = vi.fn();
   HarnessEngine.prototype.abort = vi.fn();
   HarnessEngine.prototype.runSingleSprint = vi.fn();
@@ -232,13 +258,20 @@ function bugContext() {
 function bugExpectedFiles(phase: number): string[] {
   const c = bugContext();
   switch (phase) {
-    case 1: return [c.runDir];
-    case 2: return [c.analise01Path, c.analise02Path, c.analise03Path, c.planoPath, c.specPath, c.sprintsPath];
-    case 3: return [c.planoPath, c.specPath, c.sprintsPath];
-    case 4: return [c.specPath, c.sprintsPath];
-    case 6: return [c.sprintsPath];
-    case 7: return [];
-    default: throw new Error(`fase ${phase} nao e resetavel no Bug Pipe`);
+    case 1:
+      return [c.runDir];
+    case 2:
+      return [c.analise01Path, c.analise02Path, c.analise03Path, c.planoPath, c.specPath, c.sprintsPath];
+    case 3:
+      return [c.planoPath, c.specPath, c.sprintsPath];
+    case 4:
+      return [c.specPath, c.sprintsPath];
+    case 6:
+      return [c.sprintsPath];
+    case 7:
+      return [];
+    default:
+      throw new Error(`fase ${phase} nao e resetavel no Bug Pipe`);
   }
 }
 
@@ -275,11 +308,9 @@ beforeEach(() => {
 describe('getResetPreview — phase branch (RP-1 query shape + filesToDelete golden)', () => {
   it('dev legacy phase 1: joins artifact files to projectPath; both COUNTs filter phase_number >= fromPhase', () => {
     vi.mocked(db.getHarnessProject).mockReturnValue(makeProject('development') as never);
-    vi.mocked(db.getHarnessSprints).mockReturnValue([
-      { sprintIndex: 0 }, { sprintIndex: 1 },
-    ] as never);
+    vi.mocked(db.getHarnessSprints).mockReturnValue([{ sprintIndex: 0 }, { sprintIndex: 1 }] as never);
     const engine = makeEngine();
-    countQueue = [7, 3]; // messages, metrics
+    countQueue = [7, 3];
 
     const preview = engine.getResetPreview('proj-1', { phase: 1 });
 
@@ -324,7 +355,7 @@ describe('getResetPreview — phase branch (RP-1 query shape + filesToDelete gol
     const preview = engine.getResetPreview('proj-1', { phase: 1 });
 
     expect(preview.filesToDelete).toEqual(['/tmp/project/.lionclaw/manifest.json']);
-    expect(preview.sprintsAffected).toEqual([]); // no sprints exist
+    expect(preview.sprintsAffected).toEqual([]);
     expect(capturedCounts[0].args).toEqual(['proj-1', 1]);
   });
 
@@ -340,10 +371,14 @@ describe('getResetPreview — phase branch (RP-1 query shape + filesToDelete gol
 
     const c = archContext();
     const expectedFiles = [
-      c.candidatesMdPath, c.candidatesJsonPath,
-      c.diagnosisMdPath, c.diagnosisJsonPath,
-      c.decisionsMdPath, c.decisionsJsonPath,
-      c.specPath, c.specSourcePath,
+      c.candidatesMdPath,
+      c.candidatesJsonPath,
+      c.diagnosisMdPath,
+      c.diagnosisJsonPath,
+      c.decisionsMdPath,
+      c.decisionsJsonPath,
+      c.specPath,
+      c.specSourcePath,
       c.sprintsPath,
     ];
     expect(preview.filesToDelete).toEqual(expectedFiles);
@@ -403,7 +438,7 @@ describe('getResetPreview — phase branch (RP-1 query shape + filesToDelete gol
     const engine = makeEngine();
     countQueue = [99, 99];
 
-    const preview = engine.getResetPreview('proj-1', { phase: 7 }); // dev has no map[7]
+    const preview = engine.getResetPreview('proj-1', { phase: 7 });
 
     expect(preview).toEqual({
       filesToDelete: [],
@@ -470,7 +505,7 @@ describe('resetPhase — deletion plan (executor side effects)', () => {
     ]);
     expect(db.deletePipelineMessagesFromPhase).toHaveBeenCalledWith('proj-1', 1);
     expect(db.deletePipelinePhaseMetricsFromPhase).toHaveBeenCalledWith('proj-1', 1);
-    expect(db.deleteHarnessSprintsForProject).toHaveBeenCalledWith('proj-1'); // wipeSprints
+    expect(db.deleteHarnessSprintsForProject).toHaveBeenCalledWith('proj-1');
     expect(db.updateHarnessProject).not.toHaveBeenCalled();
     expect(capturedUpdates).toEqual([
       {
@@ -478,9 +513,9 @@ describe('resetPhase — deletion plan (executor side effects)', () => {
         args: [1, 'idle', 'proj-1'],
       },
     ]);
-    expect(
-      capturedEvents.filter((e) => e.channel === 'pipeline:reset-complete'),
-    ).toEqual([{ channel: 'pipeline:reset-complete', data: { projectId: 'proj-1', phase: 1 } }]);
+    expect(capturedEvents.filter((e) => e.channel === 'pipeline:reset-complete')).toEqual([
+      { channel: 'pipeline:reset-complete', data: { projectId: 'proj-1', phase: 1 } },
+    ]);
     expect(runAuto).not.toHaveBeenCalled();
   });
 
@@ -531,9 +566,7 @@ describe('resetPhase — deletion plan (executor side effects)', () => {
     const res = await engine.resetPhase('proj-1', 1);
 
     expect(res).toEqual({ ok: true });
-    expect(fsState.rmSyncCalls).toEqual([
-      '/tmp/project/.lionclaw/pipelines/architecture-review/RUN1',
-    ]);
+    expect(fsState.rmSyncCalls).toEqual(['/tmp/project/.lionclaw/pipelines/architecture-review/RUN1']);
     expect(db.updateHarnessProject).toHaveBeenCalledWith('proj-1', {
       specPath: '',
       sprintsJsonPath: null,
@@ -559,10 +592,14 @@ describe('resetPhase — deletion plan (executor side effects)', () => {
 
     const c = archContext();
     expect(fsState.rmSyncCalls).toEqual([
-      c.candidatesMdPath, c.candidatesJsonPath,
-      c.diagnosisMdPath, c.diagnosisJsonPath,
-      c.decisionsMdPath, c.decisionsJsonPath,
-      c.specPath, c.specSourcePath,
+      c.candidatesMdPath,
+      c.candidatesJsonPath,
+      c.diagnosisMdPath,
+      c.diagnosisJsonPath,
+      c.decisionsMdPath,
+      c.decisionsJsonPath,
+      c.specPath,
+      c.specSourcePath,
       c.sprintsPath,
     ]);
     expect(db.updateHarnessProject).toHaveBeenCalledWith('proj-1', { specPath: '' });
@@ -612,9 +649,7 @@ describe('resetSprint — deletion plan', () => {
   it('deletes rounds/messages/metrics for the sprint, resets status, emits sprint-reset, kicks the next pending sprint', async () => {
     vi.mocked(db.getHarnessProject).mockReturnValue(makeProject('development') as never);
     vi.mocked(db.getHarnessSprintByIndex).mockReturnValue({ sprintIndex: 1, status: 'done' } as never);
-    vi.mocked(db.getHarnessSprints).mockReturnValue([
-      { sprintIndex: 1, status: 'pending' },
-    ] as never);
+    vi.mocked(db.getHarnessSprints).mockReturnValue([{ sprintIndex: 1, status: 'pending' }] as never);
     const engine = makeEngine();
     const runSprint = vi
       .spyOn(engine as unknown as { runSprint: (...a: unknown[]) => Promise<void> }, 'runSprint')
@@ -627,9 +662,9 @@ describe('resetSprint — deletion plan', () => {
     expect(db.deletePipelineMessagesForSprint).toHaveBeenCalledWith('proj-1', 1);
     expect(db.deletePipelinePhaseMetricsForSprint).toHaveBeenCalledWith('proj-1', 1);
     expect(db.resetHarnessSprintStatus).toHaveBeenCalledWith('proj-1', 1);
-    expect(
-      capturedEvents.filter((e) => e.channel === 'pipeline:sprint-reset'),
-    ).toEqual([{ channel: 'pipeline:sprint-reset', data: { projectId: 'proj-1', sprintIndex: 1 } }]);
+    expect(capturedEvents.filter((e) => e.channel === 'pipeline:sprint-reset')).toEqual([
+      { channel: 'pipeline:sprint-reset', data: { projectId: 'proj-1', sprintIndex: 1 } },
+    ]);
     expect(runSprint).toHaveBeenCalledWith('proj-1', 1);
   });
 
@@ -649,8 +684,9 @@ describe('resetSprint — deletion plan', () => {
     vi.mocked(db.getHarnessSprintByIndex).mockReturnValue({ sprintIndex: 1, status: 'done' } as never);
     vi.mocked(db.getHarnessSprints).mockReturnValue([{ sprintIndex: 1, status: 'pending' }] as never);
     const engine = makeEngine();
-    vi.spyOn(engine as unknown as { runSprint: (...a: unknown[]) => Promise<void> }, 'runSprint')
-      .mockResolvedValue(undefined);
+    vi.spyOn(engine as unknown as { runSprint: (...a: unknown[]) => Promise<void> }, 'runSprint').mockResolvedValue(
+      undefined,
+    );
 
     const res = await engine.resetSprint('proj-1', 1);
 
@@ -667,29 +703,26 @@ describe('resetSprint — deletion plan', () => {
 describe('Bug Pipe — TB-23: preview === executor nas 6 fases resetaveis', () => {
   const RESETABLE = [1, 2, 3, 4, 6, 7] as const;
 
-  it.each(RESETABLE)(
-    'fase %i: o preview lista exatamente os paths que o executor apaga',
-    async (phase) => {
-      vi.mocked(db.getHarnessProject).mockReturnValue(makeProject('bug') as never);
-      vi.mocked(db.getHarnessSprints).mockReturnValue([{ sprintIndex: 0 }] as never);
-      bugState.context = bugContext();
-      fsState.existsReturn = true;
-      const engine = makeEngine();
-      countQueue = [7, 4];
+  it.each(RESETABLE)('fase %i: o preview lista exatamente os paths que o executor apaga', async (phase) => {
+    vi.mocked(db.getHarnessProject).mockReturnValue(makeProject('bug') as never);
+    vi.mocked(db.getHarnessSprints).mockReturnValue([{ sprintIndex: 0 }] as never);
+    bugState.context = bugContext();
+    fsState.existsReturn = true;
+    const engine = makeEngine();
+    countQueue = [7, 4];
 
-      const preview = engine.getResetPreview('proj-1', { phase });
+    const preview = engine.getResetPreview('proj-1', { phase });
 
-      expect(preview.filesToDelete).toEqual(bugExpectedFiles(phase));
+    expect(preview.filesToDelete).toEqual(bugExpectedFiles(phase));
 
-      fsState.rmSyncCalls.length = 0;
-      vi.spyOn(
-        engine as unknown as { runAutoPhase: (...a: unknown[]) => Promise<void> },
-        'runAutoPhase',
-      ).mockResolvedValue(undefined);
-      await engine.resetPhase('proj-1', phase);
-      expect(fsState.rmSyncCalls).toEqual(preview.filesToDelete);
-    },
-  );
+    fsState.rmSyncCalls.length = 0;
+    vi.spyOn(
+      engine as unknown as { runAutoPhase: (...a: unknown[]) => Promise<void> },
+      'runAutoPhase',
+    ).mockResolvedValue(undefined);
+    await engine.resetPhase('proj-1', phase);
+    expect(fsState.rmSyncCalls).toEqual(preview.filesToDelete);
+  });
 
   it('sem BugContext o preview e o executor concordam em NADA (nao inventam paths do projectPath)', async () => {
     vi.mocked(db.getHarnessProject).mockReturnValue(makeProject('bug') as never);
@@ -743,13 +776,10 @@ describe('Bug Pipe — TB-23 (executor): DB, config e status dos 3 analistas', (
     expect(db.deleteHarnessSprintsForProject).toHaveBeenCalledWith('proj-1');
   });
 
-  it.each([2, 3, 4])(
-    'fase %i (stem SPEC presente): limpa specPath no DB (espelho de reset.ts:228)',
-    async (phase) => {
-      await reset(phase);
-      expect(db.updateHarnessProject).toHaveBeenCalledWith('proj-1', { specPath: '' });
-    },
-  );
+  it.each([2, 3, 4])('fase %i (stem SPEC presente): limpa specPath no DB (espelho de reset.ts:228)', async (phase) => {
+    await reset(phase);
+    expect(db.updateHarnessProject).toHaveBeenCalledWith('proj-1', { specPath: '' });
+  });
 
   it.each([6, 7])('fase %i (sem stem SPEC): NAO mexe em specPath', async (phase) => {
     await reset(phase);

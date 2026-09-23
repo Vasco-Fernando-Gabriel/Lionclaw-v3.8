@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import type { ActivityTurnBlock } from '@/types';
 
+let blocksBySession: Record<string, ActivityTurnBlock[]> = {};
 
 beforeAll(() => {
   (global as unknown as Record<string, unknown>).window = {
@@ -7,12 +9,13 @@ beforeAll(() => {
       chat: {
         getSessions: async () => [],
         getMessages: async () => [],
+        listOpenSessions: async () => [],
       },
       settings: {
         get: async () => ({ voiceResponseEnabled: false }),
       },
       activity: {
-        getBlocks: async () => [],
+        getBlocks: async (sessionId: string) => blocksBySession[sessionId] ?? [],
       },
       pricing: {
         calculate: async () => ({ costUsd: null }),
@@ -30,46 +33,55 @@ function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-beforeEach(async () => {
+async function setThread(
+  sessionId: string,
+  over: Parameters<typeof import('@/stores/chat-store').createThreadState>[0],
+) {
+  const { useChatStore, createThreadState } = await getStore();
+  useChatStore.setState((state) => ({
+    threads: { ...state.threads, [sessionId]: createThreadState({ hydrated: true, ...over }) },
+  }));
+}
+
+async function thread(sessionId = 's1') {
   const { useChatStore } = await getStore();
+  return useChatStore.getState().threads[sessionId];
+}
+
+beforeEach(async () => {
+  const { useChatStore, createThreadState } = await getStore();
+  blocksBySession = {};
   useChatStore.setState({
     currentSessionId: 's1',
-    messages: [],
-    streamingContent: '',
-    isStreaming: false,
-    streamTurnStartedAt: null,
-    submittedUserTurnCount: 0,
-    assistantTurnCount: 0,
-    toolCalls: [],
-    artifacts: [],
-    activities: [],
+    threads: { s1: createThreadState({ hydrated: true }) },
+    streamingSessionIds: new Set(),
   });
 });
 
 describe('streamTurnStartedAt (chat-store, I4)', () => {
   it('primeiro chunk de texto do turno (campo null) seta o marcador; segundo chunk preserva', async () => {
     const { useChatStore } = await getStore();
-    useChatStore.setState({ isStreaming: true });
+    await setThread('s1', { isStreaming: true });
 
     const before = Date.now();
     useChatStore.getState().handleStreamChunk({ type: 'text', content: 'oi', sessionId: 's1' });
     const after = Date.now();
 
-    const first = useChatStore.getState().streamTurnStartedAt;
+    const first = (await thread()).streamTurnStartedAt;
     expect(first).not.toBeNull();
     expect(first as number).toBeGreaterThanOrEqual(before);
     expect(first as number).toBeLessThanOrEqual(after);
 
     useChatStore.getState().handleStreamChunk({ type: 'text', content: 'mais', sessionId: 's1' });
-    expect(useChatStore.getState().streamTurnStartedAt).toBe(first);
+    expect((await thread()).streamTurnStartedAt).toBe(first);
   });
 
-  it('turno pode abrir com tool_call ou activity — mesmo marcador, set unico', async () => {
+  it('turno pode abrir com tool_call ou activity, mesmo marcador, set unico', async () => {
     const { useChatStore } = await getStore();
-    useChatStore.setState({ isStreaming: true });
+    await setThread('s1', { isStreaming: true });
 
     useChatStore.getState().handleStreamChunk({ type: 'tool_call', tool: 'Bash', input: {}, sessionId: 's1' });
-    const viaTool = useChatStore.getState().streamTurnStartedAt;
+    const viaTool = (await thread()).streamTurnStartedAt;
     expect(viaTool).not.toBeNull();
 
     useChatStore.getState().handleStreamChunk({
@@ -77,20 +89,20 @@ describe('streamTurnStartedAt (chat-store, I4)', () => {
       sessionId: 's1',
       activity: { id: 'a1', kind: 'tool', phase: 'start', label: 'Bash', status: 'running' },
     });
-    expect(useChatStore.getState().streamTurnStartedAt).toBe(viaTool);
+    expect((await thread()).streamTurnStartedAt).toBe(viaTool);
   });
 
   it('chunk atrasado com turno NAO streaming nao seta o marcador (guard)', async () => {
     const { useChatStore } = await getStore();
-    useChatStore.setState({ isStreaming: false });
+    await setThread('s1', { isStreaming: false });
 
     useChatStore.getState().handleStreamChunk({ type: 'text', content: 'tarde', sessionId: 's1' });
-    expect(useChatStore.getState().streamTurnStartedAt).toBeNull();
+    expect((await thread()).streamTurnStartedAt).toBeNull();
   });
 
   it('done LIMPA o marcador (decisao W4: sem congelar, sem lastTurnDurationMs)', async () => {
     const { useChatStore } = await getStore();
-    useChatStore.setState({
+    await setThread('s1', {
       isStreaming: true,
       streamTurnStartedAt: 1234,
       submittedUserTurnCount: 1,
@@ -100,13 +112,13 @@ describe('streamTurnStartedAt (chat-store, I4)', () => {
     useChatStore.getState().handleStreamChunk({ type: 'done', sessionId: 's1' });
     await flush();
 
-    expect(useChatStore.getState().streamTurnStartedAt).toBeNull();
-    expect(useChatStore.getState().isStreaming).toBe(false);
+    expect((await thread()).streamTurnStartedAt).toBeNull();
+    expect((await thread()).isStreaming).toBe(false);
   });
 
-  it('done em queue mode (queueRemaining>0) tambem limpa — proximo turno re-marca no primeiro chunk (regressao 5)', async () => {
+  it('done em queue mode (queueRemaining>0) tambem limpa; proximo turno re-marca no primeiro chunk (regressao 5)', async () => {
     const { useChatStore } = await getStore();
-    useChatStore.setState({
+    await setThread('s1', {
       isStreaming: true,
       streamTurnStartedAt: 1234,
       submittedUserTurnCount: 2,
@@ -116,94 +128,105 @@ describe('streamTurnStartedAt (chat-store, I4)', () => {
     useChatStore.getState().handleStreamChunk({ type: 'done', sessionId: 's1', queueRemaining: 1 });
     await flush();
 
-    expect(useChatStore.getState().streamTurnStartedAt).toBeNull();
-    expect(useChatStore.getState().isStreaming).toBe(true);
+    expect((await thread()).streamTurnStartedAt).toBeNull();
+    expect((await thread()).isStreaming).toBe(true);
+    expect((await thread()).queueRemaining).toBe(1);
 
     const before = Date.now();
     useChatStore.getState().handleStreamChunk({ type: 'text', content: 'turno 2', sessionId: 's1' });
-    const started = useChatStore.getState().streamTurnStartedAt;
+    const started = (await thread()).streamTurnStartedAt;
     expect(started).not.toBeNull();
     expect(started as number).toBeGreaterThanOrEqual(before);
   });
 
   it('error limpa o marcador', async () => {
     const { useChatStore } = await getStore();
-    useChatStore.setState({
+    await setThread('s1', {
       isStreaming: true,
       streamTurnStartedAt: 1234,
       submittedUserTurnCount: 1,
       assistantTurnCount: 0,
     });
 
-    useChatStore.getState().handleStreamChunk({ type: 'error', error: 'boom' });
+    useChatStore.getState().handleStreamChunk({ type: 'error', sessionId: 's1', error: 'boom' });
 
-    expect(useChatStore.getState().streamTurnStartedAt).toBeNull();
-    expect(useChatStore.getState().isStreaming).toBe(false);
+    expect((await thread()).streamTurnStartedAt).toBeNull();
+    expect((await thread()).isStreaming).toBe(false);
   });
 
-  it('drive_paused limpa isStreaming + marcador (C-08: escalate/pausa do drive)', async () => {
+  it('drive_paused preserva isStreaming + marcador (C-08: escalate/pausa do drive)', async () => {
     const { useChatStore } = await getStore();
-    useChatStore.setState({
-      isStreaming: true,
-      streamTurnStartedAt: 1234,
-    });
+    await setThread('s1', { isStreaming: true, streamTurnStartedAt: 1234 });
 
     useChatStore.getState().handleStreamChunk({ type: 'drive_paused', sessionId: 's1' });
 
-    expect(useChatStore.getState().isStreaming).toBe(false);
-    expect(useChatStore.getState().streamTurnStartedAt).toBeNull();
+    expect((await thread()).isStreaming).toBe(true);
+    expect((await thread()).drivePaused).toBe(true);
+    expect((await thread()).streamTurnStartedAt).toBe(1234);
   });
 
-  it('drive_paused de OUTRA sessao e ignorado (filtro de sessao)', async () => {
+  it('drive_paused de OUTRA sessao afeta so a thread dela (filtro de sessao)', async () => {
     const { useChatStore } = await getStore();
-    useChatStore.setState({
-      currentSessionId: 's1',
-      isStreaming: true,
-      streamTurnStartedAt: 1234,
-    });
+    await setThread('s1', { isStreaming: true, streamTurnStartedAt: 1234 });
+    await setThread('s_outra', { isStreaming: true, streamTurnStartedAt: 99 });
+    useChatStore.setState({ streamingSessionIds: new Set(['s1', 's_outra']) });
 
     useChatStore.getState().handleStreamChunk({ type: 'drive_paused', sessionId: 's_outra' });
 
-    expect(useChatStore.getState().isStreaming).toBe(true);
-    expect(useChatStore.getState().streamTurnStartedAt).toBe(1234);
+    expect((await thread()).isStreaming).toBe(true);
+    expect((await thread()).streamTurnStartedAt).toBe(1234);
+    expect((await thread('s_outra')).isStreaming).toBe(true);
+    expect((await thread('s_outra')).streamTurnStartedAt).toBe(99);
+    expect((await thread('s_outra')).drivePaused).toBe(true);
+    expect((await thread()).drivePaused).toBe(false);
+    expect(useChatStore.getState().streamingSessionIds.has('s1')).toBe(true);
+    expect(useChatStore.getState().streamingSessionIds.has('s_outra')).toBe(true);
   });
 });
 
 describe('streaming coalescido e lifecycle de tools', () => {
-  it('done força flush síncrono de todos os deltas pendentes', async () => {
+  it('done forca flush sincrono de todos os deltas pendentes', async () => {
     const { useChatStore } = await getStore();
-    useChatStore.setState({ isStreaming: true, submittedUserTurnCount: 1 });
+    await setThread('s1', { isStreaming: true, submittedUserTurnCount: 1 });
     for (let index = 0; index < 100; index += 1) {
       useChatStore.getState().handleStreamChunk({ type: 'text', content: String(index % 10), sessionId: 's1' });
     }
     useChatStore.getState().handleStreamChunk({ type: 'done', content: 's1', sessionId: 's1' });
     await flush();
-    const message = useChatStore.getState().messages.at(-1);
+    const message = (await thread()).messages.at(-1);
     expect(message?.content).toHaveLength(100);
   });
 
   it('tool_result encerra a chamada correta mesmo com o turno ainda streaming', async () => {
     const { useChatStore } = await getStore();
-    useChatStore.setState({ isStreaming: true });
+    await setThread('s1', { isStreaming: true });
     useChatStore.getState().handleStreamChunk({
-      type: 'tool_call', tool: 'Bash', toolCallId: 'tool-1', input: { command: 'pwd' }, sessionId: 's1',
+      type: 'tool_call',
+      tool: 'Bash',
+      toolCallId: 'tool-1',
+      input: { command: 'pwd' },
+      sessionId: 's1',
     });
     useChatStore.getState().handleStreamChunk({
-      type: 'tool_result', tool: 'Bash', toolCallId: 'tool-1', result: 'ok', sessionId: 's1',
+      type: 'tool_result',
+      tool: 'Bash',
+      toolCallId: 'tool-1',
+      result: 'ok',
+      sessionId: 's1',
     });
-    expect(useChatStore.getState().isStreaming).toBe(true);
-    expect(useChatStore.getState().toolCalls).toEqual([
+    expect((await thread()).isStreaming).toBe(true);
+    expect((await thread()).toolCalls).toEqual([
       expect.objectContaining({ id: 'tool-1', tool: 'Bash', status: 'done', result: 'ok' }),
     ]);
   });
 
-  it('resultado legado sem id casa a última chamada running do mesmo nome', async () => {
+  it('resultado legado sem id casa a ultima chamada running do mesmo nome', async () => {
     const { useChatStore } = await getStore();
-    useChatStore.setState({ isStreaming: true });
+    await setThread('s1', { isStreaming: true });
     useChatStore.getState().handleStreamChunk({ type: 'tool_call', tool: 'Read', input: { n: 1 }, sessionId: 's1' });
     useChatStore.getState().handleStreamChunk({ type: 'tool_call', tool: 'Read', input: { n: 2 }, sessionId: 's1' });
     useChatStore.getState().handleStreamChunk({ type: 'tool_result', tool: 'Read', result: 'ok', sessionId: 's1' });
-    expect(useChatStore.getState().toolCalls.map((call) => call.status)).toEqual(['running', 'done']);
+    expect((await thread()).toolCalls.map((call) => call.status)).toEqual(['running', 'done']);
   });
 });
 
@@ -211,8 +234,8 @@ describe('deriveTurnStartedAt (rehidratacao, I4)', () => {
   it('deriva o MENOR startedAt entre atividades com status running', async () => {
     const { deriveTurnStartedAt } = await getStore();
     const t1 = '2026-06-09T10:00:05.000Z';
-    const t2 = '2026-06-09T10:00:01.000Z'; // menor
-    const t3 = '2026-06-09T09:59:00.000Z'; // menor ainda, mas NAO running
+    const t2 = '2026-06-09T10:00:01.000Z';
+    const t3 = '2026-06-09T09:59:00.000Z';
 
     const result = deriveTurnStartedAt([
       { id: 'a', kind: 'tool', label: 'Bash', status: 'running', startedAt: t1 },
@@ -237,18 +260,16 @@ describe('deriveTurnStartedAt (rehidratacao, I4)', () => {
   it('rehidratacao via chunk session com turno vivo preservado deriva o inicio das atividades running', async () => {
     const { useChatStore } = await getStore();
     const startedIso = '2026-06-09T10:00:00.000Z';
-    useChatStore.setState({
-      currentSessionId: 'old',
+    await setThread('new', {
       streamTurnStartedAt: null,
-      activities: [
-        { id: 'live1', kind: 'subagent', label: 'orquestrador', status: 'running', startedAt: startedIso },
-      ],
+      activities: [{ id: 'live1', kind: 'subagent', label: 'orquestrador', status: 'running', startedAt: startedIso }],
     });
 
-    useChatStore.getState().handleStreamChunk({ type: 'session', content: 'new' });
+    useChatStore.getState().handleStreamChunk({ type: 'session', content: 'new', sessionId: 'new' });
     await flush();
 
-    expect(useChatStore.getState().currentSessionId).toBe('new');
-    expect(useChatStore.getState().streamTurnStartedAt).toBe(Date.parse(startedIso));
+    expect(useChatStore.getState().currentSessionId).toBe('s1');
+    expect((await thread('new')).isStreaming).toBe(true);
+    expect((await thread('new')).streamTurnStartedAt).toBe(Date.parse(startedIso));
   });
 });

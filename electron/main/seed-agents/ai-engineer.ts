@@ -1,18 +1,18 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const AI_ENGINEER_ID = 'ai-engineer';
 
 export const aiEngineer: Omit<AgentConfig, 'sortOrder'> = {
   id: AI_ENGINEER_ID,
-  name: "Engenheiro de IA",
-  description: "Use quando precisar projetar e implementar sistemas de IA completos, desde a arquitetura até o deploy em produção",
-  model: "claude-opus-4-8",
+  name: 'Engenheiro de IA',
+  description:
+    'Use quando precisar projetar e implementar sistemas de IA completos, desde a arquitetura até o deploy em produção',
+  model: 'claude-opus-5-5',
   effort: 'medium' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,
   maxToolRounds: 5,
-  allowedTools: ["Read","Write","Edit","Bash","Glob","Grep","WebSearch"],
+  allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch'],
   mcpServers: [],
   isActive: true,
   skills: [],

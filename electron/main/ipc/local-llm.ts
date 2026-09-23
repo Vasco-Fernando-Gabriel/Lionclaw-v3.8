@@ -5,13 +5,7 @@ import { checkOllamaAvailable } from '../ollama-client';
 export function registerLocalLlmHandlers(_ctx: IpcContext): void {
   ipcMain.handle(
     'ollama:check',
-    async (
-      _event,
-      baseUrl: string,
-      model: string,
-      provider?: string,
-      authHeaders?: Record<string, string>,
-    ) => {
+    async (_event, baseUrl: string, model: string, provider?: string, authHeaders?: Record<string, string>) => {
       return checkOllamaAvailable(
         baseUrl,
         model,
@@ -54,5 +48,5 @@ export function registerLocalLlmHandlers(_ctx: IpcContext): void {
     }
   };
   ipcMain.handle('ollama:list-models', ollamaListModels);
-  ipcMain.handle('ollama:listModels', ollamaListModels); // DEPRECATED — remove in vNext
+  ipcMain.handle('ollama:listModels', ollamaListModels);
 }

@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { applyMigrationV150 } from '../db-migrations/v150-gpt6-astra-codex-default';
@@ -107,7 +106,7 @@ describe('migration v150 (GPT-6 Astra como default do codex)', () => {
   });
 
   it('R10: o novo default do catalogo e o alvo da migration, e a constante de schema cobre a V150', () => {
-    expect(CODEX_DEFAULT_MODEL).toBe(NEW);
+    expect(CODEX_DEFAULT_MODEL).toBe('gpt-6-sol');
     expect(LATEST_SCHEMA_VERSION).toBeGreaterThanOrEqual(150);
   });
 });

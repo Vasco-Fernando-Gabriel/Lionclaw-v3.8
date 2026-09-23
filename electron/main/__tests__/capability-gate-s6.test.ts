@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -31,9 +30,7 @@ beforeEach(() => {
 
 describe('mcp-discovery capability-gate (SPEC 4.4)', () => {
   it('orquestrador != claude-sdk -> pula query() e registra skip no Activity Log', async () => {
-    getSettingMock.mockImplementation((k: string) =>
-      k === 'orchestrator_runtime' ? 'kimi-sdk' : '',
-    );
+    getSettingMock.mockImplementation((k: string) => (k === 'orchestrator_runtime' ? 'kimi-sdk' : ''));
 
     const result = await discoverSDKMcpServers();
 

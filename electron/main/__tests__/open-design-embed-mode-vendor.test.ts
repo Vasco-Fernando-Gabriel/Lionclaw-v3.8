@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-
 function isLionClawEmbedded(): boolean {
   if (typeof window === 'undefined') return false;
   try {
@@ -9,8 +8,7 @@ function isLionClawEmbedded(): boolean {
     if (typeof sessionStorage !== 'undefined') {
       try {
         if (sessionStorage.getItem('lionclaw:embedded') === '1') return true;
-      } catch {
-      }
+      } catch {}
     }
     return false;
   } catch {
@@ -19,7 +17,6 @@ function isLionClawEmbedded(): boolean {
 }
 
 describe('vendor patch: apps/web/src/lib/embed-mode.ts (SPEC L1093)', () => {
-
   const realWindow = (globalThis as { window?: unknown }).window;
 
   afterEach(() => {
@@ -116,18 +113,14 @@ describe('vendor patch: daemon embed-mode middleware logic (SPEC L1094)', () => 
     expect(shouldBlock('', '/api/projects/abc/finalize/anthropic')).toBe(false);
   });
 
-  it('confere que o env real lido pelo middleware vendor casa com a logica',
-    async () => {
-      const fs = await import('fs');
-      const path = await import('path');
-      const file = path.resolve(
-        __dirname,
-        '../../../vendor/open-design/apps/daemon/src/import-export-routes.ts',
-      );
-      const src = fs.readFileSync(file, 'utf-8');
-      expect(src).toMatch(/OD_EMBED_HOST.*===.*['"]lionclaw['"]/);
-      expect(src).toMatch(/\/\\\/finalize\\\//); // regex /\/finalize\// escapado
-      expect(src).toMatch(/embedded mode: finalize disabled/);
-      expect(src).toMatch(/res\.status\(403\)/);
-    });
+  it('confere que o env real lido pelo middleware vendor casa com a logica', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const file = path.resolve(__dirname, '../../../vendor/open-design/apps/daemon/src/import-export-routes.ts');
+    const src = fs.readFileSync(file, 'utf-8');
+    expect(src).toMatch(/OD_EMBED_HOST.*===.*['"]lionclaw['"]/);
+    expect(src).toMatch(/\/\\\/finalize\\\//);
+    expect(src).toMatch(/embedded mode: finalize disabled/);
+    expect(src).toMatch(/res\.status\(403\)/);
+  });
 });

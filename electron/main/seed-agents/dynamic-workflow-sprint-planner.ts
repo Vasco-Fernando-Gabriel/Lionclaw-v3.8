@@ -1,16 +1,14 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { PT_BR_BLOCK } from './_shared/language-pt-br';
 
-export const DYNAMIC_WORKFLOW_SPRINT_PLANNER_ID =
-  'dynamic-workflow-sprint-planner';
+export const DYNAMIC_WORKFLOW_SPRINT_PLANNER_ID = 'dynamic-workflow-sprint-planner';
 
 export const dynamicWorkflowSprintPlanner: Omit<AgentConfig, 'sortOrder'> = {
   id: DYNAMIC_WORKFLOW_SPRINT_PLANNER_ID,
   name: 'Dynamic Workflow Sprint Planner',
   description:
     'Decompoe a SPEC em sprints EM RUNTIME (node read-only) do workflow dinamico: O QUE entregar por sprint, criterios verificaveis, dependencias e especialista por stack. Produz via forced structured output (so { sprints }; o host normaliza/atribui planVersion/planHash).',
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'enabled' as const,
   thinkingBudget: 16000,

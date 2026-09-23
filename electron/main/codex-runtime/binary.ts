@@ -43,8 +43,7 @@ export async function resolveCodexBinary(): Promise<string | null> {
   try {
     const configured = getSetting('codex_binary_path');
     if (configured && fs.existsSync(configured)) return configured;
-  } catch {
-  }
+  } catch {}
 
   try {
     return await which('codex');
@@ -106,10 +105,18 @@ async function runBounded(binary: string, args: string[]): Promise<CommandResult
       resolve({ code, stdout: stdout.trim(), stderr: stderr.trim(), timedOut, spawnError });
     };
 
-    child.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
-    child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
-    child.once('close', (code) => { void finish(code); });
-    child.once('error', (error) => { void finish(null, error.message); });
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.once('close', (code) => {
+      void finish(code);
+    });
+    child.once('error', (error) => {
+      void finish(null, error.message);
+    });
 
     const timer = setTimeout(() => {
       timedOut = true;
@@ -149,9 +156,10 @@ async function probeStableCapability(binary: string): Promise<StableCapability> 
     ]);
     const version = versionResult.code === 0 ? versionResult.stdout || null : null;
     const appServerSupported = appServerResult.code === 0 && !appServerResult.timedOut;
-    const detail = appServerResult.spawnError
-      ?? (appServerResult.timedOut ? 'probe de app-server excedeu o timeout' : undefined)
-      ?? (appServerSupported
+    const detail =
+      appServerResult.spawnError ??
+      (appServerResult.timedOut ? 'probe de app-server excedeu o timeout' : undefined) ??
+      (appServerSupported
         ? undefined
         : appServerResult.stderr || appServerResult.stdout || `exit ${String(appServerResult.code)}`);
     const result: StableCapability = {

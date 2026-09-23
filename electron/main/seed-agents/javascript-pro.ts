@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { GIT_RESTRICTIONS_BLOCK } from './_shared/git-restrictions';
 
@@ -9,7 +8,7 @@ export const javascriptPro: Omit<AgentConfig, 'sortOrder'> = {
   name: 'Especialista JavaScript',
   description:
     'Use quando precisar construir, otimizar ou refatorar código JavaScript moderno para browser, Node.js ou qualquer ambiente onde padrões assíncronos avançados e performance sejam essenciais',
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-5-5',
   effort: 'medium' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,

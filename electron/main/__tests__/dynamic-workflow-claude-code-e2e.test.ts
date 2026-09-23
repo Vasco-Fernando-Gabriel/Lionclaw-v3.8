@@ -1,13 +1,9 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import {
-  createWorkflow,
-  type CreateWorkflowDeps,
-} from '../dynamic-workflows/workflow-create';
+import { createWorkflow, type CreateWorkflowDeps } from '../dynamic-workflows/workflow-create';
 
 import {
   createWorkflowHostApi,
@@ -38,11 +34,7 @@ import type {
   DynamicWorkflowJournalEntry,
   DynamicWorkflowJournalAppendInput,
 } from '../dynamic-workflows/types';
-import type {
-  NodeRunResult,
-  RunNodeAgentInput,
-} from '../dynamic-workflows/workflow-agent-adapter';
-
+import type { NodeRunResult, RunNodeAgentInput } from '../dynamic-workflows/workflow-agent-adapter';
 
 const CLAUDE_CODE_WORKFLOW_JS = `export const meta = {
   name: 'cc-e2e',
@@ -62,7 +54,6 @@ const reviews = await parallel([
 ], { id: 'reviews-r0', maxConcurrency: 2 });
 return { map, reviews };
 `;
-
 
 interface Captured {
   definitions: DynamicWorkflowDefinitionCreateInput[];
@@ -93,9 +84,7 @@ function makeCreateDeps(captured: Captured): CreateWorkflowDeps {
   };
 }
 
-function stubDefinition(
-  input: DynamicWorkflowDefinitionCreateInput,
-): DynamicWorkflowDefinition {
+function stubDefinition(input: DynamicWorkflowDefinitionCreateInput): DynamicWorkflowDefinition {
   return {
     id: input.id,
     name: input.name,
@@ -150,7 +139,6 @@ function stubRun(input: DynamicWorkflowRunCreateInput): DynamicWorkflowRun {
   };
 }
 
-
 type Axes = NonNullable<ReturnType<NonNullable<HostApiRunContext['resolveAgentAxes']>>>;
 
 const RUN_AXES: Record<string, Axes> = {
@@ -192,10 +180,7 @@ interface RunHarness {
 
 function makeRunResult(input: RunNodeAgentInput): NodeRunResult {
   const { runtime, family } = runtimeFor(input.agentId);
-  const structured =
-    input.outputSchema !== undefined
-      ? { summary: `done:${input.grants.nodeId}` }
-      : undefined;
+  const structured = input.outputSchema !== undefined ? { summary: `done:${input.grants.nodeId}` } : undefined;
   const base: NodeRunResult = {
     ok: true,
     output: JSON.stringify({ node: input.grants.nodeId }),
@@ -359,9 +344,7 @@ function makeRunHarness(over?: {
     awaitDecision: () => new Promise<PendingGateResolution>(() => {}),
   };
 
-  const adapter =
-    over?.adapter ??
-    ((input: RunNodeAgentInput) => Promise.resolve(makeRunResult(input)));
+  const adapter = over?.adapter ?? ((input: RunNodeAgentInput) => Promise.resolve(makeRunResult(input)));
 
   const deps: HostApiDeps = {
     crud,
@@ -416,15 +399,13 @@ async function runClaudeCodeBody(
     prompt: 'mapeie o repo',
     schema: { type: 'object', required: ['summary'] },
   } as never);
-  const reviews = (await api.parallel(
-    {
-      thunks: [
-        () => api.agent({ agentType: 'cc-reader', label: 'rev-a', prompt: 'revise A' } as never),
-        () => api.agent({ agentType: 'cc-reader', label: 'rev-b', prompt: 'revise B' } as never),
-      ],
-      options: { id: 'reviews-r0', maxConcurrency: 2 },
-    } as never,
-  )) as unknown[];
+  const reviews = (await api.parallel({
+    thunks: [
+      () => api.agent({ agentType: 'cc-reader', label: 'rev-a', prompt: 'revise A' } as never),
+      () => api.agent({ agentType: 'cc-reader', label: 'rev-b', prompt: 'revise B' } as never),
+    ],
+    options: { id: 'reviews-r0', maxConcurrency: 2 },
+  } as never)) as unknown[];
   let codex: unknown;
   if (opts?.withCodexNode) {
     codex = await api.agent({
@@ -439,7 +420,6 @@ async function runClaudeCodeBody(
 function completedNodeRun(h: RunHarness, nodeId: string): DynamicWorkflowNodeRun | undefined {
   return [...h.state.nodeRuns.values()].find((n) => n.nodeId === nodeId && n.status === 'completed');
 }
-
 
 describe('claude-code e2e (1) CRIAR de um .js inline (sem SPEC, sem manifesto)', () => {
   it('cria definition claude-code + manifesto derivado (nodes:[]), run created', async () => {
@@ -483,7 +463,6 @@ describe('claude-code e2e (1) CRIAR de um .js inline (sem SPEC, sem manifesto)',
   });
 });
 
-
 describe('claude-code e2e (2) RODAR: nodes implicitos, ordem, eixos, completa', () => {
   it('executa phase->agent->parallel->return com ids estaveis e eixos do agentType', async () => {
     const h = makeRunHarness();
@@ -492,11 +471,7 @@ describe('claude-code e2e (2) RODAR: nodes implicitos, ordem, eixos, completa', 
     const out = await runClaudeCodeBody(ctx, h.deps);
 
     const ids = ctx.manifest.nodes.map((n) => n.id);
-    expect(ids).toEqual([
-      'cc:plan:map:0',
-      'cc:plan:rev-a:0',
-      'cc:plan:rev-b:0',
-    ]);
+    expect(ids).toEqual(['cc:plan:map:0', 'cc:plan:rev-a:0', 'cc:plan:rev-b:0']);
     expect(new Set(ids).size).toBe(3);
 
     const order = h.state.adapterCalls.map((c) => c.nodeId);
@@ -529,7 +504,6 @@ describe('claude-code e2e (2) RODAR: nodes implicitos, ordem, eixos, completa', 
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
 });
-
 
 describe('claude-code e2e (3) RESUME: prefixo reusado pelo journal, nada re-roda', () => {
   it('PASS 2 no mesmo runDir/journal NAO re-chama o adapter (reuso por journal)', async () => {
@@ -566,7 +540,6 @@ describe('claude-code e2e (3) RESUME: prefixo reusado pelo journal, nada re-roda
   });
 });
 
-
 describe('claude-code e2e (4) runtime diferente (codex) nao quebra o fluxo', () => {
   it('node cc-codex roda no MESMO run; node_run persiste runtime=codex; run completa', async () => {
     const h = makeRunHarness();
@@ -575,12 +548,7 @@ describe('claude-code e2e (4) runtime diferente (codex) nao quebra o fluxo', () 
     const out = await runClaudeCodeBody(ctx, h.deps, { withCodexNode: true });
 
     const ids = ctx.manifest.nodes.map((n) => n.id);
-    expect(ids).toEqual([
-      'cc:plan:map:0',
-      'cc:plan:rev-a:0',
-      'cc:plan:rev-b:0',
-      'cc:plan:codex-check:0',
-    ]);
+    expect(ids).toEqual(['cc:plan:map:0', 'cc:plan:rev-a:0', 'cc:plan:rev-b:0', 'cc:plan:codex-check:0']);
 
     const mapRun = completedNodeRun(h, 'cc:plan:map:0');
     const codexRun = completedNodeRun(h, 'cc:plan:codex-check:0');

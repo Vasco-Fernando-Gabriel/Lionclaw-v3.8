@@ -1,8 +1,4 @@
-import type {
-  PersistedTimelineToolCall,
-  StreamTimelineBlock,
-  StreamTimelineToolBlock,
-} from '../types';
+import type { PersistedTimelineToolCall, StreamTimelineBlock, StreamTimelineToolBlock } from '../types';
 
 function nextSequence(blocks: readonly StreamTimelineBlock[]): number {
   return blocks.reduce((max, block) => Math.max(max, block.sequence), -1) + 1;
@@ -12,17 +8,11 @@ function nextId(blocks: readonly StreamTimelineBlock[], kind: 'text' | 'tool'): 
   return `${kind}-${nextSequence(blocks)}`;
 }
 
-export function appendTimelineText(
-  blocks: readonly StreamTimelineBlock[],
-  content: string,
-): StreamTimelineBlock[] {
+export function appendTimelineText(blocks: readonly StreamTimelineBlock[], content: string): StreamTimelineBlock[] {
   if (!content) return [...blocks];
   const last = blocks.at(-1);
   if (last?.kind === 'text' && last.status === 'streaming') {
-    return [
-      ...blocks.slice(0, -1),
-      { ...last, content: last.content + content },
-    ];
+    return [...blocks.slice(0, -1), { ...last, content: last.content + content }];
   }
   return [
     ...blocks,
@@ -41,14 +31,10 @@ export function appendTimelineTool(
   input: { tool: string; input?: unknown; toolCallId?: string },
 ): StreamTimelineBlock[] {
   const closed = blocks.map((block) =>
-    block.kind === 'text' && block.status === 'streaming'
-      ? { ...block, status: 'done' as const }
-      : block,
+    block.kind === 'text' && block.status === 'streaming' ? { ...block, status: 'done' as const } : block,
   );
   if (input.toolCallId) {
-    const existingIndex = closed.findIndex(
-      (block) => block.kind === 'tool' && block.toolCallId === input.toolCallId,
-    );
+    const existingIndex = closed.findIndex((block) => block.kind === 'tool' && block.toolCallId === input.toolCallId);
     if (existingIndex >= 0) {
       const existing = closed[existingIndex] as StreamTimelineToolBlock;
       const next = [...closed];
@@ -85,18 +71,13 @@ export function applyTimelineToolResult(
   },
 ): StreamTimelineBlock[] {
   let index = result.toolCallId
-    ? blocks.findIndex(
-        (block) => block.kind === 'tool' && block.toolCallId === result.toolCallId,
-      )
+    ? blocks.findIndex((block) => block.kind === 'tool' && block.toolCallId === result.toolCallId)
     : -1;
 
   if (index < 0 && !result.toolCallId && result.tool) {
     const candidates = blocks
       .map((block, candidate) => ({ block, candidate }))
-      .filter(
-        ({ block }) =>
-          block.kind === 'tool' && block.status === 'running' && block.tool === result.tool,
-      );
+      .filter(({ block }) => block.kind === 'tool' && block.status === 'running' && block.tool === result.tool);
     if (candidates.length === 1) index = candidates[0].candidate;
   }
 
@@ -159,19 +140,12 @@ export function failTimeline(blocks: readonly StreamTimelineBlock[]): StreamTime
   });
 }
 
-export function replaceTimelineText(
-  blocks: readonly StreamTimelineBlock[],
-  content: string,
-): StreamTimelineBlock[] {
+export function replaceTimelineText(blocks: readonly StreamTimelineBlock[], content: string): StreamTimelineBlock[] {
   const previousContent = blocks
     .filter((block): block is Extract<StreamTimelineBlock, { kind: 'text' }> => block.kind === 'text')
     .map((block) => block.content)
     .join('');
-  const tools = remapPersistedTimelineOffsets(
-    previousContent,
-    content,
-    timelineToolsForPersistence(blocks),
-  );
+  const tools = remapPersistedTimelineOffsets(previousContent, content, timelineToolsForPersistence(blocks));
   return timelineFromPersisted(content, tools, `replace-${blocks[0]?.id ?? 'empty'}`);
 }
 
@@ -186,14 +160,10 @@ export function remapPersistedTimelineOffsets(
   while (prefix < prefixLimit && previousContent[prefix] === nextContent[prefix]) prefix += 1;
 
   let suffix = 0;
-  const suffixLimit = Math.min(
-    previousContent.length - prefix,
-    nextContent.length - prefix,
-  );
+  const suffixLimit = Math.min(previousContent.length - prefix, nextContent.length - prefix);
   while (
     suffix < suffixLimit &&
-    previousContent[previousContent.length - 1 - suffix] ===
-      nextContent[nextContent.length - 1 - suffix]
+    previousContent[previousContent.length - 1 - suffix] === nextContent[nextContent.length - 1 - suffix]
   ) {
     suffix += 1;
   }
@@ -203,11 +173,7 @@ export function remapPersistedTimelineOffsets(
   return toolCalls.map((tool) => {
     if (!Number.isInteger(tool.textOffset) || (tool.textOffset ?? -1) < 0) return { ...tool };
     const offset = tool.textOffset ?? 0;
-    const remapped = offset <= prefix
-      ? offset
-      : offset >= previousChangedEnd
-        ? offset + delta
-        : prefix;
+    const remapped = offset <= prefix ? offset : offset >= previousChangedEnd ? offset + delta : prefix;
     return { ...tool, textOffset: Math.max(0, Math.min(nextContent.length, remapped)) };
   });
 }
@@ -218,14 +184,10 @@ export function timelineFromPersisted(
   idPrefix: string,
 ): StreamTimelineBlock[] {
   if (!toolCalls?.length) {
-    return content
-      ? [{ id: `${idPrefix}-text-0`, sequence: 0, kind: 'text', content, status: 'done' }]
-      : [];
+    return content ? [{ id: `${idPrefix}-text-0`, sequence: 0, kind: 'text', content, status: 'done' }] : [];
   }
 
-  const hasOffsets = toolCalls.every(
-    (tool) => Number.isInteger(tool.textOffset) && (tool.textOffset ?? -1) >= 0,
-  );
+  const hasOffsets = toolCalls.every((tool) => Number.isInteger(tool.textOffset) && (tool.textOffset ?? -1) >= 0);
   const sorted = toolCalls
     .map((tool, index) => ({ tool, index }))
     .sort((a, b) =>
@@ -274,9 +236,7 @@ export function timelineFromPersisted(
   return blocks;
 }
 
-export function timelineToolsForPersistence(
-  blocks: readonly StreamTimelineBlock[],
-): PersistedTimelineToolCall[] {
+export function timelineToolsForPersistence(blocks: readonly StreamTimelineBlock[]): PersistedTimelineToolCall[] {
   let textOffset = 0;
   const tools: PersistedTimelineToolCall[] = [];
   for (const block of blocks) {

@@ -4,11 +4,13 @@ import {
   registerChatCapabilityTurn,
   setActiveChatTurn,
 } from '../../chat-capability-context';
-import { desktopLane } from '../../sdk-lane';
+import { getDesktopLane } from '../../desktop-lanes';
 
 let sequence = 0;
 
 export interface ActiveChatTurnFixture {
+  sessionId: string;
+  turnId: string;
   dispose(): void;
 }
 
@@ -34,8 +36,11 @@ export function bindActiveDesktopTurn(cwd = process.cwd()): ActiveChatTurnFixtur
     writeRoots: [],
   });
   setActiveChatTurn({ sessionId, lane: 'desktop', turnId });
+  const desktopLane = getDesktopLane(sessionId);
   desktopLane.currentAbortController = abort;
   return {
+    sessionId,
+    turnId,
     dispose() {
       abort.abort();
       if (desktopLane.currentAbortController === abort) {

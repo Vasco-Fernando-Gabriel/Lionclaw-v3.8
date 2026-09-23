@@ -12,8 +12,7 @@ describe('filterManagedKimiModels', () => {
   });
 
   it('expoe somente modelos confirmados pelo provider managed', () => {
-    expect(filterManagedKimiModels(['kimi-code/k3']).map((model) => model.slug))
-      .toEqual(['kimi-code/k3']);
+    expect(filterManagedKimiModels(['kimi-code/k3']).map((model) => model.slug)).toEqual(['kimi-code/k3']);
   });
 
   it('ignora aliases desconhecidos e bloqueia quando nenhum modelo foi confirmado', () => {

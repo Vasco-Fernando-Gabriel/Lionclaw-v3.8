@@ -2,15 +2,12 @@ import Database from 'better-sqlite3';
 import { describe, expect, it, vi } from 'vitest';
 import { applyMigrationV146 } from '../db-migrations/v146-cursor-agent-runtime';
 
-function mockDb(options?: {
-  fail?: boolean;
-  violationsBefore?: unknown[];
-  violationsAfter?: unknown[];
-}) {
+function mockDb(options?: { fail?: boolean; violationsBefore?: unknown[]; violationsAfter?: unknown[] }) {
   const exec = vi.fn((_sql: string) => {
     if (options?.fail) throw new Error('injected migration failure');
   });
-  const pragma = vi.fn()
+  const pragma = vi
+    .fn()
     .mockReturnValueOnce(options?.violationsBefore ?? [])
     .mockReturnValue(options?.violationsAfter ?? []);
   const immediate = vi.fn((fn: () => void) => fn());
@@ -72,11 +69,17 @@ describe('migration v146 Cursor runtime', () => {
     applyMigrationV146(db);
     db.pragma('foreign_keys = ON');
 
-    expect(db.prepare(`
+    expect(
+      db
+        .prepare(
+          `
       SELECT id, model, effort, thinking_budget, runtime, access, allow_bash,
         allowed_commands, allow_network, max_tool_rounds, squad
       FROM agents WHERE id = 'custom'
-    `).get()).toEqual({
+    `,
+        )
+        .get(),
+    ).toEqual({
       id: 'custom',
       model: 'grok-4.6',
       effort: 'max',
@@ -93,10 +96,10 @@ describe('migration v146 Cursor runtime', () => {
     expect(db.pragma('foreign_key_check')).toEqual([
       { table: 'task_runs', rowid: 16, parent: 'scheduled_tasks', fkid: 0 },
     ]);
-    expect(() => db.prepare("INSERT INTO agents (id, name, runtime) VALUES ('cur', 'Cursor', 'cursor')").run())
-      .not.toThrow();
-    expect(() => db.prepare("INSERT INTO agents (id, name, runtime) VALUES ('bad', 'Bad', 'nope')").run())
-      .toThrow();
+    expect(() =>
+      db.prepare("INSERT INTO agents (id, name, runtime) VALUES ('cur', 'Cursor', 'cursor')").run(),
+    ).not.toThrow();
+    expect(() => db.prepare("INSERT INTO agents (id, name, runtime) VALUES ('bad', 'Bad', 'nope')").run()).toThrow();
     db.close();
   });
 

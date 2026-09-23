@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
 
-
 vi.mock('../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
@@ -15,30 +14,27 @@ vi.mock('electron', () => ({
     getAppPath: () => APPROOT,
     getPath: () => USERDATA,
   },
-  BrowserWindow: class { static getAllWindows() { return []; } },
+  BrowserWindow: class {
+    static getAllWindows() {
+      return [];
+    }
+  },
   ipcMain: { on: vi.fn(), handle: vi.fn() },
 }));
 
 type ProbeCallback = (err: Error | null, stdout: string) => void;
-const mockExecFile = vi.fn<
-  (bin: string, args: string[], options: unknown, callback: ProbeCallback) => void
->();
+const mockExecFile = vi.fn<(bin: string, args: string[], options: unknown, callback: ProbeCallback) => void>();
 const mockSpawn = vi.fn<(...args: unknown[]) => unknown>();
-const mockExec = vi.fn((_cmd: string, _opts: unknown, cb: (err: Error | null, stdout: string, stderr: string) => void) => {
-  cb(null, '', '');
-});
+const mockExec = vi.fn(
+  (_cmd: string, _opts: unknown, cb: (err: Error | null, stdout: string, stderr: string) => void) => {
+    cb(null, '', '');
+  },
+);
 vi.mock('child_process', () => ({
-  exec: (
-    command: string,
-    options: unknown,
-    callback: (err: Error | null, stdout: string, stderr: string) => void,
-  ) => mockExec(command, options, callback),
-  execFile: (
-    bin: string,
-    args: string[],
-    options: unknown,
-    callback: ProbeCallback,
-  ) => mockExecFile(bin, args, options, callback),
+  exec: (command: string, options: unknown, callback: (err: Error | null, stdout: string, stderr: string) => void) =>
+    mockExec(command, options, callback),
+  execFile: (bin: string, args: string[], options: unknown, callback: ProbeCallback) =>
+    mockExecFile(bin, args, options, callback),
   spawn: (...args: unknown[]) => mockSpawn(...args),
   execFileSync: vi.fn(),
 }));
@@ -56,8 +52,18 @@ const mockFetch = vi.fn();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).fetch = mockFetch;
 
-function makeFakeProcess(): EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; exitCode: number | null; kill: (s?: string) => boolean } {
-  const proc = new EventEmitter() as EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; exitCode: number | null; kill: (s?: string) => boolean };
+function makeFakeProcess(): EventEmitter & {
+  stdout: EventEmitter;
+  stderr: EventEmitter;
+  exitCode: number | null;
+  kill: (s?: string) => boolean;
+} {
+  const proc = new EventEmitter() as EventEmitter & {
+    stdout: EventEmitter;
+    stderr: EventEmitter;
+    exitCode: number | null;
+    kill: (s?: string) => boolean;
+  };
   proc.stdout = new EventEmitter();
   proc.stderr = new EventEmitter();
   (proc.stdout as unknown as { pipe: (target: unknown) => void }).pipe = () => undefined;
@@ -76,10 +82,13 @@ describe('open-design/manager.start (Sprint 1)', () => {
       else cb(null, '10.33.2\n');
     });
     vi.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined as never);
-    vi.spyOn(fs, 'createWriteStream').mockImplementation(() => ({
-      end: vi.fn(),
-      on: vi.fn(),
-    } as never));
+    vi.spyOn(fs, 'createWriteStream').mockImplementation(
+      () =>
+        ({
+          end: vi.fn(),
+          on: vi.fn(),
+        }) as never,
+    );
 
     const { resetPnpmCache } = await import('../open-design/pnpm-runner');
     resetPnpmCache();

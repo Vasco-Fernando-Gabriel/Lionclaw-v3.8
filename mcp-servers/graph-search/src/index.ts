@@ -8,14 +8,12 @@ import { z } from 'zod';
 import Fuse from 'fuse.js';
 import chokidar from 'chokidar';
 
-
 const LIONCLAW_HOME = process.env.LIONCLAW_HOME || path.join(os.homedir(), '.lionclaw');
 const VAULT_DIR = path.join(LIONCLAW_HOME, 'mgraph');
 const INGEST_QUEUE_DIR = path.join(VAULT_DIR, '.ingest-queue');
 const VAULT_SUBDIRS = ['entities', 'meetings', 'decisions', 'projects', 'references'] as const;
 const INDEX_DEBOUNCE_MS = 2000;
 const SNIPPET_LENGTH = 200;
-
 
 interface NoteFrontmatter {
   title: string;
@@ -28,7 +26,7 @@ interface NoteFrontmatter {
 }
 
 interface NoteIndexEntry {
-  path: string;       // relative to VAULT_DIR, e.g. "entities/person-foo.md"
+  path: string;
   title: string;
   type: string;
   tags: string[];
@@ -45,7 +43,6 @@ interface SearchResultItem {
   snippet: string;
   updatedAt: string;
 }
-
 
 function parseFrontmatter(content: string): { frontmatter: Partial<NoteFrontmatter>; body: string } {
   const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
@@ -68,12 +65,24 @@ function parseFrontmatter(content: string): { frontmatter: Partial<NoteFrontmatt
     }
 
     switch (key) {
-      case 'title':      fm.title = value; break;
-      case 'type':       fm.type = value; break;
-      case 'source':     fm.source = value; break;
-      case 'session_id': fm.session_id = value; break;
-      case 'created':    fm.created = value; break;
-      case 'updated':    fm.updated = value; break;
+      case 'title':
+        fm.title = value;
+        break;
+      case 'type':
+        fm.type = value;
+        break;
+      case 'source':
+        fm.source = value;
+        break;
+      case 'session_id':
+        fm.session_id = value;
+        break;
+      case 'created':
+        fm.created = value;
+        break;
+      case 'updated':
+        fm.updated = value;
+        break;
       case 'tags': {
         const tagMatch = value.match(/\[(.*)\]/);
         if (tagMatch) {
@@ -89,7 +98,6 @@ function parseFrontmatter(content: string): { frontmatter: Partial<NoteFrontmatt
 
   return { frontmatter: fm, body };
 }
-
 
 function readAllNotes(): NoteIndexEntry[] {
   const entries: NoteIndexEntry[] = [];
@@ -131,7 +139,6 @@ function readAllNotes(): NoteIndexEntry[] {
   return entries;
 }
 
-
 let fuseIndex: Fuse<NoteIndexEntry> | null = null;
 let notesList: NoteIndexEntry[] = [];
 let rebuildTimer: ReturnType<typeof setTimeout> | null = null;
@@ -141,8 +148,8 @@ function buildIndex(): void {
   fuseIndex = new Fuse(notesList, {
     keys: [
       { name: 'title', weight: 3.0 },
-      { name: 'tags',  weight: 2.0 },
-      { name: 'body',  weight: 1.0 },
+      { name: 'tags', weight: 2.0 },
+      { name: 'body', weight: 1.0 },
     ],
     threshold: 0.4,
     includeScore: true,
@@ -171,7 +178,6 @@ if (fs.existsSync(VAULT_DIR)) {
   watcher.on('change', scheduleRebuild);
   watcher.on('unlink', scheduleRebuild);
 }
-
 
 function extractWikiLinks(content: string): string[] {
   const matches = content.matchAll(/\[\[([^\]]+)\]\]/g);
@@ -202,7 +208,6 @@ function wikiLinkKey(rawTarget: string): string {
     .substring(0, 50);
 }
 
-
 function makeSnippet(body: string, query: string): string {
   const lower = body.toLowerCase();
   const queryLower = query.toLowerCase();
@@ -218,14 +223,12 @@ function makeSnippet(body: string, query: string): string {
   return (start > 0 ? '...' : '') + snippet + (end < body.length ? '...' : '');
 }
 
-
 const server = new McpServer({
   name: 'graph-search',
   version: '1.0.0',
 });
 
 const DOMAIN_PREFIX = '[Vault de conhecimento]';
-
 
 server.tool(
   'graph_search',
@@ -240,7 +243,9 @@ Exemplos de quando usar:
 - busca em documentos importados (PDFs, URLs, arquivos)`,
   {
     query: z.string().describe('Texto para buscar nas notas. Suporta busca fuzzy.'),
-    type: z.enum(['entities', 'meetings', 'decisions', 'projects', 'references']).optional()
+    type: z
+      .enum(['entities', 'meetings', 'decisions', 'projects', 'references'])
+      .optional()
       .describe('Filtrar por tipo de nota (opcional).'),
     limit: z.number().optional().default(10).describe('Numero maximo de resultados (padrao: 10).'),
   },
@@ -259,7 +264,7 @@ Exemplos de quando usar:
       }
 
       results.sort((a, b) => {
-        const scoreDiff = (a.score ?? 1) - (b.score ?? 1); // lower score = better in Fuse
+        const scoreDiff = (a.score ?? 1) - (b.score ?? 1);
         if (Math.abs(scoreDiff) > 0.05) return scoreDiff;
         return (b.item.updatedAt || '').localeCompare(a.item.updatedAt || '');
       });
@@ -268,36 +273,43 @@ Exemplos de quando usar:
 
       if (topResults.length === 0) {
         return {
-          content: [{
-            type: 'text' as const,
-            text: `Nenhuma nota encontrada para: "${query}" no Knowledge Graph.`,
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: `Nenhuma nota encontrada para: "${query}" no Knowledge Graph.`,
+            },
+          ],
         };
       }
 
-      const formatted = topResults.map((r, i) => {
-        const item = r.item;
-        const score = ((1 - (r.score ?? 1)) * 100).toFixed(0);
-        const tags = item.tags.length > 0 ? ` [${item.tags.join(', ')}]` : '';
-        const snippet = makeSnippet(item.body, query);
-        return `### [${i + 1}] ${item.title} (${item.type})${tags} score=${score}%\nPath: ${item.path}\nAtualizado: ${item.updatedAt || 'desconhecido'}\n${snippet}`;
-      }).join('\n\n---\n\n');
+      const formatted = topResults
+        .map((r, i) => {
+          const item = r.item;
+          const score = ((1 - (r.score ?? 1)) * 100).toFixed(0);
+          const tags = item.tags.length > 0 ? ` [${item.tags.join(', ')}]` : '';
+          const snippet = makeSnippet(item.body, query);
+          return `### [${i + 1}] ${item.title} (${item.type})${tags} score=${score}%\nPath: ${item.path}\nAtualizado: ${item.updatedAt || 'desconhecido'}\n${snippet}`;
+        })
+        .join('\n\n---\n\n');
 
       return {
-        content: [{
-          type: 'text' as const,
-          text: `Encontrei ${topResults.length} nota(s) no Knowledge Graph:\n\n${formatted}`,
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: `Encontrei ${topResults.length} nota(s) no Knowledge Graph:\n\n${formatted}`,
+          },
+        ],
       };
     } catch (error) {
       return {
-        content: [{ type: 'text' as const, text: `Erro na busca: ${error instanceof Error ? error.message : String(error)}` }],
+        content: [
+          { type: 'text' as const, text: `Erro na busca: ${error instanceof Error ? error.message : String(error)}` },
+        ],
         isError: true,
       };
     }
   },
 );
-
 
 server.tool(
   'graph_read',
@@ -330,13 +342,17 @@ O path deve ser no formato "tipo/nome-do-arquivo.md" (ex: "entities/pessoa-joao.
       };
     } catch (error) {
       return {
-        content: [{ type: 'text' as const, text: `Erro ao ler nota: ${error instanceof Error ? error.message : String(error)}` }],
+        content: [
+          {
+            type: 'text' as const,
+            text: `Erro ao ler nota: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
         isError: true,
       };
     }
   },
 );
-
 
 server.tool(
   'graph_stats',
@@ -368,26 +384,32 @@ server.tool(
         .join('\n');
 
       return {
-        content: [{
-          type: 'text' as const,
-          text: [
-            `Estatisticas do Knowledge Graph:`,
-            `- Total de notas: ${notes.length}`,
-            `- Por tipo:\n${byTypeLines || '  (nenhuma nota)'}`,
-            `- Total de conexoes wiki-link: ${totalLinks}`,
-            `- Ultima atualizacao: ${lastUpdated || 'desconhecida'}`,
-          ].join('\n'),
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: [
+              `Estatisticas do Knowledge Graph:`,
+              `- Total de notas: ${notes.length}`,
+              `- Por tipo:\n${byTypeLines || '  (nenhuma nota)'}`,
+              `- Total de conexoes wiki-link: ${totalLinks}`,
+              `- Ultima atualizacao: ${lastUpdated || 'desconhecida'}`,
+            ].join('\n'),
+          },
+        ],
       };
     } catch (error) {
       return {
-        content: [{ type: 'text' as const, text: `Erro ao obter stats: ${error instanceof Error ? error.message : String(error)}` }],
+        content: [
+          {
+            type: 'text' as const,
+            text: `Erro ao obter stats: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
         isError: true,
       };
     }
   },
 );
-
 
 server.tool(
   'graph_connections',
@@ -396,7 +418,12 @@ Suporta depth 1 (vizinhos diretos) ou depth 2 (vizinhos de vizinhos).
 Use o noteId como o titulo da nota ou o path relativo.`,
   {
     noteId: z.string().describe('Titulo ou path relativo da nota (ex: "Joao Silva" ou "entities/joao-silva.md").'),
-    depth: z.number().min(1).max(2).optional().default(1)
+    depth: z
+      .number()
+      .min(1)
+      .max(2)
+      .optional()
+      .default(1)
       .describe('Profundidade de conexoes: 1 = vizinhos diretos, 2 = vizinhos de vizinhos (padrao: 1).'),
   },
   async ({ noteId, depth }) => {
@@ -404,15 +431,19 @@ Use o noteId como o titulo da nota ou o path relativo.`,
       const notes = notesList.length > 0 ? notesList : readAllNotes();
 
       const targetKey = wikiLinkKey(noteId);
-      const target = notes.find(
-        (n) => n.path === noteId || n.title.toLowerCase() === noteId.toLowerCase() || n.path.includes(noteId),
-      ) ?? notes.find(
-        (n) => wikiLinkKey(n.path) === targetKey || wikiLinkKey(n.title) === targetKey,
-      );
+      const target =
+        notes.find(
+          (n) => n.path === noteId || n.title.toLowerCase() === noteId.toLowerCase() || n.path.includes(noteId),
+        ) ?? notes.find((n) => wikiLinkKey(n.path) === targetKey || wikiLinkKey(n.title) === targetKey);
 
       if (!target) {
         return {
-          content: [{ type: 'text' as const, text: `Nota nao encontrada: "${noteId}". Use graph_search para encontrar o path correto.` }],
+          content: [
+            {
+              type: 'text' as const,
+              text: `Nota nao encontrada: "${noteId}". Use graph_search para encontrar o path correto.`,
+            },
+          ],
           isError: true,
         };
       }
@@ -507,13 +538,17 @@ Use o noteId como o titulo da nota ou o path relativo.`,
       };
     } catch (error) {
       return {
-        content: [{ type: 'text' as const, text: `Erro ao obter conexoes: ${error instanceof Error ? error.message : String(error)}` }],
+        content: [
+          {
+            type: 'text' as const,
+            text: `Erro ao obter conexoes: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
         isError: true,
       };
     }
   },
 );
-
 
 server.tool(
   'graph_ingest',
@@ -524,7 +559,9 @@ Retorna um jobId para rastrear o status.`,
   {
     content: z.string().describe('Conteudo a ser ingerido (texto, URL ou path de arquivo).'),
     title: z.string().optional().describe('Titulo opcional para o conteudo.'),
-    type: z.enum(['text', 'file', 'url']).describe('Tipo do conteudo: "text" para texto livre, "file" para arquivo, "url" para URL.'),
+    type: z
+      .enum(['text', 'file', 'url'])
+      .describe('Tipo do conteudo: "text" para texto livre, "file" para arquivo, "url" para URL.'),
   },
   async ({ content, title, type }) => {
     try {
@@ -543,20 +580,26 @@ Retorna um jobId para rastrear o status.`,
       fs.writeFileSync(jobFile, JSON.stringify(job, null, 2), 'utf-8');
 
       return {
-        content: [{
-          type: 'text' as const,
-          text: `Conteudo enfileirado para ingestao no Knowledge Graph.\n- jobId: ${jobId}\n- tipo: ${type}\n- titulo: ${title || '(sem titulo)'}\n\nO LionClaw processara o conteudo em background e adicionara as notas ao vault.`,
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: `Conteudo enfileirado para ingestao no Knowledge Graph.\n- jobId: ${jobId}\n- tipo: ${type}\n- titulo: ${title || '(sem titulo)'}\n\nO LionClaw processara o conteudo em background e adicionara as notas ao vault.`,
+          },
+        ],
       };
     } catch (error) {
       return {
-        content: [{ type: 'text' as const, text: `Erro ao enfileirar ingestao: ${error instanceof Error ? error.message : String(error)}` }],
+        content: [
+          {
+            type: 'text' as const,
+            text: `Erro ao enfileirar ingestao: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
         isError: true,
       };
     }
   },
 );
-
 
 async function main() {
   const transport = new StdioServerTransport();

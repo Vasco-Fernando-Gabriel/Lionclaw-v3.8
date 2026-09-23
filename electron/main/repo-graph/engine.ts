@@ -1,4 +1,3 @@
-
 import crypto from 'crypto';
 import { execFileSync } from 'child_process';
 import { createLogger } from '../logger';
@@ -83,9 +82,7 @@ export interface RepoGraphEngineDb {
   getKanbanBoardForRepository?: (repositoryId: string) => { prefix: string } | null;
 }
 
-export type RepoGraphProvider = RepoGraphReader &
-  RepoGraphWriter & { readonly providerName: string };
-
+export type RepoGraphProvider = RepoGraphReader & RepoGraphWriter & { readonly providerName: string };
 
 interface ActiveRunHandle {
   runId: string;
@@ -115,7 +112,6 @@ export class RepoGraphEngine {
       logger.warn({ err }, 'emitStatus falhou (listener do renderer)');
     }
   }
-
 
   listRepositories(): LocalRepositoryRecord[] {
     return this.db.listLocalRepositories();
@@ -173,10 +169,7 @@ export class RepoGraphEngine {
     return { ok: true };
   }
 
-  attachSession(
-    sessionId: string,
-    repositoryId: string,
-  ): { ok: true } | { error: string } {
+  attachSession(sessionId: string, repositoryId: string): { ok: true } | { error: string } {
     const repo = this.db.getLocalRepository(repositoryId);
     if (!repo) return { error: `repositorio nao encontrado: ${repositoryId}` };
     this.db.attachSessionRepository(sessionId, repositoryId);
@@ -211,9 +204,7 @@ export class RepoGraphEngine {
     }
     const latestRun = this.db.getLatestRepoGraphRun(repository.id);
     const activeRun =
-      latestRun && latestRun.status === 'running' && this.activeRuns.has(repository.id)
-        ? latestRun
-        : null;
+      latestRun && latestRun.status === 'running' && this.activeRuns.has(repository.id) ? latestRun : null;
     return {
       sessionId,
       repository: this.db.getLocalRepository(repository.id),
@@ -228,10 +219,7 @@ export class RepoGraphEngine {
     return { ok: true };
   }
 
-  setGlobalPromptSuppressed(
-    repositoryId: string,
-    suppressed: boolean,
-  ): { ok: true } | { error: string } {
+  setGlobalPromptSuppressed(repositoryId: string, suppressed: boolean): { ok: true } | { error: string } {
     const repo = this.db.getLocalRepository(repositoryId);
     if (!repo) return { error: `repositorio nao encontrado: ${repositoryId}` };
     this.db.setRepoGraphPromptSuppressedGlobal(repositoryId, suppressed);
@@ -298,10 +286,7 @@ export class RepoGraphEngine {
           error: 'interrompido por restart do app',
         });
       } catch (err) {
-        logger.warn(
-          { err, repositoryId: repo.id },
-          'reconciliacao de run orfao falhou (best-effort)',
-        );
+        logger.warn({ err, repositoryId: repo.id }, 'reconciliacao de run orfao falhou (best-effort)');
       }
     }
   }
@@ -319,14 +304,10 @@ export class RepoGraphEngine {
           );
         }
       } catch (err) {
-        logger.warn(
-          { err, repositoryId: repo.id },
-          'reconciliacao de repo error falhou (best-effort)',
-        );
+        logger.warn({ err, repositoryId: repo.id }, 'reconciliacao de repo error falhou (best-effort)');
       }
     }
   }
-
 
   async startRun(
     repositoryId: string,
@@ -459,9 +440,7 @@ export class RepoGraphEngine {
         output: result.output,
       });
       const detectAfterCancel = await this.safeDetect(repo.canonicalRootPath);
-      const fallback: LocalRepositoryRecord['status'] = detectAfterCancel?.exists
-        ? 'ready'
-        : 'absent';
+      const fallback: LocalRepositoryRecord['status'] = detectAfterCancel?.exists ? 'ready' : 'absent';
       this.db.updateLocalRepositoryGraphState(repo.id, { status: fallback });
       clearStalenessForRepo(repo.id);
       this.emitStatus({
@@ -483,9 +462,7 @@ export class RepoGraphEngine {
       error: result.error ?? 'erro desconhecido no build do graph',
     });
     const detectAfterError = await this.safeDetect(repo.canonicalRootPath);
-    const fallback: LocalRepositoryRecord['status'] = detectAfterError?.exists
-      ? 'stale'
-      : 'error';
+    const fallback: LocalRepositoryRecord['status'] = detectAfterError?.exists ? 'stale' : 'error';
     this.db.updateLocalRepositoryGraphState(repo.id, { status: fallback });
     clearStalenessForRepo(repo.id);
     this.emitStatus({
@@ -507,22 +484,15 @@ export class RepoGraphEngine {
     }
   }
 
-
   asReader(): RepoGraphReader {
     return {
       detect: (rootPath) => this.provider.detect(rootPath),
-      search: (input: RepoGraphSearchInput): Promise<RepoGraphSearchResult> =>
-        this.provider.search(input),
-      minimalContext: (input: RepoGraphContextInput): Promise<RepoGraphContext> =>
-        this.provider.minimalContext(input),
-      impact: (input: RepoGraphImpactInput): Promise<RepoGraphImpactResult> =>
-        this.provider.impact(input),
-      node: (input: RepoGraphNodeInput): Promise<RepoGraphNodeResult> =>
-        this.provider.node(input),
-      callers: (input: RepoGraphCallInput): Promise<RepoGraphCallResult> =>
-        this.provider.callers(input),
-      callees: (input: RepoGraphCallInput): Promise<RepoGraphCallResult> =>
-        this.provider.callees(input),
+      search: (input: RepoGraphSearchInput): Promise<RepoGraphSearchResult> => this.provider.search(input),
+      minimalContext: (input: RepoGraphContextInput): Promise<RepoGraphContext> => this.provider.minimalContext(input),
+      impact: (input: RepoGraphImpactInput): Promise<RepoGraphImpactResult> => this.provider.impact(input),
+      node: (input: RepoGraphNodeInput): Promise<RepoGraphNodeResult> => this.provider.node(input),
+      callers: (input: RepoGraphCallInput): Promise<RepoGraphCallResult> => this.provider.callers(input),
+      callees: (input: RepoGraphCallInput): Promise<RepoGraphCallResult> => this.provider.callees(input),
     };
   }
 }

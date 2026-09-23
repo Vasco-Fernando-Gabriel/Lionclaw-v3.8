@@ -14,10 +14,12 @@ describe('pipeline timeline collector', () => {
     recordPipelineTimelineEvent({ projectId: 'project', phase: 4, type: 'text', content: 'BC' });
     recordPipelineTimelineEvent({ projectId: 'project', phase: 4, type: 'tool_call', tool: 'Bash', toolCallId: 'b1' });
 
-    expect(consumePipelineTimeline('project', 4, [
-      { tool: 'Read', input: { file: 'a.ts' }, toolCallId: 'r1' },
-      { tool: 'Bash', input: { command: 'npm test' }, toolCallId: 'b1', isError: true },
-    ])).toEqual([
+    expect(
+      consumePipelineTimeline('project', 4, [
+        { tool: 'Read', input: { file: 'a.ts' }, toolCallId: 'r1' },
+        { tool: 'Bash', input: { command: 'npm test' }, toolCallId: 'b1', isError: true },
+      ]),
+    ).toEqual([
       expect.objectContaining({ tool: 'Read', toolCallId: 'r1', sequence: 0, textOffset: 3, status: 'done' }),
       expect.objectContaining({ tool: 'Bash', toolCallId: 'b1', sequence: 1, textOffset: 5, status: 'error' }),
     ]);

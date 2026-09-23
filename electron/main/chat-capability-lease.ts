@@ -1,10 +1,8 @@
-
 import crypto from 'crypto';
 import { createLogger } from './logger';
 import { normalizeChatCapabilityServerId } from './chat-capability-context';
 
 const logger = createLogger('chat-capability-lease');
-
 
 export const INTERNAL_CAPABILITY_COORDINATORS = [
   'pipeline-drive-coordinator',
@@ -12,12 +10,9 @@ export const INTERNAL_CAPABILITY_COORDINATORS = [
   'scheduler-internal',
 ] as const;
 
-export type InternalCapabilityCoordinator =
-  (typeof INTERNAL_CAPABILITY_COORDINATORS)[number];
+export type InternalCapabilityCoordinator = (typeof INTERNAL_CAPABILITY_COORDINATORS)[number];
 
-const COORDINATOR_SET: ReadonlySet<string> = new Set(
-  INTERNAL_CAPABILITY_COORDINATORS,
-);
+const COORDINATOR_SET: ReadonlySet<string> = new Set(INTERNAL_CAPABILITY_COORDINATORS);
 
 export interface InternalCapabilityLeaseInput {
   coordinator: InternalCapabilityCoordinator;
@@ -39,7 +34,6 @@ export interface VerifyInternalCapabilityLeaseInput {
   dryRun?: boolean;
   denyLogLevel?: 'warn' | 'debug';
 }
-
 
 interface LeaseRecord {
   coordinator: InternalCapabilityCoordinator;
@@ -75,10 +69,7 @@ function sweepExpiredLeases(now: number): void {
   }
 }
 
-
-export function createInternalCapabilityLease(
-  input: InternalCapabilityLeaseInput,
-): { token: string } {
+export function createInternalCapabilityLease(input: InternalCapabilityLeaseInput): { token: string } {
   const now = Date.now();
   sweepExpiredLeases(now);
 
@@ -89,9 +80,7 @@ export function createInternalCapabilityLease(
     coordinator: input.coordinator,
     driveProjectId: input.driveProjectId,
     driveTurnId: input.driveTurnId,
-    allowedServerIds: new Set(
-      input.allowedServerIds.map(normalizeChatCapabilityServerId),
-    ),
+    allowedServerIds: new Set(input.allowedServerIds.map(normalizeChatCapabilityServerId)),
     allowedToolPrefixes: [...input.allowedToolPrefixes],
     createdAt: now,
     expiresAt: now + input.ttlMs,
@@ -113,14 +102,9 @@ export function createInternalCapabilityLease(
   return { token };
 }
 
-export function verifyInternalCapabilityLease(
-  input: VerifyInternalCapabilityLeaseInput,
-): boolean {
+export function verifyInternalCapabilityLease(input: VerifyInternalCapabilityLeaseInput): boolean {
   const deny = (reason: string, tokenHash?: string): false => {
-    const log =
-      input.denyLogLevel === 'debug'
-        ? logger.debug.bind(logger)
-        : logger.warn.bind(logger);
+    const log = input.denyLogLevel === 'debug' ? logger.debug.bind(logger) : logger.warn.bind(logger);
     log(
       {
         reason,
@@ -150,10 +134,7 @@ export function verifyInternalCapabilityLease(
   if (input.coordinator !== record.coordinator) {
     return deny('coordinator-divergente', tokenHash);
   }
-  if (
-    input.driveProjectId !== record.driveProjectId ||
-    input.driveTurnId !== record.driveTurnId
-  ) {
+  if (input.driveProjectId !== record.driveProjectId || input.driveTurnId !== record.driveTurnId) {
     return deny('drive-ids-divergentes', tokenHash);
   }
 
@@ -170,11 +151,7 @@ export function verifyInternalCapabilityLease(
   if (!record.allowedServerIds.has(serverId)) {
     return deny('server-fora-da-allowlist', tokenHash);
   }
-  if (
-    !record.allowedToolPrefixes.some((prefix) =>
-      input.toolName.startsWith(prefix),
-    )
-  ) {
+  if (!record.allowedToolPrefixes.some((prefix) => input.toolName.startsWith(prefix))) {
     return deny('tool-fora-do-prefixo', tokenHash);
   }
 
@@ -183,7 +160,6 @@ export function verifyInternalCapabilityLease(
   }
   return true;
 }
-
 
 export function __resetInternalCapabilityLeasesForTests(): void {
   leases.clear();

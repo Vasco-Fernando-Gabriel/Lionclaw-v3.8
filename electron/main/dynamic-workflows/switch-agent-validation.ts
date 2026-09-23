@@ -1,4 +1,3 @@
-
 import type {
   DynamicWorkflowDefinition,
   DynamicWorkflowDefinitionCreateInput,
@@ -8,10 +7,7 @@ import type {
 import { DYNAMIC_WORKFLOW_AGENT_DENYLIST } from './types';
 import { AGENT_DENYLIST_REASON } from './authored-agent-validation';
 import type { SwitchAgentValidation } from './workflow-runner';
-import {
-  preflightNode,
-  type WorkflowNodeRuntime,
-} from './workflow-preflight';
+import { preflightNode, type WorkflowNodeRuntime } from './workflow-preflight';
 import {
   deriveNodeExecutionPolicy,
   type NodePolicyGrants,
@@ -50,10 +46,7 @@ export function runtimeMechanism(runtime: string): PolicyEnforcementMechanism {
   throw new Error(`runtime sem mecanismo de enforcement: ${runtime}`);
 }
 
-export function grantsFromManifestNode(
-  node: DynamicWorkflowManifestNode,
-  agentId: string,
-): NodePolicyGrants {
+export function grantsFromManifestNode(node: DynamicWorkflowManifestNode, agentId: string): NodePolicyGrants {
   return {
     nodeId: node.id,
     agentId,
@@ -75,10 +68,7 @@ export async function switchAgentExpandsPermission(
   newAgentId: string,
   resolveAgent: SwitchAgentValidationDeps['resolveAgent'],
 ): Promise<{ expands: boolean; newRuntime: string }> {
-  const [cur, next] = await Promise.all([
-    resolveAgent(currentAgentId),
-    resolveAgent(newAgentId),
-  ]);
+  const [cur, next] = await Promise.all([resolveAgent(currentAgentId), resolveAgent(newAgentId)]);
   const workspace = { runId: 'preflight', workspaceRoot: '/preflight', cwd: '/preflight' };
   const curPolicy = deriveNodeExecutionPolicy(
     cur,
@@ -99,8 +89,7 @@ export async function switchAgentExpandsPermission(
   const mcpExpand = nextPolicy.effectiveMcpServers.some((m) => !curMcp.has(m));
   const bashExpand = nextPolicy.allowBash && !curPolicy.allowBash;
   const netExpand = nextPolicy.allowNetwork && !curPolicy.allowNetwork;
-  const writeExpand =
-    nextPolicy.access === 'workspace-write' && curPolicy.access !== 'workspace-write';
+  const writeExpand = nextPolicy.access === 'workspace-write' && curPolicy.access !== 'workspace-write';
 
   return {
     expands: toolsExpand || mcpExpand || bashExpand || netExpand || writeExpand,
@@ -163,12 +152,9 @@ export async function resolveSwitchAgentVerdict(
   }
 }
 
-export function makePersistSwitchedDefinition(
-  crud: SwitchAgentPersistCrud,
-): PersistSwitchedDefinition {
+export function makePersistSwitchedDefinition(crud: SwitchAgentPersistCrud): PersistSwitchedDefinition {
   const genId =
-    crud.generateDefinitionId ??
-    (() => `dwfd_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`);
+    crud.generateDefinitionId ?? (() => `dwfd_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`);
   return ({ prevDefinition, nodeId, newAgentId }) => {
     let manifest: DynamicWorkflowManifest;
     try {
@@ -178,9 +164,7 @@ export function makePersistSwitchedDefinition(
     }
     const nextManifest: DynamicWorkflowManifest = {
       ...manifest,
-      nodes: (manifest.nodes ?? []).map((n) =>
-        n.id === nodeId ? { ...n, agentId: newAgentId } : n,
-      ),
+      nodes: (manifest.nodes ?? []).map((n) => (n.id === nodeId ? { ...n, agentId: newAgentId } : n)),
     };
 
     const newDefinitionId = genId();

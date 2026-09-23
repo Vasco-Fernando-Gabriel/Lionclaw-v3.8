@@ -1,4 +1,3 @@
-
 import { describe, it, expect, afterEach } from 'vitest';
 import path from 'path';
 import {
@@ -37,9 +36,7 @@ describe('listCursorModels', () => {
     ]);
     expect(getCachedCursorModelCatalog()).toBe(catalog);
 
-    const again = await listCursorModels(
-      opts('echo', { entryPathOverride: path.join(__dirname, 'nao-existe.cjs') }),
-    );
+    const again = await listCursorModels(opts('echo', { entryPathOverride: path.join(__dirname, 'nao-existe.cjs') }));
     expect(again).toBe(catalog);
   });
 

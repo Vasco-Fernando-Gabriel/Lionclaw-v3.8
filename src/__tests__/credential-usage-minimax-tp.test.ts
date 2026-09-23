@@ -1,8 +1,6 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getAgentsUsingVaultKey } from '../lib/credential-usage';
 import type { AgentConfig } from '../types';
-
 
 const mockAgents: AgentConfig[] = [
   {

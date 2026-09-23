@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import { createLogger } from './logger';
@@ -33,11 +32,9 @@ import {
 
 const logger = createLogger('security-audit-runner');
 
-
 const SECURITY_AUDIT_PHASE = 2;
 
 const FINDING_REGEX = /^### [A-Z_]+-\d{3}:/gm;
-
 
 export interface SecurityAuditAgentDef {
   agentId: string;
@@ -48,21 +45,46 @@ export interface SecurityAuditAgentDef {
 }
 
 export const SECURITY_AUDIT_AGENTS: SecurityAuditAgentDef[] = [
-  { agentId: SECRETS_SCANNER_ID,      name: 'Secrets Scanner',      tags: ['config', 'migration'],                                                     order: 1, slug: 'secrets'     },
-  { agentId: AUTH_AUDITOR_ID,         name: 'Auth Auditor',         tags: ['auth', 'route', 'middleware'],                                              order: 2, slug: 'auth'        },
-  { agentId: ISOLATION_INSPECTOR_ID,  name: 'Isolation Inspector',  tags: ['query', 'migration', 'middleware'],                                         order: 3, slug: 'isolation'   },
-  { agentId: DUPLICATION_DETECTOR_ID, name: 'Duplication Detector', tags: ['route', 'query', 'auth', 'middleware', 'async', 'error-handling', 'template'], order: 4, slug: 'duplication' },
-  { agentId: LOGIC_ANALYZER_ID,       name: 'Logic Analyzer',       tags: ['async', 'query', 'error-handling'],                                         order: 5, slug: 'logic'       },
-  { agentId: STANDARDS_CHECKER_ID,    name: 'Standards Checker',    tags: ['route', 'query', 'auth', 'middleware', 'async', 'error-handling', 'template'], order: 6, slug: 'standards'   },
-  { agentId: OWASP_SCANNER_ID,        name: 'OWASP Scanner',        tags: ['route', 'query', 'auth', 'template'],                                       order: 7, slug: 'owasp'       },
+  { agentId: SECRETS_SCANNER_ID, name: 'Secrets Scanner', tags: ['config', 'migration'], order: 1, slug: 'secrets' },
+  { agentId: AUTH_AUDITOR_ID, name: 'Auth Auditor', tags: ['auth', 'route', 'middleware'], order: 2, slug: 'auth' },
+  {
+    agentId: ISOLATION_INSPECTOR_ID,
+    name: 'Isolation Inspector',
+    tags: ['query', 'migration', 'middleware'],
+    order: 3,
+    slug: 'isolation',
+  },
+  {
+    agentId: DUPLICATION_DETECTOR_ID,
+    name: 'Duplication Detector',
+    tags: ['route', 'query', 'auth', 'middleware', 'async', 'error-handling', 'template'],
+    order: 4,
+    slug: 'duplication',
+  },
+  {
+    agentId: LOGIC_ANALYZER_ID,
+    name: 'Logic Analyzer',
+    tags: ['async', 'query', 'error-handling'],
+    order: 5,
+    slug: 'logic',
+  },
+  {
+    agentId: STANDARDS_CHECKER_ID,
+    name: 'Standards Checker',
+    tags: ['route', 'query', 'auth', 'middleware', 'async', 'error-handling', 'template'],
+    order: 6,
+    slug: 'standards',
+  },
+  {
+    agentId: OWASP_SCANNER_ID,
+    name: 'OWASP Scanner',
+    tags: ['route', 'query', 'auth', 'template'],
+    order: 7,
+    slug: 'owasp',
+  },
 ];
 
-
-export function resolveFilesForAgent(
-  manifest: RepoManifest,
-  tags: string[],
-  maxFiles = 300,
-): string[] {
+export function resolveFilesForAgent(manifest: RepoManifest, tags: string[], maxFiles = 300): string[] {
   const seen = new Set<string>();
   const collect: string[] = [];
 
@@ -103,7 +125,11 @@ export function resolveFilesForAgent(
   }
 
   const projectPath = manifest.projectPath;
-  interface FileMeta { relPath: string; size: number; mtime: number }
+  interface FileMeta {
+    relPath: string;
+    size: number;
+    mtime: number;
+  }
   const withMeta: FileMeta[] = filtered.map((relPath) => {
     try {
       const stat = fs.statSync(path.join(projectPath, relPath));
@@ -167,7 +193,6 @@ export function partitionSecurityAuditResume(
   return { queue, interruptedAgentIds, failed };
 }
 
-
 interface AgentRunResult {
   output: string;
   metrics: {
@@ -188,7 +213,6 @@ interface AgentRunResult {
   provider: string;
   metadata?: AgentExecutionResult['metadata'];
 }
-
 
 export class SecurityAuditRunner {
   private currentProjectId: string | null = null;
@@ -252,10 +276,7 @@ export class SecurityAuditRunner {
       SECURITY_AUDIT_AGENTS.map((a) => ({ agentId: a.agentId, agentName: a.name })),
     );
 
-    const resume = partitionSecurityAuditResume(
-      SECURITY_AUDIT_AGENTS,
-      getSecurityAgentStatuses(projectId),
-    );
+    const resume = partitionSecurityAuditResume(SECURITY_AUDIT_AGENTS, getSecurityAgentStatuses(projectId));
     const queue = resume.queue;
     for (const agentId of resume.interruptedAgentIds) {
       updateSecurityAgentStatus(projectId, agentId, {
@@ -268,7 +289,8 @@ export class SecurityAuditRunner {
 
     const runAgent = async (agentDef: SecurityAuditAgentDef): Promise<void> => {
       let initialModel: string | null = null;
-      let initialRuntime: 'cloud' | 'local' | 'external' | 'codex' | 'zai' | 'minimax-tp' | 'kimi' | 'grok' | 'cursor' | null = null;
+      let initialRuntime:
+        'cloud' | 'local' | 'external' | 'codex' | 'zai' | 'minimax-tp' | 'kimi' | 'grok' | 'cursor' | null = null;
       try {
         const cfg = await resolveAgentQueryConfig(agentDef.agentId);
         initialModel = cfg.model ?? null;
@@ -311,9 +333,7 @@ export class SecurityAuditRunner {
       const getAdditionalFilesAfterStart = (): number => {
         let count = 0;
         for (const fp of tracker.filesRead) {
-          const relative = fp.startsWith(projectPath + path.sep)
-            ? fp.slice(projectPath.length + 1)
-            : fp;
+          const relative = fp.startsWith(projectPath + path.sep) ? fp.slice(projectPath.length + 1) : fp;
           if (!tracker.initialFilesSet.has(relative)) {
             count += 1;
           }
@@ -337,7 +357,7 @@ export class SecurityAuditRunner {
           additionalFilesAfterStart: extrasCount,
           toolCallsCount: tracker.toolCallsCount,
           costUsd: extras?.costUsd ?? 0,
-          durationMs: extras?.durationMs ?? (Date.now() - agentStartedAt.getTime()),
+          durationMs: extras?.durationMs ?? Date.now() - agentStartedAt.getTime(),
           findingsCount: extras?.findingsCount,
           model: extras?.model ?? tracker.model,
           runtime: tracker.runtime,
@@ -363,13 +383,10 @@ export class SecurityAuditRunner {
       const partialFilename = `Security-${scanId}-${agentDef.order.toString().padStart(2, '0')}-${agentDef.slug}.md`;
       const partialPath = path.join(securityDir, partialFilename);
 
-      const previousScanNote = manifest.previousScan
-        ? `\n\nScan anterior disponivel em: ${manifest.previousScan}`
-        : '';
+      const previousScanNote = manifest.previousScan ? `\n\nScan anterior disponivel em: ${manifest.previousScan}` : '';
 
-      const fileList = files.length > 0
-        ? files.map((f) => `- ${f}`).join('\n')
-        : '(nenhum arquivo classificado para suas tags)';
+      const fileList =
+        files.length > 0 ? files.map((f) => `- ${f}`).join('\n') : '(nenhum arquivo classificado para suas tags)';
 
       const userPrompt = buildAuditPrompt({
         agentDef,
@@ -487,16 +504,18 @@ export class SecurityAuditRunner {
 
       let findingsCount = (result.output.match(FINDING_REGEX) ?? []).length;
       if (findingsCount === 0 && result.output.length > 200) {
-        const normalised = result.output.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
-        const hasFindingKeywords = (
+        const normalised = result.output
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/\p{Diacritic}/gu, '');
+        const hasFindingKeywords =
           normalised.includes('finding') ||
           normalised.includes('vulnerab') ||
           normalised.includes('critico') ||
           normalised.includes('exposta') ||
           normalised.includes('exposed') ||
           normalised.includes('hardcod') ||
-          normalised.includes('injection')
-        );
+          normalised.includes('injection');
         if (hasFindingKeywords) {
           const boldFindingMatches = result.output.match(/\*\*Finding[^*]*\*\*/gi) ?? [];
           const headerFindingMatches = result.output.match(/^### Finding [^\n]+/gm) ?? [];
@@ -520,17 +539,15 @@ export class SecurityAuditRunner {
       const isTruncated = ((): boolean => {
         if (findingsCount > 0) return false;
         const lower = result.output.toLowerCase();
-        const explicitNoFindings = (
+        const explicitNoFindings =
           lower.includes('nenhum finding') ||
           lower.includes('no findings') ||
           lower.includes('sem findings') ||
-          lower.includes('0 findings')
-        );
+          lower.includes('0 findings');
         if (explicitNoFindings) return false;
-        const looksLikeMidStream = (
+        const looksLikeMidStream =
           result.output.length < 200 ||
-          /continuarei|continuando|vou prosseguir|vou analisar mais|let me continue|continuing/i.test(result.output)
-        );
+          /continuarei|continuando|vou prosseguir|vou analisar mais|let me continue|continuing/i.test(result.output);
         return looksLikeMidStream;
       })();
 
@@ -544,7 +561,9 @@ export class SecurityAuditRunner {
           },
           'Audit agent output appears truncated (incomplete reasoning, no findings, no explicit zero-findings statement)',
         );
-        callbacks.onText?.(`[${agentDef.name}] AVISO: output incompleto detectado. Pode ter sido cortado prematuramente.`);
+        callbacks.onText?.(
+          `[${agentDef.name}] AVISO: output incompleto detectado. Pode ter sido cortado prematuramente.`,
+        );
       }
 
       const completedAt = new Date().toISOString();
@@ -597,7 +616,9 @@ export class SecurityAuditRunner {
           additionalFilesAfterStart: getAdditionalFilesAfterStart(),
           ...(result.metrics.tokenStatus !== undefined && { tokenStatus: result.metrics.tokenStatus }),
           ...(result.metrics.costStatus !== undefined && { costStatus: result.metrics.costStatus }),
-          ...(result.metrics.costUnknownReason !== undefined && { costUnknownReason: result.metrics.costUnknownReason }),
+          ...(result.metrics.costUnknownReason !== undefined && {
+            costUnknownReason: result.metrics.costUnknownReason,
+          }),
           ...(result.metadata?.costSource !== undefined && { costSource: result.metadata.costSource }),
           ...(result.metadata?.costEstimationKind !== undefined && {
             costEstimationKind: result.metadata.costEstimationKind,
@@ -671,7 +692,13 @@ export class SecurityAuditRunner {
     abortController: AbortController,
     pipelineDocsId: string | null,
     agentDef: SecurityAuditAgentDef,
-    tracker: { initialFilesCount: number; initialFilesSet: Set<string>; filesRead: Set<string>; toolCallsCount: number; model: string | null },
+    tracker: {
+      initialFilesCount: number;
+      initialFilesSet: Set<string>;
+      filesRead: Set<string>;
+      toolCallsCount: number;
+      model: string | null;
+    },
     emitProgress: (
       status: 'queued' | 'running' | 'completed' | 'failed',
       extras?: Partial<{ findingsCount: number; costUsd: number; durationMs: number; model: string | null }>,
@@ -743,7 +770,6 @@ export class SecurityAuditRunner {
       'Security audit agent finished',
     );
 
-
     return {
       output: result.output,
       metrics: result.metrics,
@@ -754,7 +780,6 @@ export class SecurityAuditRunner {
     };
   }
 }
-
 
 export function runWithConcurrencyLimit<T>(
   queue: T[],
@@ -785,11 +810,7 @@ export function runWithConcurrencyLimit<T>(
     };
 
     const launchNext = (): void => {
-      while (
-        !abortSignal.aborted &&
-        activeWorkers < maxConcurrent &&
-        nextIndex < queue.length
-      ) {
+      while (!abortSignal.aborted && activeWorkers < maxConcurrent && nextIndex < queue.length) {
         const item = queue[nextIndex++];
         activeWorkers++;
 
@@ -818,7 +839,6 @@ export function runWithConcurrencyLimit<T>(
     launchNext();
   });
 }
-
 
 interface BuildAuditPromptArgs {
   agentDef: SecurityAuditAgentDef;
@@ -896,7 +916,6 @@ O runner salvara automaticamente o conteudo da sua resposta. Voce nao precisa e 
 Comece a FASE 1 agora.`;
 }
 
-
 interface MergeArgs {
   securityDir: string;
   scanId: string;
@@ -913,17 +932,16 @@ async function mergeAuditFiles(args: MergeArgs): Promise<string> {
   const sections: string[] = [];
 
   if (failed.length > 0) {
-    const failedList = failed
-      .map((f) => `- ${f.name} (${f.agentId}): ${f.error.substring(0, 100)}`)
-      .join('\n');
+    const failedList = failed.map((f) => `- ${f.name} (${f.agentId}): ${f.error.substring(0, 100)}`).join('\n');
     sections.push(
       `# Aviso: Agentes com falha\n\nOs seguintes agentes nao concluiram a auditoria:\n\n${failedList}\n\nOs resultados abaixo sao parciais.`,
     );
   }
 
   for (const agentDef of sortedAgents) {
-    const partialFilename = partialFilesByAgent?.get(agentDef.agentId)
-      ?? `Security-${scanId}-${agentDef.order.toString().padStart(2, '0')}-${agentDef.slug}.md`;
+    const partialFilename =
+      partialFilesByAgent?.get(agentDef.agentId) ??
+      `Security-${scanId}-${agentDef.order.toString().padStart(2, '0')}-${agentDef.slug}.md`;
     const partialPath = path.join(securityDir, partialFilename);
 
     if (!fs.existsSync(partialPath)) {

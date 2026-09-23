@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import {
   buildHandoffPrompt,
@@ -11,12 +10,9 @@ import {
 } from '../handoff-to-orchestrator';
 import type { LocalRepositoryRecord, LocalRepositoryStatus } from '../../types/repo-graph';
 
-
 const EM_DASH = '—';
 
-function pipelineReq(
-  overrides: Partial<PipelineHandoffRequest> = {},
-): PipelineHandoffRequest {
+function pipelineReq(overrides: Partial<PipelineHandoffRequest> = {}): PipelineHandoffRequest {
   return {
     source: 'pipeline',
     pipelineType: 'development',
@@ -28,9 +24,7 @@ function pipelineReq(
   };
 }
 
-function workflowReq(
-  overrides: Partial<WorkflowHandoffRequest> = {},
-): WorkflowHandoffRequest {
+function workflowReq(overrides: Partial<WorkflowHandoffRequest> = {}): WorkflowHandoffRequest {
   return {
     source: 'workflow',
     projectId: 'run-1',
@@ -69,7 +63,6 @@ function makeRecord(
 
 const READY: GraphHint = { state: 'ready' };
 
-
 describe('buildHandoffPrompt - cabecalho comum', () => {
   it('inclui projectName, projectId, rotulo e projectPath no cabecalho', () => {
     const out = buildHandoffPrompt(pipelineReq(), READY);
@@ -106,10 +99,7 @@ describe('buildHandoffPrompt - (a) development/feature/dev-v2', () => {
   });
 
   it('inclui a linha de SPEC apenas quando specPath existe', () => {
-    const out = buildHandoffPrompt(
-      pipelineReq({ specPath: '/Users/dono/code/meu-projeto/spec.md' }),
-      READY,
-    );
+    const out = buildHandoffPrompt(pipelineReq({ specPath: '/Users/dono/code/meu-projeto/spec.md' }), READY);
     expect(out).toContain('leia o documento de SPEC em /Users/dono/code/meu-projeto/spec.md');
   });
 });
@@ -124,10 +114,7 @@ describe('buildHandoffPrompt - (b) security', () => {
 
   it('linha de SPEC condicional ao specPath', () => {
     const semSpec = buildHandoffPrompt(pipelineReq({ pipelineType: 'security', specPath: null }), READY);
-    const comSpec = buildHandoffPrompt(
-      pipelineReq({ pipelineType: 'security', specPath: '/repo/SPEC.md' }),
-      READY,
-    );
+    const comSpec = buildHandoffPrompt(pipelineReq({ pipelineType: 'security', specPath: '/repo/SPEC.md' }), READY);
     expect(semSpec).not.toContain('leia a SPEC em');
     expect(comSpec).toContain('leia a SPEC em /repo/SPEC.md');
   });
@@ -142,10 +129,7 @@ describe('buildHandoffPrompt - (c) architecture-review', () => {
   });
 
   it('linha de SPEC condicional ao specPath', () => {
-    const semSpec = buildHandoffPrompt(
-      pipelineReq({ pipelineType: 'architecture-review', specPath: null }),
-      READY,
-    );
+    const semSpec = buildHandoffPrompt(pipelineReq({ pipelineType: 'architecture-review', specPath: null }), READY);
     const comSpec = buildHandoffPrompt(
       pipelineReq({ pipelineType: 'architecture-review', specPath: '/repo/SPEC.md' }),
       READY,
@@ -164,10 +148,7 @@ describe('buildHandoffPrompt - (d) workflow', () => {
   });
 
   it('omite branch/resumo quando ausentes', () => {
-    const out = buildHandoffPrompt(
-      workflowReq({ branch: null, workflowSummary: undefined }),
-      READY,
-    );
+    const out = buildHandoffPrompt(workflowReq({ branch: null, workflowSummary: undefined }), READY);
     expect(out).not.toContain('Branch da entrega:');
     expect(out).not.toContain('Resumo da entrega:');
   });
@@ -241,7 +222,6 @@ describe('buildHandoffPrompt - ausencia de em-dash em todas as saidas', () => {
   }
 });
 
-
 interface DepsSpy {
   deps: HandoffDeps;
   ensureSession: ReturnType<typeof vi.fn>;
@@ -256,12 +236,14 @@ interface DepsSpy {
   order: string[];
 }
 
-function makeDeps(opts: {
-  ensure?: { sessionId: string } | { error: string };
-  current?: string | null;
-  record?: LocalRepositoryRecord | { error: string };
-  build?: { runId: string } | { error: string };
-} = {}): DepsSpy {
+function makeDeps(
+  opts: {
+    ensure?: { sessionId: string } | { error: string };
+    current?: string | null;
+    record?: LocalRepositoryRecord | { error: string };
+    build?: { runId: string } | { error: string };
+  } = {},
+): DepsSpy {
   const order: string[] = [];
   const ensure = opts.ensure ?? { sessionId: 'sid-new' };
   const record = opts.record ?? makeRecord('ready');

@@ -1,16 +1,13 @@
-
 import { getAllAgents } from './db';
 import type { AgentConfig } from '../../src/types';
 
 export function getCodexAgentsDescription(): string {
-  const agents = getAllAgents().filter(
-    (a: AgentConfig) => a.isActive && a.runtime === 'codex' && a.codexConfig,
-  );
+  const agents = getAllAgents().filter((a: AgentConfig) => a.isActive && a.runtime === 'codex' && a.codexConfig);
 
   if (agents.length === 0) return '';
 
-  const lines = agents.map((a: AgentConfig) =>
-    `  - agentId: "${a.id}" | nome: ${a.name} | ${a.description} | modelo: ${a.codexConfig?.model}`,
+  const lines = agents.map(
+    (a: AgentConfig) => `  - agentId: "${a.id}" | nome: ${a.name} | ${a.description} | modelo: ${a.codexConfig?.model}`,
   );
 
   return (

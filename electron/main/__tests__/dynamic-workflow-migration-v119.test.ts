@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 
 describe('migration v119 (obsoleta: colapsada pela V120 modo unico)', () => {

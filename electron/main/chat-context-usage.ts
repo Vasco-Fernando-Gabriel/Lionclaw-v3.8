@@ -1,4 +1,3 @@
-
 import { getSetting } from './db';
 import { getContextWindow } from './agent-runtime/model-context-windows';
 import {
@@ -11,8 +10,7 @@ export type ChatContextUsage = NonNullable<StreamChunk['contextUsage']>;
 
 export function resolveCompactionThresholdPercent(): number {
   const raw = parseInt(
-    getSetting(CHAT_COMPACTION_TRIGGER_PERCENT_SETTING_KEY) ||
-      String(DEFAULT_CHAT_COMPACTION_TRIGGER_PERCENT),
+    getSetting(CHAT_COMPACTION_TRIGGER_PERCENT_SETTING_KEY) || String(DEFAULT_CHAT_COMPACTION_TRIGGER_PERCENT),
     10,
   );
   if (!Number.isFinite(raw)) return DEFAULT_CHAT_COMPACTION_TRIGGER_PERCENT;

@@ -11,12 +11,7 @@ vi.mock('../logger', () => ({
 }));
 vi.mock('electron', () => ({ ipcMain: { handle: vi.fn() }, shell: {} }));
 
-import {
-  getDb,
-  getSetting,
-  initDatabase,
-  setOrchestratorCompactionSelection,
-} from '../db';
+import { getDb, getSetting, initDatabase, setOrchestratorCompactionSelection } from '../db';
 
 const previous = {
   runtime: 'claude-sdk',
@@ -32,8 +27,7 @@ beforeAll(() => {
 afterAll(() => {
   try {
     getDb().close();
-  } catch {
-  }
+  } catch {}
   fs.rmSync(state.root, { recursive: true, force: true });
 });
 
@@ -49,11 +43,13 @@ describe('setOrchestratorCompactionSelection', () => {
       END;
     `);
 
-    expect(() => setOrchestratorCompactionSelection({
-      runtime: 'codex-sdk',
-      provider: 'codex',
-      model: 'gpt-5.5',
-    })).toThrow(/injected compaction write failure/i);
+    expect(() =>
+      setOrchestratorCompactionSelection({
+        runtime: 'codex-sdk',
+        provider: 'codex',
+        model: 'gpt-5.5',
+      }),
+    ).toThrow(/injected compaction write failure/i);
 
     expect(getSetting('orchestrator_compaction_runtime')).toBe(previous.runtime);
     expect(getSetting('orchestrator_compaction_provider')).toBe(previous.provider);

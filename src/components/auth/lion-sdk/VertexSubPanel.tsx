@@ -34,9 +34,7 @@ export function VertexSubPanel({ onComplete }: VertexSubPanelProps) {
       } else {
         setTestStatus('fail');
         const msg =
-          result && typeof result === 'object' && 'error' in result
-            ? String(result.error)
-            : 'Falha ao conectar.';
+          result && typeof result === 'object' && 'error' in result ? String(result.error) : 'Falha ao conectar.';
         setTestMessage(msg);
       }
     } catch (e) {
@@ -91,9 +89,7 @@ export function VertexSubPanel({ onComplete }: VertexSubPanelProps) {
             {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         </div>
-        <p className="text-xs text-zinc-600 mt-1.5">
-          Armazenada no keychain do SO, nunca em plaintext.
-        </p>
+        <p className="text-xs text-zinc-600 mt-1.5">Armazenada no keychain do SO, nunca em plaintext.</p>
       </div>
 
       {/* Modelo */}
@@ -112,9 +108,7 @@ export function VertexSubPanel({ onComplete }: VertexSubPanelProps) {
             </option>
           ))}
         </select>
-        <p className="text-xs text-zinc-600 mt-1">
-          Catalogo Vertex Gemini. Padrao: {VERTEX_DEFAULT_MODEL}.
-        </p>
+        <p className="text-xs text-zinc-600 mt-1">Catalogo Vertex Gemini. Padrao: {VERTEX_DEFAULT_MODEL}.</p>
       </div>
 
       {/* Botao testar */}

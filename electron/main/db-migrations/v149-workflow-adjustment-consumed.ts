@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const TABLE = 'dynamic_workflow_messages';
 const COLUMNS: ReadonlyArray<{ name: string; ddl: string }> = [
   { name: 'applied_node_id', ddl: 'applied_node_id TEXT' },

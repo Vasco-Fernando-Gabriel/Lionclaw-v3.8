@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const OLD_BLOCK = `   - Use SOMENTE agentes ATIVOS no catalogo fornecido na execucao
    - Sem especialista adequado, use o coder generico fornecido`;
 

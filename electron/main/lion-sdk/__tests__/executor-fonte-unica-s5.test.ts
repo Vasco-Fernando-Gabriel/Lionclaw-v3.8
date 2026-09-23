@@ -1,8 +1,6 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { OrchestratorSelection } from '../../orchestrator-selection';
 import { estimateTokens } from '../../token-estimator';
-
 
 const insertMessage = vi.fn((): number => 1);
 const updateSessionTokens = vi.fn();
@@ -22,9 +20,7 @@ vi.mock('../../db', () => ({
   updateSessionTokens: (...a: unknown[]) => updateSessionTokens(...(a as [])),
   setSessionActiveContextTokens: (...a: unknown[]) => setSessionActiveContextTokens(...(a as [])),
   clearSessionPendingSeed: (...a: unknown[]) => clearSessionPendingSeed(...(a as [])),
-  getSetting: vi.fn((key: string) =>
-    key === 'onboarding_completed' ? 'true' : '',
-  ),
+  getSetting: vi.fn((key: string) => (key === 'onboarding_completed' ? 'true' : '')),
 }));
 
 vi.mock('../../logger', () => ({
@@ -94,7 +90,6 @@ vi.mock('../runtime', () => ({
   runLionLoop: (...args: unknown[]) => runLionLoop(...args),
 }));
 
-
 import { executeLionSdkQuery } from '../index';
 
 const SELECTION: OrchestratorSelection = {
@@ -163,9 +158,7 @@ describe('lion-sdk executor — SPEC orquestrador-fonte-unica S5', () => {
     expect(tokens).toBeGreaterThanOrEqual(Math.ceil(bigChunk.length / 4));
     expect(tokens).not.toBe(300);
     expect(tokens).not.toBe(390);
-    expect(tokens).toBeGreaterThanOrEqual(
-      estimateTokens(bigChunk) + Math.floor('resposta lion'.length / 4),
-    );
+    expect(tokens).toBeGreaterThanOrEqual(estimateTokens(bigChunk) + Math.floor('resposta lion'.length / 4));
   });
 
   it('contador ativo: turno que FALHA NAO seta (valor anterior preservado)', async () => {

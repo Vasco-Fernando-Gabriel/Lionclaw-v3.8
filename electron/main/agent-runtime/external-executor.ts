@@ -1,4 +1,3 @@
-
 import { createLogger } from '../logger';
 import {
   resolveExternalAuth,
@@ -18,11 +17,8 @@ import { emptyResponseExecutionError } from './llm-error';
 
 const logger = createLogger('external-executor');
 
-async function run(
-  req: AgentExecutionRequest,
-  config: AgentQueryConfig,
-): Promise<AgentExecutionResult> {
-  const agentRecord = getAgent(req.agentId);
+async function run(req: AgentExecutionRequest, config: AgentQueryConfig): Promise<AgentExecutionResult> {
+  const agentRecord = req.executionAgent ?? getAgent(req.agentId);
   if (!agentRecord?.externalConfig) {
     throw new Error(`Agent ${req.agentId} has runtime=external but no externalConfig`);
   }
@@ -35,7 +31,6 @@ async function run(
     return googleGenAiExecutor.run(req, config);
   }
 
-
   warnMcpToolsDroppedOnce({
     agentId: req.agentId,
     runtime: 'external',
@@ -46,7 +41,7 @@ async function run(
   if (!extCfg.baseUrl || extCfg.baseUrl.trim().length === 0) {
     throw new Error(
       `Agent ${req.agentId} (provider ${extCfg.provider}) sem baseUrl. ` +
-      `Custom OpenAI-compatible exige baseUrl; presets devem preencher a partir de PROVIDER_PRESETS.`,
+        `Custom OpenAI-compatible exige baseUrl; presets devem preencher a partir de PROVIDER_PRESETS.`,
     );
   }
 
@@ -68,45 +63,44 @@ async function run(
 
   let extResult: Awaited<ReturnType<typeof ollamaChatWithRetry>>;
   try {
-    extResult = await ollamaChatWithRetry(
-      extCfg.baseUrl,
-      extCfg.model,
-      config.systemPrompt,
-      req.prompt,
-      ollamaTools,
-      {
-        cwd: req.cwd,
-        onText: req.onText,
-        onTextDelta: req.onText,
-        onToolUse: (record) => {
-          req.onToolUse?.(record.tool);
-          let parsedInput: unknown = record.input;
-          if (typeof record.input === 'string') {
-            try { parsedInput = JSON.parse(record.input); } catch { parsedInput = null; }
+    extResult = await ollamaChatWithRetry(extCfg.baseUrl, extCfg.model, config.systemPrompt, req.prompt, ollamaTools, {
+      cwd: req.cwd,
+      signal: req.abortController.signal,
+      onActivity: req.onActivity,
+      toolDispatch: req.swarmToolDispatch,
+      disableTaskRetry: Boolean(req.executionAgent),
+      externallyManagedTimeout: Boolean(req.swarmLifecycle),
+      onText: req.onText,
+      onTextDelta: req.onText,
+      onToolUse: (record) => {
+        req.onToolUse?.(record.tool);
+        let parsedInput: unknown = record.input;
+        if (typeof record.input === 'string') {
+          try {
+            parsedInput = JSON.parse(record.input);
+          } catch {
+            parsedInput = null;
           }
-          req.onToolUseComplete?.(record.tool, parsedInput);
-        },
-        provider: extCfg.provider,
-        authHeaders,
-        maxTokens: extCfg.maxTokens,
-        streaming: true,
-        extraBodyParams: reasoningParams,
-        maxRounds: agentRecord.maxToolRounds ?? 50,
-        priorMessages: req.priorMessages,
+        }
+        req.onToolUseComplete?.(record.tool, parsedInput);
       },
-    );
+      provider: extCfg.provider,
+      authHeaders,
+      maxTokens: extCfg.maxTokens,
+      streaming: true,
+      extraBodyParams: reasoningParams,
+      maxRounds: agentRecord.maxToolRounds ?? 50,
+      priorMessages: req.priorMessages,
+    });
   } catch (err) {
     const errMsg = (err as Error).message || '';
     if (isContextLengthError(errMsg)) {
-      throw new Error(
-        `Contexto excedido para modelo ${extCfg.model}. Considere usar um modelo com janela maior.`,
-      );
+      throw new Error(`Contexto excedido para modelo ${extCfg.model}. Considere usar um modelo com janela maior.`);
     }
     throw err;
   }
 
   const durationMs = Date.now() - startedAt;
-
 
   const pricing = resolveExternalPricing(extCfg);
   const reportedCostUsd = extResult.reportedCostUsd;

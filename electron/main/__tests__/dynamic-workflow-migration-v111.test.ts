@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -28,12 +27,8 @@ describe('migration v111 dynamic-workflow builder green-check no dev-loop (R10, 
   it('R10 metade 1: a V113 (FIX F2-S7) SUPERSEDE a secao green-check da V111 no seed .ts', () => {
     const neu = grabBlock(V111_SOURCE, 'NEW_SECTION');
     expect(neu).toContain('MESCLAR os findings dela no MESMO set de convergencia');
-    expect(dynamicWorkflowBuilder.systemPrompt).not.toContain(
-      'MESCLAR os findings dela no MESMO set de convergencia',
-    );
-    expect(dynamicWorkflowBuilder.systemPrompt).toContain(
-      'green-check do host VERDE (green.ok, gate deterministico)',
-    );
+    expect(dynamicWorkflowBuilder.systemPrompt).not.toContain('MESCLAR os findings dela no MESMO set de convergencia');
+    expect(dynamicWorkflowBuilder.systemPrompt).toContain('green-check do host VERDE (green.ok, gate deterministico)');
   });
 
   it('R10 metade 1: o NEW_PRIMITIVES aparece VERBATIM no seed .ts (greenCheck no ctx)', () => {

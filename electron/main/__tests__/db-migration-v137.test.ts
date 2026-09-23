@@ -2,15 +2,12 @@ import Database from 'better-sqlite3';
 import { describe, expect, it, vi } from 'vitest';
 import { applyMigrationV137 } from '../db-migrations/v137-grok-agent-runtime';
 
-function mockDb(options?: {
-  fail?: boolean;
-  violationsBefore?: unknown[];
-  violationsAfter?: unknown[];
-}) {
+function mockDb(options?: { fail?: boolean; violationsBefore?: unknown[]; violationsAfter?: unknown[] }) {
   const exec = vi.fn((_sql: string) => {
     if (options?.fail) throw new Error('injected migration failure');
   });
-  const pragma = vi.fn()
+  const pragma = vi
+    .fn()
     .mockReturnValueOnce(options?.violationsBefore ?? [])
     .mockReturnValue(options?.violationsAfter ?? []);
   const immediate = vi.fn((fn: () => void) => fn());
@@ -73,11 +70,17 @@ describe('migration v137 Grok runtime', () => {
     applyMigrationV137(db);
     db.pragma('foreign_keys = ON');
 
-    expect(db.prepare(`
+    expect(
+      db
+        .prepare(
+          `
       SELECT id, model, effort, thinking_budget, runtime, access, allow_bash,
         allowed_commands, allow_network, max_tool_rounds, squad
       FROM agents WHERE id = 'custom'
-    `).get()).toEqual({
+    `,
+        )
+        .get(),
+    ).toEqual({
       id: 'custom',
       model: 'kimi-k2.5',
       effort: 'max',
@@ -94,8 +97,9 @@ describe('migration v137 Grok runtime', () => {
     expect(db.pragma('foreign_key_check')).toEqual([
       { table: 'task_runs', rowid: 16, parent: 'scheduled_tasks', fkid: 0 },
     ]);
-    expect(() => db.prepare("INSERT INTO agents (id, name, runtime) VALUES ('grok', 'Grok', 'grok')").run())
-      .not.toThrow();
+    expect(() =>
+      db.prepare("INSERT INTO agents (id, name, runtime) VALUES ('grok', 'Grok', 'grok')").run(),
+    ).not.toThrow();
     expect(db.prepare(`SELECT key, value FROM settings ORDER BY key`).all()).toEqual([
       { key: 'grok_max_concurrency', value: '3' },
       { key: 'orchestrator_grok_effort', value: 'high' },

@@ -1,4 +1,3 @@
-
 export interface ProjectLock {
   projectId: string;
   pipelineKind: 'pipeline-engine';
@@ -7,14 +6,9 @@ export interface ProjectLock {
 
 const activeLocks = new Map<string, ProjectLock>();
 
-export type AcquireLockResult =
-  | { ok: true; lock: ProjectLock }
-  | { ok: false; runningPipeline: ProjectLock };
+export type AcquireLockResult = { ok: true; lock: ProjectLock } | { ok: false; runningPipeline: ProjectLock };
 
-export function acquireProjectLock(
-  projectId: string,
-  kind: 'pipeline-engine' = 'pipeline-engine',
-): AcquireLockResult {
+export function acquireProjectLock(projectId: string, kind: 'pipeline-engine' = 'pipeline-engine'): AcquireLockResult {
   const existing = activeLocks.get(projectId);
   if (existing) return { ok: false, runningPipeline: existing };
   const lock: ProjectLock = { projectId, pipelineKind: kind, acquiredAt: new Date() };

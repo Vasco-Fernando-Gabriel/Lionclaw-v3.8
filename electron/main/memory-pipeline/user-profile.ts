@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -12,14 +11,8 @@ import { splitIntoSections, countNonEmptyLines } from './md-sections';
 
 const logger = createLogger('user-profile');
 
-
 export type UserSection =
-  | 'identidade'
-  | 'perfil_profissional'
-  | 'negocios_projetos'
-  | 'stack_ferramentas'
-  | 'preferencias'
-  | 'fatos_duraveis';
+  'identidade' | 'perfil_profissional' | 'negocios_projetos' | 'stack_ferramentas' | 'preferencias' | 'fatos_duraveis';
 
 export const USER_SECTION_HEADERS: Record<UserSection, string> = {
   identidade: '## Identidade',
@@ -39,9 +32,7 @@ export const USER_SECTION_ORDER: UserSection[] = [
   'fatos_duraveis',
 ];
 
-export const VALID_USER_SECTIONS: ReadonlySet<UserSection> = new Set<UserSection>(
-  USER_SECTION_ORDER,
-);
+export const VALID_USER_SECTIONS: ReadonlySet<UserSection> = new Set<UserSection>(USER_SECTION_ORDER);
 
 export const USER_SKELETON = [
   '# Sobre o Usuario',
@@ -96,9 +87,8 @@ function formatToday(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-
 export interface ArchivedUserLine {
-  section: string; // header de origem (ex: '## Negocios e projetos')
+  section: string;
   line: string;
 }
 
@@ -106,13 +96,12 @@ function archiveUserLines(entries: ArchivedUserLine[]): void {
   if (entries.length === 0) return;
   const archivePath = path.join(getLionClawHome(), 'USER-archive.md');
   const ts = new Date().toISOString();
-  const block = entries.map(e => `- [${ts}] [${e.section}] ${e.line}`).join('\n') + '\n';
+  const block = entries.map((e) => `- [${ts}] [${e.section}] ${e.line}`).join('\n') + '\n';
   fs.appendFileSync(archivePath, block, 'utf-8');
 }
 
-
 interface UserMdModel {
-  titleLines: string[]; // linhas `# ...` antes do primeiro header (titulo preservado)
+  titleLines: string[];
   sections: Record<UserSection, string[]>;
 }
 
@@ -165,10 +154,10 @@ function parseUserMd(rawContent: string): { model: UserMdModel; foldedBlocks: st
 
     const section = headerToSection(block.header);
     if (section) {
-      const body = block.lines.filter(l => l.trim().length > 0);
+      const body = block.lines.filter((l) => l.trim().length > 0);
       model.sections[section].push(...body);
     } else {
-      const body = block.lines.filter(l => l.trim().length > 0);
+      const body = block.lines.filter((l) => l.trim().length > 0);
       if (body.length > 0) {
         folded.push(...body);
       }
@@ -191,7 +180,7 @@ function renderUserMd(model: UserMdModel): string {
   const parts: string[] = [...model.titleLines, ''];
   for (const s of USER_SECTION_ORDER) {
     parts.push(USER_SECTION_HEADERS[s]);
-    const body = model.sections[s].filter(l => l.trim().length > 0);
+    const body = model.sections[s].filter((l) => l.trim().length > 0);
     if (body.length > 0) parts.push(...body);
     parts.push('');
   }
@@ -220,12 +209,7 @@ function identityKey(line: string): string | null {
   const fact = stripDashPrefix(line);
   const idx = fact.indexOf(':');
   if (idx <= 0) return null;
-  return fact
-    .slice(0, idx)
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .trim();
+  return fact.slice(0, idx).toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').trim();
 }
 
 function pruneToCap(model: UserMdModel, cap: number): ArchivedUserLine[] {
@@ -237,7 +221,7 @@ function pruneToCap(model: UserMdModel, cap: number): ArchivedUserLine[] {
     let prunedSomething = false;
     for (const s of USER_PRUNE_ORDER) {
       const body = model.sections[s];
-      const idx = body.findIndex(l => l.trim().length > 0);
+      const idx = body.findIndex((l) => l.trim().length > 0);
       if (idx === -1) continue;
       const [removed] = body.splice(idx, 1);
       archived.push({ section: USER_SECTION_HEADERS[s], line: removed });
@@ -256,7 +240,6 @@ function pruneToCap(model: UserMdModel, cap: number): ArchivedUserLine[] {
   }
   return archived;
 }
-
 
 export interface UserProfileUpdateInput {
   add: Array<{ section: UserSection; text: string }>;
@@ -286,17 +269,14 @@ function applyUserUpdatesTransform(
       }
     }
     if (!removed) {
-      logger.warn(
-        { removeLine },
-        'user-profile: userRemove sem line-match exato no USER.md — no-op',
-      );
+      logger.warn({ removeLine }, 'user-profile: userRemove sem line-match exato no USER.md — no-op');
     }
   }
 
   const identityFold: string[] = [];
   for (const item of input.add) {
     const line = formatAddLine(item.section, item.text, today);
-    const allLines = new Set(USER_SECTION_ORDER.flatMap(s => model.sections[s]));
+    const allLines = new Set(USER_SECTION_ORDER.flatMap((s) => model.sections[s]));
     if (allLines.has(line)) {
       logger.info({ line }, 'user-profile: add duplicado literal ignorado (guard secundario)');
       continue;
@@ -304,7 +284,7 @@ function applyUserUpdatesTransform(
     if (item.section === 'identidade') {
       const key = identityKey(line);
       if (key) {
-        model.sections.identidade = model.sections.identidade.filter(existing => {
+        model.sections.identidade = model.sections.identidade.filter((existing) => {
           const existingKey = identityKey(existing);
           return existingKey === null || existingKey !== key;
         });
@@ -315,7 +295,7 @@ function applyUserUpdatesTransform(
     }
   }
 
-  const identityBody = model.sections.identidade.filter(l => l.trim().length > 0);
+  const identityBody = model.sections.identidade.filter((l) => l.trim().length > 0);
   if (identityBody.length > IDENTITY_MAX_LINES) {
     const keep = identityBody.slice(0, IDENTITY_MAX_LINES);
     const overflow = identityBody.slice(IDENTITY_MAX_LINES);
@@ -334,9 +314,7 @@ function applyUserUpdatesTransform(
   return { content: renderUserMd(model), archived };
 }
 
-export async function updateUserProfileSectionAware(
-  input: UserProfileUpdateInput,
-): Promise<void> {
+export async function updateUserProfileSectionAware(input: UserProfileUpdateInput): Promise<void> {
   if (input.add.length === 0 && input.remove.length === 0) return;
 
   const today = formatToday();
@@ -363,7 +341,6 @@ export async function updateUserProfileSectionAware(
 export async function applyUserProfileUpdates(input: UserProfileUpdateInput): Promise<void> {
   return updateUserProfileSectionAware(input);
 }
-
 
 const SANITIZED_FLAG_KEY = 'user_md_sanitized_v1';
 const SANITIZE_ATTEMPTS_KEY = 'user_md_sanitize_attempts';
@@ -449,25 +426,26 @@ function parseSanitizeResponse(raw: string): SanitizeSectionsPayload {
     cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
   }
   const parsed = JSON.parse(cleaned) as { sections?: Record<string, unknown> };
-  if (typeof parsed !== 'object' || parsed === null || typeof parsed.sections !== 'object' || parsed.sections === null) {
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    typeof parsed.sections !== 'object' ||
+    parsed.sections === null
+  ) {
     throw new Error('sanitizacao: resposta sem objeto "sections"');
   }
   const out = emptySections();
   for (const s of USER_SECTION_ORDER) {
     const value = parsed.sections[s];
-    if (!Array.isArray(value) || value.some(v => typeof v !== 'string')) {
+    if (!Array.isArray(value) || value.some((v) => typeof v !== 'string')) {
       throw new Error(`sanitizacao: "sections.${s}" deve ser array de strings`);
     }
-    out[s] = (value as string[]).map(v => v.trim()).filter(v => v.length > 0);
+    out[s] = (value as string[]).map((v) => v.trim()).filter((v) => v.length > 0);
   }
   return { sections: out };
 }
 
-async function invokeWithTimeout(
-  invoker: PlainPromptInvoker,
-  prompt: string,
-  timeoutMs: number,
-): Promise<string> {
+async function invokeWithTimeout(invoker: PlainPromptInvoker, prompt: string, timeoutMs: number): Promise<string> {
   const timeoutPromise = new Promise<never>((_, reject) => {
     const id = setTimeout(() => reject(new Error('user_md_sanitize_timeout')), timeoutMs);
     if (typeof id === 'object' && 'unref' in id) {
@@ -533,10 +511,7 @@ export async function maybeSanitizeUserProfile(opts: SanitizeUserProfileOptions)
 
     const original = readUserMdRaw();
 
-    if (
-      original.trim().length === 0 ||
-      original.includes('Nenhuma informacao coletada')
-    ) {
+    if (original.trim().length === 0 || original.includes('Nenhuma informacao coletada')) {
       setSetting(SANITIZED_FLAG_KEY, 'true');
       logger.info('user-profile: USER.md ausente/vazio/placeholder — sanitizacao no-op (flag setada sem LLM)');
       return;
@@ -593,7 +568,7 @@ export async function maybeSanitizeUserProfile(opts: SanitizeUserProfileOptions)
 
     const model: UserMdModel = { titleLines: ['# Sobre o Usuario'], sections: emptySections() };
     for (const s of USER_SECTION_ORDER) {
-      model.sections[s] = merged[s].map(fact => `- ${stripDashPrefix(fact)}`);
+      model.sections[s] = merged[s].map((fact) => `- ${stripDashPrefix(fact)}`);
     }
     const archived = pruneToCap(model, cap);
     const finalContent = renderUserMd(model);

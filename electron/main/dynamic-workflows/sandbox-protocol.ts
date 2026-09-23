@@ -1,4 +1,3 @@
-
 export const SANDBOX_PROTOCOL_VERSION = 1 as const;
 
 export const SANDBOX_PRIMITIVES = [
@@ -16,7 +15,6 @@ export const SANDBOX_PRIMITIVES = [
 ] as const;
 
 export type SandboxPrimitive = (typeof SANDBOX_PRIMITIVES)[number];
-
 
 export const PROXIED_PRIMITIVES = [
   'phase',
@@ -37,7 +35,6 @@ const PROXIED_PRIMITIVE_SET: ReadonlySet<string> = new Set(PROXIED_PRIMITIVES);
 export function isProxiedPrimitive(value: unknown): value is ProxiedPrimitive {
   return typeof value === 'string' && PROXIED_PRIMITIVE_SET.has(value);
 }
-
 
 export interface SandboxChildHello {
   t: 'hello';
@@ -68,12 +65,7 @@ export interface SandboxChildFatal {
 }
 
 export type SandboxChildMessage =
-  | SandboxChildHello
-  | SandboxChildHeartbeat
-  | SandboxChildCall
-  | SandboxChildResult
-  | SandboxChildFatal;
-
+  SandboxChildHello | SandboxChildHeartbeat | SandboxChildCall | SandboxChildResult | SandboxChildFatal;
 
 export interface SandboxParentRun {
   t: 'run';
@@ -103,11 +95,7 @@ export interface SandboxParentReject {
   fatal?: boolean;
 }
 
-export type SandboxParentMessage =
-  | SandboxParentRun
-  | SandboxParentResolve
-  | SandboxParentReject;
-
+export type SandboxParentMessage = SandboxParentRun | SandboxParentResolve | SandboxParentReject;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -118,13 +106,9 @@ export function parseChildMessage(value: unknown): SandboxChildMessage | null {
   const t = value.t;
   switch (t) {
     case 'hello':
-      return typeof value.protocol === 'number'
-        ? { t: 'hello', protocol: value.protocol }
-        : null;
+      return typeof value.protocol === 'number' ? { t: 'hello', protocol: value.protocol } : null;
     case 'heartbeat':
-      return typeof value.uptimeMs === 'number'
-        ? { t: 'heartbeat', uptimeMs: value.uptimeMs }
-        : null;
+      return typeof value.uptimeMs === 'number' ? { t: 'heartbeat', uptimeMs: value.uptimeMs } : null;
     case 'call':
       if (typeof value.callId !== 'number') return null;
       if (!isProxiedPrimitive(value.primitive)) return null;
@@ -165,8 +149,7 @@ export function parseParentMessage(value: unknown): SandboxParentMessage | null 
       if (Array.isArray(value.agentCatalog)) {
         run.agentCatalog = value.agentCatalog
           .filter(
-            (e): e is Record<string, unknown> =>
-              isRecord(e) && typeof e.id === 'string' && typeof e.name === 'string',
+            (e): e is Record<string, unknown> => isRecord(e) && typeof e.id === 'string' && typeof e.name === 'string',
           )
           .map((e) => ({
             id: e.id as string,
@@ -197,7 +180,6 @@ export function parseParentMessage(value: unknown): SandboxParentMessage | null 
 function isPositiveInt(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1;
 }
-
 
 export function isSafeArtifactRelativePath(rel: unknown): rel is string {
   if (typeof rel !== 'string') return false;

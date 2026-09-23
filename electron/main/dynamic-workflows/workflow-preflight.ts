@@ -1,31 +1,10 @@
-
-import type {
-  DynamicWorkflowNodeAccess,
-  DynamicWorkflowWorkspaceMode,
-} from '../../../src/types/dynamic-workflow';
-import type {
-  NodePolicyGrants,
-  PolicyEnforcementMechanism,
-} from './workflow-policy';
+import type { DynamicWorkflowNodeAccess, DynamicWorkflowWorkspaceMode } from '../../../src/types/dynamic-workflow';
+import type { NodePolicyGrants, PolicyEnforcementMechanism } from './workflow-policy';
 
 export type WorkflowNodeRuntime =
-  | 'cloud'
-  | 'zai'
-  | 'minimax-tp'
-  | 'codex'
-  | 'kimi'
-  | 'grok'
-  | 'cursor'
-  | 'local'
-  | 'external'
-  | 'google-genai';
+  'cloud' | 'zai' | 'minimax-tp' | 'codex' | 'kimi' | 'grok' | 'cursor' | 'local' | 'external' | 'google-genai';
 
-export type RuntimeFamily =
-  | 'claude-compatible'
-  | 'codex'
-  | 'grok'
-  | 'cursor'
-  | 'local-family';
+export type RuntimeFamily = 'claude-compatible' | 'codex' | 'grok' | 'cursor' | 'local-family';
 
 export interface RuntimeCapabilities {
   family: RuntimeFamily;
@@ -39,10 +18,7 @@ export interface RuntimeCapabilities {
   mechanism: PolicyEnforcementMechanism;
 }
 
-export const RUNTIME_CAPABILITIES: Record<
-  WorkflowNodeRuntime,
-  RuntimeCapabilities
-> = {
+export const RUNTIME_CAPABILITIES: Record<WorkflowNodeRuntime, RuntimeCapabilities> = {
   cloud: {
     family: 'claude-compatible',
     canUseTool: true,
@@ -155,12 +131,7 @@ export const RUNTIME_CAPABILITIES: Record<
   },
 };
 
-export const GUARD_CAPABLE_RUNTIMES: readonly WorkflowNodeRuntime[] = [
-  'cloud',
-  'zai',
-  'minimax-tp',
-  'grok',
-];
+export const GUARD_CAPABLE_RUNTIMES: readonly WorkflowNodeRuntime[] = ['cloud', 'zai', 'minimax-tp', 'grok'];
 
 export function isGuardCapableRuntime(runtime: string): boolean {
   return (GUARD_CAPABLE_RUNTIMES as readonly string[]).includes(runtime);
@@ -193,9 +164,7 @@ export interface PreflightNodeInput {
 }
 
 function normalizeRuntime(runtime: string): WorkflowNodeRuntime | null {
-  return runtime in RUNTIME_CAPABILITIES
-    ? (runtime as WorkflowNodeRuntime)
-    : null;
+  return runtime in RUNTIME_CAPABILITIES ? (runtime as WorkflowNodeRuntime) : null;
 }
 
 function suggestGuardCapable(): string {
@@ -297,12 +266,7 @@ export function preflightNode(input: PreflightNodeInput): PreflightResult {
   return { ok: true, runtime, mechanism: caps.mechanism, warnings };
 }
 
-
-export type ProjectGitState =
-  | 'git-with-commits' // repo existente com codigo
-  | 'git-unborn' // git init feito mas HEAD sem nenhum commit
-  | 'empty-dir' // pasta vazia, sem git
-  | 'code-no-git'; // pasta com codigo mas sem git
+export type ProjectGitState = 'git-with-commits' | 'git-unborn' | 'empty-dir' | 'code-no-git';
 
 export type ProjectGitProbe = (projectPath: string) => ProjectGitState;
 
@@ -315,10 +279,7 @@ export interface WorkspaceModeDecision {
   rationale: string;
 }
 
-export function decideWorkspaceMode(
-  projectPath: string,
-  probe: ProjectGitProbe,
-): WorkspaceModeDecision {
+export function decideWorkspaceMode(projectPath: string, probe: ProjectGitProbe): WorkspaceModeDecision {
   const state = probe(projectPath);
   switch (state) {
     case 'git-with-commits':
@@ -328,8 +289,7 @@ export function decideWorkspaceMode(
         requiresBaselineCommit: false,
         hasMergeGate: true,
         state,
-        rationale:
-          'repo existente com commits: checkout do usuario fica intocado; worktree + merge pos-gate (8.6.2)',
+        rationale: 'repo existente com commits: checkout do usuario fica intocado; worktree + merge pos-gate (8.6.2)',
       };
     case 'git-unborn':
       return {
@@ -348,8 +308,7 @@ export function decideWorkspaceMode(
         requiresBaselineCommit: false,
         hasMergeGate: false,
         state,
-        rationale:
-          'pasta vazia: host faz git init e o run desenvolve direto; sem worktree, sem merge gate',
+        rationale: 'pasta vazia: host faz git init e o run desenvolve direto; sem worktree, sem merge gate',
       };
     case 'code-no-git':
       return {

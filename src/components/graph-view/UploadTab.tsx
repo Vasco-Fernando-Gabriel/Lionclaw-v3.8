@@ -61,10 +61,7 @@ export function UploadTab() {
       {/* Scrollable content area */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {/* 1. Drop zone */}
-        <UploadDropZone
-          maxFileSizeMb={maxFileSizeMb}
-          onNewFilesAdded={handleNewFilesAdded}
-        />
+        <UploadDropZone maxFileSizeMb={maxFileSizeMb} onNewFilesAdded={handleNewFilesAdded} />
 
         {/* 2. URL import */}
         <UrlImportField onJobCreated={handleJobCreated} />

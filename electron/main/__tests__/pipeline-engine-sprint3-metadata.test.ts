@@ -1,7 +1,5 @@
-
 import { describe, it, expect } from 'vitest';
 import type { SprintMetrics } from '../harness-engine';
-
 
 function buildCoderPhaseMetadata(
   sprintIndex: number,
@@ -25,10 +23,11 @@ function buildEvaluatorPhaseMetadata(
     sprintIndex,
     sprintName,
     ...(evaluatorMetrics.provider !== undefined && { provider: evaluatorMetrics.provider }),
-    ...(evaluatorMetrics.costEstimationKind !== undefined && { costEstimationKind: evaluatorMetrics.costEstimationKind }),
+    ...(evaluatorMetrics.costEstimationKind !== undefined && {
+      costEstimationKind: evaluatorMetrics.costEstimationKind,
+    }),
   };
 }
-
 
 describe('pipeline-engine fases agregadas - SPEC-006 Sprint 3 metadata', () => {
   const baseMetrics: SprintMetrics = {

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -20,10 +19,7 @@ import {
   type WorkflowRunnerDeps,
   type WorkflowTimerHandle,
 } from '../dynamic-workflows/workflow-runner';
-import type {
-  NodeRunResult,
-  RunNodeAgentInput,
-} from '../dynamic-workflows/workflow-agent-adapter';
+import type { NodeRunResult, RunNodeAgentInput } from '../dynamic-workflows/workflow-agent-adapter';
 import type {
   DynamicWorkflowRun,
   DynamicWorkflowDefinition,
@@ -39,7 +35,6 @@ import type {
 
 const FIXED_NOW = '2026-06-12T12:00:00.000Z';
 
-
 interface FakeTimer {
   delayMs: number;
   cb: () => void;
@@ -51,7 +46,11 @@ class FakeScheduler {
   schedule = (delayMs: number, cb: () => void): WorkflowTimerHandle => {
     const t: FakeTimer = { delayMs, cb, cancelled: false };
     this.timers.push(t);
-    return { cancel: () => { t.cancelled = true; } };
+    return {
+      cancel: () => {
+        t.cancelled = true;
+      },
+    };
   };
   flush(): void {
     const active = this.timers.filter((t) => !t.cancelled);
@@ -86,11 +85,12 @@ function callHandleNodeFailed(
   state: ActiveRunStateLike,
   input: NodeFailedHookInput,
 ): Promise<NodeFailureHookOutcome | undefined> {
-  return (runner as unknown as {
-    handleNodeFailed: (s: ActiveRunStateLike, i: NodeFailedHookInput) => Promise<NodeFailureHookOutcome | undefined>;
-  }).handleNodeFailed(state, input);
+  return (
+    runner as unknown as {
+      handleNodeFailed: (s: ActiveRunStateLike, i: NodeFailedHookInput) => Promise<NodeFailureHookOutcome | undefined>;
+    }
+  ).handleNodeFailed(state, input);
 }
-
 
 interface SharedState {
   runs: Map<string, DynamicWorkflowRun>;
@@ -414,7 +414,6 @@ beforeEach(() => {
   _resetWorkflowRunnerForTesting();
 });
 
-
 describe('DEFECT-4: host agent() falha -> onNodeFailed -> handleProviderFailure (AC-22)', () => {
   it('o caminho de falha do agent() DISPARA o hook onNodeFailed (era codigo morto)', async () => {
     const state: SharedState = {
@@ -507,7 +506,13 @@ describe('DEFECT-4: host agent() falha -> onNodeFailed -> handleProviderFailure 
       crud: hostCrud,
       gateGate,
       runNodeAgent: (input) => Promise.resolve(makeProviderLimitFailure(input)),
-      emit: (e) => runnerCrud.insertEvent({ runId: e.runId, type: e.type, nodeId: e.nodeId ?? null, payloadJson: JSON.stringify(e.payload ?? {}) }),
+      emit: (e) =>
+        runnerCrud.insertEvent({
+          runId: e.runId,
+          type: e.type,
+          nodeId: e.nodeId ?? null,
+          payloadJson: JSON.stringify(e.payload ?? {}),
+        }),
       now: () => FIXED_NOW,
       generateId: (p) => `${p}_${state.nodeRuns.length}`,
       sleep: async (ms) => {
@@ -526,13 +531,28 @@ describe('DEFECT-4: host agent() falha -> onNodeFailed -> handleProviderFailure 
     expect(retries).toHaveLength(2);
     expect(retries.every((e) => (e.payload as { inProcess?: boolean }).inProcess === true)).toBe(true);
     const attempts = state.nodeRuns.filter((nr) => nr.nodeId === 'coder').map((nr) => [nr.attempt, nr.status]);
-    expect(attempts).toEqual([[1, 'failed'], [2, 'failed'], [3, 'failed']]);
+    expect(attempts).toEqual([
+      [1, 'failed'],
+      [2, 'failed'],
+      [3, 'failed'],
+    ]);
 
     const blocked = state.events.filter((e) => e.type === 'run-blocked-provider');
     expect(blocked).toHaveLength(1);
-    expect(blocked[0]!.payload).toMatchObject({ failureClass: 'provider-limit', retriesExhausted: true, attemptsMade: 3, gateId: 'failure:coder' });
+    expect(blocked[0]!.payload).toMatchObject({
+      failureClass: 'provider-limit',
+      retriesExhausted: true,
+      attemptsMade: 3,
+      gateId: 'failure:coder',
+    });
     const gate = state.events.find((e) => e.type === 'gate-blocked');
-    expect(gate?.payload).toMatchObject({ gateId: 'failure:coder', mode: 'orchestrator', failure: true, failureClass: 'provider-limit', actions: ['retry', 'switch-agent', 'skip', 'abort'] });
+    expect(gate?.payload).toMatchObject({
+      gateId: 'failure:coder',
+      mode: 'orchestrator',
+      failure: true,
+      failureClass: 'provider-limit',
+      actions: ['retry', 'switch-agent', 'skip', 'abort'],
+    });
     expect(gateCalls).toEqual(['failure:coder']);
     const approved = state.events.find((e) => e.type === 'gate-approved');
     expect(approved?.payload).toMatchObject({ gateId: 'failure:coder', action: 'skip' });
@@ -600,14 +620,12 @@ describe('DEFECT-4: host agent() falha -> onNodeFailed -> handleProviderFailure 
     expect(retryCount).toBe(2);
     expect(state.events.some((e) => e.type === 'run-blocked-provider')).toBe(true);
     const pd = JSON.parse(state.runs.get('run-1')?.inputJson || '{}').pendingDecision as
-      | { type?: string; retriesExhausted?: boolean; gateId?: string }
-      | undefined;
+      { type?: string; retriesExhausted?: boolean; gateId?: string } | undefined;
     expect(pd?.type).toBe('provider');
     expect(pd?.retriesExhausted).toBe(true);
     expect(pd?.gateId).toBe('failure:coder');
   });
 });
-
 
 describe('DEFECT-4: resume() roda detectPolicyInvalidation (10.1)', () => {
   it('policy_hash mudou -> resume NAO re-executa, bloqueia exigindo aceite humano', async () => {
@@ -648,7 +666,8 @@ describe('DEFECT-4: resume() roda detectPolicyInvalidation (10.1)', () => {
     const res = await runner.resume('run-1');
     expect('error' in res).toBe(true);
     expect(state.runs.get('run-1')?.status).toBe('blocked');
-    const pd = JSON.parse(state.runs.get('run-1')?.inputJson || '{}').pendingDecision as { policyChanged?: boolean } | undefined;
+    const pd = JSON.parse(state.runs.get('run-1')?.inputJson || '{}').pendingDecision as
+      { policyChanged?: boolean } | undefined;
     expect(pd?.policyChanged).toBe(true);
     expect(state.events.some((e) => e.type === 'cache-invalidated:policy-changed' && e.nodeId === 'coder')).toBe(true);
   });
@@ -661,7 +680,12 @@ describe('DEFECT-4: resume() roda detectPolicyInvalidation (10.1)', () => {
           makeRun({
             status: 'blocked',
             inputJson: JSON.stringify({
-              pendingDecision: { type: 'provider', id: 'policy-changed', policyChanged: true, invalidatedNodeIds: ['coder'] },
+              pendingDecision: {
+                type: 'provider',
+                id: 'policy-changed',
+                policyChanged: true,
+                invalidatedNodeIds: ['coder'],
+              },
             }),
           }),
         ],
@@ -690,7 +714,6 @@ describe('DEFECT-4: resume() roda detectPolicyInvalidation (10.1)', () => {
     expect(state.events.some((e) => e.type === 'policy-change-accepted')).toBe(true);
   });
 });
-
 
 describe('DEFECT-4: stall watchdog arma no node-started (13.8)', () => {
   it('evento node-started (emitido pelo host) ARMA o watchdog; node-completed CANCELA', () => {
@@ -729,7 +752,21 @@ describe('DEFECT-4: stall watchdog arma no node-started (13.8)', () => {
     const state: SharedState = {
       runs: new Map([['run-1', makeRun()]]),
       definitions: new Map([['def-1', makeDefinition()]]),
-      nodeRuns: [{ ...nodeRunFromUpsert({ id: 'nr-coder-1', runId: 'run-1', nodeId: 'coder', phaseId: 'Implementar', type: 'agent', agentId: 'a-coder', status: 'running', attempt: 1 }), status: 'running' }],
+      nodeRuns: [
+        {
+          ...nodeRunFromUpsert({
+            id: 'nr-coder-1',
+            runId: 'run-1',
+            nodeId: 'coder',
+            phaseId: 'Implementar',
+            type: 'agent',
+            agentId: 'a-coder',
+            status: 'running',
+            attempt: 1,
+          }),
+          status: 'running',
+        },
+      ],
       events: [],
       gateDecisions: [],
       messages: [],

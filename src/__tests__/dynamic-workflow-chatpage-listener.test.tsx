@@ -28,12 +28,8 @@ beforeAll(() => {
 
 import { useDynamicWorkflowStore } from '@/stores/dynamic-workflow-store';
 
-
 describe('ChatPage: fiacao do listener do dynamic-workflow-store (DEFECT-6 ITEM 3)', () => {
-  const chatPageSource = readFileSync(
-    join(__dirname, '..', 'pages', 'ChatPage.tsx'),
-    'utf8',
-  );
+  const chatPageSource = readFileSync(join(__dirname, '..', 'pages', 'ChatPage.tsx'), 'utf8');
 
   it('importa o store de dynamic-workflow', () => {
     expect(chatPageSource).toMatch(
@@ -57,7 +53,6 @@ describe('ChatPage: fiacao do listener do dynamic-workflow-store (DEFECT-6 ITEM 
     expect(chatPageSource).toContain('useRepoGraphStore.getState().init()');
   });
 });
-
 
 describe('dynamic-workflow-store.init(): listener + cleanup (mecanismo do cockpit)', () => {
   beforeEach(() => {

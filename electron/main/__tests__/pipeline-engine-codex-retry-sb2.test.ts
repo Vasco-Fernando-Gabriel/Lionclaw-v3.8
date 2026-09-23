@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
 
@@ -15,10 +14,12 @@ const capturedEvents: Array<{ channel: string; data: unknown }> = [];
 
 vi.mock('electron', () => ({
   BrowserWindow: {
-    getAllWindows: vi.fn(() => [{
-      isDestroyed: () => false,
-      webContents: { send: (channel: string, data: unknown) => capturedEvents.push({ channel, data }) },
-    }]),
+    getAllWindows: vi.fn(() => [
+      {
+        isDestroyed: () => false,
+        webContents: { send: (channel: string, data: unknown) => capturedEvents.push({ channel, data }) },
+      },
+    ]),
   },
   app: { on: vi.fn() },
 }));
@@ -194,9 +195,7 @@ describe('AC-C9 — Pilar C + SB-2 JUNTOS (executeAgent REAL, allowlist ativa)',
   });
 
   it('AC-C9 (fluxo completo C+B): retry do spawnAgent dispara e conclui com o execute.ts REAL no meio', async () => {
-    codexRun
-      .mockRejectedValueOnce(new CodexUnavailableError(TRANSIENT_MSG))
-      .mockResolvedValueOnce(makeSuccessResult());
+    codexRun.mockRejectedValueOnce(new CodexUnavailableError(TRANSIENT_MSG)).mockResolvedValueOnce(makeSuccessResult());
 
     const engine = makeEngine();
     const { state, session } = seedCachedSession(engine);

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
 
@@ -157,7 +156,7 @@ describe('describeImage - anthropic', () => {
 describe('coerencia provider->modelo e defaults', () => {
   it('provider anthropic com modelo openai salvo -> realinha ao primeiro do provider', async () => {
     settings.set('vision_provider', 'anthropic');
-    settings.set('vision_model', 'gpt-5.5'); // modelo de OUTRO provider
+    settings.set('vision_model', 'gpt-5.5');
     getSecretMock.mockResolvedValue('sk-ant');
     anthropicCreate.mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] });
 

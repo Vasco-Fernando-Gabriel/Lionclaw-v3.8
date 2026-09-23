@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { DynamicWorkflowEvent } from '../dynamic-workflows/types';
 import type { DynamicWorkflowRun } from '../../../src/types/dynamic-workflow';
@@ -35,6 +34,16 @@ vi.mock('../orchestrator', () => ({
   submitMessage: (...args: unknown[]) => submitMessageMock(...(args as [])),
 }));
 
+const DEFAULT_ORCHESTRATOR_COLUMNS = {
+  runtime: 'codex-sdk',
+  provider: 'openai',
+  model: 'gpt-5.5',
+  effort: 'high',
+};
+vi.mock('../orchestrator-selection', () => ({
+  readDefaultOrchestratorColumns: () => DEFAULT_ORCHESTRATOR_COLUMNS,
+}));
+
 import {
   parseOrchestratorGateBlock,
   parseWakeSignal,
@@ -46,6 +55,7 @@ import {
   initWorkflowIgnitionBridge,
   isHarnessProjectId,
   decideWorkflowDriveTurn,
+  defaultCreateDedicatedSession,
   findUnacknowledgedWake,
   _resetIgnitionForTesting,
   _pendingWakeForTesting,
@@ -58,9 +68,7 @@ import type { DynamicWorkflowEventInsertInput } from '../dynamic-workflows/types
 
 let seqCounter = 0;
 
-function makeEvent(
-  patch: Partial<DynamicWorkflowEvent> & Pick<DynamicWorkflowEvent, 'type'>,
-): DynamicWorkflowEvent {
+function makeEvent(patch: Partial<DynamicWorkflowEvent> & Pick<DynamicWorkflowEvent, 'type'>): DynamicWorkflowEvent {
   seqCounter += 1;
   return {
     id: seqCounter,
@@ -74,11 +82,7 @@ function makeEvent(
   };
 }
 
-function gateBlocked(
-  mode: string,
-  gateId = 'gate-plan-review',
-  runId = 'run-1',
-): DynamicWorkflowEvent {
+function gateBlocked(mode: string, gateId = 'gate-plan-review', runId = 'run-1'): DynamicWorkflowEvent {
   return makeEvent({
     type: 'gate-blocked',
     runId,
@@ -289,7 +293,6 @@ beforeEach(() => {
   _resetIgnitionForTesting();
 });
 
-
 describe('parseOrchestratorGateBlock (filtro)', () => {
   it('aceita gate-blocked mode:orchestrator e devolve {runId, gateId}', () => {
     const out = parseOrchestratorGateBlock(gateBlocked('orchestrator', 'gate-plan-review'));
@@ -305,9 +308,7 @@ describe('parseOrchestratorGateBlock (filtro)', () => {
   });
 
   it('rejeita payload corrompido (JSON invalido) sem lancar', () => {
-    expect(
-      parseOrchestratorGateBlock(makeEvent({ type: 'gate-blocked', payloadJson: '{ nao-json' })),
-    ).toBeNull();
+    expect(parseOrchestratorGateBlock(makeEvent({ type: 'gate-blocked', payloadJson: '{ nao-json' }))).toBeNull();
   });
 
   it('rejeita gate-blocked sem gateId mesmo com mode:orchestrator', () => {
@@ -318,7 +319,6 @@ describe('parseOrchestratorGateBlock (filtro)', () => {
     ).toBeNull();
   });
 });
-
 
 describe('buildIgnitionPrompt', () => {
   it('contem o runId LITERAL e instrui dynamic_workflow_inspect ANTES de agir', () => {
@@ -332,7 +332,6 @@ describe('buildIgnitionPrompt', () => {
     expect(inspectIdx).toBeLessThan(approveIdx);
   });
 });
-
 
 describe('resolveDriveSession', () => {
   it('usa run.chatSessionId quando presente (run chat-bound) sem criar sessao', () => {
@@ -356,7 +355,6 @@ describe('resolveDriveSession', () => {
     expect(resolveDriveSession(deps as WorkflowIgnitionDeps, 'run-x')).toBeNull();
   });
 });
-
 
 describe('initWorkflowIgnitionBridge', () => {
   it('gate-blocked mode:orchestrator (run chat-bound) acorda submitMessage com a assinatura de drive', () => {
@@ -512,7 +510,6 @@ describe('initWorkflowIgnitionBridge', () => {
   });
 });
 
-
 describe('isHarnessProjectId (E4 / risco 5 - disjuncao de namespace)', () => {
   it('TRUE para projectId de harness (inteiro autoincrement, so digitos)', () => {
     expect(isHarnessProjectId('1')).toBe(true);
@@ -522,7 +519,7 @@ describe('isHarnessProjectId (E4 / risco 5 - disjuncao de namespace)', () => {
 
   it('FALSE para runId de workflow (YYYYMMDD_HHmmss-hex6) e ids nao-numericos', () => {
     expect(isHarnessProjectId('20260628_120000-abc123')).toBe(false);
-    expect(isHarnessProjectId('run-1')).toBe(false); // ids de teste
+    expect(isHarnessProjectId('run-1')).toBe(false);
     expect(isHarnessProjectId('dw-drive-run-1-xyz')).toBe(false);
     expect(isHarnessProjectId('')).toBe(false);
   });
@@ -588,8 +585,7 @@ describe('T7: completion-filter (complete de pipeline NAO afeta o gate de workfl
     return {
       bus,
       cap,
-      fireComplete: (projectId, driveTurnId) =>
-        completeListener!({ projectId, driveTurnId, outcome: 'executed' }),
+      fireComplete: (projectId, driveTurnId) => completeListener!({ projectId, driveTurnId, outcome: 'executed' }),
     };
   }
 
@@ -605,7 +601,7 @@ describe('T7: completion-filter (complete de pipeline NAO afeta o gate de workfl
     expect(decideWorkflowDriveTurn(runId, Date.now())).toBe('coalesce');
 
     bus.publish(gateBlocked('orchestrator', 'gate-delivery', runId));
-    expect(cap.submit).toHaveBeenCalledTimes(1); // nada novo: o pipeline-complete nao liberou
+    expect(cap.submit).toHaveBeenCalledTimes(1);
 
     fireComplete(runId, `${runId}:1`);
     expect(cap.submit).toHaveBeenCalledTimes(2);
@@ -637,7 +633,6 @@ describe('T7: completion-filter (complete de pipeline NAO afeta o gate de workfl
     expect(decideWorkflowDriveTurn(runId, Date.now())).toBe('coalesce');
   });
 });
-
 
 describe('parsePendingGateId (E2.4)', () => {
   it('le {type:gate, id} do inputJson e devolve o gateId', () => {
@@ -703,9 +698,7 @@ describe('resolveGateModeFromManifest (E2.4)', () => {
   });
 
   it("gate SINTETICO 'cc-delivery' resolve 'orchestrator' mesmo FORA do manifesto (fix da ignicao)", () => {
-    expect(resolveGateModeFromManifest(makeDefinition({ gates: [] }), 'cc-delivery')).toBe(
-      'orchestrator',
-    );
+    expect(resolveGateModeFromManifest(makeDefinition({ gates: [] }), 'cc-delivery')).toBe('orchestrator');
     expect(resolveGateModeFromManifest(null, 'cc-delivery')).toBe('orchestrator');
   });
 
@@ -878,23 +871,16 @@ describe('scanBlockedRunsForIgnition (E2.4 / T8)', () => {
       definition: makeDefinition(),
       blocked: [bad, good],
     });
-    (cap.getRun as ReturnType<typeof vi.fn>).mockImplementation((id: string) =>
-      id === 'run-good' ? good : bad,
-    );
-    (cap.submit as ReturnType<typeof vi.fn>).mockImplementation(
-      (_p: string, opts: { driveProjectId: string }) => {
-        if (opts.driveProjectId === 'run-bad') throw new Error('boom');
-      },
-    );
+    (cap.getRun as ReturnType<typeof vi.fn>).mockImplementation((id: string) => (id === 'run-good' ? good : bad));
+    (cap.submit as ReturnType<typeof vi.fn>).mockImplementation((_p: string, opts: { driveProjectId: string }) => {
+      if (opts.driveProjectId === 'run-bad') throw new Error('boom');
+    });
 
     const count = scanBlockedRunsForIgnition(deps as WorkflowIgnitionDeps);
 
     expect(count).toBe(1);
-    expect(cap.submit).toHaveBeenCalledTimes(2); // tentou os dois; o bad jogou
-    expect(cap.submit.mock.calls.map((c) => c[1].driveProjectId)).toEqual([
-      'run-bad',
-      'run-good',
-    ]);
+    expect(cap.submit).toHaveBeenCalledTimes(2);
+    expect(cap.submit.mock.calls.map((c) => c[1].driveProjectId)).toEqual(['run-bad', 'run-good']);
   });
 
   it('listBlockedRuns que joga nao derruba o boot (varredura pulada, retorna 0)', () => {
@@ -944,7 +930,6 @@ describe('initWorkflowIgnitionBridge: boot re-ignition wiring (E2.4 / T8)', () =
   });
 });
 
-
 function runningRun(patch?: Partial<DynamicWorkflowRun>): DynamicWorkflowRun {
   return makeRun({ status: 'running', chatSessionId: 'sess-1', inputJson: '{}', ...patch });
 }
@@ -983,36 +968,101 @@ function bridgeFor(
 
 describe('parseWakeSignal (D1/D3)', () => {
   it('classifica por tipo: terminais acordam, precursores/verdes nao', () => {
-    expect(parseWakeSignal(makeEvent({ type: 'run-blocked-provider', nodeId: 'c1', payloadJson: JSON.stringify({ failureClass: 'logic' }) }))).toEqual({ reason: 'needs-decision', nodeId: 'c1' });
+    expect(
+      parseWakeSignal(
+        makeEvent({
+          type: 'run-blocked-provider',
+          nodeId: 'c1',
+          payloadJson: JSON.stringify({ failureClass: 'logic' }),
+        }),
+      ),
+    ).toEqual({ reason: 'needs-decision', nodeId: 'c1' });
     expect(parseWakeSignal(makeEvent({ type: 'node-stalled', nodeId: 'c1' }))).toBeNull();
-    expect(parseWakeSignal(makeEvent({ type: 'run-blocked-provider', nodeId: 'c1', payloadJson: JSON.stringify({ failureClass: 'logic', gateId: 'failure:c1' }) }))).toBeNull();
-    expect(parseWakeSignal(gateBlocked('orchestrator', 'failure:c1'))).toEqual({ reason: 'blocked', gateId: 'failure:c1' });
+    expect(
+      parseWakeSignal(
+        makeEvent({
+          type: 'run-blocked-provider',
+          nodeId: 'c1',
+          payloadJson: JSON.stringify({ failureClass: 'logic', gateId: 'failure:c1' }),
+        }),
+      ),
+    ).toBeNull();
+    expect(parseWakeSignal(gateBlocked('orchestrator', 'failure:c1'))).toEqual({
+      reason: 'blocked',
+      gateId: 'failure:c1',
+    });
     expect(parseWakeSignal(makeEvent({ type: 'run-failed' }))!.reason).toBe('needs-decision');
-    expect(parseWakeSignal(gateBlocked('orchestrator', 'boundary:S2'))).toEqual({ reason: 'blocked', gateId: 'boundary:S2' });
+    expect(parseWakeSignal(gateBlocked('orchestrator', 'boundary:S2'))).toEqual({
+      reason: 'blocked',
+      gateId: 'boundary:S2',
+    });
     expect(parseWakeSignal(gateBlocked('human'))).toBeNull();
     expect(parseWakeSignal(makeEvent({ type: 'wake-runaway' }))).toEqual({ reason: 'needs-human' });
     expect(parseWakeSignal(makeEvent({ type: 'phase-changed' }))).toEqual({ reason: 'boundary' });
     expect(parseWakeSignal(makeEvent({ type: 'coordinator-finished' }))).toEqual({ reason: 'boundary' });
-    for (const t of ['node-failed', 'sandbox-killed', 'node-completed', 'node-retry-scheduled', 'green-check', 'run-delivered', 'run-finished', 'node-started']) {
+    for (const t of [
+      'node-failed',
+      'sandbox-killed',
+      'node-completed',
+      'node-retry-scheduled',
+      'green-check',
+      'run-delivered',
+      'run-finished',
+      'node-started',
+    ]) {
       expect(parseWakeSignal(makeEvent({ type: t }))).toBeNull();
     }
   });
 
   it("alias parseOrchestratorGateBlock intacto e resolveGateModeFromManifest reconhece 'boundary:*' como orchestrator", () => {
-    expect(parseOrchestratorGateBlock(gateBlocked('orchestrator', 'boundary:S2'))).toEqual({ runId: 'run-1', gateId: 'boundary:S2' });
+    expect(parseOrchestratorGateBlock(gateBlocked('orchestrator', 'boundary:S2'))).toEqual({
+      runId: 'run-1',
+      gateId: 'boundary:S2',
+    });
     expect(resolveGateModeFromManifest(null, 'boundary:S2')).toBe('orchestrator');
-    expect(resolveGateModeFromManifest(makeDefinition({ gates: [] }), 'boundary:coordinator-finished')).toBe('orchestrator');
+    expect(resolveGateModeFromManifest(makeDefinition({ gates: [] }), 'boundary:coordinator-finished')).toBe(
+      'orchestrator',
+    );
   });
 });
 
 describe('wake por desfecho (D1/D3): cadeias terminais geram UM wake', () => {
   it('node-failed(logic) -> run-blocked-provider = UM wake needs-decision com classe/erro reais no digest', () => {
     const { cap, bus } = bridgeFor(runningRun());
-    bus.emit(makeEvent({ type: 'node-completed', nodeId: 'scout', payloadJson: JSON.stringify({ agentId: 'scout', access: 'read-only', costUsd: 0.1 }) }));
-    bus.emit(makeEvent({ type: 'node-completed', nodeId: 'planner', payloadJson: JSON.stringify({ agentId: 'planner', access: 'read-only', costUsd: 0.2 }) }));
-    bus.emit(makeEvent({ type: 'node-failed', nodeId: 'coder', payloadJson: JSON.stringify({ failureClass: 'logic', error: 'agentType inexistente', attempt: 1 }) }));
-    expect(cap.submit).not.toHaveBeenCalled(); // precursor NAO acorda
-    bus.emit(makeEvent({ type: 'run-blocked-provider', nodeId: 'coder', payloadJson: JSON.stringify({ failureClass: 'logic', retriesExhausted: false, attemptsMade: 1, nodeError: 'agentType inexistente' }) }));
+    bus.emit(
+      makeEvent({
+        type: 'node-completed',
+        nodeId: 'scout',
+        payloadJson: JSON.stringify({ agentId: 'scout', access: 'read-only', costUsd: 0.1 }),
+      }),
+    );
+    bus.emit(
+      makeEvent({
+        type: 'node-completed',
+        nodeId: 'planner',
+        payloadJson: JSON.stringify({ agentId: 'planner', access: 'read-only', costUsd: 0.2 }),
+      }),
+    );
+    bus.emit(
+      makeEvent({
+        type: 'node-failed',
+        nodeId: 'coder',
+        payloadJson: JSON.stringify({ failureClass: 'logic', error: 'agentType inexistente', attempt: 1 }),
+      }),
+    );
+    expect(cap.submit).not.toHaveBeenCalled();
+    bus.emit(
+      makeEvent({
+        type: 'run-blocked-provider',
+        nodeId: 'coder',
+        payloadJson: JSON.stringify({
+          failureClass: 'logic',
+          retriesExhausted: false,
+          attemptsMade: 1,
+          nodeError: 'agentType inexistente',
+        }),
+      }),
+    );
 
     expect(cap.submit).toHaveBeenCalledTimes(1);
     const [prompt, options] = cap.submit.mock.calls[0]!;
@@ -1028,15 +1078,29 @@ describe('wake por desfecho (D1/D3): cadeias terminais geram UM wake', () => {
     expect(cap.mintCapability.mock.calls[0]![0].gateId).toBeUndefined();
     const planned = cap.eventsOfType('wake-planned');
     expect(planned).toHaveLength(1);
-    expect(payloadOf(planned[0]!)).toMatchObject({ reason: 'needs-decision', fromSeq: 0, throughSeq: 4, driveTurnId: options.driveTurnId, readOnly: false });
+    expect(payloadOf(planned[0]!)).toMatchObject({
+      reason: 'needs-decision',
+      fromSeq: 0,
+      throughSeq: 4,
+      driveTurnId: options.driveTurnId,
+      readOnly: false,
+    });
   });
 
   it('sandbox-killed -> run-failed = UM wake (precursor no digest, run-failed acorda)', () => {
     const { cap, bus } = bridgeFor(runningRun());
-    bus.emit(makeEvent({ type: 'node-completed', nodeId: 'coder', payloadJson: JSON.stringify({ access: 'workspace-write' }) }));
+    bus.emit(
+      makeEvent({
+        type: 'node-completed',
+        nodeId: 'coder',
+        payloadJson: JSON.stringify({ access: 'workspace-write' }),
+      }),
+    );
     bus.emit(makeEvent({ type: 'sandbox-killed', payloadJson: JSON.stringify({ reason: 'wall-timeout' }) }));
     expect(cap.submit).not.toHaveBeenCalled();
-    bus.emit(makeEvent({ type: 'run-failed', payloadJson: JSON.stringify({ error: 'execucao falhou (wall-timeout)' }) }));
+    bus.emit(
+      makeEvent({ type: 'run-failed', payloadJson: JSON.stringify({ error: 'execucao falhou (wall-timeout)' }) }),
+    );
     expect(cap.submit).toHaveBeenCalledTimes(1);
     const [prompt] = cap.submit.mock.calls[0]!;
     expect(prompt).toContain('wall-timeout');
@@ -1045,11 +1109,53 @@ describe('wake por desfecho (D1/D3): cadeias terminais geram UM wake', () => {
 
   it('L1.1: node-stalled -> node-failed(timeout) -> run-blocked-provider{gateId} -> gate-blocked failure:* = UM wake blocked com classe/erro e as 4 acoes no prompt', () => {
     const { cap, bus } = bridgeFor(runningRun());
-    bus.emit(makeEvent({ type: 'node-stalled', nodeId: 'coder', payloadJson: JSON.stringify({ message: 'sem progresso ha 3min' }) }));
-    bus.emit(makeEvent({ type: 'node-failed', nodeId: 'coder', payloadJson: JSON.stringify({ failureClass: 'timeout', error: 'node abortado pelo watchdog de stall', attempt: 1, stalled: true }) }));
-    bus.emit(makeEvent({ type: 'run-blocked-provider', nodeId: 'coder', payloadJson: JSON.stringify({ failureClass: 'timeout', retriesExhausted: true, attemptsMade: 3, nodeError: 'node abortado pelo watchdog de stall', gateId: 'failure:coder' }) }));
+    bus.emit(
+      makeEvent({
+        type: 'node-stalled',
+        nodeId: 'coder',
+        payloadJson: JSON.stringify({ message: 'sem progresso ha 3min' }),
+      }),
+    );
+    bus.emit(
+      makeEvent({
+        type: 'node-failed',
+        nodeId: 'coder',
+        payloadJson: JSON.stringify({
+          failureClass: 'timeout',
+          error: 'node abortado pelo watchdog de stall',
+          attempt: 1,
+          stalled: true,
+        }),
+      }),
+    );
+    bus.emit(
+      makeEvent({
+        type: 'run-blocked-provider',
+        nodeId: 'coder',
+        payloadJson: JSON.stringify({
+          failureClass: 'timeout',
+          retriesExhausted: true,
+          attemptsMade: 3,
+          nodeError: 'node abortado pelo watchdog de stall',
+          gateId: 'failure:coder',
+        }),
+      }),
+    );
     expect(cap.submit).toHaveBeenCalledTimes(0);
-    bus.emit(makeEvent({ type: 'gate-blocked', nodeId: 'coder', payloadJson: JSON.stringify({ gateId: 'failure:coder', mode: 'orchestrator', failure: true, failureClass: 'timeout', error: 'node abortado pelo watchdog de stall', actions: ['retry', 'switch-agent', 'skip', 'abort'] }) }));
+    bus.emit(
+      makeEvent({
+        type: 'gate-blocked',
+        nodeId: 'coder',
+        payloadJson: JSON.stringify({
+          gateId: 'failure:coder',
+          mode: 'orchestrator',
+          failure: true,
+          failureClass: 'timeout',
+          error: 'node abortado pelo watchdog de stall',
+          actions: ['retry', 'switch-agent', 'skip', 'abort'],
+        }),
+      }),
+    );
     expect(cap.submit).toHaveBeenCalledTimes(1);
     const prompt = cap.submit.mock.calls[0]![0] as string;
     expect(prompt).toContain('failure:coder');
@@ -1081,7 +1187,18 @@ describe('wake por desfecho (D1/D3): cadeias terminais geram UM wake', () => {
     try {
       const { cap, bus } = bridgeFor(runningRun());
       bus.emit(makeEvent({ type: 'phase-changed', phaseId: 'S1', payloadJson: JSON.stringify({ phase: 'S1' }) }));
-      bus.emit(makeEvent({ type: 'node-completed', nodeId: 'v1', payloadJson: JSON.stringify({ access: 'read-only', validatorVerdict: { verdict: 'pass', findingsTotal: 0, blockers: 0 }, p1Count: 0, findings: [] }) }));
+      bus.emit(
+        makeEvent({
+          type: 'node-completed',
+          nodeId: 'v1',
+          payloadJson: JSON.stringify({
+            access: 'read-only',
+            validatorVerdict: { verdict: 'pass', findingsTotal: 0, blockers: 0 },
+            p1Count: 0,
+            findings: [],
+          }),
+        }),
+      );
       bus.emit(makeEvent({ type: 'phase-changed', phaseId: 'S2', payloadJson: JSON.stringify({ phase: 'S2' }) }));
       expect(cap.submit).not.toHaveBeenCalled();
       vi.advanceTimersByTime(WAKE_BOUNDARY_DEBOUNCE_MS - 1);
@@ -1104,24 +1221,41 @@ describe('wake por desfecho (D1/D3): cadeias terminais geram UM wake', () => {
     try {
       const { cap, bus } = bridgeFor(runningRun());
       bus.emit(makeEvent({ type: 'phase-changed', phaseId: 'S1' }));
-      bus.emit(makeEvent({
-        type: 'node-completed',
-        nodeId: 'v1',
-        payloadJson: JSON.stringify({ access: 'read-only', validatorVerdict: { verdict: 'fail', findingsTotal: 1, blockers: 1 }, p1Count: 1, findings: [{ severity: 'P1', where: 'a.ts:1', problem: 'x' }] }),
-      }));
+      bus.emit(
+        makeEvent({
+          type: 'node-completed',
+          nodeId: 'v1',
+          payloadJson: JSON.stringify({
+            access: 'read-only',
+            validatorVerdict: { verdict: 'fail', findingsTotal: 1, blockers: 1 },
+            p1Count: 1,
+            findings: [{ severity: 'P1', where: 'a.ts:1', problem: 'x' }],
+          }),
+        }),
+      );
       bus.emit(makeEvent({ type: 'phase-changed', phaseId: 'S2' }));
       vi.advanceTimersByTime(WAKE_BOUNDARY_DEBOUNCE_MS * 2);
       expect(cap.submit).not.toHaveBeenCalled();
-      bus.emit(makeEvent({
-        type: 'gate-blocked',
-        payloadJson: JSON.stringify({ gateId: 'boundary:S2', mode: 'orchestrator', boundary: 'S2', semaphore: 'ATENCAO', reasons: ['1 P1 aberto(s) no ledger'] }),
-      }));
+      bus.emit(
+        makeEvent({
+          type: 'gate-blocked',
+          payloadJson: JSON.stringify({
+            gateId: 'boundary:S2',
+            mode: 'orchestrator',
+            boundary: 'S2',
+            semaphore: 'ATENCAO',
+            reasons: ['1 P1 aberto(s) no ledger'],
+          }),
+        }),
+      );
       expect(cap.submit).toHaveBeenCalledTimes(1);
       const [prompt] = cap.submit.mock.calls[0]!;
       expect(prompt).toContain('boundary:S2');
       expect(prompt).toContain('SEMAFORO: ATENCAO');
       expect(prompt).toContain('dynamic_workflow_inspect("run-1")');
-      expect(cap.mintCapability).toHaveBeenCalledWith(expect.objectContaining({ runId: 'run-1', gateId: 'boundary:S2' }));
+      expect(cap.mintCapability).toHaveBeenCalledWith(
+        expect.objectContaining({ runId: 'run-1', gateId: 'boundary:S2' }),
+      );
     } finally {
       vi.useRealTimers();
     }
@@ -1131,14 +1265,16 @@ describe('wake por desfecho (D1/D3): cadeias terminais geram UM wake', () => {
     vi.useFakeTimers();
     try {
       const { cap, bus } = bridgeFor(runningRun());
-      bus.emit(makeEvent({ type: 'node-completed', nodeId: 'n1', payloadJson: JSON.stringify({ access: 'read-only' }) }));
+      bus.emit(
+        makeEvent({ type: 'node-completed', nodeId: 'n1', payloadJson: JSON.stringify({ access: 'read-only' }) }),
+      );
       bus.emit(makeEvent({ type: 'phase-changed', phaseId: 'S2' }));
       expect(cap.submit).not.toHaveBeenCalled();
       bus.emit(makeEvent({ type: 'run-failed', payloadJson: JSON.stringify({ error: 'boom' }) }));
       expect(cap.submit).toHaveBeenCalledTimes(1);
       expect(payloadOf(cap.eventsOfType('wake-planned')[0]!).reason).toBe('needs-decision');
       vi.advanceTimersByTime(WAKE_BOUNDARY_DEBOUNCE_MS * 2);
-      expect(cap.submit).toHaveBeenCalledTimes(1); // o timer foi cancelado
+      expect(cap.submit).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
@@ -1152,7 +1288,13 @@ describe('coalescencia real + lifecycle duravel (D5)', () => {
     expect(cap.submit).toHaveBeenCalledTimes(1);
     const turn1 = cap.submit.mock.calls[0]![1].driveTurnId as string;
 
-    bus.emit(makeEvent({ type: 'run-blocked-provider', nodeId: 'coder', payloadJson: JSON.stringify({ failureClass: 'logic' }) }));
+    bus.emit(
+      makeEvent({
+        type: 'run-blocked-provider',
+        nodeId: 'coder',
+        payloadJson: JSON.stringify({ failureClass: 'logic' }),
+      }),
+    );
     expect(cap.submit).toHaveBeenCalledTimes(1);
     expect(_pendingWakeForTesting('run-1')).toEqual({ reason: 'needs-decision', nodeId: 'coder' });
 
@@ -1223,11 +1365,16 @@ describe('coalescencia real + lifecycle duravel (D5)', () => {
       bus.emit(makeEvent({ type: 'run-failed' }));
       const turn1 = cap.submit.mock.calls[0]![1].driveTurnId as string;
       complete(turn1, undefined);
-      expect(payloadOf(cap.eventsOfType('wake-completed')[0]!)).toEqual({ driveTurnId: turn1, outcome: 'failed-before-execution' });
+      expect(payloadOf(cap.eventsOfType('wake-completed')[0]!)).toEqual({
+        driveTurnId: turn1,
+        outcome: 'failed-before-execution',
+      });
       expect(decideWorkflowDriveTurn('run-1', Date.now())).toBe('fire');
       vi.advanceTimersByTime(WAKE_BOUNDARY_DEBOUNCE_MS);
       expect(cap.submit).toHaveBeenCalledTimes(2);
-      expect(payloadOf(cap.eventsOfType('wake-planned')[1]!).fromSeq).toBe(payloadOf(cap.eventsOfType('wake-planned')[0]!).fromSeq);
+      expect(payloadOf(cap.eventsOfType('wake-planned')[1]!).fromSeq).toBe(
+        payloadOf(cap.eventsOfType('wake-planned')[0]!).fromSeq,
+      );
     } finally {
       vi.useRealTimers();
     }
@@ -1291,8 +1438,16 @@ describe('boot-scan generalizado (D5)', () => {
     cap.seed(
       makeEvent({ runId: 'run-done', type: 'node-completed', nodeId: 'n1' }),
       makeEvent({ runId: 'run-done', type: 'coordinator-finished' }),
-      makeEvent({ runId: 'run-done', type: 'wake-planned', payloadJson: JSON.stringify({ reason: 'boundary', fromSeq: 0, throughSeq: 2, driveTurnId: 'run-done:1' }) }),
-      makeEvent({ runId: 'run-done', type: 'wake-completed', payloadJson: JSON.stringify({ driveTurnId: 'run-done:1', outcome: 'discarded' }) }),
+      makeEvent({
+        runId: 'run-done',
+        type: 'wake-planned',
+        payloadJson: JSON.stringify({ reason: 'boundary', fromSeq: 0, throughSeq: 2, driveTurnId: 'run-done:1' }),
+      }),
+      makeEvent({
+        runId: 'run-done',
+        type: 'wake-completed',
+        payloadJson: JSON.stringify({ driveTurnId: 'run-done:1', outcome: 'discarded' }),
+      }),
     );
     expect(findUnacknowledgedWake(cap.events)).toEqual({ reason: 'boundary' });
     const count = scanBlockedRunsForIgnition(deps as WorkflowIgnitionDeps);
@@ -1306,8 +1461,16 @@ describe('boot-scan generalizado (D5)', () => {
     const { deps, cap } = makeDeps(run, { runs: [run] });
     cap.seed(
       makeEvent({ runId: 'run-done', type: 'node-completed', nodeId: 'n1' }),
-      makeEvent({ runId: 'run-done', type: 'wake-planned', payloadJson: JSON.stringify({ reason: 'boundary', fromSeq: 0, throughSeq: 1, driveTurnId: 'run-done:1' }) }),
-      makeEvent({ runId: 'run-done', type: 'wake-completed', payloadJson: JSON.stringify({ driveTurnId: 'run-done:1', outcome: 'executed' }) }),
+      makeEvent({
+        runId: 'run-done',
+        type: 'wake-planned',
+        payloadJson: JSON.stringify({ reason: 'boundary', fromSeq: 0, throughSeq: 1, driveTurnId: 'run-done:1' }),
+      }),
+      makeEvent({
+        runId: 'run-done',
+        type: 'wake-completed',
+        payloadJson: JSON.stringify({ driveTurnId: 'run-done:1', outcome: 'executed' }),
+      }),
     );
     expect(scanBlockedRunsForIgnition(deps as WorkflowIgnitionDeps)).toBe(0);
     expect(cap.submit).not.toHaveBeenCalled();
@@ -1331,7 +1494,12 @@ describe('boot-scan generalizado (D5)', () => {
     const run = makeRun({ id: 'run-b', status: 'running', chatSessionId: 'sess-b' });
     const { deps, cap } = makeDeps(run, { runs: [run] });
     cap.seed(
-      makeEvent({ runId: 'run-b', type: 'node-completed', nodeId: 'n1', payloadJson: JSON.stringify({ access: 'read-only' }) }),
+      makeEvent({
+        runId: 'run-b',
+        type: 'node-completed',
+        nodeId: 'n1',
+        payloadJson: JSON.stringify({ access: 'read-only' }),
+      }),
       makeEvent({ runId: 'run-b', type: 'phase-changed', phaseId: 'S2' }),
     );
     expect(scanBlockedRunsForIgnition(deps as WorkflowIgnitionDeps)).toBe(1);
@@ -1342,9 +1510,27 @@ describe('boot-scan generalizado (D5)', () => {
     const run = makeRun({ id: 'run-h', status: 'paused', chatSessionId: 'sess-h' });
     const { deps, cap, bus, complete } = bridgeFor(run, { runs: [run] });
     cap.seed(
-      makeEvent({ runId: 'run-h', type: 'gate-blocked', payloadJson: JSON.stringify({ gateId: 'gate-7', mode: 'orchestrator' }) }),
-      makeEvent({ runId: 'run-h', type: 'wake-runaway', payloadJson: JSON.stringify({ wakesTotal: 7, wakesSinceProgress: 7, reason: 'max-wakes-sem-progresso' }) }),
-      makeEvent({ runId: 'run-h', type: 'wake-planned', payloadJson: JSON.stringify({ reason: 'needs-human', fromSeq: 0, throughSeq: 2, driveTurnId: 'run-h:1', readOnly: true }) }),
+      makeEvent({
+        runId: 'run-h',
+        type: 'gate-blocked',
+        payloadJson: JSON.stringify({ gateId: 'gate-7', mode: 'orchestrator' }),
+      }),
+      makeEvent({
+        runId: 'run-h',
+        type: 'wake-runaway',
+        payloadJson: JSON.stringify({ wakesTotal: 7, wakesSinceProgress: 7, reason: 'max-wakes-sem-progresso' }),
+      }),
+      makeEvent({
+        runId: 'run-h',
+        type: 'wake-planned',
+        payloadJson: JSON.stringify({
+          reason: 'needs-human',
+          fromSeq: 0,
+          throughSeq: 2,
+          driveTurnId: 'run-h:1',
+          readOnly: true,
+        }),
+      }),
     );
     expect(findUnacknowledgedWake(cap.events)).toEqual({ reason: 'needs-human' });
     expect(scanBlockedRunsForIgnition(deps as WorkflowIgnitionDeps)).toBe(1);
@@ -1359,7 +1545,13 @@ describe('boot-scan generalizado (D5)', () => {
     expect(cap.eventsOfType('wake-runaway')).toHaveLength(1);
 
     complete(options.driveTurnId as string, 'executed');
-    bus.emit(makeEvent({ runId: 'run-h', type: 'gate-blocked', payloadJson: JSON.stringify({ gateId: 'gate-8', mode: 'orchestrator' }) }));
+    bus.emit(
+      makeEvent({
+        runId: 'run-h',
+        type: 'gate-blocked',
+        payloadJson: JSON.stringify({ gateId: 'gate-8', mode: 'orchestrator' }),
+      }),
+    );
     expect(cap.submit).toHaveBeenCalledTimes(2);
     const [prompt2, options2] = cap.submit.mock.calls[1]!;
     expect(prompt2).toContain('SEMAFORO: DECISAO HUMANA');
@@ -1368,7 +1560,13 @@ describe('boot-scan generalizado (D5)', () => {
 
     complete(options2.driveTurnId as string, 'executed');
     bus.emit(makeEvent({ runId: 'run-h', type: 'resume-requested' }));
-    bus.emit(makeEvent({ runId: 'run-h', type: 'gate-blocked', payloadJson: JSON.stringify({ gateId: 'gate-9', mode: 'orchestrator' }) }));
+    bus.emit(
+      makeEvent({
+        runId: 'run-h',
+        type: 'gate-blocked',
+        payloadJson: JSON.stringify({ gateId: 'gate-9', mode: 'orchestrator' }),
+      }),
+    );
     expect(cap.submit).toHaveBeenCalledTimes(3);
     expect(cap.submit.mock.calls[2]![0]).toContain('gate-9');
     expect(cap.submit.mock.calls[2]![0]).not.toContain('DECISAO HUMANA');
@@ -1379,8 +1577,17 @@ describe('boot-scan generalizado (D5)', () => {
     const run = makeRun({ id: 'run-r', status: 'paused', chatSessionId: 'sess-r' });
     const { deps, cap } = makeDeps(run, { runs: [run] });
     cap.seed(
-      makeEvent({ runId: 'run-r', type: 'node-completed', nodeId: 'n1', payloadJson: JSON.stringify({ access: 'read-only' }) }),
-      makeEvent({ runId: 'run-r', type: 'wake-runaway', payloadJson: JSON.stringify({ wakesTotal: 7, wakesSinceProgress: 7, reason: 'max-wakes-sem-progresso' }) }),
+      makeEvent({
+        runId: 'run-r',
+        type: 'node-completed',
+        nodeId: 'n1',
+        payloadJson: JSON.stringify({ access: 'read-only' }),
+      }),
+      makeEvent({
+        runId: 'run-r',
+        type: 'wake-runaway',
+        payloadJson: JSON.stringify({ wakesTotal: 7, wakesSinceProgress: 7, reason: 'max-wakes-sem-progresso' }),
+      }),
     );
     expect(findUnacknowledgedWake(cap.events)).toBeNull();
     expect(scanBlockedRunsForIgnition(deps as WorkflowIgnitionDeps)).toBe(1);
@@ -1401,7 +1608,13 @@ describe('boot-scan generalizado (D5)', () => {
       inputJson: JSON.stringify({ pendingDecision: { type: 'gate', id: 'cc-delivery' } }),
     });
     const { deps, cap } = makeDeps(run, { definition: makeDefinition({ gates: [] }), blocked: [run], runs: [run] });
-    cap.seed(makeEvent({ runId: 'run-g', type: 'gate-blocked', payloadJson: JSON.stringify({ gateId: 'cc-delivery', mode: 'orchestrator' }) }));
+    cap.seed(
+      makeEvent({
+        runId: 'run-g',
+        type: 'gate-blocked',
+        payloadJson: JSON.stringify({ gateId: 'cc-delivery', mode: 'orchestrator' }),
+      }),
+    );
     expect(scanBlockedRunsForIgnition(deps as WorkflowIgnitionDeps)).toBe(1);
     expect(cap.submit).toHaveBeenCalledTimes(1);
   });
@@ -1417,17 +1630,21 @@ describe('anti-runaway de wakes (D6)', () => {
     }
     expect(cap.submit).toHaveBeenCalledTimes(6);
     expect(cap.pause).not.toHaveBeenCalled();
-    expect(cap.mintCapability).toHaveBeenCalledTimes(12); // 6 wakes blocked x (gate + wake), D7
+    expect(cap.mintCapability).toHaveBeenCalledTimes(12);
 
     bus.emit(gateBlocked('orchestrator', 'gate-7'));
     expect(cap.pause).toHaveBeenCalledWith('run-1');
     expect(cap.eventsOfType('wake-runaway')).toHaveLength(1);
-    expect(payloadOf(cap.eventsOfType('wake-runaway')[0]!)).toMatchObject({ wakesTotal: 7, wakesSinceProgress: 7, reason: 'max-wakes-sem-progresso' });
+    expect(payloadOf(cap.eventsOfType('wake-runaway')[0]!)).toMatchObject({
+      wakesTotal: 7,
+      wakesSinceProgress: 7,
+      reason: 'max-wakes-sem-progresso',
+    });
     expect(cap.submit).toHaveBeenCalledTimes(7);
     const [prompt, options] = cap.submit.mock.calls[6]!;
     expect(prompt).toContain('SEMAFORO: DECISAO HUMANA');
     expect(prompt).toContain('So `dynamic_workflow_inspect` esta disponivel');
-    expect(cap.mintCapability).toHaveBeenCalledTimes(12); // 6 wakes blocked x (gate + wake), D7
+    expect(cap.mintCapability).toHaveBeenCalledTimes(12);
     expect(cap.registerReadOnlyTurn).toHaveBeenCalledWith(options.driveTurnId);
     expect(payloadOf(cap.eventsOfType('wake-planned')[6]!)).toMatchObject({ reason: 'needs-human', readOnly: true });
   });
@@ -1435,7 +1652,9 @@ describe('anti-runaway de wakes (D6)', () => {
   it('node-completed entre wakes conta como progresso e zera o contador (sem runaway)', () => {
     const { cap, bus, complete } = bridgeFor(runningRun());
     for (let i = 0; i < 10; i++) {
-      bus.emit(makeEvent({ type: 'node-completed', nodeId: `n${i}`, payloadJson: JSON.stringify({ access: 'read-only' }) }));
+      bus.emit(
+        makeEvent({ type: 'node-completed', nodeId: `n${i}`, payloadJson: JSON.stringify({ access: 'read-only' }) }),
+      );
       bus.emit(gateBlocked('orchestrator', `gate-${i}`));
       const turn = cap.submit.mock.calls[cap.submit.mock.calls.length - 1]![1].driveTurnId as string;
       complete(turn, 'executed');
@@ -1443,5 +1662,18 @@ describe('anti-runaway de wakes (D6)', () => {
     expect(cap.submit).toHaveBeenCalledTimes(10);
     expect(cap.pause).not.toHaveBeenCalled();
     expect(cap.eventsOfType('wake-runaway')).toHaveLength(0);
+  });
+});
+
+describe('AC-22 (segunda metade): sessao dedicada de drive nasce com as colunas do orquestrador', () => {
+  it('defaultCreateDedicatedSession grava runtime/provider/modelo/effort via createSession opts, sem UPDATE posterior', () => {
+    createSessionMock.mockClear();
+    const sessionId = defaultCreateDedicatedSession('run-7');
+    expect(sessionId.startsWith('dw-drive-run-7-')).toBe(true);
+    expect(createSessionMock).toHaveBeenCalledTimes(1);
+    expect(createSessionMock).toHaveBeenCalledWith(sessionId, 'Workflow run-7', undefined, {
+      type: 'chat',
+      orchestrator: DEFAULT_ORCHESTRATOR_COLUMNS,
+    });
   });
 });

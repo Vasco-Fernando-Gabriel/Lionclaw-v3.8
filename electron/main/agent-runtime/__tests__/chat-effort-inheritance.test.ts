@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -33,7 +32,6 @@ import type { AgentQueryConfig } from '../../agent-config-resolver';
 
 const MAIN_DIR = join(__dirname, '..', '..');
 
-
 describe('traducao de escala claude <-> codex', () => {
   it('claude -> codex: max vira xhigh; low/medium/high 1:1', () => {
     expect(claudeEffortToCodex('max')).toBe('max');
@@ -61,26 +59,15 @@ describe('traducao de escala claude <-> codex', () => {
   });
 
   it('heranca NUNCA propaga ultra (P6): orquestrador codex em ultra herda {codex: max, claude: max}', () => {
-    const r = resolveChatInheritedEffort({
-      getSetting: ((key: string) =>
-        key === 'orchestrator_runtime' ? 'codex-sdk'
-        : key === 'orchestrator_codex_effort' ? 'ultra'
-        : undefined) as never,
-    });
+    const r = resolveChatInheritedEffort('codex-sdk', 'ultra');
     expect(r).toEqual({ claude: 'max', codex: 'max', kimi: 'max', grok: 'high' });
   });
 
-  it('orquestrador codex em max herda {codex: max, claude: max} (setting valida agora)', () => {
-    const r = resolveChatInheritedEffort({
-      getSetting: ((key: string) =>
-        key === 'orchestrator_runtime' ? 'codex-sdk'
-        : key === 'orchestrator_codex_effort' ? 'max'
-        : undefined) as never,
-    });
+  it('orquestrador codex em max herda {codex: max, claude: max}', () => {
+    const r = resolveChatInheritedEffort('codex-sdk', 'max');
     expect(r).toEqual({ claude: 'max', codex: 'max', kimi: 'max', grok: 'high' });
   });
 });
-
 
 describe('clampCodexEffortForModel', () => {
   it('mantem xhigh em modelo com suporte (slugs exatos do catalogo: gpt-5.2-codex / codex-max)', () => {
@@ -112,87 +99,83 @@ describe('clampCodexEffortForModel', () => {
   });
 });
 
-
-function settingsReader(map: Record<string, string | undefined>) {
-  return (key: string): string | undefined => map[key];
-}
-
-describe('resolveChatInheritedEffort', () => {
-  it('orquestrador claude-sdk em max -> { claude: max, codex: xhigh }', () => {
-    const r = resolveChatInheritedEffort({
-      getSetting: settingsReader({ orchestrator_runtime: 'claude-sdk', orchestrator_effort: 'max' }),
+describe('resolveChatInheritedEffort (pura: runtime + effort da selecao da lane, 7.6)', () => {
+  it('lane claude-sdk em max -> { claude: max, codex: max }', () => {
+    expect(resolveChatInheritedEffort('claude-sdk', 'max')).toEqual({
+      claude: 'max',
+      codex: 'max',
+      kimi: 'max',
+      grok: 'high',
     });
-    expect(r).toEqual({ claude: 'max', codex: 'max', kimi: 'max', grok: 'high' });
   });
 
-  it('orquestrador codex-sdk em xhigh -> { claude: max, codex: xhigh }', () => {
-    const r = resolveChatInheritedEffort({
-      getSetting: settingsReader({ orchestrator_runtime: 'codex-sdk', orchestrator_codex_effort: 'xhigh' }),
+  it('lane codex-sdk em xhigh -> { claude: max, codex: xhigh }', () => {
+    expect(resolveChatInheritedEffort('codex-sdk', 'xhigh')).toEqual({
+      claude: 'max',
+      codex: 'xhigh',
+      kimi: 'max',
+      grok: 'high',
     });
-    expect(r).toEqual({ claude: 'max', codex: 'xhigh', kimi: 'max', grok: 'high' });
   });
 
-  it('claude-sdk sem setting de effort -> default high/high', () => {
-    const r = resolveChatInheritedEffort({
-      getSetting: settingsReader({ orchestrator_runtime: 'claude-sdk' }),
+  it('claude-sdk sem effort -> default high/high', () => {
+    expect(resolveChatInheritedEffort('claude-sdk', undefined)).toEqual({
+      claude: 'high',
+      codex: 'high',
+      kimi: 'high',
+      grok: 'high',
     });
-    expect(r).toEqual({ claude: 'high', codex: 'high', kimi: 'high', grok: 'high' });
   });
 
-  it('codex-sdk com setting invalida -> default high/high', () => {
-    const r = resolveChatInheritedEffort({
-      getSetting: settingsReader({ orchestrator_runtime: 'codex-sdk', orchestrator_codex_effort: 'banana' }),
+  it('codex-sdk com effort invalido -> default high/high', () => {
+    expect(resolveChatInheritedEffort('codex-sdk', 'banana')).toEqual({
+      claude: 'high',
+      codex: 'high',
+      kimi: 'high',
+      grok: 'high',
     });
-    expect(r).toEqual({ claude: 'high', codex: 'high', kimi: 'high', grok: 'high' });
   });
 
   it('claude-sdk em low/medium traduz 1:1', () => {
-    expect(
-      resolveChatInheritedEffort({
-        getSetting: settingsReader({ orchestrator_runtime: 'claude-sdk', orchestrator_effort: 'low' }),
-      }),
-    ).toEqual({ claude: 'low', codex: 'low', kimi: 'low', grok: 'low' });
-    expect(
-      resolveChatInheritedEffort({
-        getSetting: settingsReader({ orchestrator_runtime: 'claude-sdk', orchestrator_effort: 'medium' }),
-      }),
-    ).toEqual({ claude: 'medium', codex: 'medium', kimi: 'high', grok: 'medium' });
+    expect(resolveChatInheritedEffort('claude-sdk', 'low')).toEqual({
+      claude: 'low',
+      codex: 'low',
+      kimi: 'low',
+      grok: 'low',
+    });
+    expect(resolveChatInheritedEffort('claude-sdk', 'medium')).toEqual({
+      claude: 'medium',
+      codex: 'medium',
+      kimi: 'high',
+      grok: 'medium',
+    });
   });
 
   it('Kimi e Grok propagam suas escalas nativas para todos os executores', () => {
-    expect(resolveChatInheritedEffort({
-      getSetting: settingsReader({ orchestrator_runtime: 'kimi-sdk', orchestrator_kimi_effort: 'max' }),
-    })).toEqual({ claude: 'max', codex: 'max', kimi: 'max', grok: 'high' });
-    expect(resolveChatInheritedEffort({
-      getSetting: settingsReader({ orchestrator_runtime: 'grok-sdk', orchestrator_grok_effort: 'medium' }),
-    })).toEqual({ claude: 'medium', codex: 'medium', kimi: 'high', grok: 'medium' });
+    expect(resolveChatInheritedEffort('kimi-sdk', 'max')).toEqual({
+      claude: 'max',
+      codex: 'max',
+      kimi: 'max',
+      grok: 'high',
+    });
+    expect(resolveChatInheritedEffort('grok-sdk', 'medium')).toEqual({
+      claude: 'medium',
+      codex: 'medium',
+      kimi: 'high',
+      grok: 'medium',
+    });
   });
 
-  it('orquestradores sem suporte a effort (compat/lion) -> undefined', () => {
-    for (const runtime of ['claude-compat-sdk', 'lion-sdk']) {
-      expect(
-        resolveChatInheritedEffort({
-          getSetting: settingsReader({ orchestrator_runtime: runtime, orchestrator_effort: 'max' }),
-        }),
-      ).toBeUndefined();
+  it('runtimes sem suporte a effort (compat/cursor/lion) -> undefined', () => {
+    for (const runtime of ['claude-compat-sdk', 'cursor-sdk', 'lion-sdk']) {
+      expect(resolveChatInheritedEffort(runtime, 'max')).toBeUndefined();
     }
   });
 
-  it('setting orchestrator_runtime ausente -> undefined', () => {
-    expect(resolveChatInheritedEffort({ getSetting: settingsReader({}) })).toBeUndefined();
-  });
-
-  it('leitura que lanca NAO derruba: retorna undefined', () => {
-    expect(
-      resolveChatInheritedEffort({
-        getSetting: () => {
-          throw new Error('db off');
-        },
-      }),
-    ).toBeUndefined();
+  it('runtime ausente -> undefined (nunca le setting global)', () => {
+    expect(resolveChatInheritedEffort(undefined, 'max')).toBeUndefined();
   });
 });
-
 
 function makeReq(overrides: Partial<AgentExecutionRequest> = {}): AgentExecutionRequest {
   return {
@@ -243,16 +226,10 @@ describe('cloud-executor: heranca de effort no query() do subagente', () => {
   });
 
   it('sem inheritedEffort e sem config.effort a chave effort nao entra', () => {
-    const opts = buildClaudeQueryOptions(
-      makeReq(),
-      makeConfig(),
-      '/fake/cli.js',
-      new AbortController(),
-    );
+    const opts = buildClaudeQueryOptions(makeReq(), makeConfig(), '/fake/cli.js', new AbortController());
     expect('effort' in opts).toBe(false);
   });
 });
-
 
 function makeExecResult(): AgentExecutionResult {
   return {
@@ -309,12 +286,11 @@ describe('lionAgentDispatch: heranca de effort no call_agent', () => {
   });
 });
 
-
 describe('wiring-audit (fonte): codex-executor e codex-agents-mcp', () => {
   it('codex-executor: inheritedEffort.codex tem precedencia com clamp pelo modelo do agente', () => {
     const src = readFileSync(join(MAIN_DIR, 'agent-runtime', 'codex-executor.ts'), 'utf-8');
     expect(src).toMatch(
-      /const requestedEffort =\s*\n\s*req\.inheritedEffort !== undefined\s*\n\s*\? req\.inheritedEffort\.codex\s*\n\s*: agent\.codexConfig\.reasoningEffort;/,
+      /const requestedEffort =\s*req\.inheritedEffort !== undefined\s*\? req\.inheritedEffort\.codex\s*: agent\.codexConfig\.reasoningEffort;/,
     );
     expect(src).toContain('reasoningEffortOverride: requestedEffort,');
   });
@@ -329,11 +305,12 @@ describe('wiring-audit (fonte): codex-executor e codex-agents-mcp', () => {
     expect(src).not.toContain('repoRoot: z.string()');
     expect(src).not.toContain('sessionId: z.string()');
     const orchestrator = readFileSync(join(MAIN_DIR, 'orchestrator.ts'), 'utf-8');
-    expect(orchestrator).toContain('inheritedEffort: resolveChatInheritedEffort()');
+    expect(orchestrator).toContain(
+      'inheritedEffort: resolveChatInheritedEffort(selection?.runtime, selection?.effort)',
+    );
     expect(orchestrator).toContain('getCodexAgentsServer(');
   });
 });
-
 
 describe('heranca NAO se aplica a pipeline/harness/enrich (source-assertion)', () => {
   function grepDirForInheritedEffort(dir: string): string[] {

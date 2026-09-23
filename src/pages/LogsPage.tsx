@@ -1,5 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
-import { RefreshCw, Search, Terminal, Download, ChevronRight, ChevronDown, FolderOpen, Pause, Play, Copy, Check } from 'lucide-react';
+import {
+  RefreshCw,
+  Search,
+  Terminal,
+  Download,
+  ChevronRight,
+  ChevronDown,
+  FolderOpen,
+  Pause,
+  Play,
+  Copy,
+  Check,
+} from 'lucide-react';
 import type { AuditEntry, AuditSource, SystemLogEntry } from '@/types';
 
 type LogsTab = 'audit' | 'system';
@@ -134,9 +146,8 @@ export function LogsPage() {
 
   const handleExport = async (format: 'csv' | 'json') => {
     const filters = { search: search || undefined, source: sourceFilter || undefined, limit: 10000, offset: 0 };
-    const data = format === 'csv'
-      ? await window.lionclaw.logs.exportCSV(filters)
-      : await window.lionclaw.logs.exportJSON(filters);
+    const data =
+      format === 'csv' ? await window.lionclaw.logs.exportCSV(filters) : await window.lionclaw.logs.exportJSON(filters);
     const blob = new Blob([data], { type: format === 'csv' ? 'text/csv' : 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -148,21 +159,31 @@ export function LogsPage() {
 
   const getEventColor = (type: string) => {
     switch (type) {
-      case 'tool_call': return 'text-sky-300/80';
-      case 'tool_result': return 'text-emerald-300/80';
-      case 'tool_blocked': return 'text-rose-300/80';
-      case 'error': return 'text-rose-300/90';
-      case 'confirm_request': return 'text-amber-200/80';
-      case 'confirm_response': return 'text-violet-300/80';
-      default: return 'text-zinc-400';
+      case 'tool_call':
+        return 'text-sky-300/80';
+      case 'tool_result':
+        return 'text-emerald-300/80';
+      case 'tool_blocked':
+        return 'text-rose-300/80';
+      case 'error':
+        return 'text-rose-300/90';
+      case 'confirm_request':
+        return 'text-amber-200/80';
+      case 'confirm_response':
+        return 'text-violet-300/80';
+      default:
+        return 'text-zinc-400';
     }
   };
 
   const getEventBg = (type: string) => {
     switch (type) {
-      case 'error': return 'bg-rose-500/[0.04] border-l-2 border-rose-400/20';
-      case 'confirm_request': return 'bg-amber-400/[0.04] border-l-2 border-amber-300/20';
-      default: return '';
+      case 'error':
+        return 'bg-rose-500/[0.04] border-l-2 border-rose-400/20';
+      case 'confirm_request':
+        return 'bg-amber-400/[0.04] border-l-2 border-amber-300/20';
+      default:
+        return '';
     }
   };
 
@@ -247,7 +268,9 @@ export function LogsPage() {
               className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-amber-500/50"
             >
               {AUDIT_SOURCES.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
               ))}
             </select>
             <div className="relative">
@@ -292,7 +315,9 @@ export function LogsPage() {
               className="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-zinc-100 outline-none focus:border-amber-500/50"
             >
               {SYSTEM_LEVELS.map((l) => (
-                <option key={l.value} value={l.value}>{l.label}</option>
+                <option key={l.value} value={l.value}>
+                  {l.label}
+                </option>
               ))}
             </select>
             <select
@@ -302,7 +327,9 @@ export function LogsPage() {
             >
               <option value="">Todos os modulos</option>
               {sysModules.map((m) => (
-                <option key={m} value={m}>{m}</option>
+                <option key={m} value={m}>
+                  {m}
+                </option>
               ))}
             </select>
             <div className="relative">
@@ -356,29 +383,23 @@ export function LogsPage() {
                   onClick={() => hasDetails(entry) && setExpandedId(expandedId === entry.id ? null : entry.id)}
                 >
                   {hasDetails(entry) ? (
-                    expandedId === entry.id
-                      ? <ChevronDown size={10} className="text-zinc-600 shrink-0" />
-                      : <ChevronRight size={10} className="text-zinc-600 shrink-0" />
+                    expandedId === entry.id ? (
+                      <ChevronDown size={10} className="text-zinc-600 shrink-0" />
+                    ) : (
+                      <ChevronRight size={10} className="text-zinc-600 shrink-0" />
+                    )
                   ) : (
                     <span className="w-[10px] shrink-0" />
                   )}
                   <span className="text-zinc-600 shrink-0">
                     {new Date(entry.createdAt).toLocaleTimeString('pt-BR')}
                   </span>
-                  <span className={`shrink-0 w-28 ${getEventColor(entry.eventType)}`}>
-                    [{entry.eventType}]
-                  </span>
+                  <span className={`shrink-0 w-28 ${getEventColor(entry.eventType)}`}>[{entry.eventType}]</span>
                   {entry.source && entry.source !== 'chat' && (
-                    <span className={`shrink-0 ${SOURCE_COLORS[entry.source] ?? 'text-zinc-500'}`}>
-                      {entry.source}
-                    </span>
+                    <span className={`shrink-0 ${SOURCE_COLORS[entry.source] ?? 'text-zinc-500'}`}>{entry.source}</span>
                   )}
-                  {entry.toolName && (
-                    <span className="text-cyan-300/70 shrink-0">{entry.toolName}</span>
-                  )}
-                  <span className="text-zinc-500 truncate min-w-0">
-                    {getSummaryText(entry)}
-                  </span>
+                  {entry.toolName && <span className="text-cyan-300/70 shrink-0">{entry.toolName}</span>}
+                  <span className="text-zinc-500 truncate min-w-0">{getSummaryText(entry)}</span>
                   {entry.approved !== undefined && (
                     <span className={`shrink-0 ${entry.approved ? 'text-emerald-300/80' : 'text-rose-300/80'}`}>
                       {entry.approved ? 'APPROVED' : 'DENIED'}
@@ -418,14 +439,18 @@ export function LogsPage() {
                       <div>
                         <span className="text-zinc-600">input: </span>
                         <CopyButton getText={() => entry.input ?? ''} label="Copiar" />
-                        <pre className="text-zinc-300 whitespace-pre-wrap break-all mt-0.5 max-h-40 overflow-y-auto">{entry.input}</pre>
+                        <pre className="text-zinc-300 whitespace-pre-wrap break-all mt-0.5 max-h-40 overflow-y-auto">
+                          {entry.input}
+                        </pre>
                       </div>
                     )}
                     {entry.output && (
                       <div>
                         <span className="text-zinc-600">output: </span>
                         <CopyButton getText={() => entry.output ?? ''} label="Copiar" />
-                        <pre className="text-zinc-300 whitespace-pre-wrap break-all mt-0.5 max-h-40 overflow-y-auto">{entry.output}</pre>
+                        <pre className="text-zinc-300 whitespace-pre-wrap break-all mt-0.5 max-h-40 overflow-y-auto">
+                          {entry.output}
+                        </pre>
                       </div>
                     )}
                     {entry.durationMs !== undefined && entry.durationMs !== null && (
@@ -451,21 +476,17 @@ export function LogsPage() {
                   onClick={() => entry.extra && setSysExpandedSeq(sysExpandedSeq === entry.seq ? null : entry.seq)}
                 >
                   {entry.extra ? (
-                    sysExpandedSeq === entry.seq
-                      ? <ChevronDown size={10} className="text-zinc-600 shrink-0" />
-                      : <ChevronRight size={10} className="text-zinc-600 shrink-0" />
+                    sysExpandedSeq === entry.seq ? (
+                      <ChevronDown size={10} className="text-zinc-600 shrink-0" />
+                    ) : (
+                      <ChevronRight size={10} className="text-zinc-600 shrink-0" />
+                    )
                   ) : (
                     <span className="w-[10px] shrink-0" />
                   )}
-                  <span className="text-zinc-600 shrink-0">
-                    {new Date(entry.time).toLocaleTimeString('pt-BR')}
-                  </span>
-                  <span className={`shrink-0 w-14 uppercase ${getLevelColor(entry.level)}`}>
-                    {entry.levelLabel}
-                  </span>
-                  {entry.module && (
-                    <span className="text-cyan-300/70 shrink-0">{entry.module}</span>
-                  )}
+                  <span className="text-zinc-600 shrink-0">{new Date(entry.time).toLocaleTimeString('pt-BR')}</span>
+                  <span className={`shrink-0 w-14 uppercase ${getLevelColor(entry.level)}`}>{entry.levelLabel}</span>
+                  {entry.module && <span className="text-cyan-300/70 shrink-0">{entry.module}</span>}
                   <span className="text-zinc-400 truncate min-w-0">{entry.msg}</span>
                   <span className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                     <CopyButton getText={() => systemEntryAsText(entry)} />
@@ -476,7 +497,9 @@ export function LogsPage() {
                     <div className="flex justify-end">
                       <CopyButton getText={() => systemEntryAsText(entry)} label="Copiar tudo" />
                     </div>
-                    <pre className="text-zinc-300 whitespace-pre-wrap break-all max-h-60 overflow-y-auto">{formatExtra(entry.extra)}</pre>
+                    <pre className="text-zinc-300 whitespace-pre-wrap break-all max-h-60 overflow-y-auto">
+                      {formatExtra(entry.extra)}
+                    </pre>
                   </div>
                 )}
               </div>

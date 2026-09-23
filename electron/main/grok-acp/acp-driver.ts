@@ -1,10 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createLogger } from '../logger';
-import type {
-  CliAgenticRuntime,
-  CliRunHandle,
-  CliStreamCallbacks,
-} from '../agent-runtime/cli-agentic/contract';
+import type { CliAgenticRuntime, CliRunHandle, CliStreamCallbacks } from '../agent-runtime/cli-agentic/contract';
 import {
   buildGrokChildEnv,
   isSuccessfulGrokAuthResponse,
@@ -27,20 +23,11 @@ import {
   translateGrokSessionUpdate,
   type GrokAcpResponse,
 } from './acp-translator';
-import {
-  defaultGrokAcpTransportFactory,
-  type GrokAcpTransport,
-  type GrokAcpTransportFactory,
-} from './acp-transport';
+import { defaultGrokAcpTransportFactory, type GrokAcpTransport, type GrokAcpTransportFactory } from './acp-transport';
 import { GrokAcpLifecycleRegistry } from './lifecycle-registry';
 import { stopAllGrokMcpBridges } from './mcp-http-bridge';
 import { shutdownGrokConcurrency } from '../agent-runtime/grok-concurrency';
-import type {
-  GrokAcpNotification,
-  GrokAcpRunOptions,
-  GrokAcpRunSessionKey,
-  GrokAcpSessionUpdate,
-} from './types';
+import type { GrokAcpNotification, GrokAcpRunOptions, GrokAcpRunSessionKey, GrokAcpSessionUpdate } from './types';
 
 const logger = createLogger('grok-acp:driver');
 
@@ -52,7 +39,7 @@ const GROK_HANDLE_IDLE_REAP_MS = 120_000;
 const GROK_HANDLE_IDLE_SWEEP_MS = 60_000;
 
 function record(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
 function authMethodIds(initialize: unknown): string[] {
@@ -83,8 +70,9 @@ function assertTerminalModel(terminal: unknown, expectedModel: string): void {
   if (rawModelUsage === null || typeof rawModelUsage !== 'object' || Array.isArray(rawModelUsage)) {
     throw new GrokBackendError('Grok terminal usage returned invalid modelUsage attestation.');
   }
-  const mismatched = Object.keys(rawModelUsage as Record<string, unknown>)
-    .find((usageModel) => usageModel !== expectedModel && usageModel !== `${expectedModel}-build`);
+  const mismatched = Object.keys(rawModelUsage as Record<string, unknown>).find(
+    (usageModel) => usageModel !== expectedModel && usageModel !== `${expectedModel}-build`,
+  );
   if (mismatched) {
     throw new GrokBackendError(
       `Grok terminal usage reported model "${mismatched}" instead of required "${expectedModel}".`,
@@ -96,21 +84,23 @@ function authErrorFrom(error: unknown, context: string): GrokAuthError | null {
   if (error instanceof GrokAuthError) return error;
   if (!(error instanceof GrokJsonRpcError)) return null;
   const data = record(error.data);
-  const codes = [error.code, data['code'], data['status'], data['statusCode'], data['errorCode']]
-    .filter((value): value is string | number => typeof value === 'string' || typeof value === 'number');
+  const codes = [error.code, data['code'], data['status'], data['statusCode'], data['errorCode']].filter(
+    (value): value is string | number => typeof value === 'string' || typeof value === 'number',
+  );
   const numericAuthCode = codes.some((value) => value === 401 || value === -32001);
   const structuredText = [error.message, ...codes.map(String), JSON.stringify(error.data ?? '')].join(' ');
-  const namedAuthCode = /(?:^|[^a-z])(unauthenticated|unauthorized|auth(?:entication)?[_ -]?required|token[_ -]?(?:expired|invalid)|login[_ -]?required)(?:[^a-z]|$)/i
-    .test(structuredText);
+  const namedAuthCode =
+    /(?:^|[^a-z])(unauthenticated|unauthorized|auth(?:entication)?[_ -]?required|token[_ -]?(?:expired|invalid)|login[_ -]?required)(?:[^a-z]|$)/i.test(
+      structuredText,
+    );
   return numericAuthCode || namedAuthCode
     ? new GrokAuthError(`Grok authentication failed during ${context}.`, { cause: error })
     : null;
 }
 
-export function buildGrokAgentArgv(opts: Pick<
-  GrokAcpRunOptions,
-  'model' | 'effort' | 'permission' | 'sandbox' | 'nativeToolArgs'
->): string[] {
+export function buildGrokAgentArgv(
+  opts: Pick<GrokAcpRunOptions, 'model' | 'effort' | 'permission' | 'sandbox' | 'nativeToolArgs'>,
+): string[] {
   const global = [
     '--no-auto-update',
     '--no-subagents',
@@ -143,18 +133,15 @@ export function buildGrokAcpRunKey(opts: GrokAcpRunOptions): GrokAcpRunSessionKe
   };
 }
 
-function optionId(
-  options: unknown,
-  decision: 'allow' | 'deny',
-  preferAlways = false,
-): string | undefined {
+function optionId(options: unknown, decision: 'allow' | 'deny', preferAlways = false): string | undefined {
   if (!Array.isArray(options)) return undefined;
   const rows = options.map(record);
-  const kindMatches = decision === 'allow'
-    ? preferAlways
-      ? ['allow_always', 'allow-once', 'allow_once']
-      : ['allow_once', 'allow-once']
-    : ['reject_once', 'reject-once', 'deny_once'];
+  const kindMatches =
+    decision === 'allow'
+      ? preferAlways
+        ? ['allow_always', 'allow-once', 'allow_once']
+        : ['allow_once', 'allow-once']
+      : ['reject_once', 'reject-once', 'deny_once'];
   for (const expected of kindMatches) {
     const found = rows.find((row) => row['kind'] === expected || row['optionId'] === expected);
     if (typeof found?.['optionId'] === 'string') return found['optionId'];
@@ -217,11 +204,9 @@ function canonicalToolInput(toolCall: Record<string, unknown>): {
   }
   if (toolName === 'Write' && typeof input['content'] !== 'string') return null;
   if (toolName === 'Edit') {
-    const hasReplacement = (
-      typeof input['old_string'] === 'string' && typeof input['new_string'] === 'string'
-    ) || (
-      typeof input['oldText'] === 'string' && typeof input['newText'] === 'string'
-    );
+    const hasReplacement =
+      (typeof input['old_string'] === 'string' && typeof input['new_string'] === 'string') ||
+      (typeof input['oldText'] === 'string' && typeof input['newText'] === 'string');
     if (!hasReplacement) return null;
   }
   if (toolName === 'Bash' && !nonEmpty(input['command'])) return null;
@@ -267,10 +252,14 @@ export class GrokAcpRunHandle implements CliRunHandle {
     };
     let initialized: unknown;
     try {
-      initialized = await this.transport.request('initialize', {
-        protocolVersion: 1,
-        clientCapabilities: {},
-      }, requestOptions);
+      initialized = await this.transport.request(
+        'initialize',
+        {
+          protocolVersion: 1,
+          clientCapabilities: {},
+        },
+        requestOptions,
+      );
     } catch (error) {
       const authError = authErrorFrom(error, 'initialize');
       if (authError) throw authError;
@@ -281,10 +270,16 @@ export class GrokAcpRunHandle implements CliRunHandle {
       throw new GrokAuthError('Grok ACP did not advertise cached_token authentication.');
     }
     try {
-      const auth = record(await this.transport.request('authenticate', {
-        methodId: 'cached_token',
-        _meta: { headless: true },
-      }, requestOptions));
+      const auth = record(
+        await this.transport.request(
+          'authenticate',
+          {
+            methodId: 'cached_token',
+            _meta: { headless: true },
+          },
+          requestOptions,
+        ),
+      );
       if (!isSuccessfulGrokAuthResponse(auth)) {
         throw new GrokAuthError('Grok cached_token authentication was not accepted.');
       }
@@ -301,13 +296,17 @@ export class GrokAcpRunHandle implements CliRunHandle {
     if (this.sessionId !== null) return;
     let rawResult: unknown;
     try {
-      rawResult = await this.transport.request('session/new', {
-        cwd: this.opts.workDir,
-        mcpServers: this.opts.mcpServers ?? [],
-      }, {
-        timeoutMs: this.opts.handshakeTimeoutMs ?? GROK_DEFAULT_HANDSHAKE_TIMEOUT_MS,
-        ...(signal ? { signal } : {}),
-      });
+      rawResult = await this.transport.request(
+        'session/new',
+        {
+          cwd: this.opts.workDir,
+          mcpServers: this.opts.mcpServers ?? [],
+        },
+        {
+          timeoutMs: this.opts.handshakeTimeoutMs ?? GROK_DEFAULT_HANDSHAKE_TIMEOUT_MS,
+          ...(signal ? { signal } : {}),
+        },
+      );
     } catch (error) {
       const authError = authErrorFrom(error, 'session/new');
       if (authError) throw authError;
@@ -327,9 +326,7 @@ export class GrokAcpRunHandle implements CliRunHandle {
       throw new GrokBackendError('Grok session/new did not attest the effective model.');
     }
     if (effectiveModel !== this.opts.model) {
-      throw new GrokBackendError(
-        `Grok selected model "${effectiveModel}" instead of required "${this.opts.model}".`,
-      );
+      throw new GrokBackendError(`Grok selected model "${effectiveModel}" instead of required "${this.opts.model}".`);
     }
     await this.opts.attestSession?.(sessionId);
     await this.opts.assertWorkspaceUnchanged?.();
@@ -337,11 +334,7 @@ export class GrokAcpRunHandle implements CliRunHandle {
     this.lastActivityAt = Date.now();
   }
 
-  private async handleServerRequest(
-    id: unknown,
-    method: string,
-    params: Record<string, unknown>,
-  ): Promise<void> {
+  private async handleServerRequest(id: unknown, method: string, params: Record<string, unknown>): Promise<void> {
     if (method !== 'session/request_permission') {
       this.transport.respond(id, null);
       return;
@@ -416,29 +409,17 @@ export class GrokAcpRunHandle implements CliRunHandle {
     }
   }
 
-  async send(
-    prompt: string,
-    callbacks?: CliStreamCallbacks,
-    abortSignal?: AbortSignal,
-  ): Promise<GrokAcpResponse> {
+  async send(prompt: string, callbacks?: CliStreamCallbacks, abortSignal?: AbortSignal): Promise<GrokAcpResponse> {
     await this.ensureSession(abortSignal ?? this.opts.abortSignal);
     return this.runTurn(prompt, callbacks, abortSignal);
   }
 
-  async reply(
-    message: string,
-    callbacks?: CliStreamCallbacks,
-    abortSignal?: AbortSignal,
-  ): Promise<GrokAcpResponse> {
+  async reply(message: string, callbacks?: CliStreamCallbacks, abortSignal?: AbortSignal): Promise<GrokAcpResponse> {
     if (this.sessionId === null) throw new GrokProcessError('Grok reply() called before send().');
     return this.runTurn(message, callbacks, abortSignal);
   }
 
-  private runTurn(
-    prompt: string,
-    callbacks?: CliStreamCallbacks,
-    abortSignal?: AbortSignal,
-  ): Promise<GrokAcpResponse> {
+  private runTurn(prompt: string, callbacks?: CliStreamCallbacks, abortSignal?: AbortSignal): Promise<GrokAcpResponse> {
     const generation = this.generation;
     const handle = this;
     const accumulator = createGrokAccumulator();
@@ -477,9 +458,10 @@ export class GrokAcpRunHandle implements CliRunHandle {
         cleanup();
         this.status = 'failed';
         const authError = authErrorFrom(error, 'active turn');
-        reject(authError ?? (error instanceof GrokUnavailableError
-          ? error
-          : new GrokProcessError(error.message, { cause: error })));
+        reject(
+          authError ??
+            (error instanceof GrokUnavailableError ? error : new GrokProcessError(error.message, { cause: error })),
+        );
       };
       this.activeTurnAbort = fail;
 
@@ -497,16 +479,20 @@ export class GrokAcpRunHandle implements CliRunHandle {
         const rawOutcome = grokStopReasonOutcome(terminalRecord['stopReason']);
         if (cancelRequested && rawOutcome !== 'cancelled') {
           this.transport.kill('cancel-terminal-mismatch');
-          fail(new GrokProcessError(
-            `Grok cancel was not confirmed: stopReason=${String(terminalRecord['stopReason'] ?? 'unknown')}`,
-          ));
+          fail(
+            new GrokProcessError(
+              `Grok cancel was not confirmed: stopReason=${String(terminalRecord['stopReason'] ?? 'unknown')}`,
+            ),
+          );
           return;
         }
         const outcome = rawOutcome;
         if (outcome === 'failed') {
-          fail(new GrokProcessError(
-            `Grok turn failed with stopReason=${String(terminalRecord['stopReason'] ?? 'unknown')}`,
-          ));
+          fail(
+            new GrokProcessError(
+              `Grok turn failed with stopReason=${String(terminalRecord['stopReason'] ?? 'unknown')}`,
+            ),
+          );
           return;
         }
         settled = true;
@@ -549,17 +535,18 @@ export class GrokAcpRunHandle implements CliRunHandle {
         }
         if (notification.method === 'error' && notification.params['willRetry'] !== true) {
           const error = record(notification.params['error']);
-          const code = typeof error['code'] === 'number' || typeof error['code'] === 'string'
-            ? error['code']
-            : undefined;
-          fail(new GrokJsonRpcError(
-            typeof error['message'] === 'string' ? error['message'] : 'Grok ACP error notification',
-            {
-              method: 'notification:error',
-              ...(code !== undefined ? { code } : {}),
-              ...(Object.prototype.hasOwnProperty.call(error, 'data') ? { data: error['data'] } : {}),
-            },
-          ));
+          const code =
+            typeof error['code'] === 'number' || typeof error['code'] === 'string' ? error['code'] : undefined;
+          fail(
+            new GrokJsonRpcError(
+              typeof error['message'] === 'string' ? error['message'] : 'Grok ACP error notification',
+              {
+                method: 'notification:error',
+                ...(code !== undefined ? { code } : {}),
+                ...(Object.prototype.hasOwnProperty.call(error, 'data') ? { data: error['data'] } : {}),
+              },
+            ),
+          );
         }
       }
 
@@ -591,21 +578,27 @@ export class GrokAcpRunHandle implements CliRunHandle {
       if (abortSignal?.aborted) onAbort();
       else abortSignal?.addEventListener('abort', onAbort, { once: true });
 
-      void Promise.resolve(this.opts.assertWorkspaceUnchanged?.())
-        .then(() => {
+      void Promise.resolve(this.opts.assertWorkspaceUnchanged?.()).then(
+        () => {
           if (settled || abortSignal?.aborted) {
             if (!settled) onAbort();
             return;
           }
           promptStarted = true;
-          return this.transport.request('session/prompt', {
-            sessionId,
-            prompt: [{ type: 'text', text: prompt }],
-          }).then(
-            (terminal) => { void finish(terminal); },
-            (error: unknown) => fail(error as Error),
-          );
-        }, (error: unknown) => fail(error as Error));
+          return this.transport
+            .request('session/prompt', {
+              sessionId,
+              prompt: [{ type: 'text', text: prompt }],
+            })
+            .then(
+              (terminal) => {
+                void finish(terminal);
+              },
+              (error: unknown) => fail(error as Error),
+            );
+        },
+        (error: unknown) => fail(error as Error),
+      );
     });
   }
 
@@ -620,7 +613,11 @@ export class GrokAcpRunHandle implements CliRunHandle {
     this.closePromise = (async () => {
       try {
         if (this.status === 'running') {
-          try { await this.interrupt('close'); } catch { /* continue teardown */ }
+          try {
+            await this.interrupt('close');
+          } catch {
+            /* continue teardown */
+          }
         }
         this.activeTurnAbort?.(new GrokProcessError('Grok run closed during an active turn.'));
         this.generation += 1;
@@ -693,7 +690,7 @@ export class GrokAcpDriver implements CliAgenticRuntime {
   private async createRunInternal(opts: GrokAcpRunOptions): Promise<CliRunHandle> {
     if (opts.abortSignal?.aborted) throw new GrokUnavailableError('Grok run aborted before start.');
     ensureGrokHome();
-    const binary = opts.executable ?? await resolveGrokBinary();
+    const binary = opts.executable ?? (await resolveGrokBinary());
     if (!binary) throw new GrokUnavailableError('grok binary not found.');
     const env = opts.env ?? buildGrokChildEnv(resolveGrokHome());
     assertGrokChildEnv(env);

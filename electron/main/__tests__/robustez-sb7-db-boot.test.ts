@@ -1,13 +1,8 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import {
-  MigrationError,
-  buildDbMigrationErrorBox,
-  DB_MIGRATION_ERROR_CODE,
-} from '../db-init-error';
+import { MigrationError, buildDbMigrationErrorBox, DB_MIGRATION_ERROR_CODE } from '../db-init-error';
 
 describe('SB-7 AC-B17: MigrationError + caixa de erro DB-MIGRATION', () => {
   it('AC-B17: MigrationError carrega versao, path e cause (message/stack preservados)', () => {

@@ -15,9 +15,11 @@ export function AgentThinking({ elapsed }: { elapsed?: string }) {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setPhraseIndex(prev => {
+      setPhraseIndex((prev) => {
         let next: number;
-        do { next = Math.floor(Math.random() * THINKING_PHRASES.length); } while (next === prev);
+        do {
+          next = Math.floor(Math.random() * THINKING_PHRASES.length);
+        } while (next === prev);
         return next;
       });
     }, 3000);
@@ -25,10 +27,7 @@ export function AgentThinking({ elapsed }: { elapsed?: string }) {
   }, []);
 
   return (
-    <div
-      className="flex items-center gap-2.5 py-1"
-      style={{ '--agent-neon': neonOrange } as React.CSSProperties}
-    >
+    <div className="flex items-center gap-2.5 py-1" style={{ '--agent-neon': neonOrange } as React.CSSProperties}>
       <style>{`
         .paw-pad-sm {
           background-color: var(--agent-neon);
@@ -69,19 +68,25 @@ export function AgentThinking({ elapsed }: { elapsed?: string }) {
       `}</style>
 
       <div className="relative w-[36px] h-[36px]">
-        <div className="toe-ct toe-s1"><div className="toe-dot td1" /></div>
-        <div className="toe-ct toe-s2"><div className="toe-dot td2" /></div>
-        <div className="toe-ct toe-s3"><div className="toe-dot td3" /></div>
-        <div className="toe-ct toe-s4"><div className="toe-dot td4" /></div>
+        <div className="toe-ct toe-s1">
+          <div className="toe-dot td1" />
+        </div>
+        <div className="toe-ct toe-s2">
+          <div className="toe-dot td2" />
+        </div>
+        <div className="toe-ct toe-s3">
+          <div className="toe-dot td3" />
+        </div>
+        <div className="toe-ct toe-s4">
+          <div className="toe-dot td4" />
+        </div>
         <div className="paw-pad-sm main-pad-sm" />
       </div>
 
       <span className="text-[10px] font-mono tracking-widest text-zinc-500 uppercase animate-pulse">
         {THINKING_PHRASES[phraseIndex]}
       </span>
-      {elapsed && (
-        <span className="text-[10px] font-mono tabular-nums text-amber-400/70">{elapsed}</span>
-      )}
+      {elapsed && <span className="text-[10px] font-mono tabular-nums text-amber-400/70">{elapsed}</span>}
     </div>
   );
 }

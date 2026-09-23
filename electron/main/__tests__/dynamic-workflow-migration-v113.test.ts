@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -28,13 +27,13 @@ const V111_SOURCE = readMigration('v111-dynamic-workflow-builder-green-check.ts'
 describe('migration v113 dynamic-workflow builder refute no dev-loop (R10, sem DB)', () => {
   it('R10 metade 1: a V114 SUPERSEDE partes da secao da V113 no seed; o nucleo da V113 sobrevive', () => {
     const neu = grabBlock(V113_SOURCE, 'NEW_SECTION');
-    expect(neu).toContain('por where/ref, 1:1'); // ensino antigo vivia no NEW da V113
-    expect(dynamicWorkflowBuilder.systemPrompt).not.toContain('por where/ref, 1:1'); // trocado pela V114
+    expect(neu).toContain('por where/ref, 1:1');
+    expect(dynamicWorkflowBuilder.systemPrompt).not.toContain('por where/ref, 1:1');
     expect(dynamicWorkflowBuilder.systemPrompt).toContain('green-check do host VERDE (green.ok, gate deterministico)');
     expect(dynamicWorkflowBuilder.systemPrompt).toContain('AND de DUAS condicoes INDEPENDENTES');
     expect(dynamicWorkflowBuilder.systemPrompt).toContain('FAIL-CLOSED');
-    expect(dynamicWorkflowBuilder.systemPrompt).toContain('correlaciona por ID ESTAVEL'); // supersession V114
-    expect(dynamicWorkflowBuilder.systemPrompt).toContain('SEMPRE passe o sprintIndex'); // supersession V114
+    expect(dynamicWorkflowBuilder.systemPrompt).toContain('correlaciona por ID ESTAVEL');
+    expect(dynamicWorkflowBuilder.systemPrompt).toContain('SEMPRE passe o sprintIndex');
   });
 
   it('o OLD_SECTION ancora na secao do green-check da V111 (REPLACE substitui a secao inteira)', () => {

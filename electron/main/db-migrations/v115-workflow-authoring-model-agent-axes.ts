@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 interface TableInfoRow {
   cid: number;
   name: string;
@@ -17,9 +16,7 @@ function hasColumn(db: Database.Database, table: string, column: string): boolea
 
 export function applyMigrationV115(db: Database.Database): void {
   if (!hasColumn(db, 'dynamic_workflow_definitions', 'authoring_model')) {
-    db.exec(
-      `ALTER TABLE dynamic_workflow_definitions ADD COLUMN authoring_model TEXT NOT NULL DEFAULT 'manifest';`,
-    );
+    db.exec(`ALTER TABLE dynamic_workflow_definitions ADD COLUMN authoring_model TEXT NOT NULL DEFAULT 'manifest';`);
   }
 
   if (!hasColumn(db, 'agents', 'access')) {
@@ -35,12 +32,7 @@ export function applyMigrationV115(db: Database.Database): void {
     db.exec(`ALTER TABLE agents ADD COLUMN allow_network INTEGER DEFAULT 0;`);
   }
 
-  const writerCommandsJson = JSON.stringify([
-    'npm run typecheck',
-    'npm run test',
-    'npm install',
-    'npm ci',
-  ]);
+  const writerCommandsJson = JSON.stringify(['npm run typecheck', 'npm run test', 'npm install', 'npm ci']);
   const setWriterAxes = db.prepare(
     `UPDATE agents
         SET access = 'workspace-write',

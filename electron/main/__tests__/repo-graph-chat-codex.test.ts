@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -67,6 +66,7 @@ vi.mock('../codex-sdk/stream-translator', () => ({
     callbacks: {},
     finalize: vi.fn(),
     fail: vi.fn(),
+    timelineEvents: () => [],
   }),
 }));
 vi.mock('../dreaming-turn-engine', () => ({ recordCompletedMainChatTurn: vi.fn() }));
@@ -123,7 +123,7 @@ const getWindow = () => fakeWindow as never;
 
 function setTurnComRepo(): void {
   setRepoGraphTurnSession('sess-1', 'codex-sdk');
-  setRepoGraphTurnContext({
+  setRepoGraphTurnContext('sess-1', {
     repositoryId: 'repo-1',
     canonicalRootPath: repoDir,
     status: 'ready',
@@ -184,13 +184,7 @@ describe('FINDING-1 — chat codex COM repo ativo (AC-6 linha codex)', () => {
 
 describe('FINDING-1 — regressao SEM repo (cwd e prompt byte-identicos)', () => {
   it('sem repo ativo: cwd = getAgentCwd, prompt = mensagem crua, zero turn_usage', async () => {
-    await executeCodexSdkQuery(
-      'pergunta qualquer',
-      { sessionId: 'sess-1' },
-      getWindow,
-      undefined,
-      selection,
-    );
+    await executeCodexSdkQuery('pergunta qualquer', { sessionId: 'sess-1' }, getWindow, undefined, selection);
 
     const session = capturedSessions[0]!;
     expect(session.opts['cwd']).toBe('/lionclaw/agents-home');
@@ -204,13 +198,7 @@ describe('FINDING-1 — regressao SEM repo (cwd e prompt byte-identicos)', () =>
 
   it('graph ausente/building (turno SEM ctx do hook F6): sem cwdOverride e sem baseline', async () => {
     setRepoGraphTurnSession('sess-1', 'codex-sdk');
-    await executeCodexSdkQuery(
-      'pergunta qualquer',
-      { sessionId: 'sess-1' },
-      getWindow,
-      undefined,
-      selection,
-    );
+    await executeCodexSdkQuery('pergunta qualquer', { sessionId: 'sess-1' }, getWindow, undefined, selection);
 
     const session = capturedSessions[0]!;
     expect(session.opts['cwd']).toBe('/lionclaw/agents-home');
@@ -222,13 +210,7 @@ describe('FINDING-1 — regressao SEM repo (cwd e prompt byte-identicos)', () =>
 
 describe('thread persistente — transicoes do repo em conversa ja aberta', () => {
   async function send(message: string): Promise<void> {
-    await executeCodexSdkQuery(
-      message,
-      { sessionId: 'sess-1' },
-      getWindow,
-      undefined,
-      selection,
-    );
+    await executeCodexSdkQuery(message, { sessionId: 'sess-1' }, getWindow, undefined, selection);
   }
 
   it('recria a thread ao anexar repo e ao remover repo', async () => {
@@ -241,9 +223,7 @@ describe('thread persistente — transicoes do repo em conversa ja aberta', () =
     expect(capturedSessions).toHaveLength(2);
     expect(capturedSessions[0]!.close).toHaveBeenCalledTimes(1);
     expect(capturedSessions[1]!.opts['cwd']).toBe(repoDir);
-    expect(capturedSessions[1]!.opts['systemPrompt']).toContain(
-      'Repositorio ativo da conversa',
-    );
+    expect(capturedSessions[1]!.opts['systemPrompt']).toContain('Repositorio ativo da conversa');
     expect(capturedSessions[1]!.sendPrompts[0]).toContain(RENDERED);
 
     clearRepoGraphTurnSession();
@@ -251,9 +231,7 @@ describe('thread persistente — transicoes do repo em conversa ja aberta', () =
     expect(capturedSessions).toHaveLength(3);
     expect(capturedSessions[1]!.close).toHaveBeenCalledTimes(1);
     expect(capturedSessions[2]!.opts['cwd']).toBe('/lionclaw/agents-home');
-    expect(capturedSessions[2]!.opts['systemPrompt']).not.toContain(
-      'Repositorio ativo da conversa',
-    );
+    expect(capturedSessions[2]!.opts['systemPrompt']).not.toContain('Repositorio ativo da conversa');
   });
 
   it('recria a thread quando status/stats mudam no mesmo repo e cwd', async () => {
@@ -261,7 +239,7 @@ describe('thread persistente — transicoes do repo em conversa ja aberta', () =
     await send('graph pronto');
     expect(capturedSessions).toHaveLength(1);
 
-    setRepoGraphTurnContext({
+    setRepoGraphTurnContext('sess-1', {
       repositoryId: 'repo-1',
       canonicalRootPath: repoDir,
       status: 'stale',
@@ -316,7 +294,7 @@ describe('Montagem da secao por variante (teste de montagem do AC)', () => {
 
   it('appendRepoGraphSection sem ctx do turno e byte-identico nas duas variantes', () => {
     clearRepoGraphTurnSession();
-    expect(appendRepoGraphSection('# Base')).toBe('# Base');
-    expect(appendRepoGraphSection('# Base', 'codex')).toBe('# Base');
+    expect(appendRepoGraphSection('# Base', 'sess-1')).toBe('# Base');
+    expect(appendRepoGraphSection('# Base', 'sess-1', 'codex')).toBe('# Base');
   });
 });

@@ -1,5 +1,17 @@
+import { SwarmSettings } from '@/components/swarm/SwarmSettings';
 import { useState, useEffect, useCallback } from 'react';
-import { Save, CheckCircle, RotateCcw, KeyRound, Volume2, Cpu, BrainCircuit, AlertTriangle } from 'lucide-react';
+import {
+  Save,
+  CheckCircle,
+  RotateCcw,
+  KeyRound,
+  Volume2,
+  Cpu,
+  BrainCircuit,
+  AlertTriangle,
+  MessageSquare,
+} from 'lucide-react';
+import { DEFAULT_CHAT_STALE_LANE_DAYS, normalizeStaleLaneDays } from '@/lib/lanes';
 import { CartesiaVoiceSelector } from '@/components/settings/CartesiaVoiceSelector';
 import { VoiceSelector } from '@/components/settings/VoiceSelector';
 import { GoogleOAuthSetup } from '@/components/settings/GoogleOAuthSetup';
@@ -7,6 +19,7 @@ import { ExternalProvidersPanel } from '@/components/settings/ExternalProvidersP
 import { OrchestratorSelector } from '@/components/settings/OrchestratorSelector';
 import { CompactionModelSelector } from '@/components/settings/CompactionModelSelector';
 import { CompactionTriggerSettings } from '@/components/settings/CompactionTriggerSettings';
+import { TimelineReinjectSettings } from '@/components/settings/TimelineReinjectSettings';
 import { TranscriptionModelSelector } from '@/components/settings/TranscriptionModelSelector';
 import { VisionModelSelector } from '@/components/settings/VisionModelSelector';
 import { ToolScriptSettingsCard } from '@/components/settings/ToolScriptSettingsCard';
@@ -27,14 +40,18 @@ export function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [saved, setSaved] = useState(false);
   const [activeTab, setActiveTab] = useState<'orquestrador' | 'geral' | 'permissoes' | 'canais'>('orquestrador');
-  const [uiFont, setUiFontState] = useState<'system' | 'dmsans' | 'lionlabs'>(
-    () => (typeof localStorage !== 'undefined'
-      ? ((localStorage.getItem('lionlabs:uifont') as 'system' | 'dmsans' | 'lionlabs') || 'lionlabs')
-      : 'lionlabs'),
+  const [uiFont, setUiFontState] = useState<'system' | 'dmsans' | 'lionlabs'>(() =>
+    typeof localStorage !== 'undefined'
+      ? (localStorage.getItem('lionlabs:uifont') as 'system' | 'dmsans' | 'lionlabs') || 'lionlabs'
+      : 'lionlabs',
   );
   const setUiFont = (v: 'system' | 'dmsans' | 'lionlabs') => {
     setUiFontState(v);
-    try { localStorage.setItem('lionlabs:uifont', v); } catch { /* noop */ }
+    try {
+      localStorage.setItem('lionlabs:uifont', v);
+    } catch {
+      /* noop */
+    }
     document.documentElement.dataset.uifont = v;
   };
 
@@ -54,7 +71,7 @@ export function SettingsPage() {
   };
 
   const handleSettingsPatch = useCallback(async (patch: Partial<AppSettings>) => {
-    setSettings((prev) => prev ? { ...prev, ...patch } : prev);
+    setSettings((prev) => (prev ? { ...prev, ...patch } : prev));
     try {
       await window.lionclaw.settings.update(patch);
       setSaved(true);
@@ -66,7 +83,7 @@ export function SettingsPage() {
   }, []);
 
   const handleOrchestratorSettingsChange = useCallback((patch: Partial<AppSettings>) => {
-    setSettings((prev) => prev ? { ...prev, ...patch } : prev);
+    setSettings((prev) => (prev ? { ...prev, ...patch } : prev));
   }, []);
 
   if (!settings) {
@@ -141,25 +158,17 @@ export function SettingsPage() {
             </section>
 
             {/* Compaction Model */}
-            <CompactionModelSelector
-              settings={settings}
-              onUpdate={handleSettingsPatch}
-            />
+            <CompactionModelSelector settings={settings} onUpdate={handleSettingsPatch} />
 
-            <CompactionTriggerSettings
-              settings={settings}
-              onUpdate={handleSettingsPatch}
-            />
+            <CompactionTriggerSettings settings={settings} onUpdate={handleSettingsPatch} />
 
-            <TranscriptionModelSelector
-              settings={settings}
-              onUpdate={handleSettingsPatch}
-            />
+            <TimelineReinjectSettings settings={settings} onUpdate={handleSettingsPatch} />
 
-            <VisionModelSelector
-              settings={settings}
-              onUpdate={handleSettingsPatch}
-            />
+            <TranscriptionModelSelector settings={settings} onUpdate={handleSettingsPatch} />
+
+            <SwarmSettings />
+
+            <VisionModelSelector settings={settings} onUpdate={handleSettingsPatch} />
 
             {/* Provedores externos */}
             <section className="space-y-3">
@@ -208,11 +217,13 @@ export function SettingsPage() {
                   </p>
                 </div>
                 <div className="grid grid-cols-3 rounded-lg border border-zinc-700 bg-zinc-950 p-0.5 text-xs">
-                  {([
-                    ['system', 'Sistema'],
-                    ['dmsans', 'DM Sans'],
-                    ['lionlabs', 'LionLabs'],
-                  ] as const).map(([val, label]) => (
+                  {(
+                    [
+                      ['system', 'Sistema'],
+                      ['dmsans', 'DM Sans'],
+                      ['lionlabs', 'LionLabs'],
+                    ] as const
+                  ).map(([val, label]) => (
                     <button
                       key={val}
                       onClick={() => setUiFont(val)}
@@ -229,6 +240,34 @@ export function SettingsPage() {
 
             {/* Layout do chat (SPEC-chat-width-toggle) */}
             <ChatLayoutSettings />
+
+            <section className="space-y-3">
+              <h2 className="text-sm font-medium text-zinc-300 flex items-center gap-2">
+                <MessageSquare size={16} className="text-amber-500" />
+                Chat
+              </h2>
+              <div className="flex items-center justify-between bg-zinc-900 rounded-lg border border-zinc-800 px-4 py-3">
+                <div>
+                  <p className="text-sm text-zinc-200">Aviso de lane parada (dias)</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Uma lane com mensagens e sem mensagem sua ha mais de N dias recebe um aviso na sidebar pedindo Clear
+                    para salvar a memoria. Nenhuma acao automatica.
+                  </p>
+                </div>
+                <input
+                  type="number"
+                  min={1}
+                  value={settings.chatStaleLaneDays ?? DEFAULT_CHAT_STALE_LANE_DAYS}
+                  onChange={(e) => {
+                    const days = normalizeStaleLaneDays(e.target.value);
+                    useChatStore.getState().setStaleLaneDays(days);
+                    void handleSettingsPatch({ chatStaleLaneDays: days });
+                  }}
+                  aria-label="Aviso de lane parada (dias)"
+                  className="w-20 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50"
+                />
+              </div>
+            </section>
 
             {/* Voice */}
             <section className="space-y-3">
@@ -273,9 +312,7 @@ export function SettingsPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-sm text-zinc-200">Chat ao vivo</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      Provider usado apenas na conversa em tempo real.
-                    </p>
+                    <p className="text-xs text-zinc-500 mt-0.5">Provider usado apenas na conversa em tempo real.</p>
                   </div>
                   <div className="grid grid-cols-2 rounded-lg border border-zinc-700 bg-zinc-950 p-0.5 text-xs">
                     {(['elevenlabs', 'cartesia'] as const).map((provider) => {
@@ -287,9 +324,7 @@ export function SettingsPage() {
                             void handleSettingsPatch({ voiceLiveProvider: provider });
                           }}
                           className={`px-3 py-1.5 rounded-md transition-colors ${
-                            active
-                              ? 'bg-amber-600 text-white'
-                              : 'text-zinc-400 hover:text-zinc-200'
+                            active ? 'bg-amber-600 text-white' : 'text-zinc-400 hover:text-zinc-200'
                           }`}
                         >
                           {provider === 'elevenlabs' ? 'ElevenLabs' : 'Cartesia'}
@@ -304,9 +339,7 @@ export function SettingsPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-xs font-medium text-zinc-300">Voz da Cartesia</p>
-                        <p className="text-xs text-zinc-500 mt-0.5">
-                          Requer CARTESIA_API_KEY no Vault.
-                        </p>
+                        <p className="text-xs text-zinc-500 mt-0.5">Requer CARTESIA_API_KEY no Vault.</p>
                       </div>
                       <button
                         onClick={() => useAppStore.getState().setPage('vault')}
@@ -373,10 +406,9 @@ export function SettingsPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-zinc-200">Limpeza automatica do MEMORY.md</p>
                     <p className="text-xs text-zinc-500 mt-0.5">
-                      A cada N interacoes do chat, audita o MEMORY.md procurando entradas obsoletas
-                      (decisoes revertidas, projetos abandonados, workarounds que viraram solucao)
-                      e remove ou atualiza. NAO faz compactacao — a compactacao continua acontecendo
-                      separadamente quando o contexto enche.
+                      A cada N interacoes do chat, audita o MEMORY.md procurando entradas obsoletas (decisoes
+                      revertidas, projetos abandonados, workarounds que viraram solucao) e remove ou atualiza. NAO faz
+                      compactacao — a compactacao continua acontecendo separadamente quando o contexto enche.
                     </p>
                   </div>
                   <button
@@ -402,8 +434,8 @@ export function SettingsPage() {
                   <div className="pr-3">
                     <p className="text-sm text-zinc-200">A cada N interacoes do chat</p>
                     <p className="text-xs text-zinc-500 mt-0.5">
-                      Conta apenas turnos user -&gt; assistant concluidos com sucesso. Erros, aborts
-                      e respostas vazias nao contam. Minimo 10, maximo 500. Default: 20.
+                      Conta apenas turnos user -&gt; assistant concluidos com sucesso. Erros, aborts e respostas vazias
+                      nao contam. Minimo 10, maximo 500. Default: 20.
                     </p>
                   </div>
                   <input
@@ -433,16 +465,15 @@ export function SettingsPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-zinc-200">Indice compacto de subagentes</p>
                   <p className="text-xs text-zinc-500 mt-0.5">
-                    Ligado (padrao): o system prompt carrega um indice de 1 linha por agente
-                    (economia de ~8k tokens por turno); a ficha completa fica disponivel sob
-                    demanda via ferramenta. Desligado: volta a secao completa legada.
+                    Ligado (padrao): o system prompt carrega um indice de 1 linha por agente (economia de ~8k tokens por
+                    turno); a ficha completa fica disponivel sob demanda via ferramenta. Desligado: volta a secao
+                    completa legada.
                   </p>
                 </div>
                 <button
                   onClick={() => {
                     void handleSettingsPatch({
-                      subagentsPromptMode:
-                        (settings.subagentsPromptMode ?? 'index') === 'full' ? 'index' : 'full',
+                      subagentsPromptMode: (settings.subagentsPromptMode ?? 'index') === 'full' ? 'index' : 'full',
                     });
                   }}
                   className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${
@@ -462,16 +493,15 @@ export function SettingsPage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-zinc-200">Indice compacto de MCPs</p>
                   <p className="text-xs text-zinc-500 mt-0.5">
-                    Ligado (padrao): indice compacto (recomendado) — 1 linha por tool MCP no
-                    contexto (~4k tokens) com schema sob demanda. Desligado: schemas completos
-                    (modo antigo, ~15-20k tokens). Vale para conversas novas.
+                    Ligado (padrao): indice compacto (recomendado) — 1 linha por tool MCP no contexto (~4k tokens) com
+                    schema sob demanda. Desligado: schemas completos (modo antigo, ~15-20k tokens). Vale para conversas
+                    novas.
                   </p>
                 </div>
                 <button
                   onClick={() => {
                     void handleSettingsPatch({
-                      mcpPromptMode:
-                        (settings.mcpPromptMode ?? 'index') === 'full' ? 'index' : 'full',
+                      mcpPromptMode: (settings.mcpPromptMode ?? 'index') === 'full' ? 'index' : 'full',
                     });
                   }}
                   className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${
@@ -493,31 +523,25 @@ export function SettingsPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-zinc-200">Bloquear Pipeline/Workflows desligados</p>
                     <p className="text-xs text-zinc-500 mt-0.5">
-                      Desligado (padrao, modo shadow): observa e loga o que negaria, nao bloqueia
-                      nada. Ligado (modo enforce): bloqueia de fato os turnos de chat com o chip
-                      Pipeline ou Workflows desligado. Vale para os proximos envios.
+                      Desligado (padrao, modo shadow): observa e loga o que negaria, nao bloqueia nada. Ligado (modo
+                      enforce): bloqueia de fato os turnos de chat com o chip Pipeline ou Workflows desligado. Vale para
+                      os proximos envios.
                     </p>
                   </div>
                   <button
                     onClick={() => {
                       void handleSettingsPatch({
                         chatCapabilityGateMode:
-                          (settings.chatCapabilityGateMode ?? 'shadow') === 'enforce'
-                            ? 'shadow'
-                            : 'enforce',
+                          (settings.chatCapabilityGateMode ?? 'shadow') === 'enforce' ? 'shadow' : 'enforce',
                       });
                     }}
                     className={`relative w-11 h-6 shrink-0 rounded-full transition-colors ${
-                      (settings.chatCapabilityGateMode ?? 'shadow') === 'enforce'
-                        ? 'bg-amber-600'
-                        : 'bg-zinc-700'
+                      (settings.chatCapabilityGateMode ?? 'shadow') === 'enforce' ? 'bg-amber-600' : 'bg-zinc-700'
                     }`}
                   >
                     <span
                       className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                        (settings.chatCapabilityGateMode ?? 'shadow') === 'enforce'
-                          ? 'translate-x-5'
-                          : 'translate-x-0'
+                        (settings.chatCapabilityGateMode ?? 'shadow') === 'enforce' ? 'translate-x-5' : 'translate-x-0'
                       }`}
                     />
                   </button>
@@ -525,8 +549,8 @@ export function SettingsPage() {
                 {(settings.chatCapabilityGateMode ?? 'shadow') === 'enforce' && (
                   <p className="flex items-start gap-1.5 text-xs text-amber-400">
                     <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-                    Ligue so depois de observar os logs do modo shadow. Com o enforce ligado, um
-                    turno de drive interno que perca a identidade cai fail-closed.
+                    Ligue so depois de observar os logs do modo shadow. Com o enforce ligado, um turno de drive interno
+                    que perca a identidade cai fail-closed.
                   </p>
                 )}
               </div>
@@ -551,11 +575,12 @@ export function SettingsPage() {
                 <button
                   onClick={async () => {
                     const confirmed = window.confirm(
-                      'Isso vai resetar seu perfil, memoria e historico de conversas. Continuar?'
+                      'Isso vai resetar seu perfil, memoria e historico de conversas. Continuar?',
                     );
                     if (!confirmed) return;
                     await window.lionclaw.onboarding.reset();
-                    await window.lionclaw.chat.stop();
+                    const lanes = await useChatStore.getState().loadOpenLanes();
+                    await Promise.all(lanes.map((lane) => window.lionclaw.chat.stop(lane.id)));
                     useChatStore.getState().startNewSession();
                     useAuthStore.getState().checkOnboarding();
                     useAppStore.getState().setPage('chat');
@@ -609,7 +634,9 @@ function MgraphSettings({
   const [showRestartDialog, setShowRestartDialog] = useState(false);
   const [showReseedConfirm, setShowReseedConfirm] = useState(false);
   const [seeding, setSeeding] = useState(false);
-  const [seedProgress, setSeedProgress] = useState<{ processed: number; total: number; notesCreated: number } | null>(null);
+  const [seedProgress, setSeedProgress] = useState<{ processed: number; total: number; notesCreated: number } | null>(
+    null,
+  );
 
   useEffect(() => {
     const unsub = window.lionclaw.mgraph.onSeedProgress((data) => {
@@ -648,9 +675,7 @@ function MgraphSettings({
       <div className="flex items-center justify-between bg-zinc-900 rounded-lg border border-zinc-800 px-4 py-3">
         <div>
           <p className="text-sm text-zinc-200">Memory Graph</p>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Ativa o grafo de memoria persistente em arquivos Markdown
-          </p>
+          <p className="text-xs text-zinc-500 mt-0.5">Ativa o grafo de memoria persistente em arquivos Markdown</p>
         </div>
         <button
           onClick={handleToggle}
@@ -671,17 +696,13 @@ function MgraphSettings({
         <div className="flex items-center justify-between bg-zinc-900 rounded-lg border border-zinc-800 px-4 py-3">
           <div>
             <p className="text-sm text-zinc-200">Forcar re-seed</p>
-            <p className="text-xs text-zinc-500 mt-0.5">
-              Apaga todas as notas do graph e reprocessa o historico
-            </p>
+            <p className="text-xs text-zinc-500 mt-0.5">Apaga todas as notas do graph e reprocessa o historico</p>
           </div>
           <button
             onClick={() => setShowReseedConfirm(true)}
             disabled={seeding}
             className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
-              seeding
-                ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
-                : 'bg-zinc-700 hover:bg-zinc-600 text-zinc-200'
+              seeding ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' : 'bg-zinc-700 hover:bg-zinc-600 text-zinc-200'
             }`}
           >
             {seeding ? 'Processando...' : 'Re-seed'}
@@ -694,7 +715,8 @@ function MgraphSettings({
         <div className="bg-zinc-900 rounded-lg border border-zinc-800 px-4 py-3 space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="text-zinc-300">
-              Processando batch {seedProgress.processed} de {seedProgress.total} ({seedProgress.notesCreated} notas criadas)
+              Processando batch {seedProgress.processed} de {seedProgress.total} ({seedProgress.notesCreated} notas
+              criadas)
             </span>
             <span className="text-amber-400 font-mono">
               {Math.round((seedProgress.processed / seedProgress.total) * 100)}%
@@ -714,9 +736,7 @@ function MgraphSettings({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-sm w-full mx-4 space-y-4">
             <h3 className="text-sm font-medium text-zinc-100">Reiniciar necessario</h3>
-            <p className="text-xs text-zinc-400">
-              A alteracao do Memory Graph requer reiniciar o app para ter efeito.
-            </p>
+            <p className="text-xs text-zinc-400">A alteracao do Memory Graph requer reiniciar o app para ter efeito.</p>
             <div className="flex gap-2 justify-end">
               <button
                 onClick={async () => {
@@ -771,23 +791,14 @@ function MgraphSettings({
   );
 }
 
-function OllamaSettings({
-  settings,
-  onChange,
-}: {
-  settings: AppSettings;
-  onChange: (s: AppSettings) => void;
-}) {
+function OllamaSettings({ settings, onChange }: { settings: AppSettings; onChange: (s: AppSettings) => void }) {
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle');
   const [testModels, setTestModels] = useState<string[]>([]);
 
   const handleTest = async () => {
     setTestStatus('testing');
     try {
-      const result = await window.lionclaw.ollama.check(
-        settings.ollamaBaseUrl,
-        settings.ollamaEmbeddingModel,
-      );
+      const result = await window.lionclaw.ollama.check(settings.ollamaBaseUrl, settings.ollamaEmbeddingModel);
       setTestStatus(result.available ? 'ok' : 'error');
       setTestModels(result.models);
     } catch {
@@ -806,9 +817,7 @@ function OllamaSettings({
       <div className="flex items-center justify-between bg-zinc-900 rounded-lg border border-zinc-800 px-4 py-3">
         <div>
           <p className="text-sm text-zinc-200">Ativar Ollama</p>
-          <p className="text-xs text-zinc-500 mt-0.5">
-            Usa modelos locais para embeddings de memoria
-          </p>
+          <p className="text-xs text-zinc-500 mt-0.5">Usa modelos locais para embeddings de memoria</p>
         </div>
         <button
           onClick={() => onChange({ ...settings, ollamaEnabled: !settings.ollamaEnabled })}
@@ -846,7 +855,9 @@ function OllamaSettings({
               placeholder="nomic-embed-text"
               className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-600"
             />
-            <p className="text-[10px] text-zinc-600 mt-1">Modelo usado para gerar vetores de busca semantica (768 dimensoes)</p>
+            <p className="text-[10px] text-zinc-600 mt-1">
+              Modelo usado para gerar vetores de busca semantica (768 dimensoes)
+            </p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -862,9 +873,7 @@ function OllamaSettings({
                 <CheckCircle size={12} /> Conectado
               </span>
             )}
-            {testStatus === 'error' && (
-              <span className="text-xs text-red-400">Falha na conexao</span>
-            )}
+            {testStatus === 'error' && <span className="text-xs text-red-400">Falha na conexao</span>}
           </div>
 
           {testModels.length > 0 && (
@@ -900,8 +909,7 @@ function ChatLayoutSettings() {
         <div>
           <p className="text-sm text-zinc-200">Largura do chat</p>
           <p className="text-xs text-zinc-500 mt-0.5">
-            Amplo e full-width ajudam tabelas largas em monitores wide a caber sem rolagem
-            horizontal. Aplica na hora.
+            Amplo e full-width ajudam tabelas largas em monitores wide a caber sem rolagem horizontal. Aplica na hora.
           </p>
         </div>
         {/* Mini-barra de preview (ilustrativa, nao e medida real do viewport) */}
@@ -911,7 +919,11 @@ function ChatLayoutSettings() {
             style={{ width: `${CHAT_WIDTH_PREVIEW_PERCENT[width]}%` }}
           />
         </div>
-        <div className="flex gap-1 bg-zinc-950 rounded-lg p-1 text-xs w-fit" role="radiogroup" aria-label="Largura do chat">
+        <div
+          className="flex gap-1 bg-zinc-950 rounded-lg p-1 text-xs w-fit"
+          role="radiogroup"
+          aria-label="Largura do chat"
+        >
           {CHAT_WIDTH_MODES.map((mode) => (
             <button
               key={mode}

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   WorkflowRunner,
@@ -7,14 +6,8 @@ import {
   type WorkflowRunnerDeps,
   type WorkflowRunnerCrud,
 } from '../dynamic-workflows/workflow-runner';
-import type {
-  SandboxProcessFactory,
-  SandboxProcessHandle,
-} from '../dynamic-workflows/workflow-sandbox';
-import type {
-  SandboxParentMessage,
-  SandboxChildMessage,
-} from '../dynamic-workflows/sandbox-protocol';
+import type { SandboxProcessFactory, SandboxProcessHandle } from '../dynamic-workflows/workflow-sandbox';
+import type { SandboxParentMessage, SandboxChildMessage } from '../dynamic-workflows/sandbox-protocol';
 import type {
   DynamicWorkflowRun,
   DynamicWorkflowDefinition,
@@ -28,7 +21,6 @@ import type { NodeRunResult, RunNodeAgentInput } from '../dynamic-workflows/work
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
 
 interface CoordinatorCtx {
   phase: (name: string) => Promise<unknown>;
@@ -112,7 +104,6 @@ function makeFakeSandboxFactory(coordinator: Coordinator): SandboxProcessFactory
     },
   };
 }
-
 
 interface Harness {
   deps: WorkflowRunnerDeps;
@@ -307,8 +298,7 @@ function makeHarness(opts: {
       const nr = state.nodeRuns.get(id);
       if (nr) Object.assign(nr, patch);
     },
-    listNodeRuns: (runId) =>
-      [...new Set([...state.nodeRuns.values()])].filter((n) => n.runId === runId),
+    listNodeRuns: (runId) => [...new Set([...state.nodeRuns.values()])].filter((n) => n.runId === runId),
     insertEvent: (input) => {
       const id = state.events.length + 1;
       state.events.push({ type: input.type, runId: input.runId, payload: input.payloadJson });
@@ -399,13 +389,10 @@ function makeHarness(opts: {
     git: defaultFakeGit(),
     emitIPC: () => {},
     now: () => NOW,
-    runNodeAgent: effectiveAdapter
-      ? (effectiveAdapter as WorkflowRunnerDeps['runNodeAgent'])
-      : undefined,
+    runNodeAgent: effectiveAdapter ? (effectiveAdapter as WorkflowRunnerDeps['runNodeAgent']) : undefined,
   };
   return { deps, crud, state };
 }
-
 
 let tmpRoot: string;
 
@@ -420,7 +407,6 @@ afterEach(() => {
   rmSync(tmpRoot, { recursive: true, force: true });
 });
 
-
 describe('SM-34: pause sinaliza o AbortController do no corrente', () => {
   it('pause() sinaliza o abort do AbortController antes do no encerrar', async () => {
     let signalAbortedAtDispatch = false;
@@ -432,9 +418,13 @@ describe('SM-34: pause sinaliza o AbortController do no corrente', () => {
           if (signal.aborted) {
             signalAbortedAtDispatch = true;
           } else {
-            signal.addEventListener('abort', () => {
-              signalAbortedAtDispatch = true;
-            }, { once: true });
+            signal.addEventListener(
+              'abort',
+              () => {
+                signalAbortedAtDispatch = true;
+              },
+              { once: true },
+            );
           }
         }
         releaseAdapter = resolve;
@@ -452,11 +442,7 @@ describe('SM-34: pause sinaliza o AbortController do no corrente', () => {
 
     await runner.start('run-1');
     await vi.waitFor(() =>
-      expect(
-        [...h.state.nodeRuns.values()].some(
-          (n) => n.nodeId === 'coder' && n.status === 'running',
-        ),
-      ).toBe(true),
+      expect([...h.state.nodeRuns.values()].some((n) => n.nodeId === 'coder' && n.status === 'running')).toBe(true),
     );
 
     const pauseResult = await runner.pause('run-1');
@@ -515,11 +501,7 @@ describe('SM-34: pause sinaliza o AbortController do no corrente', () => {
 
     await runner.start('run-1');
     await vi.waitFor(() =>
-      expect(
-        [...h.state.nodeRuns.values()].some(
-          (n) => n.nodeId === 'coder' && n.status === 'running',
-        ),
-      ).toBe(true),
+      expect([...h.state.nodeRuns.values()].some((n) => n.nodeId === 'coder' && n.status === 'running')).toBe(true),
     );
 
     await runner.pause('run-1');
@@ -556,9 +538,7 @@ describe('SM-34: pause sinaliza o AbortController do no corrente', () => {
       durationMs: 0,
     });
 
-    await vi.waitFor(() =>
-      expect(h.crud.getRun('run-1')?.status).toBe('paused'),
-    );
+    await vi.waitFor(() => expect(h.crud.getRun('run-1')?.status).toBe('paused'));
 
     expect(h.state.events.some((e) => e.type === 'run-paused')).toBe(true);
     expect(h.state.events.some((e) => e.type === 'run-aborted')).toBe(false);
@@ -582,11 +562,7 @@ describe('SM-34: pause sinaliza o AbortController do no corrente', () => {
 
     await runner.start('run-1');
     await vi.waitFor(() =>
-      expect(
-        [...h.state.nodeRuns.values()].some(
-          (n) => n.nodeId === 'coder' && n.status === 'running',
-        ),
-      ).toBe(true),
+      expect([...h.state.nodeRuns.values()].some((n) => n.nodeId === 'coder' && n.status === 'running')).toBe(true),
     );
 
     await runner.pause('run-1');
@@ -623,9 +599,7 @@ describe('SM-34: pause sinaliza o AbortController do no corrente', () => {
       durationMs: 0,
     });
 
-    await vi.waitFor(() =>
-      expect(h.crud.getRun('run-1')?.status).toBe('paused'),
-    );
+    await vi.waitFor(() => expect(h.crud.getRun('run-1')?.status).toBe('paused'));
 
     const coder = [...h.state.nodeRuns.values()].find((n) => n.nodeId === 'coder');
     expect(['failed', 'interrupted']).toContain(coder?.status);
@@ -650,11 +624,7 @@ describe('SM-34: pause sinaliza o AbortController do no corrente', () => {
 
     await runner.start('run-1');
     await vi.waitFor(() =>
-      expect(
-        [...h.state.nodeRuns.values()].some(
-          (n) => n.nodeId === 'coder' && n.status === 'running',
-        ),
-      ).toBe(true),
+      expect([...h.state.nodeRuns.values()].some((n) => n.nodeId === 'coder' && n.status === 'running')).toBe(true),
     );
 
     expect(isWorkflowRunLocked('run-1')).toBe(true);
@@ -693,9 +663,7 @@ describe('SM-34: pause sinaliza o AbortController do no corrente', () => {
       durationMs: 0,
     });
 
-    await vi.waitFor(() =>
-      expect(h.crud.getRun('run-1')?.status).toBe('paused'),
-    );
+    await vi.waitFor(() => expect(h.crud.getRun('run-1')?.status).toBe('paused'));
     expect(isWorkflowRunLocked('run-1')).toBe(false);
   });
 
@@ -734,11 +702,7 @@ describe('SM-34: pause sinaliza o AbortController do no corrente', () => {
 
     await runner.start('run-1');
     await vi.waitFor(() =>
-      expect(
-        [...h.state.nodeRuns.values()].some(
-          (n) => n.nodeId === 'coder' && n.status === 'running',
-        ),
-      ).toBe(true),
+      expect([...h.state.nodeRuns.values()].some((n) => n.nodeId === 'coder' && n.status === 'running')).toBe(true),
     );
 
     await runner.pause('run-1');
@@ -774,9 +738,7 @@ describe('SM-34: pause sinaliza o AbortController do no corrente', () => {
       durationMs: 0,
     });
 
-    await vi.waitFor(() =>
-      expect(h.crud.getRun('run-1')?.status).toBe('paused'),
-    );
+    await vi.waitFor(() => expect(h.crud.getRun('run-1')?.status).toBe('paused'));
 
     const run = h.crud.getRun('run-1');
     const ckpt = JSON.parse(run?.checkpointJson ?? '{}') as { nodes?: Record<string, unknown> };

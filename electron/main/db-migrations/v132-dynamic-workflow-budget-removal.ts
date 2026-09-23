@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const OLD_LINE =
   '- Respeite o budget e a politica de gates fornecidos no prompt; preencha estimate com honestidade e liste em unknownCostNodes os nodes sem pricing conhecido.';
 

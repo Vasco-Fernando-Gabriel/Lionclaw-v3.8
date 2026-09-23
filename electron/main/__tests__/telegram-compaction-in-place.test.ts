@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { ChatMessage, ChatSession } from '../../../src/types';
 
@@ -42,7 +41,11 @@ vi.mock('../orchestrator', () => ({
   resetTelegramSessionState: h.resetTelegramSessionStateMock,
 }));
 
-vi.mock('../memory-pipeline', () => ({ runCompaction: h.runCompactionMock }));
+vi.mock('../memory-pipeline', () => ({
+  runCompaction: h.runCompactionMock,
+  isCompactionStepError: (err: unknown) =>
+    typeof err === 'object' && err !== null && (err as { name?: string }).name === 'CompactionStepError',
+}));
 vi.mock('../secrets-vault', () => ({ getSecret: vi.fn(async () => null) }));
 vi.mock('../channels-db', () => ({ updateChannelStatus: vi.fn() }));
 vi.mock('../logger', () => ({
@@ -63,10 +66,11 @@ vi.mock('../voice-engine', () => ({ transcribeAudio: vi.fn() }));
 import {
   compactTelegramSessionInPlace,
   buildTelegramCompactionSeed,
+  TELEGRAM_DREAMING_BUSY_MESSAGE,
   __telegramInternal,
 } from '../telegram-bridge';
+import { resetDreamingMutexForTests, tryAcquireDreamingMutex } from '../dreaming-mutex';
 import { estimateTokens } from '../token-estimator';
-
 
 function makeSession(overrides: Partial<ChatSession> = {}): ChatSession {
   return {
@@ -108,16 +112,21 @@ beforeEach(() => {
   h.runCompactionMock.mockResolvedValue(OK_SUMMARY);
   __telegramInternal.setBotForTests(null);
   __telegramInternal.setActiveSessionIdForTests(null);
+  __telegramInternal.resetCompactionBackoffForTests();
+  resetDreamingMutexForTests();
 });
 
+function memoryFailedError(): Error {
+  const err = new Error('Gate de memoria / MEMORY.md / USER.md falhou: disco cheio');
+  err.name = 'CompactionStepError';
+  (err as Error & { code: string }).code = 'COMPACT-MEMORY-FAILED';
+  return err;
+}
 
 describe('compactTelegramSessionInPlace (SPEC 5.4)', () => {
   it('compacta IN-PLACE: mesma sessao, sem createSession, sem status compacted (AC-13)', async () => {
     h.getSessionMock.mockReturnValue(makeSession());
-    h.getSessionMessagesMock.mockReturnValue([
-      makeMsg(1, 'user', 'oi'),
-      makeMsg(2, 'assistant', 'ola, tudo bem?'),
-    ]);
+    h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'oi'), makeMsg(2, 'assistant', 'ola, tudo bem?')]);
 
     const outcome = await compactTelegramSessionInPlace('s1', { force: true });
 
@@ -152,10 +161,12 @@ describe('compactTelegramSessionInPlace (SPEC 5.4)', () => {
   });
 
   it('delta pela fronteira: runCompaction recebe sinceMessageId + priorSummary + skipDailySummary (AC-15/AC-72)', async () => {
-    h.getSessionMock.mockReturnValue(makeSession({
-      compactedUpToMessageId: 2,
-      rollingSummary: 'resumo anterior',
-    }));
+    h.getSessionMock.mockReturnValue(
+      makeSession({
+        compactedUpToMessageId: 2,
+        rollingSummary: 'resumo anterior',
+      }),
+    );
     h.getSessionMessagesMock.mockReturnValue([
       makeMsg(1, 'user', 'antigo'),
       makeMsg(2, 'assistant', 'antigo tambem'),
@@ -210,9 +221,10 @@ describe('compactTelegramSessionInPlace (SPEC 5.4)', () => {
       throw new Error('summarizer ainda nao iniciou');
     };
     h.runCompactionMock.mockImplementationOnce(
-      () => new Promise<typeof OK_SUMMARY>((resolve) => {
-        releaseCompaction = () => resolve(OK_SUMMARY);
-      }),
+      () =>
+        new Promise<typeof OK_SUMMARY>((resolve) => {
+          releaseCompaction = () => resolve(OK_SUMMARY);
+        }),
     );
     let active = true;
 
@@ -229,6 +241,44 @@ describe('compactTelegramSessionInPlace (SPEC 5.4)', () => {
     expect(h.setSessionCompactionStateMock).not.toHaveBeenCalled();
     expect(h.setSessionActiveContextTokensMock).not.toHaveBeenCalled();
     expect(h.resetTelegramSessionStateMock).not.toHaveBeenCalled();
+  });
+
+  it('D6/AC-6: mutex do dreaming ocupado = noop dreaming_busy, sem bloquear e sem runCompaction', async () => {
+    h.getSessionMock.mockReturnValue(makeSession());
+    h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'oi')]);
+    const release = tryAcquireDreamingMutex();
+    expect(release).not.toBeNull();
+
+    const outcome = await compactTelegramSessionInPlace('s1', { force: true });
+
+    expect(outcome).toEqual({ ok: true, noop: true, reason: 'dreaming_busy' });
+    expect(h.runCompactionMock).not.toHaveBeenCalled();
+    expect(h.setSessionCompactionStateMock).not.toHaveBeenCalled();
+    release!();
+
+    const after = await compactTelegramSessionInPlace('s1', { force: true });
+    expect(after.ok).toBe(true);
+    expect(after.noop).toBeUndefined();
+    const [, , , opts] = h.runCompactionMock.mock.calls[0];
+    expect(opts.dreamingMutex).toBe('held');
+  });
+
+  it('6.7: COMPACT-MEMORY-FAILED arma backoff, boundary intacto, e o automatico nao re-tenta no proximo turno', async () => {
+    h.getSessionMock.mockReturnValue(makeSession({ activeContextTokensEst: 10_000_000 }));
+    h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'oi')]);
+    h.runCompactionMock.mockRejectedValue(memoryFailedError());
+
+    const outcome = await compactTelegramSessionInPlace('s1', { force: true, notify: false });
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toMatch(/disco cheio/);
+    expect(h.setSessionCompactionStateMock).not.toHaveBeenCalled();
+    expect(__telegramInternal.getCompactionBackoffUntilForTests('s1')).toBeGreaterThan(Date.now());
+
+    h.runCompactionMock.mockClear();
+    await __telegramInternal.maybeCompactTelegramSession('s1', null, () => true);
+    expect(h.enqueueTelegramLaneTaskMock).not.toHaveBeenCalled();
+    expect(h.runCompactionMock).not.toHaveBeenCalled();
   });
 
   it('delta vazio = noop (nada a compactar, nada reescrito)', async () => {
@@ -256,26 +306,27 @@ describe('compactTelegramSessionInPlace (SPEC 5.4)', () => {
   });
 });
 
-
 describe('gatilho min(600k, 75% janela) (SPEC 5.2 / AC-13)', () => {
   it('modelo de janela 200k (haiku): threshold = 200k * 0.75 = 150k (vence o absoluto 600k)', () => {
     h.getSettingMock.mockImplementation((key: string) =>
-      key === 'orchestrator_model' ? 'claude-haiku-4-5-20251001' : undefined);
+      key === 'orchestrator_model' ? 'claude-haiku-4-5-20251001' : undefined,
+    );
     expect(__telegramInternal.getTelegramCompactionThreshold()).toBe(150_000);
   });
 
   it('modelo de janela 1M (opus/sonnet atuais): absoluto 600k vence (75% de 1M = 750k)', () => {
     h.getSettingMock.mockImplementation((key: string) =>
-      key === 'orchestrator_model' ? 'claude-opus-4-8' : undefined);
+      key === 'orchestrator_model' ? 'claude-opus-4-8' : undefined,
+    );
     expect(__telegramInternal.getTelegramCompactionThreshold()).toBe(600_000);
     h.getSettingMock.mockImplementation((key: string) =>
-      key === 'orchestrator_model' ? 'claude-sonnet-4-6' : undefined);
+      key === 'orchestrator_model' ? 'claude-sonnet-4-6' : undefined,
+    );
     expect(__telegramInternal.getTelegramCompactionThreshold()).toBe(600_000);
   });
 
   it('modelo desconhecido: cai SO no threshold absoluto (600k default)', () => {
-    h.getSettingMock.mockImplementation((key: string) =>
-      key === 'orchestrator_model' ? 'super-model-x' : undefined);
+    h.getSettingMock.mockImplementation((key: string) => (key === 'orchestrator_model' ? 'super-model-x' : undefined));
     expect(__telegramInternal.getTelegramCompactionThreshold()).toBe(600_000);
   });
 
@@ -289,17 +340,18 @@ describe('gatilho min(600k, 75% janela) (SPEC 5.2 / AC-13)', () => {
   });
 
   it('tokens ativos: usa active_context_tokens_est; fallback input+output quando NULL', () => {
-    expect(__telegramInternal.getActiveContextTokens(
-      makeSession({ activeContextTokensEst: 42, inputTokens: 999_999, outputTokens: 999_999 }),
-    )).toBe(42);
-    expect(__telegramInternal.getActiveContextTokens(
-      makeSession({ inputTokens: 300, outputTokens: 200 }),
-    )).toBe(500);
+    expect(
+      __telegramInternal.getActiveContextTokens(
+        makeSession({ activeContextTokensEst: 42, inputTokens: 999_999, outputTokens: 999_999 }),
+      ),
+    ).toBe(42);
+    expect(__telegramInternal.getActiveContextTokens(makeSession({ inputTokens: 300, outputTokens: 200 }))).toBe(500);
   });
 
   it('abaixo do threshold: force=false vira noop; force=true roda mesmo assim (AC-19)', async () => {
     h.getSettingMock.mockImplementation((key: string) =>
-      key === 'orchestrator_model' ? 'claude-sonnet-4-6' : undefined);
+      key === 'orchestrator_model' ? 'claude-sonnet-4-6' : undefined,
+    );
     h.getSessionMock.mockReturnValue(makeSession({ activeContextTokensEst: 1_000 }));
     h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'oi')]);
 
@@ -314,7 +366,8 @@ describe('gatilho min(600k, 75% janela) (SPEC 5.2 / AC-13)', () => {
 
   it('acima do threshold: force=false compacta', async () => {
     h.getSettingMock.mockImplementation((key: string) =>
-      key === 'orchestrator_model' ? 'claude-sonnet-4-6' : undefined);
+      key === 'orchestrator_model' ? 'claude-sonnet-4-6' : undefined,
+    );
     h.getSessionMock.mockReturnValue(makeSession({ activeContextTokensEst: 650_000 }));
     h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'oi')]);
 
@@ -325,7 +378,8 @@ describe('gatilho min(600k, 75% janela) (SPEC 5.2 / AC-13)', () => {
 
   it('maybeCompactTelegramSession enfileira na telegramQueueChain so acima do threshold (SPEC 5.3)', async () => {
     h.getSettingMock.mockImplementation((key: string) =>
-      key === 'orchestrator_model' ? 'claude-sonnet-4-6' : undefined);
+      key === 'orchestrator_model' ? 'claude-sonnet-4-6' : undefined,
+    );
 
     h.getSessionMock.mockReturnValue(makeSession({ activeContextTokensEst: 1_000 }));
     await __telegramInternal.maybeCompactTelegramSession('s1');
@@ -345,15 +399,18 @@ describe('gatilho min(600k, 75% janela) (SPEC 5.2 / AC-13)', () => {
   });
 });
 
-
 describe('buildTelegramCompactionSeed (SPEC 5.4 passo 6 / AC-14)', () => {
   it('tudo cabe: header + turnos verbatim em ordem cronologica', () => {
-    const seed = buildTelegramCompactionSeed('resumo X', [
-      makeMsg(1, 'user', 'primeira pergunta'),
-      makeMsg(2, 'assistant', 'primeira resposta'),
-      makeMsg(3, 'user', 'segunda pergunta'),
-      makeMsg(4, 'assistant', 'segunda resposta'),
-    ], 50_000);
+    const seed = buildTelegramCompactionSeed(
+      'resumo X',
+      [
+        makeMsg(1, 'user', 'primeira pergunta'),
+        makeMsg(2, 'assistant', 'primeira resposta'),
+        makeMsg(3, 'user', 'segunda pergunta'),
+        makeMsg(4, 'assistant', 'segunda resposta'),
+      ],
+      50_000,
+    );
 
     expect(seed.startsWith('[Resumo da conversa ate aqui]: resumo X')).toBe(true);
     const firstTurnIdx = seed.indexOf('[user] primeira pergunta');
@@ -366,7 +423,7 @@ describe('buildTelegramCompactionSeed (SPEC 5.4 passo 6 / AC-14)', () => {
   });
 
   it('teto DURO: seed <= target; mais recente entra, mais antigo cai', () => {
-    const target = 1_000; // 4000 chars
+    const target = 1_000;
     const messages: ChatMessage[] = [];
     for (let t = 0; t < 10; t++) {
       messages.push(makeMsg(t * 2 + 1, 'user', `pergunta-${t} ` + 'x'.repeat(600)));
@@ -376,29 +433,28 @@ describe('buildTelegramCompactionSeed (SPEC 5.4 passo 6 / AC-14)', () => {
     const seed = buildTelegramCompactionSeed('resumo curto', messages, target);
 
     expect(estimateTokens(seed)).toBeLessThanOrEqual(target);
-    expect(seed).toContain('pergunta-9'); // turno mais RECENTE sempre presente
-    expect(seed).not.toContain('pergunta-0'); // mais antigo cai primeiro
+    expect(seed).toContain('pergunta-9');
+    expect(seed).not.toContain('pergunta-0');
   });
 
   it('turno unico gigante: minimo 1 turno, truncado no INICIO com [turno truncado]', () => {
-    const target = 500; // 2000 chars
+    const target = 500;
     const giant = 'INICIO-DESCARTAVEL ' + 'm'.repeat(50_000) + ' FINAL-IMPORTANTE';
     const seed = buildTelegramCompactionSeed('resumo', [makeMsg(1, 'user', giant)], target);
 
     expect(estimateTokens(seed)).toBeLessThanOrEqual(target);
     expect(seed).toContain('[turno truncado]');
-    expect(seed).toContain('FINAL-IMPORTANTE'); // mantem o final (mais proximo do presente)
-    expect(seed).not.toContain('INICIO-DESCARTAVEL'); // inicio foi cortado
+    expect(seed).toContain('FINAL-IMPORTANTE');
+    expect(seed).not.toContain('INICIO-DESCARTAVEL');
   });
 
   it('o bloco de resumo e descontado primeiro (o resumo sempre cabe)', () => {
-    const rolling = 'R'.repeat(1_200); // ~300 tokens
+    const rolling = 'R'.repeat(1_200);
     const seed = buildTelegramCompactionSeed(rolling, [makeMsg(1, 'user', 'u'.repeat(4_000))], 400);
     expect(seed).toContain(rolling);
     expect(estimateTokens(seed)).toBeLessThanOrEqual(400);
   });
 });
-
 
 interface FakeBot {
   sendMessage: ReturnType<typeof vi.fn>;
@@ -435,7 +491,7 @@ function installDbForCommands(): void {
 }
 
 function sentTexts(bot: FakeBot): string[] {
-  return bot.sendMessage.mock.calls.map(c => String(c[1]));
+  return bot.sendMessage.mock.calls.map((c) => String(c[1]));
 }
 
 describe('comandos do bot (SPEC 6)', () => {
@@ -446,16 +502,29 @@ describe('comandos do bot (SPEC 6)', () => {
 
   it('/compact roda SEMPRE (mesmo abaixo do threshold), sessao continua ativa, usuario avisado (AC-19/20)', async () => {
     const bot = installFakeBot();
-    h.getSessionMock.mockReturnValue(makeSession({ activeContextTokensEst: 10 })); // bem abaixo do threshold
+    h.getSessionMock.mockReturnValue(makeSession({ activeContextTokensEst: 10 }));
     h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'oi'), makeMsg(2, 'assistant', 'ola')]);
 
     await __telegramInternal.handleBotCommand('/compact', 42, FAKE_CONFIG);
 
-    expect(h.enqueueTelegramLaneTaskMock).toHaveBeenCalledTimes(1); // via telegramQueueChain
-    expect(h.runCompactionMock).toHaveBeenCalledTimes(1); // force: rodou abaixo do threshold
+    expect(h.enqueueTelegramLaneTaskMock).toHaveBeenCalledTimes(1);
+    expect(h.runCompactionMock).toHaveBeenCalledTimes(1);
     expect(h.setSessionCompactionStateMock).toHaveBeenCalledTimes(1);
-    expect(h.updateSessionStatusMock).not.toHaveBeenCalled(); // sessao CONTINUA ativa
-    expect(sentTexts(bot).some(t => t.includes('Compactei nossa conversa'))).toBe(true);
+    expect(h.updateSessionStatusMock).not.toHaveBeenCalled();
+    expect(sentTexts(bot).some((t) => t.includes('Compactei nossa conversa'))).toBe(true);
+  });
+
+  it('/compact com Clear do desktop em andamento responde dreaming_busy sem prender a cadeia', async () => {
+    const bot = installFakeBot();
+    h.getSessionMock.mockReturnValue(makeSession());
+    h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'oi'), makeMsg(2, 'assistant', 'ola')]);
+    const release = tryAcquireDreamingMutex();
+
+    await __telegramInternal.handleBotCommand('/compact', 42, FAKE_CONFIG);
+
+    expect(h.runCompactionMock).not.toHaveBeenCalled();
+    expect(sentTexts(bot)).toContain(TELEGRAM_DREAMING_BUSY_MESSAGE);
+    release!();
   });
 
   it('/compact sem nada novo: responde noop e nao mexe em nada', async () => {
@@ -466,7 +535,7 @@ describe('comandos do bot (SPEC 6)', () => {
     await __telegramInternal.handleBotCommand('/compact', 42, FAKE_CONFIG);
 
     expect(h.runCompactionMock).not.toHaveBeenCalled();
-    expect(sentTexts(bot).some(t => t.includes('Nada novo para compactar'))).toBe(true);
+    expect(sentTexts(bot).some((t) => t.includes('Nada novo para compactar'))).toBe(true);
   });
 
   it('/clear salva na memoria, ARQUIVA e zera RAM + lane (AC-19)', async () => {
@@ -476,12 +545,12 @@ describe('comandos do bot (SPEC 6)', () => {
 
     await __telegramInternal.handleBotCommand('/clear', 42, FAKE_CONFIG);
 
-    expect(h.runCompactionMock).toHaveBeenCalledTimes(1); // salvou na memoria primeiro
-    expect(h.updateSessionStatusMock).toHaveBeenCalledWith('s1', 'archived'); // recuperavel, nunca apagada
+    expect(h.runCompactionMock).toHaveBeenCalledTimes(1);
+    expect(h.updateSessionStatusMock).toHaveBeenCalledWith('s1', 'archived');
     expect(h.resetTelegramSessionStateMock).toHaveBeenCalled();
     expect(__telegramInternal.getActiveSessionIdForTests()).toBeNull();
-    expect(sentTexts(bot).some(t => t.includes('Conversa salva na memoria e encerrada'))).toBe(true);
-    expect(sentTexts(bot).some(t => t.includes('Compactei nossa conversa'))).toBe(false);
+    expect(sentTexts(bot).some((t) => t.includes('Conversa salva na memoria e encerrada'))).toBe(true);
+    expect(sentTexts(bot).some((t) => t.includes('Compactei nossa conversa'))).toBe(false);
   });
 
   it('/clear com compactacao falhando NAO arquiva (nada se perde) (AC-19)', async () => {
@@ -493,8 +562,8 @@ describe('comandos do bot (SPEC 6)', () => {
     await __telegramInternal.handleBotCommand('/clear', 42, FAKE_CONFIG);
 
     expect(h.updateSessionStatusMock).not.toHaveBeenCalled();
-    expect(__telegramInternal.getActiveSessionIdForTests()).toBe('s1'); // conversa mantida
-    expect(sentTexts(bot).some(t => t.includes('nao encerrei'))).toBe(true);
+    expect(__telegramInternal.getActiveSessionIdForTests()).toBe('s1');
+    expect(sentTexts(bot).some((t) => t.includes('nao encerrei'))).toBe(true);
   });
 
   it('/reset e alias de /clear (mesmo fluxo; zerar-so-a-RAM deixou de existir)', async () => {
@@ -506,18 +575,19 @@ describe('comandos do bot (SPEC 6)', () => {
 
     expect(h.runCompactionMock).toHaveBeenCalledTimes(1);
     expect(h.updateSessionStatusMock).toHaveBeenCalledWith('s1', 'archived');
-    expect(sentTexts(bot).some(t => t.includes('Conversa salva na memoria e encerrada'))).toBe(true);
+    expect(sentTexts(bot).some((t) => t.includes('Conversa salva na memoria e encerrada'))).toBe(true);
   });
 
   it('/status mostra contexto: tokens ativos / threshold (pct) e o target (AC-20)', async () => {
     const bot = installFakeBot();
     h.getSettingMock.mockImplementation((key: string) =>
-      key === 'orchestrator_model' ? 'claude-sonnet-4-6' : undefined);
+      key === 'orchestrator_model' ? 'claude-sonnet-4-6' : undefined,
+    );
     h.getSessionMock.mockReturnValue(makeSession({ activeContextTokensEst: 75_000 }));
 
     await __telegramInternal.handleBotCommand('/status', 42, FAKE_CONFIG);
 
-    const status = sentTexts(bot).find(t => t.includes('Status do LionClaw'));
+    const status = sentTexts(bot).find((t) => t.includes('Status do LionClaw'));
     expect(status).toBeDefined();
     expect(status).toContain('Contexto: 75000 / 600000 (13%)');
     expect(status).toContain('alvo pos-compactacao: 50000');

@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { GIT_RESTRICTIONS_BLOCK } from './_shared/git-restrictions';
 
@@ -9,7 +8,7 @@ export const electronPro: Omit<AgentConfig, 'sortOrder'> = {
   name: 'Especialista Electron',
   description:
     'Use quando precisar construir aplicações desktop com Electron que exijam integração nativa com o sistema operacional, distribuição cross-platform, hardening de segurança e otimização de performance',
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,

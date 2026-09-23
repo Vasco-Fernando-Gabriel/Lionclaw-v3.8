@@ -1,4 +1,3 @@
-
 export interface CanonicalUsage {
   inputTokens: number;
   outputTokens: number;
@@ -31,11 +30,7 @@ function pick(raw: Record<string, unknown>, keys: readonly string[]): number {
   return 0;
 }
 
-function pickNested(
-  raw: Record<string, unknown>,
-  parents: readonly string[],
-  keys: readonly string[],
-): number {
+function pickNested(raw: Record<string, unknown>, parents: readonly string[], keys: readonly string[]): number {
   for (const p of parents) {
     const obj = raw[p];
     if (obj && typeof obj === 'object') {
@@ -52,16 +47,8 @@ export function normalizeUsage(raw: unknown, shape: UsageApiShape): CanonicalUsa
 
   if (shape === 'anthropic') {
     const input = pick(r, ['input_tokens', 'inputTokens']);
-    const cacheRead = pick(r, [
-      'cache_read_input_tokens',
-      'cacheReadInputTokens',
-      'cacheReadTokens',
-    ]);
-    const cacheWrite = pick(r, [
-      'cache_creation_input_tokens',
-      'cacheCreationInputTokens',
-      'cacheCreationTokens',
-    ]);
+    const cacheRead = pick(r, ['cache_read_input_tokens', 'cacheReadInputTokens', 'cacheReadTokens']);
+    const cacheWrite = pick(r, ['cache_creation_input_tokens', 'cacheCreationInputTokens', 'cacheCreationTokens']);
     return {
       inputTokens: input,
       outputTokens: pick(r, ['output_tokens', 'outputTokens']),
@@ -72,7 +59,7 @@ export function normalizeUsage(raw: unknown, shape: UsageApiShape): CanonicalUsa
   }
 
   if (shape === 'codex') {
-    const inputTotal = pick(r, ['input_tokens', 'inputTokens']); // JA inclui cache
+    const inputTotal = pick(r, ['input_tokens', 'inputTokens']);
     const cacheRead = pick(r, ['cached_tokens', 'cachedInputTokens', 'cached_input_tokens']);
     return {
       inputTokens: Math.max(0, inputTotal - cacheRead),
@@ -140,7 +127,6 @@ export function reconcileActiveContext(
 export function estimateTokensRough(text: string): number {
   return estimateTextTokens(text);
 }
-
 
 export const CONTEXT_CALIBRATION_SDK_VERSION = '0.3.257';
 
@@ -219,7 +205,6 @@ export function resolveHistoryFence(
   if (a === null && b === null) return null;
   return Math.max(a ?? Number.MIN_SAFE_INTEGER, b ?? Number.MIN_SAFE_INTEGER);
 }
-
 
 export interface CompositionStaticTokens {
   settingsFilesTokens: number;

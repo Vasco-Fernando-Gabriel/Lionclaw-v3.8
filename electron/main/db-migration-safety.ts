@@ -9,7 +9,7 @@ import {
   DatabaseVersionError,
 } from './db-init-error';
 
-export const LATEST_SCHEMA_VERSION = 151;
+export const LATEST_SCHEMA_VERSION = 159;
 const RECOVERY_MARKER_NAME = 'migration-in-progress.json';
 
 export interface MigrationSafetyResult {
@@ -117,7 +117,11 @@ function firstPragmaValue(rows: unknown): unknown {
 export function assertDatabaseIntegrity(database: Database.Database, dbPath: string): void {
   try {
     const result = database.pragma('integrity_check(1)');
-    if (String(firstPragmaValue(result) ?? '').trim().toLowerCase() !== 'ok') {
+    if (
+      String(firstPragmaValue(result) ?? '')
+        .trim()
+        .toLowerCase() !== 'ok'
+    ) {
       throw new Error(`integrity_check retornou: ${JSON.stringify(result)}`);
     }
   } catch (cause) {
@@ -137,8 +141,7 @@ export function readCurrentSchemaVersion(
       .get() as { present: number } | undefined;
     if (!table) return 0;
     const row = database.prepare('SELECT MAX(version) AS version FROM schema_version').get() as
-      | { version: unknown }
-      | undefined;
+      { version: unknown } | undefined;
     const value = row?.version ?? 0;
     if (!Number.isSafeInteger(value) || Number(value) < 0) {
       throw new Error(`schema_version invalida: ${String(value)}`);
@@ -168,10 +171,7 @@ function safeRandomId(raw: string): string {
   return safe;
 }
 
-function readRecoveryMarker(
-  dbPath: string,
-  deps: MigrationSafetyDependencies,
-): RecoveryMarker | null {
+function readRecoveryMarker(dbPath: string, deps: MigrationSafetyDependencies): RecoveryMarker | null {
   const markerPath = markerPathFor(dbPath);
   if (!deps.existsSync(markerPath)) return null;
   let parsed: unknown;
@@ -210,10 +210,7 @@ function smokeReadVecTables(database: Database.Database): void {
   }
 }
 
-function validateBackup(
-  partialPath: string,
-  deps: MigrationSafetyDependencies,
-): void {
+function validateBackup(partialPath: string, deps: MigrationSafetyDependencies): void {
   let verifier: Database.Database | null = null;
   try {
     verifier = deps.openReadonlyDatabase(partialPath);
@@ -228,8 +225,7 @@ function validateBackup(
 function cleanupAttemptPartial(partialPath: string, deps: MigrationSafetyDependencies): void {
   try {
     if (deps.existsSync(partialPath)) deps.unlinkSync(partialPath);
-  } catch {
-  }
+  } catch {}
 }
 
 function createBackupAndMarker(
@@ -282,9 +278,7 @@ function createBackupAndMarker(
   }
 }
 
-export function prepareDatabaseForMigrations(
-  options: MigrationSafetyOptions,
-): MigrationSafetyResult {
+export function prepareDatabaseForMigrations(options: MigrationSafetyOptions): MigrationSafetyResult {
   const deps = resolveDependencies(options);
   if (!options.integrityAlreadyChecked) {
     assertDatabaseIntegrity(options.database, options.dbPath);
@@ -300,11 +294,7 @@ export function prepareDatabaseForMigrations(
   }
 
   const latestVersion = options.latestSchemaVersion ?? LATEST_SCHEMA_VERSION;
-  const currentVersion = readCurrentSchemaVersion(
-    options.database,
-    options.dbPath,
-    latestVersion,
-  );
+  const currentVersion = readCurrentSchemaVersion(options.database, options.dbPath, latestVersion);
   if (currentVersion > latestVersion) {
     throw new DatabaseVersionError(options.dbPath, currentVersion, latestVersion);
   }
@@ -338,9 +328,7 @@ export function clearMigrationInProgressMarker(
       throw new Error(`marker de recovery ausente: ${markerPath}`);
     }
     if (marker.backupPath !== backupPath) {
-      throw new Error(
-        `marker pertence a outro snapshot: esperado ${backupPath}, encontrado ${marker.backupPath}`,
-      );
+      throw new Error(`marker pertence a outro snapshot: esperado ${backupPath}, encontrado ${marker.backupPath}`);
     }
     deps.unlinkSync(markerPath);
     deps.fsyncDirectory(path.dirname(markerPath));

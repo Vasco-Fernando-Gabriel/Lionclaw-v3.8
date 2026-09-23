@@ -37,8 +37,7 @@ function notifySessionsUpdated(getWindow: GetWindow): void {
     if (win && !win.isDestroyed()) {
       win.webContents.send('chat:sessions-updated');
     }
-  } catch {
-  }
+  } catch {}
 }
 
 function errorLogFields(error: unknown): Record<string, unknown> {
@@ -62,11 +61,7 @@ function buildTitleMessages(sessionId: string): LionChatMessage[] | null {
   const contextMessages = messages.slice(0, 6);
   const conversationSnippet = contextMessages
     .map((m) => {
-      const role = m.role === 'user'
-        ? 'Usuario'
-        : m.role === 'assistant'
-          ? 'Assistente'
-          : m.role;
+      const role = m.role === 'user' ? 'Usuario' : m.role === 'assistant' ? 'Assistente' : m.role;
       return `${role}: ${m.content.substring(0, 300)}`;
     })
     .join('\n\n');
@@ -149,9 +144,6 @@ export async function maybeGenerateLionSessionTitle(opts: {
     logger.info({ sessionId: opts.sessionId, model: opts.model, title }, 'Lion-SDK session title generated');
     notifySessionsUpdated(opts.getWindow);
   } catch (error) {
-    logger.warn(
-      { ...errorLogFields(error), sessionId: opts.sessionId },
-      'Lion-SDK title generation failed',
-    );
+    logger.warn({ ...errorLogFields(error), sessionId: opts.sessionId }, 'Lion-SDK title generation failed');
   }
 }

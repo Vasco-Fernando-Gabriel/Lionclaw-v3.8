@@ -1,4 +1,3 @@
-
 import type { AgentConfig, Skill } from '../../../src/types';
 import { summarizeAgentDescription } from '../subagent-summary';
 
@@ -191,7 +190,6 @@ Default to proceeding with a stated assumption.
 - One or two sentences for simple tasks.
 `;
 
-
 export interface LionToolCatalogEntry {
   name: string;
   description?: string;
@@ -248,10 +246,7 @@ export function buildLionMcpCatalogPrompt(mcps: LionMcpToolEntry[]): string {
     for (const e of entries) {
       const desc = e.description ? ` - ${e.description.slice(0, 200)}` : '';
       lines.push(`- \`${e.toolName}\`${desc}`);
-      const args =
-        e.args && e.args.length > 0
-          ? e.args
-          : (e.requiredArgs ?? []).map((a) => ({ ...a, required: true }));
+      const args = e.args && e.args.length > 0 ? e.args : (e.requiredArgs ?? []).map((a) => ({ ...a, required: true }));
       if (args.length > 0) {
         lines.push('  args:');
         for (const arg of args) {
@@ -278,10 +273,7 @@ export function buildLionSkillCatalogPrompt(skills: Pick<Skill, 'name' | 'descri
   return lines.join('\n');
 }
 
-export function buildLionSubagentCatalogPrompt(
-  agents: AgentConfig[],
-  mode: 'index' | 'full' = 'index',
-): string {
+export function buildLionSubagentCatalogPrompt(agents: AgentConfig[], mode: 'index' | 'full' = 'index'): string {
   if (!agents.length) return '## Available Active Subagents\n\n(no chat-eligible subagents)';
   if (mode === 'full') {
     const lines = ['## Available Active Subagents', ''];
@@ -298,7 +290,9 @@ export function buildLionSubagentCatalogPrompt(
     return lines.join('\n');
   }
   const lines = ['## Available Active Subagents', ''];
-  lines.push('Dispatch: Agent({ agent_id, task }). Full profile of one agent on demand: mcp_call({ server_id: "lionclaw-agents", tool: "agent_details", args: { agent_id } }). Consult it before delegating when the one-line summary is not enough.');
+  lines.push(
+    'Dispatch: Agent({ agent_id, task }). Full profile of one agent on demand: mcp_call({ server_id: "lionclaw-agents", tool: "agent_details", args: { agent_id } }). Consult it before delegating when the one-line summary is not enough.',
+  );
   lines.push('');
   for (const a of agents) {
     lines.push(`- ${a.id}: ${summarizeAgentDescription(a.description, a.name)} (${a.runtime}/${a.model})`);

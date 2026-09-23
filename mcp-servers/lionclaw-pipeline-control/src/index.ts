@@ -1,10 +1,10 @@
-
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import {
   LocalIpcClient,
   assertEndpointPresentOrExit,
+  withTurnBinding,
   type CallOptions,
 } from '../../_shared/local-ipc-client.js';
 import { normalizeApproveMetadata } from '../../_shared/approve-metadata.js';
@@ -13,14 +13,12 @@ assertEndpointPresentOrExit();
 
 const client = new LocalIpcClient({ callTimeoutMs: 35 * 60 * 1000 });
 
-const PIPELINE_TYPES = [
-  'development',
-  'development-v2',
-  'security',
-  'feature',
-  'architecture-review',
-  'bug',
-] as const;
+const LANE: string | undefined = (() => {
+  const raw = process.env['LIONCLAW_MCP_LANE'];
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined;
+})();
+
+const PIPELINE_TYPES = ['development', 'development-v2', 'security', 'feature', 'architecture-review', 'bug'] as const;
 
 const server = new McpServer({ name: 'lionclaw-pipeline-control', version: '1.0.0' });
 
@@ -33,9 +31,14 @@ async function proxy(
   method: string,
   params: Record<string, unknown>,
   options: CallOptions = {},
+  extra?: unknown,
 ): Promise<ToolResult> {
   try {
-    const result = await client.callMethod(method, params, options);
+    const result = await client.callMethod(
+      method,
+      withTurnBinding({ ...params, ...(LANE !== undefined ? { lane: LANE } : {}) }, extra),
+      options,
+    );
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -50,7 +53,7 @@ server.tool(
   'pipeline_list',
   'List all pipeline projects (id, name, type, current phase, status). Use before creating or driving.',
   {},
-  async () => proxy('pipeline_list', {}),
+  async (extra) => proxy('pipeline_list', {}, {}, extra),
 );
 
 server.tool(
@@ -59,7 +62,7 @@ server.tool(
   {
     id: z.string().describe('Pipeline project id.'),
   },
-  async ({ id }) => proxy('pipeline_inspect', { id }),
+  async ({ id }, extra) => proxy('pipeline_inspect', { id }, {}, extra),
 );
 
 server.tool(
@@ -77,24 +80,23 @@ server.tool(
         'Optional: take over driving right after creation (semi = escalates control gates to the human; full = reads, evaluates and decides control gates itself).',
       ),
   },
-  async ({ projectPath, pipelineType, name, brief, drive }) =>
+  async ({ projectPath, pipelineType, name, brief, drive }, extra) =>
     proxy(
       'pipeline_create',
       { projectPath, pipelineType, name, brief, drive },
       { idempotent: false, timeoutMs: 5 * 60_000 },
+      extra,
     ),
 );
 
 server.tool(
   'pipeline_drive',
-  'Take over driving an EXISTING pipeline (created via pipeline_create or by the human). Hooks the drive coordinator into the ACTIVE chat session. mode: "semi" (escalates control gates to the human) or "full" (autonomous: at control gates it reads the artifact, evaluates vs the intent and decides itself - approve if aligned, escalate only if diverging; human gates like Design Lock stay with the human). Use this OR pipeline_create with drive for the orchestrator to drive.',
+  'Take over driving an EXISTING pipeline (created via pipeline_create or by the human). Engata o drive na lane desta conversa; se ela ja dirige outro pipeline, pare-o pelo Pipeline ou use a outra lane. mode: "semi" (escalates control gates to the human) or "full" (autonomous: at control gates it reads the artifact, evaluates vs the intent and decides itself - approve if aligned, escalate only if diverging; human gates like Design Lock stay with the human). Use this OR pipeline_create with drive for the orchestrator to drive.',
   {
     id: z.string().describe('Pipeline project id to drive.'),
-    mode: z
-      .enum(['semi', 'full'])
-      .describe('Autonomy: semi (gated) or full (auto on low-risk gates).'),
+    mode: z.enum(['semi', 'full']).describe('Autonomy: semi (gated) or full (auto on low-risk gates).'),
   },
-  async ({ id, mode }) => proxy('pipeline_drive', { id, mode }),
+  async ({ id, mode }, extra) => proxy('pipeline_drive', { id, mode }, {}, extra),
 );
 
 server.tool(
@@ -104,7 +106,7 @@ server.tool(
     id: z.string().describe('Pipeline project id.'),
     message: z.string().describe('Message/answer for the phase agent.'),
   },
-  async ({ id, message }) => proxy('pipeline_reply', { id, message }, { idempotent: false }),
+  async ({ id, message }, extra) => proxy('pipeline_reply', { id, message }, { idempotent: false }, extra),
 );
 
 server.tool(
@@ -119,7 +121,7 @@ server.tool(
         'Gate metadata as a JSON object (e.g. { selectedCandidateId }, { action:"lock-and-continue" } or, in the bug pipeline phase 3, { action:"approve-plan" } | { action:"close-pipeline" }). A JSON string of the same object is also accepted.',
       ),
   },
-  async ({ id, metadata }) => {
+  async ({ id, metadata }, extra) => {
     const normalized = normalizeApproveMetadata(metadata);
     if (!normalized.ok) {
       return {
@@ -127,11 +129,7 @@ server.tool(
         isError: true,
       };
     }
-    return proxy(
-      'pipeline_approve',
-      { id, metadata: normalized.metadata },
-      { idempotent: false },
-    );
+    return proxy('pipeline_approve', { id, metadata: normalized.metadata }, { idempotent: false }, extra);
   },
 );
 
@@ -140,11 +138,9 @@ server.tool(
   'Escalate the pipeline to the human: posts your message in the chat and PAUSES the drive (awaiting-human) until the human replies. Use it on a control gate in semi mode, or when you disagree with a control gate in full mode. Writing in the chat alone does NOT pause the drive; only pipeline_escalate does.',
   {
     id: z.string().describe('Pipeline project id.'),
-    message: z
-      .string()
-      .describe('Message for the human (summary + what you need an OK on, or why you disagree).'),
+    message: z.string().describe('Message for the human (summary + what you need an OK on, or why you disagree).'),
   },
-  async ({ id, message }) => proxy('pipeline_escalate', { id, message }, { idempotent: false }),
+  async ({ id, message }, extra) => proxy('pipeline_escalate', { id, message }, { idempotent: false }, extra),
 );
 
 server.tool(
@@ -153,7 +149,7 @@ server.tool(
   {
     id: z.string().describe('Pipeline project id.'),
   },
-  async ({ id }) => proxy('pipeline_abort', { id }),
+  async ({ id }, extra) => proxy('pipeline_abort', { id }, {}, extra),
 );
 
 server.tool(
@@ -162,7 +158,7 @@ server.tool(
   {
     id: z.string().describe('Pipeline project id.'),
   },
-  async ({ id }) => proxy('pipeline_pause', { id }),
+  async ({ id }, extra) => proxy('pipeline_pause', { id }, {}, extra),
 );
 
 server.tool(
@@ -170,10 +166,7 @@ server.tool(
   'Configure the LionDesign Studio session of a development-v2 pipeline: pick the agent/model (e.g. agentId "claude" + model "opus"), reasoning effort and design system. Merges over the current session config and reboots the design session.',
   {
     id: z.string().describe('Pipeline project id (development-v2).'),
-    agentId: z
-      .string()
-      .optional()
-      .describe('LionDesign agent id (e.g. claude | codex | gemini).'),
+    agentId: z.string().optional().describe('LionDesign agent id (e.g. claude | codex | gemini).'),
     model: z
       .string()
       .optional()
@@ -181,12 +174,8 @@ server.tool(
     reasoning: z.enum(['low', 'medium', 'high']).optional().describe('Reasoning effort.'),
     designSystemId: z.string().optional().describe('Design system id to apply to the session.'),
   },
-  async ({ id, agentId, model, reasoning, designSystemId }) =>
-    proxy(
-      'design_session_config',
-      { id, agentId, model, reasoning, designSystemId },
-      { idempotent: false },
-    ),
+  async ({ id, agentId, model, reasoning, designSystemId }, extra) =>
+    proxy('design_session_config', { id, agentId, model, reasoning, designSystemId }, { idempotent: false }, extra),
 );
 
 async function main(): Promise<void> {

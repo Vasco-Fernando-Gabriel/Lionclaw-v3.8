@@ -57,7 +57,8 @@ function getDb(): Database.Database {
 export function loadAgentConfig(agentId: string): LocalAgentConfig | null {
   try {
     const database = getDb();
-    const row = database.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as Record<string, unknown> | undefined;
+    const row = database.prepare('SELECT * FROM agents WHERE id = ?').get(agentId) as
+      Record<string, unknown> | undefined;
     if (!row) return null;
 
     const config: LocalAgentConfig = {
@@ -97,22 +98,25 @@ export function loadAgentRules(agentId: string): string | null {
 export function loadAllLocalAgents(): LocalAgentConfig[] {
   try {
     const database = getDb();
-    const rows = database.prepare(
-      "SELECT * FROM agents WHERE is_active = 1 AND runtime = 'local'"
-    ).all() as Record<string, unknown>[];
+    const rows = database.prepare("SELECT * FROM agents WHERE is_active = 1 AND runtime = 'local'").all() as Record<
+      string,
+      unknown
+    >[];
 
-    return rows.map((row) => ({
-      id: row['id'] as string,
-      name: row['name'] as string,
-      description: row['description'] as string,
-      systemPrompt: row['system_prompt'] as string,
-      allowedTools: JSON.parse((row['allowed_tools'] as string) || '[]'),
-      isActive: true,
-      runtime: 'local' as const,
-      localConfig: row['local_config'] ? JSON.parse(row['local_config'] as string) : undefined,
-      localMode: (row['local_mode'] as 'simple' | 'smart') || 'simple',
-      maxToolRounds: (row['max_tool_rounds'] as number) || 5,
-    })).filter((a) => a.localConfig);
+    return rows
+      .map((row) => ({
+        id: row['id'] as string,
+        name: row['name'] as string,
+        description: row['description'] as string,
+        systemPrompt: row['system_prompt'] as string,
+        allowedTools: JSON.parse((row['allowed_tools'] as string) || '[]'),
+        isActive: true,
+        runtime: 'local' as const,
+        localConfig: row['local_config'] ? JSON.parse(row['local_config'] as string) : undefined,
+        localMode: (row['local_mode'] as 'simple' | 'smart') || 'simple',
+        maxToolRounds: (row['max_tool_rounds'] as number) || 5,
+      }))
+      .filter((a) => a.localConfig);
   } catch (err) {
     logger.error({ err }, 'Failed to load local agents');
     return [];
@@ -122,23 +126,26 @@ export function loadAllLocalAgents(): LocalAgentConfig[] {
 export function loadAllExternalAgents(): LocalAgentConfig[] {
   try {
     const database = getDb();
-    const rows = database.prepare(
-      "SELECT * FROM agents WHERE is_active = 1 AND runtime = 'external'"
-    ).all() as Record<string, unknown>[];
+    const rows = database.prepare("SELECT * FROM agents WHERE is_active = 1 AND runtime = 'external'").all() as Record<
+      string,
+      unknown
+    >[];
 
-    return rows.map((row) => ({
-      id: row['id'] as string,
-      name: row['name'] as string,
-      description: row['description'] as string,
-      systemPrompt: row['system_prompt'] as string,
-      allowedTools: JSON.parse((row['allowed_tools'] as string) || '[]'),
-      isActive: true,
-      runtime: 'external' as const,
-      localConfig: undefined,
-      externalConfig: row['external_config'] ? JSON.parse(row['external_config'] as string) : undefined,
-      localMode: (row['local_mode'] as 'simple' | 'smart') || 'simple',
-      maxToolRounds: (row['max_tool_rounds'] as number) || 5,
-    })).filter((a) => a.externalConfig);
+    return rows
+      .map((row) => ({
+        id: row['id'] as string,
+        name: row['name'] as string,
+        description: row['description'] as string,
+        systemPrompt: row['system_prompt'] as string,
+        allowedTools: JSON.parse((row['allowed_tools'] as string) || '[]'),
+        isActive: true,
+        runtime: 'external' as const,
+        localConfig: undefined,
+        externalConfig: row['external_config'] ? JSON.parse(row['external_config'] as string) : undefined,
+        localMode: (row['local_mode'] as 'simple' | 'smart') || 'simple',
+        maxToolRounds: (row['max_tool_rounds'] as number) || 5,
+      }))
+      .filter((a) => a.externalConfig);
   } catch (err) {
     logger.error({ err }, 'Failed to load external agents');
     return [];
@@ -146,10 +153,7 @@ export function loadAllExternalAgents(): LocalAgentConfig[] {
 }
 
 export async function checkOllamaHealth(): Promise<boolean> {
-  return checkLocalLLMHealth(
-    'ollama',
-    process.env.LIONCLAW_OLLAMA_HEALTH_URL || 'http://localhost:11434',
-  );
+  return checkLocalLLMHealth('ollama', process.env.LIONCLAW_OLLAMA_HEALTH_URL || 'http://localhost:11434');
 }
 
 export async function checkLocalLLMHealth(
@@ -157,9 +161,7 @@ export async function checkLocalLLMHealth(
   baseUrl: string,
 ): Promise<boolean> {
   try {
-    const url = provider === 'ollama'
-      ? `${baseUrl}/api/version`
-      : `${baseUrl}/v1/models`;
+    const url = provider === 'ollama' ? `${baseUrl}/api/version` : `${baseUrl}/v1/models`;
     const res = await fetch(url, {
       signal: AbortSignal.timeout(5000),
     });

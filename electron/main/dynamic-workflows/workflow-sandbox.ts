@@ -1,4 +1,3 @@
-
 import { createLogger } from '../logger';
 import {
   parseChildMessage,
@@ -11,7 +10,6 @@ import {
 
 const logger = createLogger('dynamic-workflow-sandbox');
 
-
 export interface SandboxProcessHandle {
   send(message: SandboxParentMessage): void;
   onMessage(cb: (raw: unknown) => void): void;
@@ -23,7 +21,6 @@ export interface SandboxProcessHandle {
 export interface SandboxProcessFactory {
   spawn(): SandboxProcessHandle;
 }
-
 
 export interface WorkflowSandboxOptions {
   transformedSource: string;
@@ -49,15 +46,10 @@ export type WorkflowSandboxLifecycleEvent =
   | { type: 'killed'; reason: WorkflowSandboxKillReason };
 
 export type WorkflowSandboxKillReason =
-  | 'wall-timeout'
-  | 'idle-timeout'
-  | 'protocol-violation'
-  | 'crash'
-  | 'parent-abort';
+  'wall-timeout' | 'idle-timeout' | 'protocol-violation' | 'crash' | 'parent-abort';
 
 export type WorkflowSandboxResult =
-  | { status: 'completed'; value: unknown }
-  | { status: 'failed'; reason: WorkflowSandboxKillReason; message: string };
+  { status: 'completed'; value: unknown } | { status: 'failed'; reason: WorkflowSandboxKillReason; message: string };
 
 export class WorkflowSandboxError extends Error {
   readonly reason: WorkflowSandboxKillReason;
@@ -67,7 +59,6 @@ export class WorkflowSandboxError extends Error {
     this.reason = reason;
   }
 }
-
 
 export function runWorkflowSandbox(options: WorkflowSandboxOptions): Promise<WorkflowSandboxResult> {
   const {
@@ -183,15 +174,13 @@ export function runWorkflowSandbox(options: WorkflowSandboxOptions): Promise<Wor
           finish({ status: 'completed', value: msg.value }, undefined);
           try {
             child.kill();
-          } catch {
-          }
+          } catch {}
           return;
         case 'fatal':
           finish({ status: 'failed', reason: 'crash', message: msg.message }, undefined);
           try {
             child.kill();
-          } catch {
-          }
+          } catch {}
           return;
       }
     });
@@ -232,7 +221,6 @@ export function runWorkflowSandbox(options: WorkflowSandboxOptions): Promise<Wor
   });
 }
 
-
 export const SANDBOX_CHILD_ENTRY_BASENAME = 'workflow-sandbox-child.js';
 
 export function createUtilityProcessFactory(childEntryPath: string): SandboxProcessFactory {
@@ -241,18 +229,11 @@ export function createUtilityProcessFactory(childEntryPath: string): SandboxProc
       const electron = loadElectron();
       const utilityProcess = electron?.utilityProcess as
         | {
-            fork(
-              modulePath: string,
-              args?: string[],
-              options?: Record<string, unknown>,
-            ): UtilityChild;
+            fork(modulePath: string, args?: string[], options?: Record<string, unknown>): UtilityChild;
           }
         | undefined;
       if (!utilityProcess || typeof utilityProcess.fork !== 'function') {
-        throw new WorkflowSandboxError(
-          'crash',
-          'utilityProcess indisponivel; use createNodeForkFactory como fallback',
-        );
+        throw new WorkflowSandboxError('crash', 'utilityProcess indisponivel; use createNodeForkFactory como fallback');
       }
       const proc: UtilityChild = utilityProcess.fork(childEntryPath, [], {
         env: { ...process.env, LIONCLAW_WORKFLOW_SANDBOX_CHILD: '1' },
@@ -272,8 +253,7 @@ export function createUtilityProcessFactory(childEntryPath: string): SandboxProc
           killed = true;
           try {
             proc.kill();
-          } catch {
-          }
+          } catch {}
         },
       };
     },
@@ -321,8 +301,7 @@ export function createNodeForkFactory(childEntry: string, extraEnv?: Record<stri
           killed = true;
           try {
             child.kill('SIGKILL');
-          } catch {
-          }
+          } catch {}
         },
       };
     },

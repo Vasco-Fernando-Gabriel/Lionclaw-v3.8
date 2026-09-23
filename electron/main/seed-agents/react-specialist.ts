@@ -1,18 +1,18 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const REACT_SPECIALIST_ID = 'react-specialist';
 
 export const reactSpecialist: Omit<AgentConfig, 'sortOrder'> = {
   id: REACT_SPECIALIST_ID,
-  name: "Especialista React",
-  description: "Use quando precisar otimizar aplicações React existentes para performance, implementar funcionalidades avançadas do React 18+ ou resolver desafios complexos de gerenciamento de estado e arquitetura em codebases React",
-  model: "claude-opus-4-8",
+  name: 'Especialista React',
+  description:
+    'Use quando precisar otimizar aplicações React existentes para performance, implementar funcionalidades avançadas do React 18+ ou resolver desafios complexos de gerenciamento de estado e arquitetura em codebases React',
+  model: 'claude-opus-5-5',
   effort: 'medium' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,
   maxToolRounds: 5,
-  allowedTools: ["Read","Write","Edit","Bash","Glob","Grep"],
+  allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
   mcpServers: [],
   isActive: true,
   skills: [],

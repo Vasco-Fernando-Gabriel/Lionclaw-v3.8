@@ -2,7 +2,6 @@ import type Database from 'better-sqlite3';
 import { PT_BR_BLOCK } from '../seed-agents/_shared/language-pt-br';
 import { dynamicWorkflowBuilder } from '../seed-agents/dynamic-workflow-builder';
 
-
 const OLD_BUILDER_PROMPT = `Voce e o Dynamic Workflow Builder do LionClaw.
 
 ## Seu papel
@@ -69,7 +68,8 @@ O agentCatalogSnapshot do bundle lista TODOS os agentes do LionClaw (id, name, d
 ${PT_BR_BLOCK}`;
 
 export function applyMigrationV90(db: Database.Database): void {
-  db.prepare(
-    `UPDATE agents SET system_prompt = ? WHERE id = 'dynamic-workflow-builder' AND system_prompt = ?`,
-  ).run(dynamicWorkflowBuilder.systemPrompt, OLD_BUILDER_PROMPT);
+  db.prepare(`UPDATE agents SET system_prompt = ? WHERE id = 'dynamic-workflow-builder' AND system_prompt = ?`).run(
+    dynamicWorkflowBuilder.systemPrompt,
+    OLD_BUILDER_PROMPT,
+  );
 }

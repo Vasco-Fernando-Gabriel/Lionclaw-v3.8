@@ -8,7 +8,7 @@ export const featDiscovery: Omit<AgentConfig, 'sortOrder'> = {
   name: 'Feature Discovery',
   description:
     'Explora o repositorio existente, gera CLAUDE.md se necessario, conduz conversa livre sobre a feature e gera feature-discovery-notes com timestamp.',
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'enabled' as const,
   thinkingBudget: 10000,

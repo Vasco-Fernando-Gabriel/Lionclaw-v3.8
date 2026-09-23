@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -15,8 +14,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   try {
     fs.rmSync(SANDBOX, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
   vi.resetModules();
 });
 
@@ -167,7 +165,6 @@ describe('syncCodexMcpConfig', () => {
   });
 });
 
-
 describe('syncCodexMcpConfig — helpers gated por capability toggle (S4b)', () => {
   beforeEach(() => {
     mcpServers.length = 0;
@@ -187,12 +184,7 @@ describe('syncCodexMcpConfig — helpers gated por capability toggle (S4b)', () 
     await syncCodexMcpConfig();
 
     const toml = fs.readFileSync(path.join(SANDBOX, '.codex', 'config.toml'), 'utf8');
-    const wrapperPath = path.join(
-      SANDBOX,
-      '.lionclaw',
-      'mcp-wrappers',
-      'lionclaw-pipeline-control.js',
-    );
+    const wrapperPath = path.join(SANDBOX, '.lionclaw', 'mcp-wrappers', 'lionclaw-pipeline-control.js');
 
     expect(toml).toContain('[mcp_servers.lionclaw-pipeline-control]');
     expect(toml).toContain(wrapperPath);
@@ -222,9 +214,7 @@ describe('syncCodexMcpConfig — helpers gated por capability toggle (S4b)', () 
     const toml = fs.readFileSync(path.join(SANDBOX, '.codex', 'config.toml'), 'utf8');
     expect(toml).toContain('[mcp_servers.knowledge-base]');
     expect(toml).toContain('"/opt/lionclaw/mcp/knowledge-base/server.js"');
-    expect(
-      fs.existsSync(path.join(SANDBOX, '.lionclaw', 'mcp-wrappers', 'knowledge-base.js')),
-    ).toBe(false);
+    expect(fs.existsSync(path.join(SANDBOX, '.lionclaw', 'mcp-wrappers', 'knowledge-base.js'))).toBe(false);
   });
 
   it('invariante no-plaintext: nenhum token aparece no config.toml nem no wrapper', async () => {
@@ -244,12 +234,7 @@ describe('syncCodexMcpConfig — helpers gated por capability toggle (S4b)', () 
     await syncCodexMcpConfig();
 
     const tomlPath = path.join(SANDBOX, '.codex', 'config.toml');
-    const wrapperPath = path.join(
-      SANDBOX,
-      '.lionclaw',
-      'mcp-wrappers',
-      'lionclaw-dynamic-workflows.js',
-    );
+    const wrapperPath = path.join(SANDBOX, '.lionclaw', 'mcp-wrappers', 'lionclaw-dynamic-workflows.js');
     const toml = fs.readFileSync(tomlPath, 'utf8');
     const wrapper = fs.readFileSync(wrapperPath, 'utf8');
 
@@ -342,9 +327,7 @@ describe('syncCodexMcpConfig — dedupe do managed block (spec-codex-config-dedu
     expect(final).toContain('[projects."/home/user/proj"]');
     expect(countOccurrences(final, '# >>> LIONCLAW_MANAGED')).toBe(1);
     expect(countOccurrences(final, '# <<< LIONCLAW_MANAGED')).toBe(1);
-    expect(final.indexOf('# >>> LIONCLAW_MANAGED')).toBeLessThan(
-      final.indexOf('# <<< LIONCLAW_MANAGED'),
-    );
+    expect(final.indexOf('# >>> LIONCLAW_MANAGED')).toBeLessThan(final.indexOf('# <<< LIONCLAW_MANAGED'));
     const begin = final.indexOf('# >>> LIONCLAW_MANAGED');
     expect(final.indexOf('[mcp_servers.blotato]')).toBeGreaterThan(begin);
   });

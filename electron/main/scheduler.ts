@@ -8,7 +8,9 @@ import { InvalidOrchestratorSelectionError } from './orchestrator-selection';
 import { smokeAudit } from './smoke-audit';
 import { sendTelegramNotification, isTelegramConfigured } from './telegram-bridge';
 import { buildExecutionError, translateProviderError } from './agent-runtime/llm-error';
-const tryBeginBackgroundWorkStart = (_lane: string): (() => void) | null => () => {};
+const tryBeginBackgroundWorkStart =
+  (_lane: string): (() => void) | null =>
+  () => {};
 import type { ScheduledTask, TaskRun } from '../../src/types';
 
 const logger = createLogger('scheduler');
@@ -58,9 +60,13 @@ async function checkAndRunTasks(): Promise<void> {
   const db = getDb();
   const now = new Date();
 
-  const tasks = db.prepare(`
+  const tasks = db
+    .prepare(
+      `
     SELECT * FROM scheduled_tasks WHERE status = 'active' AND next_run <= ?
-  `).all(now.toISOString()) as Array<Record<string, unknown>>;
+  `,
+    )
+    .all(now.toISOString()) as Array<Record<string, unknown>>;
 
   for (const task of tasks) {
     const taskId = task['id'] as string;
@@ -100,10 +106,14 @@ async function checkAndRunTasks(): Promise<void> {
       taskId,
     });
 
-    const runResult = db.prepare(`
+    const runResult = db
+      .prepare(
+        `
       INSERT INTO task_runs (task_id, started_at, status, session_id, scheduled_for)
       VALUES (?, datetime('now'), 'running', ?, ?)
-    `).run(taskId, sessionId, scheduledFor);
+    `,
+      )
+      .run(taskId, sessionId, scheduledFor);
     const runId = runResult.lastInsertRowid as number;
 
     runTaskAsync(taskId, taskName, prompt, subagent, sessionId, runId, scheduleType, scheduleValue, notify);
@@ -125,29 +135,39 @@ async function runTaskAsync(
 
   try {
     if (getWindowFn) {
-      await executeCronQuery(prompt, {
-        agentId: subagent || undefined,
-        sessionId,
-        silent: true,
-      }, getWindowFn);
+      await executeCronQuery(
+        prompt,
+        {
+          agentId: subagent || undefined,
+          sessionId,
+          silent: true,
+        },
+        getWindowFn,
+      );
     }
 
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE task_runs SET completed_at = datetime('now'), status = 'success', review_status = 'pending_review' WHERE id = ?
-    `).run(runId);
+    `,
+    ).run(runId);
 
     if (notify) {
       showNotification(taskName, 'Tarefa concluida - clique para revisar');
       if (isTelegramConfigured()) {
-        sendTelegramNotification(`Tarefa "${taskName}" concluida com sucesso. Abra o app para revisar.`).catch(() => {});
+        sendTelegramNotification(`Tarefa "${taskName}" concluida com sucesso. Abra o app para revisar.`).catch(
+          () => {},
+        );
       }
     }
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
 
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE task_runs SET completed_at = datetime('now'), status = 'error', error = ? WHERE id = ?
-    `).run(errorMsg, runId);
+    `,
+    ).run(errorMsg, runId);
 
     if (notify) {
       const friendly = buildTaskFailureNotification(taskName, error);
@@ -157,8 +177,7 @@ async function runTaskAsync(
       }
     }
 
-    const orchestratorCode =
-      error instanceof InvalidOrchestratorSelectionError ? error.code : undefined;
+    const orchestratorCode = error instanceof InvalidOrchestratorSelectionError ? error.code : undefined;
     if (error instanceof InvalidOrchestratorSelectionError) {
       smokeAudit('orchestrator_error', {
         lane: 'cron',
@@ -172,28 +191,22 @@ async function runTaskAsync(
 
     const nextRun = scheduleType === 'once' ? null : calculateNextRun(scheduleType, scheduleValue);
 
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE scheduled_tasks
       SET last_run = datetime('now'),
           run_count = run_count + 1,
           next_run = ?,
           status = ?
       WHERE id = ?
-    `).run(
-      nextRun?.toISOString() || null,
-      scheduleType === 'once' ? 'completed' : 'active',
-      taskId,
-    );
+    `,
+    ).run(nextRun?.toISOString() || null, scheduleType === 'once' ? 'completed' : 'active', taskId);
 
     logger.info({ taskId, taskName }, 'Scheduled task completed');
   }
 }
 
-export function claimScheduledTaskForRun(
-  db: SchedulerDb,
-  taskId: string,
-  scheduledFor: string,
-): boolean {
+export function claimScheduledTaskForRun(db: SchedulerDb, taskId: string, scheduledFor: string): boolean {
   const statement = db.prepare(`
     UPDATE scheduled_tasks
     SET next_run = NULL
@@ -205,11 +218,7 @@ export function claimScheduledTaskForRun(
   return result.changes === 1;
 }
 
-export function calculateNextRun(
-  scheduleType: string,
-  scheduleValue: string,
-  currentDate = new Date(),
-): Date | null {
+export function calculateNextRun(scheduleType: string, scheduleValue: string, currentDate = new Date()): Date | null {
   switch (scheduleType) {
     case 'cron': {
       try {
@@ -237,10 +246,7 @@ export function calculateNextRun(
   }
 }
 
-export function reconcileActiveCronNextRuns(
-  db: SchedulerDb,
-  currentDate = new Date(),
-): number {
+export function reconcileActiveCronNextRuns(db: SchedulerDb, currentDate = new Date()): number {
   const select = db.prepare(`
     SELECT id, schedule_value, next_run
     FROM scheduled_tasks
@@ -248,9 +254,9 @@ export function reconcileActiveCronNextRuns(
       AND schedule_type = 'cron'
   `) as { all: () => Array<Record<string, unknown>> };
   const rows = select.all();
-  const update = db.prepare(
-    'UPDATE scheduled_tasks SET next_run = ? WHERE id = ?',
-  ) as { run: (...params: unknown[]) => unknown };
+  const update = db.prepare('UPDATE scheduled_tasks SET next_run = ? WHERE id = ?') as {
+    run: (...params: unknown[]) => unknown;
+  };
   let updated = 0;
 
   for (const row of rows) {
@@ -275,7 +281,6 @@ function showNotification(title: string, body: string): void {
   }
 }
 
-
 export function buildTaskFailureNotification(taskName: string, error: unknown): string {
   const typed = translateProviderError(error);
   return `Tarefa "${taskName}" falhou: ${typed.userMessage} ${typed.suggestedAction}`;
@@ -294,25 +299,22 @@ export function validateScheduleValue(scheduleType: string, scheduleValue: strin
     }
     case 'interval': {
       const ms = parseInt(scheduleValue, 10);
-      return isNaN(ms) || ms <= 0
-        ? 'Intervalo invalido: informe o periodo em milissegundos (> 0).'
-        : null;
+      return isNaN(ms) || ms <= 0 ? 'Intervalo invalido: informe o periodo em milissegundos (> 0).' : null;
     }
     case 'once': {
       const date = new Date(scheduleValue);
-      return isNaN(date.getTime())
-        ? 'Data invalida para execucao unica.'
-        : null;
+      return isNaN(date.getTime()) ? 'Data invalida para execucao unica.' : null;
     }
     default:
       return `Tipo de agendamento desconhecido: ${scheduleType}`;
   }
 }
 
-
 export function getAllScheduledTasks(): ScheduledTask[] {
   const db = getDb();
-  const rows = db.prepare('SELECT * FROM scheduled_tasks ORDER BY created_at DESC').all() as Array<Record<string, unknown>>;
+  const rows = db.prepare('SELECT * FROM scheduled_tasks ORDER BY created_at DESC').all() as Array<
+    Record<string, unknown>
+  >;
   return rows.map(mapTask);
 }
 
@@ -321,7 +323,10 @@ export function createScheduledTask(
 ): ScheduledTask | { error: string } {
   const validationError = validateScheduleValue(task.scheduleType, task.scheduleValue);
   if (validationError) {
-    logger.warn({ scheduleType: task.scheduleType, scheduleValue: task.scheduleValue }, 'createScheduledTask: schedule invalido rejeitado');
+    logger.warn(
+      { scheduleType: task.scheduleType, scheduleValue: task.scheduleValue },
+      'createScheduledTask: schedule invalido rejeitado',
+    );
     return { error: validationError };
   }
 
@@ -330,10 +335,12 @@ export function createScheduledTask(
 
   const nextRun = calculateNextRun(task.scheduleType, task.scheduleValue);
 
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO scheduled_tasks (id, name, prompt, subagent, schedule_type, schedule_value, status, next_run, notify, tags)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     id,
     task.name,
     task.prompt,
@@ -349,10 +356,7 @@ export function createScheduledTask(
   return getScheduledTask(id)!;
 }
 
-export function updateScheduledTask(
-  id: string,
-  updates: Partial<ScheduledTask>,
-): ScheduledTask | { error: string } {
+export function updateScheduledTask(id: string, updates: Partial<ScheduledTask>): ScheduledTask | { error: string } {
   const db = getDb();
 
   if (updates.scheduleType !== undefined || updates.scheduleValue !== undefined) {
@@ -369,14 +373,38 @@ export function updateScheduledTask(
   const fields: string[] = [];
   const values: unknown[] = [];
 
-  if (updates.name !== undefined) { fields.push('name = ?'); values.push(updates.name); }
-  if (updates.prompt !== undefined) { fields.push('prompt = ?'); values.push(updates.prompt); }
-  if (updates.subagent !== undefined) { fields.push('subagent = ?'); values.push(updates.subagent); }
-  if (updates.scheduleType !== undefined) { fields.push('schedule_type = ?'); values.push(updates.scheduleType); }
-  if (updates.scheduleValue !== undefined) { fields.push('schedule_value = ?'); values.push(updates.scheduleValue); }
-  if (updates.status !== undefined) { fields.push('status = ?'); values.push(updates.status); }
-  if (updates.notify !== undefined) { fields.push('notify = ?'); values.push(updates.notify ? 1 : 0); }
-  if (updates.tags !== undefined) { fields.push('tags = ?'); values.push(JSON.stringify(updates.tags)); }
+  if (updates.name !== undefined) {
+    fields.push('name = ?');
+    values.push(updates.name);
+  }
+  if (updates.prompt !== undefined) {
+    fields.push('prompt = ?');
+    values.push(updates.prompt);
+  }
+  if (updates.subagent !== undefined) {
+    fields.push('subagent = ?');
+    values.push(updates.subagent);
+  }
+  if (updates.scheduleType !== undefined) {
+    fields.push('schedule_type = ?');
+    values.push(updates.scheduleType);
+  }
+  if (updates.scheduleValue !== undefined) {
+    fields.push('schedule_value = ?');
+    values.push(updates.scheduleValue);
+  }
+  if (updates.status !== undefined) {
+    fields.push('status = ?');
+    values.push(updates.status);
+  }
+  if (updates.notify !== undefined) {
+    fields.push('notify = ?');
+    values.push(updates.notify ? 1 : 0);
+  }
+  if (updates.tags !== undefined) {
+    fields.push('tags = ?');
+    values.push(JSON.stringify(updates.tags));
+  }
 
   if (fields.length > 0) {
     values.push(id);
@@ -402,9 +430,9 @@ export function deleteScheduledTask(id: string): void {
 
 export function getTaskRuns(taskId: string): TaskRun[] {
   const db = getDb();
-  const rows = db.prepare(
-    'SELECT * FROM task_runs WHERE task_id = ? ORDER BY started_at DESC LIMIT 50'
-  ).all(taskId) as Array<Record<string, unknown>>;
+  const rows = db
+    .prepare('SELECT * FROM task_runs WHERE task_id = ? ORDER BY started_at DESC LIMIT 50')
+    .all(taskId) as Array<Record<string, unknown>>;
   return rows.map((r) => ({
     id: r['id'] as number,
     taskId: r['task_id'] as string,
@@ -424,16 +452,18 @@ export function getTaskRuns(taskId: string): TaskRun[] {
 
 export function reviewTaskRun(runId: number, status: 'validated' | 'rejected', note?: string): void {
   const db = getDb();
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE task_runs SET review_status = ?, review_note = ?, reviewed_at = datetime('now') WHERE id = ?
-  `).run(status, note || null, runId);
+  `,
+  ).run(status, note || null, runId);
 }
 
 export function getPendingReviewCount(): number {
   const db = getDb();
-  const row = db.prepare(
-    "SELECT COUNT(*) as c FROM task_runs WHERE review_status = 'pending_review'"
-  ).get() as { c: number };
+  const row = db.prepare("SELECT COUNT(*) as c FROM task_runs WHERE review_status = 'pending_review'").get() as {
+    c: number;
+  };
   return row.c;
 }
 
@@ -464,7 +494,6 @@ function mapTask(row: Record<string, unknown>): ScheduledTask {
     tags: JSON.parse((row['tags'] as string) || '[]'),
   };
 }
-
 
 export interface ActivityItem {
   runId: number;
@@ -631,9 +660,7 @@ export function getActivities(filters: {
     const fromDate = new Date(filters.from);
     const toDate = new Date(filters.to);
 
-    const existingRunTimes = new Set(
-      items.map(i => `${i.taskId}|${i.scheduledFor.slice(0, 16)}`),
-    );
+    const existingRunTimes = new Set(items.map((i) => `${i.taskId}|${i.scheduledFor.slice(0, 16)}`));
 
     for (const t of activeTasks) {
       const taskId = t['task_id'] as string;
@@ -671,15 +698,16 @@ export function getActivities(filters: {
   items.sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor));
 
   if (filters.tags && filters.tags.length > 0) {
-    return items.filter(item =>
-      filters.tags!.some(tag => item.tags.includes(tag))
-    );
+    return items.filter((item) => filters.tags!.some((tag) => item.tags.includes(tag)));
   }
 
   return items;
 }
 
-export function getActivityStats(from: string, to: string): {
+export function getActivityStats(
+  from: string,
+  to: string,
+): {
   scheduled: number;
   running: number;
   success: number;
@@ -688,12 +716,16 @@ export function getActivityStats(from: string, to: string): {
   const db = getDb();
   const stats = { scheduled: 0, running: 0, success: 0, error: 0 };
 
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT status, COUNT(*) as c
     FROM task_runs
     WHERE COALESCE(scheduled_for, started_at) >= ? AND COALESCE(scheduled_for, started_at) < ?
     GROUP BY status
-  `).all(from, to) as Array<{ status: string; c: number }>;
+  `,
+    )
+    .all(from, to) as Array<{ status: string; c: number }>;
 
   for (const row of rows) {
     if (row.status in stats) {
@@ -701,11 +733,15 @@ export function getActivityStats(from: string, to: string): {
     }
   }
 
-  const activeTasks = db.prepare(`
+  const activeTasks = db
+    .prepare(
+      `
     SELECT schedule_type, schedule_value, next_run
     FROM scheduled_tasks
     WHERE status = 'active'
-  `).all() as Array<Record<string, unknown>>;
+  `,
+    )
+    .all() as Array<Record<string, unknown>>;
 
   const fromDate = new Date(from);
   const toDate = new Date(to);
@@ -719,7 +755,7 @@ export function getActivityStats(from: string, to: string): {
       fromDate,
       toDate,
     );
-    stats.scheduled += occurrences.filter(occ => new Date(occ) > now).length;
+    stats.scheduled += occurrences.filter((occ) => new Date(occ) > now).length;
   }
 
   return stats;
@@ -727,11 +763,13 @@ export function getActivityStats(from: string, to: string): {
 
 export function getAllTags(): string[] {
   const db = getDb();
-  const rows = db.prepare("SELECT DISTINCT tags FROM scheduled_tasks WHERE tags != '[]'").all() as Array<{ tags: string }>;
+  const rows = db.prepare("SELECT DISTINCT tags FROM scheduled_tasks WHERE tags != '[]'").all() as Array<{
+    tags: string;
+  }>;
   const tagSet = new Set<string>();
   for (const row of rows) {
     const tags = JSON.parse(row.tags) as string[];
-    tags.forEach(t => tagSet.add(t));
+    tags.forEach((t) => tagSet.add(t));
   }
   return Array.from(tagSet).sort();
 }

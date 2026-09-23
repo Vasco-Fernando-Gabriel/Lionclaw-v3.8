@@ -1,4 +1,3 @@
-
 export const BASH_VALIDATION_BLOCK = `## Restricoes Bash (validacao + git read-only)
 
 PERMITIDO (validacao de codigo):

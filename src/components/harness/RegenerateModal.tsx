@@ -30,19 +30,15 @@ export function RegenerateModal({ projectId, onClose }: RegenerateModalProps) {
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-md mx-4 shadow-xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
           <h2 className="text-sm font-semibold text-zinc-100">Regenerar Sprints</h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-zinc-800 text-zinc-400"
-            disabled={submitting}
-          >
+          <button onClick={onClose} className="p-1 rounded hover:bg-zinc-800 text-zinc-400" disabled={submitting}>
             <X size={16} />
           </button>
         </div>
 
         <div className="px-5 py-4 space-y-3">
           <p className="text-xs text-zinc-400">
-            Descreva o que deve ser ajustado no planejamento dos sprints. O agente planejador ira
-            considerar seu feedback ao regenerar.
+            Descreva o que deve ser ajustado no planejamento dos sprints. O agente planejador ira considerar seu
+            feedback ao regenerar.
           </p>
 
           <textarea

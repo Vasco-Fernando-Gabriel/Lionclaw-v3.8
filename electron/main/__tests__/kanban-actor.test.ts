@@ -1,141 +1,93 @@
+import { describe, it, expect, afterEach } from 'vitest';
 
-import { describe, it, expect, vi, afterEach } from 'vitest';
-
-const loggerMock = vi.hoisted(() => ({
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-  debug: vi.fn(),
-}));
-
-vi.mock('../logger', () => ({ createLogger: () => loggerMock }));
-
-import { actorForActiveLanes, resolveKanbanActor } from '../kanban-actor';
+import { actorForLane, resolveKanbanActor, resolveKanbanActorRef, KanbanTurnBindingError } from '../kanban-actor';
 import {
   setActiveChatTurn,
   clearActiveChatTurn,
-  type ChatLane,
+  __resetChatCapabilityContextForTests,
 } from '../chat-capability-context';
 
-
-describe('actorForActiveLanes', () => {
-  it('desktop unica lane ativa -> orchestrator sem ambiguidade', () => {
-    expect(actorForActiveLanes(['desktop'])).toEqual({
-      actor: 'orchestrator',
-      ambiguous: false,
-    });
-  });
-
-  it('telegram unica lane ativa -> orchestrator sem ambiguidade', () => {
-    expect(actorForActiveLanes(['telegram'])).toEqual({
-      actor: 'orchestrator',
-      ambiguous: false,
-    });
-  });
-
-  it('cron unica lane ativa -> scheduler sem ambiguidade', () => {
-    expect(actorForActiveLanes(['cron'])).toEqual({
-      actor: 'scheduler',
-      ambiguous: false,
-    });
-  });
-
-  it('nenhuma lane ativa -> fallback orchestrator COM ambiguidade', () => {
-    expect(actorForActiveLanes([])).toEqual({ actor: 'orchestrator', ambiguous: true });
-  });
-
-  it('mais de uma lane ativa (desktop + cron) -> fallback orchestrator COM ambiguidade', () => {
-    expect(actorForActiveLanes(['desktop', 'cron'])).toEqual({
-      actor: 'orchestrator',
-      ambiguous: true,
-    });
-    expect(actorForActiveLanes(['desktop', 'telegram', 'cron'])).toEqual({
-      actor: 'orchestrator',
-      ambiguous: true,
-    });
+describe('actorForLane', () => {
+  it('cron -> scheduler; desktop e telegram -> orchestrator', () => {
+    expect(actorForLane('cron')).toBe('scheduler');
+    expect(actorForLane('desktop')).toBe('orchestrator');
+    expect(actorForLane('telegram')).toBe('orchestrator');
   });
 });
 
-
-function turnGetterFor(lanes: ChatLane[]) {
-  return (lane: ChatLane) =>
-    lanes.includes(lane) ? { sessionId: `s-${lane}`, turnId: `t-${lane}` } : undefined;
-}
-
-describe('resolveKanbanActor (getter injetado)', () => {
+describe('resolveKanbanActor (binding por chamada, 9.3)', () => {
   afterEach(() => {
-    loggerMock.warn.mockClear();
+    __resetChatCapabilityContextForTests();
   });
 
-  it('cron-only -> scheduler, sem warn', () => {
-    expect(resolveKanbanActor(turnGetterFor(['cron']))).toBe('scheduler');
-    expect(loggerMock.warn).not.toHaveBeenCalled();
+  it('desktop com binding valido -> orchestrator', () => {
+    setActiveChatTurn({ sessionId: 'sess-a', lane: 'desktop', turnId: 'turn-1' });
+    expect(resolveKanbanActor({ lane: 'desktop', sessionId: 'sess-a', turnId: 'turn-1' })).toBe('orchestrator');
+    expect(resolveKanbanActor({ lane: 'desktop', sessionId: 'sess-a' })).toBe('orchestrator');
   });
 
-  it('desktop-only -> orchestrator, sem warn', () => {
-    expect(resolveKanbanActor(turnGetterFor(['desktop']))).toBe('orchestrator');
-    expect(loggerMock.warn).not.toHaveBeenCalled();
+  it('desktop sem sessionId -> turn_binding_required, mesmo com turno ativo em alguma lane', () => {
+    setActiveChatTurn({ sessionId: 'sess-a', lane: 'desktop', turnId: 'turn-1' });
+    expect(() => resolveKanbanActor({ lane: 'desktop' })).toThrow(KanbanTurnBindingError);
+    expect(() => resolveKanbanActor({ lane: 'desktop' })).toThrow(/turn_binding_required/);
   });
 
-  it('nenhuma lane -> orchestrator + warn com flag de ambiguidade', () => {
-    expect(resolveKanbanActor(turnGetterFor([]))).toBe('orchestrator');
-    expect(loggerMock.warn).toHaveBeenCalledTimes(1);
-    expect(loggerMock.warn.mock.calls[0][0]).toMatchObject({
-      ambiguous: true,
-      activeLanes: [],
-    });
+  it('desktop com sessionId sem turno ativo ou turnId defasado -> turn_binding_required', () => {
+    expect(() => resolveKanbanActor({ lane: 'desktop', sessionId: 'sess-x' })).toThrow(/turn_binding_required/);
+    setActiveChatTurn({ sessionId: 'sess-a', lane: 'desktop', turnId: 'turn-2' });
+    expect(() => resolveKanbanActor({ lane: 'desktop', sessionId: 'sess-a', turnId: 'turn-1' })).toThrow(
+      /turn_binding_required/,
+    );
   });
 
-  it('desktop + cron simultaneos -> orchestrator + warn (limite documentado 4.1)', () => {
-    expect(resolveKanbanActor(turnGetterFor(['desktop', 'cron']))).toBe('orchestrator');
-    expect(loggerMock.warn).toHaveBeenCalledTimes(1);
-    expect(loggerMock.warn.mock.calls[0][0]).toMatchObject({
-      ambiguous: true,
-      activeLanes: ['desktop', 'cron'],
-    });
+  it('duas lanes desktop em voo: cada binding resolve a sua, sem ambiguidade', () => {
+    setActiveChatTurn({ sessionId: 'sess-a', lane: 'desktop', turnId: 'turn-a' });
+    setActiveChatTurn({ sessionId: 'sess-b', lane: 'desktop', turnId: 'turn-b' });
+    expect(resolveKanbanActor({ lane: 'desktop', sessionId: 'sess-a', turnId: 'turn-a' })).toBe('orchestrator');
+    expect(resolveKanbanActor({ lane: 'desktop', sessionId: 'sess-b', turnId: 'turn-b' })).toBe('orchestrator');
+    expect(() => resolveKanbanActor({ lane: 'desktop', sessionId: 'sess-a', turnId: 'turn-b' })).toThrow(
+      /turn_binding_required/,
+    );
+  });
+
+  it('lane cron com turno ativo -> scheduler; sem turno -> turn_binding_required', () => {
+    expect(() => resolveKanbanActor({ lane: 'cron' })).toThrow(/turn_binding_required/);
+    setActiveChatTurn({ sessionId: 'sess-cron', lane: 'cron', turnId: 'turn-c' });
+    expect(resolveKanbanActor({ lane: 'cron' })).toBe('scheduler');
+    clearActiveChatTurn({ sessionId: 'sess-cron', lane: 'cron', turnId: 'turn-c' });
+    expect(() => resolveKanbanActor({ lane: 'cron' })).toThrow(/turn_binding_required/);
+  });
+
+  it('a resolucao e POR CHAMADA: o actor muda com a lane do binding', () => {
+    setActiveChatTurn({ sessionId: 'sess-cron', lane: 'cron', turnId: 'turn-c' });
+    setActiveChatTurn({ sessionId: 'sess-d', lane: 'desktop', turnId: 'turn-d' });
+    expect(resolveKanbanActor({ lane: 'cron' })).toBe('scheduler');
+    expect(resolveKanbanActor({ lane: 'desktop', sessionId: 'sess-d' })).toBe('orchestrator');
   });
 });
 
-
-describe('resolveKanbanActor (registry real por lane)', () => {
-  const LANES: ChatLane[] = ['desktop', 'telegram', 'cron'];
-
+describe('resolveKanbanActorRef (cliente externo, ex. LionCode)', () => {
   afterEach(() => {
-    for (const lane of LANES) {
-      clearActiveChatTurn({ sessionId: `sess-${lane}`, lane });
-    }
-    loggerMock.warn.mockClear();
+    __resetChatCapabilityContextForTests();
   });
 
-  it('turno ativo so na lane cron -> scheduler (independe do processo pooled)', () => {
-    setActiveChatTurn({ sessionId: 'sess-cron', lane: 'cron', turnId: 'turn-1' });
-    expect(resolveKanbanActor()).toBe('scheduler');
-    expect(loggerMock.warn).not.toHaveBeenCalled();
+  it('cliente externo lioncode -> actor lioncode com o detalhe, SEM exigir turno de chat', () => {
+    expect(resolveKanbanActorRef({ lane: 'desktop' }, { id: 'lioncode', detail: 'Claude Opus 5' })).toEqual({
+      actor: 'lioncode',
+      detail: 'Claude Opus 5',
+    });
+    expect(resolveKanbanActorRef({ lane: 'desktop' }, { id: 'lioncode', detail: null })).toEqual({
+      actor: 'lioncode',
+      detail: null,
+    });
   });
 
-  it('turno ativo so na lane desktop -> orchestrator', () => {
-    setActiveChatTurn({ sessionId: 'sess-desktop', lane: 'desktop', turnId: 'turn-1' });
-    expect(resolveKanbanActor()).toBe('orchestrator');
-    expect(loggerMock.warn).not.toHaveBeenCalled();
-  });
-
-  it('desktop + cron ativos -> fallback orchestrator + warn', () => {
-    setActiveChatTurn({ sessionId: 'sess-desktop', lane: 'desktop', turnId: 'turn-1' });
-    setActiveChatTurn({ sessionId: 'sess-cron', lane: 'cron', turnId: 'turn-2' });
-    expect(resolveKanbanActor()).toBe('orchestrator');
-    expect(loggerMock.warn).toHaveBeenCalledTimes(1);
-  });
-
-  it('nenhum turno ativo -> fallback orchestrator + warn', () => {
-    expect(resolveKanbanActor()).toBe('orchestrator');
-    expect(loggerMock.warn).toHaveBeenCalledTimes(1);
-  });
-
-  it('a resolucao e POR CHAMADA: o actor muda quando a lane ativa muda', () => {
-    setActiveChatTurn({ sessionId: 'sess-cron', lane: 'cron', turnId: 'turn-1' });
-    expect(resolveKanbanActor()).toBe('scheduler');
-    clearActiveChatTurn({ sessionId: 'sess-cron', lane: 'cron', turnId: 'turn-1' });
-    setActiveChatTurn({ sessionId: 'sess-desktop', lane: 'desktop', turnId: 'turn-2' });
-    expect(resolveKanbanActor()).toBe('orchestrator');
+  it('sem cliente externo segue a regra do turno: binding valido -> orchestrator; sem turno -> turn_binding_required', () => {
+    setActiveChatTurn({ sessionId: 'sess-a', lane: 'desktop', turnId: 'turn-1' });
+    expect(resolveKanbanActorRef({ lane: 'desktop', sessionId: 'sess-a', turnId: 'turn-1' }, null)).toEqual({
+      actor: 'orchestrator',
+      detail: null,
+    });
+    expect(() => resolveKanbanActorRef({ lane: 'desktop' }, undefined)).toThrow(KanbanTurnBindingError);
   });
 });

@@ -1,14 +1,7 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AgentConfig } from '../../types/index';
 
-
-function makeExternalAgent(overrides: {
-  id: string;
-  name: string;
-  provider: string;
-  apiKeyRef: string;
-}): AgentConfig {
+function makeExternalAgent(overrides: { id: string; name: string; provider: string; apiKeyRef: string }): AgentConfig {
   return {
     id: overrides.id,
     name: overrides.name,
@@ -24,7 +17,11 @@ function makeExternalAgent(overrides: {
     skills: [],
     runtime: 'external',
     externalConfig: {
-      provider: overrides.provider as AgentConfig['externalConfig'] extends infer T ? T extends { provider: infer P } ? P : never : never,
+      provider: overrides.provider as AgentConfig['externalConfig'] extends infer T
+        ? T extends { provider: infer P }
+          ? P
+          : never
+        : never,
       model: 'some-model',
       apiKeyRef: overrides.apiKeyRef,
       baseUrl: 'https://api.example.com/v1',
@@ -60,16 +57,13 @@ vi.stubGlobal('window', {
   },
 });
 
-
 import { getAgentsUsingVaultKey } from '../credential-usage';
-
 
 describe('getAgentsUsingVaultKey', () => {
   beforeEach(() => {
     mockAgentsList.length = 0;
     vi.mocked(window.lionclaw.agents.list).mockClear();
   });
-
 
   it('retorna lista vazia quando nao ha agentes', async () => {
     const result = await getAgentsUsingVaultKey('HARNESS_KIMI_KEY');
@@ -78,16 +72,25 @@ describe('getAgentsUsingVaultKey', () => {
 
   it('retorna lista vazia quando nenhum agente referencia a key', async () => {
     mockAgentsList.push(
-      makeExternalAgent({ id: 'agent-1', name: 'OpenRouter Agent', provider: 'openrouter', apiKeyRef: 'HARNESS_OPENROUTER_KEY' }),
+      makeExternalAgent({
+        id: 'agent-1',
+        name: 'OpenRouter Agent',
+        provider: 'openrouter',
+        apiKeyRef: 'HARNESS_OPENROUTER_KEY',
+      }),
       makeCloudAgent('cloud-1', 'Cloud Agent'),
     );
     const result = await getAgentsUsingVaultKey('HARNESS_KIMI_KEY');
     expect(result.agentsReferencing).toHaveLength(0);
   });
 
-
   it('retorna o agente que referencia HARNESS_KIMI_KEY', async () => {
-    const kimiAgent = makeExternalAgent({ id: 'kimi-1', name: 'Kimi Coder', provider: 'kimi', apiKeyRef: 'HARNESS_KIMI_KEY' });
+    const kimiAgent = makeExternalAgent({
+      id: 'kimi-1',
+      name: 'Kimi Coder',
+      provider: 'kimi',
+      apiKeyRef: 'HARNESS_KIMI_KEY',
+    });
     mockAgentsList.push(kimiAgent);
 
     const result = await getAgentsUsingVaultKey('HARNESS_KIMI_KEY');
@@ -109,11 +112,20 @@ describe('getAgentsUsingVaultKey', () => {
     expect(result.agentsReferencing[0].id).toBe('ds-1');
   });
 
-
   it('retorna multiplos agentes se todos referenciam a mesma key', async () => {
     mockAgentsList.push(
-      makeExternalAgent({ id: 'or-1', name: 'OpenRouter Alpha', provider: 'openrouter', apiKeyRef: 'HARNESS_OPENROUTER_KEY' }),
-      makeExternalAgent({ id: 'or-2', name: 'OpenRouter Beta', provider: 'openrouter', apiKeyRef: 'HARNESS_OPENROUTER_KEY' }),
+      makeExternalAgent({
+        id: 'or-1',
+        name: 'OpenRouter Alpha',
+        provider: 'openrouter',
+        apiKeyRef: 'HARNESS_OPENROUTER_KEY',
+      }),
+      makeExternalAgent({
+        id: 'or-2',
+        name: 'OpenRouter Beta',
+        provider: 'openrouter',
+        apiKeyRef: 'HARNESS_OPENROUTER_KEY',
+      }),
       makeExternalAgent({ id: 'kimi-1', name: 'Kimi Coder', provider: 'kimi', apiKeyRef: 'HARNESS_KIMI_KEY' }),
     );
 
@@ -123,7 +135,6 @@ describe('getAgentsUsingVaultKey', () => {
     expect(ids).toContain('or-1');
     expect(ids).toContain('or-2');
   });
-
 
   it('ignora agentes cloud (sem externalConfig)', async () => {
     mockAgentsList.push(makeCloudAgent('cloud-1', 'Cloud Brain'));
@@ -142,7 +153,6 @@ describe('getAgentsUsingVaultKey', () => {
     expect(result.agentsReferencing).toHaveLength(0);
   });
 
-
   it('propaga provider corretamente no resultado', async () => {
     mockAgentsList.push(
       makeExternalAgent({ id: 'q-1', name: 'Qwen Pro', provider: 'qwen', apiKeyRef: 'HARNESS_QWEN_KEY' }),
@@ -153,7 +163,12 @@ describe('getAgentsUsingVaultKey', () => {
 
   it('provider e undefined para agente sem externalConfig.provider', async () => {
     const agent: AgentConfig = {
-      ...makeExternalAgent({ id: 'mx-1', name: 'MiniMax One', provider: 'minimax-payg', apiKeyRef: 'HARNESS_MINIMAX_PAYG_KEY' }),
+      ...makeExternalAgent({
+        id: 'mx-1',
+        name: 'MiniMax One',
+        provider: 'minimax-payg',
+        apiKeyRef: 'HARNESS_MINIMAX_PAYG_KEY',
+      }),
       externalConfig: {
         provider: 'minimax-payg',
         model: 'MiniMax-Text-01',
@@ -167,7 +182,6 @@ describe('getAgentsUsingVaultKey', () => {
     expect(result.agentsReferencing).toHaveLength(1);
     expect(result.agentsReferencing[0].provider).toBe('minimax-payg');
   });
-
 
   it('retorna agente Gemini que usa ORCHESTRATOR_VERTEX_API_KEY', async () => {
     const geminiAgent = makeExternalAgent({
@@ -188,18 +202,19 @@ describe('getAgentsUsingVaultKey', () => {
   });
 
   it('mantem compatibilidade com agente Gemini salvo com ref legada', async () => {
-    mockAgentsList.push(makeExternalAgent({
-      id: 'gem-legacy',
-      name: 'Gemini Legacy',
-      provider: 'gemini-agent-platform',
-      apiKeyRef: 'orchestrator_vertex_api_key_ref',
-    }));
+    mockAgentsList.push(
+      makeExternalAgent({
+        id: 'gem-legacy',
+        name: 'Gemini Legacy',
+        provider: 'gemini-agent-platform',
+        apiKeyRef: 'orchestrator_vertex_api_key_ref',
+      }),
+    );
 
     const result = await getAgentsUsingVaultKey('ORCHESTRATOR_VERTEX_API_KEY');
     expect(result.agentsReferencing).toHaveLength(1);
     expect(result.agentsReferencing[0].id).toBe('gem-legacy');
   });
-
 
   it('formato do objeto retornado tem apenas agentsReferencing', async () => {
     const result = await getAgentsUsingVaultKey('HARNESS_KIMI_KEY');
@@ -208,7 +223,12 @@ describe('getAgentsUsingVaultKey', () => {
 
   it('cada elemento de agentsReferencing tem id, name, runtime obrigatorios', async () => {
     mockAgentsList.push(
-      makeExternalAgent({ id: 'or-1', name: 'OpenRouter One', provider: 'openrouter', apiKeyRef: 'HARNESS_OPENROUTER_KEY' }),
+      makeExternalAgent({
+        id: 'or-1',
+        name: 'OpenRouter One',
+        provider: 'openrouter',
+        apiKeyRef: 'HARNESS_OPENROUTER_KEY',
+      }),
     );
     const result = await getAgentsUsingVaultKey('HARNESS_OPENROUTER_KEY');
     for (const agent of result.agentsReferencing) {
@@ -218,7 +238,6 @@ describe('getAgentsUsingVaultKey', () => {
     }
   });
 
-
   it('e case-sensitive: "harness_kimi_key" NAO casa com "HARNESS_KIMI_KEY"', async () => {
     mockAgentsList.push(
       makeExternalAgent({ id: 'kimi-1', name: 'Kimi Dev', provider: 'kimi', apiKeyRef: 'HARNESS_KIMI_KEY' }),
@@ -226,7 +245,6 @@ describe('getAgentsUsingVaultKey', () => {
     const result = await getAgentsUsingVaultKey('harness_kimi_key');
     expect(result.agentsReferencing).toHaveLength(0);
   });
-
 
   it('chama window.lionclaw.agents.list a cada invocacao', async () => {
     await getAgentsUsingVaultKey('HARNESS_KIMI_KEY');

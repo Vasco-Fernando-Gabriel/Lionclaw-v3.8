@@ -1,7 +1,5 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { OrchestratorSelection } from '../../orchestrator-selection';
-
 
 const settings = new Map<string, string>();
 
@@ -27,7 +25,6 @@ vi.mock('../../logger', () => ({
 }));
 
 vi.mock('../../pricing', () => ({ calculateCost: vi.fn(() => 0.5) }));
-
 
 const BROAD_CONFIG: Record<string, { command: string; args: string[] }> = {
   'google-drive': { command: 'node', args: ['drive.js'] },
@@ -102,9 +99,7 @@ const REGISTRY = [
   },
 ];
 
-const getMCPConfigForAgent = vi.fn(async (agentId?: string) =>
-  agentId === 'agent-x' ? AGENT_CONFIG : BROAD_CONFIG,
-);
+const getMCPConfigForAgent = vi.fn(async (agentId?: string) => (agentId === 'agent-x' ? AGENT_CONFIG : BROAD_CONFIG));
 const getMcpToolRegistryEntries = vi.fn((mcpId?: string) =>
   mcpId ? REGISTRY.filter((e) => e.mcpId === mcpId) : REGISTRY,
 );
@@ -167,22 +162,17 @@ const teardownMCPsForSession = vi.fn(async () => {});
 const callMCPTool = vi.fn(async () => ({ content: [{ type: 'text', text: 'drive ok' }] }));
 
 vi.mock('../../mcp-tool-bridge', () => ({
-  setupMCPsForSession: (...a: unknown[]) =>
-    setupMCPsForSession(...(a as [Record<string, unknown>])),
+  setupMCPsForSession: (...a: unknown[]) => setupMCPsForSession(...(a as [Record<string, unknown>])),
   teardownMCPsForSession: (...a: unknown[]) => teardownMCPsForSession(...(a as [])),
   callMCPTool: (...a: unknown[]) => callMCPTool(...(a as [])),
 }));
 
-
-const guardDecision = vi.fn(
-  async (): Promise<{ behavior: 'allow' } | { behavior: 'deny'; message: string }> => ({
-    behavior: 'allow',
-  }),
-);
+const guardDecision = vi.fn(async (): Promise<{ behavior: 'allow' } | { behavior: 'deny'; message: string }> => ({
+  behavior: 'allow',
+}));
 vi.mock('../../permission-guard', () => ({
   createPermissionGuard: vi.fn(() => guardDecision),
 }));
-
 
 vi.mock('../../skills', () => ({ listSkills: vi.fn(() => []) }));
 vi.mock('../../title-generator', () => ({ ensureInitialSessionTitle: vi.fn() }));
@@ -193,8 +183,7 @@ vi.mock('../../onboarding', () => ({
   extractAndProcessOnboardingData: vi.fn(() => null),
   resolveOnboardingCompletedFromState: vi.fn(() => false),
 }));
-const PIPELINE_SENTINEL =
-  '## Pipeline Control\n\nUse pipeline_drive e dynamic_workflow_generate via mcp_call.';
+const PIPELINE_SENTINEL = '## Pipeline Control\n\nUse pipeline_drive e dynamic_workflow_generate via mcp_call.';
 vi.mock('../../prompt-builder', () => ({
   buildSystemPrompt: vi.fn(() => 'SYS'),
   buildPipelineControlSection: vi.fn(() => PIPELINE_SENTINEL),
@@ -251,7 +240,6 @@ vi.mock('../runtime', () => ({
   runLionLoop: (...a: unknown[]) => runLionLoop(...(a as [CapturedLoopOpts])),
 }));
 
-
 import { executeLionSdkQuery } from '../index';
 import {
   LION_SDK_SYSTEM_PROMPT_V1,
@@ -284,13 +272,7 @@ async function runTurn(
   selection: OrchestratorSelection = OLLAMA,
   options: Record<string, unknown> = {},
 ): Promise<{ systemPrompt: string; opts: CapturedLoopOpts }> {
-  await executeLionSdkQuery(
-    'oi',
-    { sessionId: 'sid', ...options },
-    () => null,
-    undefined,
-    selection,
-  );
+  await executeLionSdkQuery('oi', { sessionId: 'sid', ...options }, () => null, undefined, selection);
   if (!capturedLoopOpts) throw new Error('runLionLoop nao foi chamado');
   return { systemPrompt: capturedLoopOpts.initialMessages[0].content, opts: capturedLoopOpts };
 }
@@ -329,9 +311,7 @@ function expectedFullModePrompt(): string {
   const parts = [
     LION_SDK_SYSTEM_PROMPT_V1,
     '## LionClaw Runtime Context\n\nRUNTIME-CONTEXT',
-    buildLionToolCatalogPrompt(
-      LION_TOOL_SCHEMAS.map((t) => ({ name: t.name, description: t.description })),
-    ),
+    buildLionToolCatalogPrompt(LION_TOOL_SCHEMAS.map((t) => ({ name: t.name, description: t.description }))),
     PIPELINE_SENTINEL,
     '', // getRepoGraphPromptSection() — filtrada
     buildLionMcpCatalogPrompt(toolsToEntries(EAGER_TOOLS)),
@@ -367,9 +347,7 @@ describe('S4 — prompt por modo', () => {
   it("modo 'index': prompt contem o indice + instrucao mcp_call/mcp_schema, SEM schemas completos", async () => {
     settings.set('mcp_prompt_mode', 'index');
     const { systemPrompt } = await runTurn();
-    expect(systemPrompt).toContain(
-      'Servidores MCP disponiveis (catalogo resumido; schemas completos sob demanda):',
-    );
+    expect(systemPrompt).toContain('Servidores MCP disponiveis (catalogo resumido; schemas completos sob demanda):');
     expect(systemPrompt).toContain('google-drive: Acesso ao Google Drive do usuario');
     expect(systemPrompt).toContain('- delete_file: Delete a file permanently from Drive');
     expect(systemPrompt).toContain('shopify: Operacoes na loja Shopify');
@@ -553,8 +531,8 @@ describe('S4 — mcp_call via wrapper central (modo index)', () => {
       return { finalText: 'ok', ok: true, usage: { inputTokens: 1, outputTokens: 1 } };
     });
     await runTurn();
-    expect(setupMCPsForSession).toHaveBeenCalledTimes(1); // pool spawn do wrapper
-    expect(teardownMCPsForSession).not.toHaveBeenCalled(); // pool vive alem da sessao (TTL)
+    expect(setupMCPsForSession).toHaveBeenCalledTimes(1);
+    expect(teardownMCPsForSession).not.toHaveBeenCalled();
   });
 });
 

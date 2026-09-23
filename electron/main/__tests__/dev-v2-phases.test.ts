@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   PIPELINE_PHASES,
@@ -14,7 +13,6 @@ import {
   isValidPhaseForProject,
 } from '../../../src/types/pipeline';
 import { getPhaseNumberForAgent, getPhaseAgentId } from '../pipeline-engine/phase-helpers';
-
 
 describe('DEVELOPMENT_V2_PIPELINE_PHASES', () => {
   it('has exactly 17 phases', () => {
@@ -112,7 +110,6 @@ describe('DEVELOPMENT_V2_PIPELINE_PHASES', () => {
   });
 });
 
-
 describe('Legacy pipeline phases regression snapshots', () => {
   it('PIPELINE_PHASES (development) matches snapshot', () => {
     expect(PIPELINE_PHASES).toMatchSnapshot();
@@ -156,7 +153,6 @@ describe('Legacy pipeline phases regression snapshots', () => {
     expect(phase?.agentId).toBe('harness-evaluator');
   });
 });
-
 
 describe('isValidPhaseForProject', () => {
   const devProject = { pipelineType: 'development' as const };
@@ -229,7 +225,6 @@ describe('isValidPhaseForProject', () => {
   });
 });
 
-
 describe('DEVELOPMENT_V2 derived sets', () => {
   it('AUTO_PHASES contains phases 2, 4, 6, 7, 12, 14', () => {
     expect(DEVELOPMENT_V2_AUTO_PHASES).toEqual(new Set([2, 4, 6, 7, 12, 14]));
@@ -297,7 +292,6 @@ describe('DEVELOPMENT_V2 derived sets', () => {
   });
 });
 
-
 describe('getPhaseNumberForAgent', () => {
   it.each([
     ['development', 'harness-coder', 13],
@@ -314,7 +308,6 @@ describe('getPhaseNumberForAgent', () => {
     expect(getPhaseNumberForAgent({ pipelineType }, agentId)).toBe(expected);
   });
 });
-
 
 describe('legacy dispatch regression', () => {
   it('development phase 13 resolves to harness-coder', () => {

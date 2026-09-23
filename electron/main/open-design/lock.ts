@@ -34,10 +34,7 @@ export interface LockRejected {
   report: LockValidationResult;
 }
 
-
-export async function lock(
-  projectId: string,
-): Promise<LockResult | LockRejected | { error: string }> {
+export async function lock(projectId: string): Promise<LockResult | LockRejected | { error: string }> {
   try {
     logger.info({ projectId }, 'Design Lock gate started');
 
@@ -48,25 +45,17 @@ export async function lock(
     const designPaths = project?.projectPath
       ? resolveDesignSnapshotPaths(project.projectPath, project.pipelineDocsId ?? null)
       : null;
-    const snapshotDir = designPaths?.snapshotDir
-      ?? path.join(cfg.runDir, 'open-design', 'snapshots', 'latest');
-    const lockReportPath = designPaths?.lockReportPath
-      ?? path.join(snapshotDir, 'design-lock-report.md');
+    const snapshotDir = designPaths?.snapshotDir ?? path.join(cfg.runDir, 'open-design', 'snapshots', 'latest');
+    const lockReportPath = designPaths?.lockReportPath ?? path.join(snapshotDir, 'design-lock-report.md');
     const reportPath = lockReportPath;
 
     if (cfg.locked === true && cfg.lockedAt) {
-      const artifactHtmlPath = cfg.artifactHtmlPath
-        ?? designPaths?.artifactHtmlPath
-        ?? path.join(snapshotDir, 'artifact', 'index.html');
-      const contractPath = cfg.contractPath
-        ?? designPaths?.contractPath
-        ?? path.join(snapshotDir, 'design-contract.json');
-      const briefPath = cfg.briefPath
-        ?? designPaths?.briefPath
-        ?? path.join(snapshotDir, 'design-brief.md');
-      const manifestPath = cfg.manifestPath
-        ?? designPaths?.manifestPath
-        ?? path.join(snapshotDir, 'manifest.json');
+      const artifactHtmlPath =
+        cfg.artifactHtmlPath ?? designPaths?.artifactHtmlPath ?? path.join(snapshotDir, 'artifact', 'index.html');
+      const contractPath =
+        cfg.contractPath ?? designPaths?.contractPath ?? path.join(snapshotDir, 'design-contract.json');
+      const briefPath = cfg.briefPath ?? designPaths?.briefPath ?? path.join(snapshotDir, 'design-brief.md');
+      const manifestPath = cfg.manifestPath ?? designPaths?.manifestPath ?? path.join(snapshotDir, 'manifest.json');
       const allPresent =
         fs.existsSync(artifactHtmlPath) &&
         fs.existsSync(contractPath) &&
@@ -128,10 +117,7 @@ export async function lock(
     const validation = await validateLock(projectId);
 
     if (!validation.ok) {
-      logger.warn(
-        { projectId, problemCount: validation.problems.length },
-        'Design Lock REJECTED',
-      );
+      logger.warn({ projectId, problemCount: validation.problems.length }, 'Design Lock REJECTED');
 
       savePipelinePhaseMetrics({
         projectId,
@@ -142,11 +128,13 @@ export async function lock(
       });
 
       const db = getDb();
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE harness_projects
         SET status = 'running', pipeline_current_phase = 5, updated_at = datetime('now')
         WHERE id = ?
-      `).run(projectId);
+      `,
+      ).run(projectId);
 
       emitIPC('pipeline:project-updated', {
         projectId,
@@ -195,8 +183,7 @@ export async function lock(
     if (fs.existsSync(manifestPath)) {
       try {
         existingManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as Record<string, unknown>;
-      } catch {
-      }
+      } catch {}
     }
 
     const existingHashes = (existingManifest.hashes as Record<string, string> | undefined) ?? {};

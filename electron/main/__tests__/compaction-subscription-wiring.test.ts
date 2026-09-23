@@ -1,4 +1,3 @@
-
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
@@ -37,7 +36,9 @@ vi.mock('../db', () => ({
     prepare: vi.fn((sql: string) => ({
       all: vi.fn(() => {
         if (sql.includes('FROM messages')) {
-          return [{ role: 'user', content: 'compacta isso', created_at: '2026-05-18T10:00:00.000Z', session_title: 'T' }];
+          return [
+            { role: 'user', content: 'compacta isso', created_at: '2026-05-18T10:00:00.000Z', session_title: 'T' },
+          ];
         }
         return [];
       }),

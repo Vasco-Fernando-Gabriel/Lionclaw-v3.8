@@ -1,6 +1,5 @@
 import type { SystemLogEntry, SystemLogFilters } from '../../src/types';
 
-
 const BUFFER_MAX = 2000;
 const MSG_MAX = 2000;
 const EXTRA_MAX = 4000;
@@ -57,8 +56,7 @@ export const systemLogStream = {
       for (const sub of subscribers) {
         try {
           sub(entry);
-        } catch {
-        }
+        } catch {}
       }
     }
   },

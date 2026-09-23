@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
 
@@ -77,7 +76,9 @@ describe('StdioAcpTransport (via defaultAcpTransportFactory)', () => {
     transport.onNotification((n) => received.push(n));
 
     expect(() =>
-      child.feed('{ this is not json\n' + JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { a: 1 } }) + '\n'),
+      child.feed(
+        '{ this is not json\n' + JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { a: 1 } }) + '\n',
+      ),
     ).not.toThrow();
 
     expect(warn).toHaveBeenCalledTimes(1);
@@ -130,7 +131,13 @@ describe('StdioAcpTransport (via defaultAcpTransportFactory)', () => {
     const { transport, child } = await makeTransport();
     const notes: AcpNotification[] = [];
     transport.onNotification((n) => notes.push(n));
-    child.feed(JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { update: { sessionUpdate: 'agent_message_chunk' } } }) + '\n');
+    child.feed(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: { update: { sessionUpdate: 'agent_message_chunk' } },
+      }) + '\n',
+    );
     expect(notes).toHaveLength(1);
     expect(notes[0].method).toBe('session/update');
   });

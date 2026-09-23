@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-
 vi.mock('../db', () => ({
   getHarnessProject: vi.fn(),
   updateHarnessProject: vi.fn(),
@@ -21,7 +20,11 @@ vi.mock('electron', () => ({
     getAppPath: () => '/tmp/lionclaw-test-approot',
     getPath: (_name: string) => '/tmp/lionclaw-test-userdata',
   },
-  BrowserWindow: class { static getAllWindows() { return []; } },
+  BrowserWindow: class {
+    static getAllWindows() {
+      return [];
+    }
+  },
   ipcMain: { on: vi.fn(), handle: vi.fn() },
 }));
 
@@ -77,7 +80,8 @@ describe('session-config', () => {
 
     expect(mockUpdateHarnessProject).toHaveBeenCalledTimes(1);
     const updateArgs = mockUpdateHarnessProject.mock.calls[0]![1];
-    const persistedOd = (updateArgs as unknown as { config: { openDesign: Record<string, unknown> } }).config.openDesign;
+    const persistedOd = (updateArgs as unknown as { config: { openDesign: Record<string, unknown> } }).config
+      .openDesign;
     expect(persistedOd.sessionConfig).toEqual(cfg);
 
     const projectWithCfg = baseProject({ sessionConfig: cfg });
@@ -138,9 +142,11 @@ describe('session-config', () => {
 
     setSessionConfig(PROJECT_ID, { ...validSessionConfig(), model: 'sonnet' });
 
-    const persistedOd = (mockUpdateHarnessProject.mock.calls[0]![1] as unknown as {
-      config: { openDesign: Record<string, unknown> };
-    }).config.openDesign;
+    const persistedOd = (
+      mockUpdateHarnessProject.mock.calls[0]![1] as unknown as {
+        config: { openDesign: Record<string, unknown> };
+      }
+    ).config.openDesign;
     expect(persistedOd.sessionConfig).toMatchObject({ model: 'sonnet' });
   });
 
@@ -156,9 +162,9 @@ describe('session-config', () => {
   it('rejeita alias Opus quando o agente selecionado eh Codex', () => {
     mockGetHarnessProject.mockReturnValue(baseProject() as never);
 
-    expect(() =>
-      setSessionConfig(PROJECT_ID, { ...validSessionConfig(), agentId: 'codex', model: 'opus' }),
-    ).toThrow(/nao pertence ao agente Codex/i);
+    expect(() => setSessionConfig(PROJECT_ID, { ...validSessionConfig(), agentId: 'codex', model: 'opus' })).toThrow(
+      /nao pertence ao agente Codex/i,
+    );
     expect(mockUpdateHarnessProject).not.toHaveBeenCalled();
   });
 
@@ -169,9 +175,11 @@ describe('session-config', () => {
 
     setSessionConfig(PROJECT_ID, { ...validSessionConfig(), agentId: 'codex', model: 'gpt-5.5' });
 
-    const persistedOd = (mockUpdateHarnessProject.mock.calls[0]![1] as unknown as {
-      config: { openDesign: Record<string, unknown> };
-    }).config.openDesign;
+    const persistedOd = (
+      mockUpdateHarnessProject.mock.calls[0]![1] as unknown as {
+        config: { openDesign: Record<string, unknown> };
+      }
+    ).config.openDesign;
     expect(persistedOd.sessionConfig).toMatchObject({ agentId: 'codex', model: 'gpt-5.5' });
   });
 
@@ -182,9 +190,11 @@ describe('session-config', () => {
 
     setSessionConfig(PROJECT_ID, { ...validSessionConfig(), agentId: 'claude', model: 'opus' });
 
-    const persistedOd = (mockUpdateHarnessProject.mock.calls[0]![1] as unknown as {
-      config: { openDesign: Record<string, unknown> };
-    }).config.openDesign;
+    const persistedOd = (
+      mockUpdateHarnessProject.mock.calls[0]![1] as unknown as {
+        config: { openDesign: Record<string, unknown> };
+      }
+    ).config.openDesign;
     expect(persistedOd.sessionConfig).toMatchObject({ agentId: 'claude', model: 'opus' });
   });
 
@@ -203,7 +213,8 @@ describe('session-config', () => {
     setSessionConfig(PROJECT_ID, validSessionConfig());
 
     const updateArgs = mockUpdateHarnessProject.mock.calls[0]![1];
-    const persistedOd = (updateArgs as unknown as { config: { openDesign: Record<string, unknown> } }).config.openDesign;
+    const persistedOd = (updateArgs as unknown as { config: { openDesign: Record<string, unknown> } }).config
+      .openDesign;
     expect(persistedOd.sessionConfig).toEqual(validSessionConfig());
     expect(persistedOd.openDesignProjectId).toBe('lionclaw-foo');
     expect(persistedOd.conversationId).toBeUndefined();
@@ -220,10 +231,7 @@ describe('session-config', () => {
     const cfg = validSessionConfig();
     setSessionConfig(PROJECT_ID, cfg);
 
-    expect(setSetting).toHaveBeenCalledWith(
-      LAST_SESSION_CONFIG_SETTINGS_KEY,
-      JSON.stringify(cfg),
-    );
+    expect(setSetting).toHaveBeenCalledWith(LAST_SESSION_CONFIG_SETTINGS_KEY, JSON.stringify(cfg));
   });
 
   it('payload REJEITADO nao grava o ultimo-config-usado (so apos sucesso)', () => {
@@ -246,9 +254,11 @@ describe('session-config', () => {
 
     clearSessionConfig(PROJECT_ID);
 
-    const persistedOd = (mockUpdateHarnessProject.mock.calls[0]![1] as unknown as {
-      config: { openDesign: Record<string, unknown> };
-    }).config.openDesign;
+    const persistedOd = (
+      mockUpdateHarnessProject.mock.calls[0]![1] as unknown as {
+        config: { openDesign: Record<string, unknown> };
+      }
+    ).config.openDesign;
     expect(persistedOd.sessionConfig).toBeUndefined();
     expect(persistedOd.conversationId).toBeUndefined();
     expect(persistedOd.initialPromptHash).toBeUndefined();

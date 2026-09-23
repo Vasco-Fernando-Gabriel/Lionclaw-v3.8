@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import * as path from 'path';
@@ -41,12 +40,10 @@ describe('SC-1 — provas de fonte (AC-C8 / AC-C10)', () => {
     expect(source).toContain(
       '[Codex parou sem produzir saida — reiniciando a fase automaticamente com um processo novo...]',
     );
-    expect(source).toContain('continue; // re-run the dispatch from the top of the for-loop');
 
     const catchBlock = source.slice(catchStart);
     expect(catchBlock).toContain('throw new PipelinePausedError(');
     expect(catchBlock).toContain("title: 'CODEX FALHOU',");
-    expect(catchBlock).toContain('// All other errors propagate normally.');
   });
 
   it('AC-C8 [INV]: o retry e limitado por flag LOCAL inline (sem recursao, sem contador persistente)', () => {
@@ -74,13 +71,11 @@ describe('SC-1 — provas de fonte (AC-C8 / AC-C10)', () => {
 
     for (const { file, conversationalCallsites } of expectations) {
       const src = read(file);
-      const callsites =
-        count(src, 'continueSession: true') + count(src, 'continueSession: sessionEntry.alive');
+      const callsites = count(src, 'continueSession: true') + count(src, 'continueSession: sessionEntry.alive');
       const callbacks = count(src, 'rebuildPromptOnRetry: () =>');
-      expect(
-        callsites,
-        `${file}: numero de callsites conversacionais mudou — atualize o retry SC-1 junto`,
-      ).toBe(conversationalCallsites);
+      expect(callsites, `${file}: numero de callsites conversacionais mudou — atualize o retry SC-1 junto`).toBe(
+        conversationalCallsites,
+      );
       expect(
         callbacks,
         `${file}: todo callsite conversacional com continueSession deve passar rebuildPromptOnRetry`,

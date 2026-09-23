@@ -1,9 +1,5 @@
-
 import { createHash } from 'crypto';
-import type {
-  DynamicWorkflowNodeAccess,
-  WorkflowNodeExecutionPolicy,
-} from '../../../src/types/dynamic-workflow';
+import type { DynamicWorkflowNodeAccess, WorkflowNodeExecutionPolicy } from '../../../src/types/dynamic-workflow';
 
 export interface ResolvedAgentPolicyConfig {
   allowedTools: string[];
@@ -32,11 +28,7 @@ export interface PolicyWorkspace {
   cwd: string;
 }
 
-export type PolicyEnforcementMechanism =
-  | 'canUseTool'
-  | 'codex-sandbox'
-  | 'grok-cli-sandbox'
-  | 'motor-dispatcher';
+export type PolicyEnforcementMechanism = 'canUseTool' | 'codex-sandbox' | 'grok-cli-sandbox' | 'motor-dispatcher';
 
 export const WORKFLOW_POLICY_DEFAULTS = {
   timeoutMs: 30 * 60 * 1000,
@@ -45,11 +37,7 @@ export const WORKFLOW_POLICY_DEFAULTS = {
 } as const;
 
 const SIDE_ROUTE_EXACT = new Set<string>(['Task', 'Agent']);
-const SIDE_ROUTE_PREFIXES: readonly string[] = [
-  'mcp__lionclaw-agents__',
-  'dynamic_workflow_',
-  'pipeline_',
-];
+const SIDE_ROUTE_PREFIXES: readonly string[] = ['mcp__lionclaw-agents__', 'dynamic_workflow_', 'pipeline_'];
 
 export const GUARD_GATED_TOOL_NAMES: readonly string[] = ['Bash', 'Write', 'Edit'];
 
@@ -58,9 +46,7 @@ export function isSideRouteTool(toolName: string): boolean {
   return SIDE_ROUTE_PREFIXES.some((prefix) => toolName.startsWith(prefix));
 }
 
-function extractMcpServerIds(
-  entries: Array<Record<string, unknown>>,
-): string[] {
+function extractMcpServerIds(entries: Array<Record<string, unknown>>): string[] {
   const ids: string[] = [];
   const seen = new Set<string>();
   for (const entry of entries) {
@@ -113,9 +99,7 @@ function computePolicyHash(input: {
     mechanism: input.mechanism,
     workspaceRoot: input.workspaceRoot,
   };
-  return createHash('sha256')
-    .update(JSON.stringify(canonical))
-    .digest('hex');
+  return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }
 
 export function deriveNodeExecutionPolicy(
@@ -127,22 +111,15 @@ export function deriveNodeExecutionPolicy(
   const access: DynamicWorkflowNodeAccess = grants.access ?? 'read-only';
 
   const resolvedTools = resolved.allowedTools.filter((t) => !isSideRouteTool(t));
-  const nodeAllowedTools = (grants.allowedTools ?? []).filter(
-    (t) => !isSideRouteTool(t),
-  );
+  const nodeAllowedTools = (grants.allowedTools ?? []).filter((t) => !isSideRouteTool(t));
 
   const intersectedTools = orderedIntersection(resolvedTools, nodeAllowedTools);
 
   const effectiveTools = intersectedTools;
 
-  const resolvedMcpIds = extractMcpServerIds(resolved.mcpServers).filter(
-    (id) => !isSideRouteTool(`mcp__${id}__x`),
-  );
+  const resolvedMcpIds = extractMcpServerIds(resolved.mcpServers).filter((id) => !isSideRouteTool(`mcp__${id}__x`));
   const nodeMcpServers = grants.allowedMcpServers ?? [];
-  const effectiveMcpServers = orderedIntersection(
-    resolvedMcpIds,
-    nodeMcpServers,
-  );
+  const effectiveMcpServers = orderedIntersection(resolvedMcpIds, nodeMcpServers);
 
   const rawMcpTools = grants.allowedMcpTools ?? [];
   const allowedMcpTools = rawMcpTools.filter((toolName) => {
@@ -155,12 +132,12 @@ export function deriveNodeExecutionPolicy(
   const wantsBash = grants.allowBash === true && access === 'workspace-write';
   const allowBash = wantsBash && mechanism === 'canUseTool';
 
-  const allowedCommands = allowBash ? grants.allowedCommands ?? [] : [];
+  const allowedCommands = allowBash ? (grants.allowedCommands ?? []) : [];
 
   const allowNetwork = grants.allowNetwork === true;
 
   const guardGatedDenied = GUARD_GATED_TOOL_NAMES.filter((tool) => {
-    if (access === 'read-only') return true; // read-only nega todas as guard-gated.
+    if (access === 'read-only') return true;
     if (tool === 'Bash') return !allowBash;
     return false;
   });
@@ -215,7 +192,5 @@ export function computeNodeGrantsHash(grants: NodePolicyGrants): string {
     allowBash: grants.allowBash === true,
     allowNetwork: grants.allowNetwork === true,
   };
-  return createHash('sha256')
-    .update(JSON.stringify(canonical))
-    .digest('hex');
+  return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }

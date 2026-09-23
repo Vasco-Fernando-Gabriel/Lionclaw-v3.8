@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -88,8 +87,7 @@ const GOLDEN_AGENTS = [
   {
     id: 'code-reviewer',
     name: 'Code Reviewer',
-    description:
-      'Revisa diffs procurando bugs de correcao, regressoes e simplificacoes. Nao escreve features.',
+    description: 'Revisa diffs procurando bugs de correcao, regressoes e simplificacoes. Nao escreve features.',
     runtime: 'cloud',
     squad: '',
   },
@@ -112,8 +110,7 @@ const GOLDEN_AGENTS = [
   {
     id: 'docs-writer',
     name: 'Docs Writer',
-    description:
-      'Escreve documentacao de usuario e tecnica clara, com exemplos e estrutura consistente.',
+    description: 'Escreve documentacao de usuario e tecnica clara, com exemplos e estrutura consistente.',
     runtime: 'cloud',
     squad: '',
   },
@@ -134,15 +131,12 @@ describe('AC-60 (estatico) — indice compacto carrega id + gatilhos de cada alv
   it('cada agente-alvo tem linha propria no indice com os gatilhos no resumo', () => {
     const index = buildSubagentIndexSection();
     for (const entry of GOLDEN_SET) {
-      const line = index
-        .split('\n')
-        .find((l) => l.startsWith(`- ${entry.expectedAgentId}: `));
+      const line = index.split('\n').find((l) => l.startsWith(`- ${entry.expectedAgentId}: `));
       expect(line, `linha do alvo ${entry.expectedAgentId}`).toBeDefined();
       for (const trigger of entry.triggers) {
-        expect(
-          line!.toLowerCase(),
-          `gatilho "${trigger}" no resumo de ${entry.expectedAgentId}`,
-        ).toContain(trigger.toLowerCase());
+        expect(line!.toLowerCase(), `gatilho "${trigger}" no resumo de ${entry.expectedAgentId}`).toContain(
+          trigger.toLowerCase(),
+        );
       }
     }
   });
@@ -158,9 +152,7 @@ describe('AC-60 (estatico) — indice compacto carrega id + gatilhos de cada alv
     const chatEligible = GOLDEN_AGENTS as unknown as AgentConfig[];
     const catalog = buildLionSubagentCatalogPrompt(chatEligible, 'index');
     for (const entry of GOLDEN_SET) {
-      const line = catalog
-        .split('\n')
-        .find((l) => l.startsWith(`- ${entry.expectedAgentId}: `));
+      const line = catalog.split('\n').find((l) => l.startsWith(`- ${entry.expectedAgentId}: `));
       expect(line, `linha do alvo ${entry.expectedAgentId} no catalogo lion`).toBeDefined();
       for (const trigger of entry.triggers) {
         expect(line!.toLowerCase()).toContain(trigger.toLowerCase());

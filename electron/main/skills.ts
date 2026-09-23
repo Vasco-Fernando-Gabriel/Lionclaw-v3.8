@@ -5,7 +5,6 @@ import { createLogger } from './logger';
 
 const logger = createLogger('skills');
 
-
 export interface SkillFrontmatter {
   name?: string;
   description?: string;
@@ -49,7 +48,6 @@ export interface SkillCreateInput {
   agent?: string;
 }
 
-
 function getSkillsDir(): string {
   return path.join(getLionClawHome(), 'skills');
 }
@@ -82,7 +80,6 @@ function extractBody(rawContent: string): string {
   const bodyMatch = normalized.match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/);
   return bodyMatch ? bodyMatch[1].trim() : rawContent;
 }
-
 
 export function listSkills(): SkillData[] {
   const dir = getSkillsDir();
@@ -122,13 +119,13 @@ export function getSkill(name: string): SkillData | null {
   const content = extractBody(rawContent);
 
   const allFiles = fs.readdirSync(skillDir);
-  const hasAuxFiles = allFiles.some(f => f !== 'SKILL.md');
+  const hasAuxFiles = allFiles.some((f) => f !== 'SKILL.md');
 
   return {
     name: frontmatter.name || name,
     description: frontmatter.description || content.split('\n')[0] || name,
     category: frontmatter.category,
-    allowedTools: frontmatter['allowed-tools']?.split(',').map(t => t.trim()),
+    allowedTools: frontmatter['allowed-tools']?.split(',').map((t) => t.trim()),
     model: frontmatter.model,
     disableModelInvocation: frontmatter['disable-model-invocation'] === true,
     userInvocable: frontmatter['user-invocable'] !== false,
@@ -201,7 +198,6 @@ export function deleteSkill(name: string): void {
   }
 }
 
-
 function buildSkillContent(name: string, input: SkillCreateInput): string {
   const lines = ['---'];
   lines.push(`name: ${name}`);
@@ -236,14 +232,17 @@ function buildSkillContent(name: string, input: SkillCreateInput): string {
   return lines.join('\n') + input.content;
 }
 
-
 export function buildSkillsPromptSection(): string {
   const skills = listSkills();
   if (skills.length === 0) return '';
 
   const parts = ['## Skills Disponiveis'];
-  parts.push('Skills sao especialidades sob demanda. Quando a tarefa se encaixar, busque e use a tool `load_skill` do helper `lionclaw-skills` antes de agir.');
-  parts.push('Nao use a tool nativa `Skill` do Claude Code para estas skills e nao leia o SKILL.md via Bash/Read como primeira opcao.');
+  parts.push(
+    'Skills sao especialidades sob demanda. Quando a tarefa se encaixar, busque e use a tool `load_skill` do helper `lionclaw-skills` antes de agir.',
+  );
+  parts.push(
+    'Nao use a tool nativa `Skill` do Claude Code para estas skills e nao leia o SKILL.md via Bash/Read como primeira opcao.',
+  );
   parts.push('Voce pode criar novas skills usando Write em .lionclaw/skills/{nome}/SKILL.md');
   parts.push('');
 
@@ -267,7 +266,9 @@ export function buildAgentSkillsPromptSection(skillNames: string[]): string {
   if (skillNames.length === 0) return '';
 
   const parts = ['## Skills Disponiveis'];
-  parts.push('Quando a tarefa se encaixar com uma skill, use `lionclaw-skills.load_skill` para carregar o conteudo completo.');
+  parts.push(
+    'Quando a tarefa se encaixar com uma skill, use `lionclaw-skills.load_skill` para carregar o conteudo completo.',
+  );
   parts.push('Nao tente executar a skill sem carregar primeiro.');
 
   for (const name of skillNames) {

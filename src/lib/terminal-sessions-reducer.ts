@@ -1,4 +1,3 @@
-
 export interface TerminalTab {
   id: string;
   title: string;
@@ -11,10 +10,7 @@ export interface TerminalSessionsState {
 }
 
 export type TerminalSessionsAction =
-  | { type: 'reset' }
-  | { type: 'add' }
-  | { type: 'remove'; id: string }
-  | { type: 'setActive'; id: string };
+  { type: 'reset' } | { type: 'add' } | { type: 'remove'; id: string } | { type: 'setActive'; id: string };
 
 function uuid(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -58,9 +54,7 @@ export function terminalSessionsReducer(
       return { ...state, sessions: remaining, activeId };
     }
     case 'setActive':
-      return state.sessions.some((s) => s.id === action.id)
-        ? { ...state, activeId: action.id }
-        : state;
+      return state.sessions.some((s) => s.id === action.id) ? { ...state, activeId: action.id } : state;
     default:
       return state;
   }

@@ -1,16 +1,38 @@
 import fs from 'fs';
 import path from 'path';
-import { getDb, getSessionMessages, getSession, getSetting, insertChunkWithEmbedding, insertChunkPlainWithFTS, searchBM25, searchVector, setLastGateRunAt } from './db';
+import {
+  getDb,
+  getSessionMessages,
+  getSession,
+  getSetting,
+  insertChunkWithEmbedding,
+  searchBM25,
+  searchVector,
+  setLastGateRunAt,
+} from './db';
+import { acquireDreamingMutex } from './dreaming-mutex';
 import { createLogger } from './logger';
 import { getLionClawHome } from './paths';
 import { extractBalancedJsonObjectCandidates } from './json-extractor';
 import type { GateOutputApplyItem, MemorySection, DreamingGateResult } from './dreaming-gate';
 import { runDreamingGate, saveDreamingReport } from './dreaming-gate';
 import { generateEmbedding as generateEmbeddingProvider } from './embedding-provider';
-import { executeVaultOperation, regenerateVaultIndex, updateVaultHot, appendVaultLog, getExistingVaultFilesList } from './mgraph-engine';
+import {
+  executeVaultOperation,
+  regenerateVaultIndex,
+  updateVaultHot,
+  appendVaultLog,
+  getExistingVaultFilesList,
+} from './mgraph-engine';
 import { BrowserWindow } from 'electron';
-import type { OrchestratorProvider, OrchestratorRuntime, VaultOperation } from '../../src/types';
-import { resolveOrchestratorSelection, resolveSubscriptionSelectionFor, InvalidOrchestratorSelectionError } from './orchestrator-selection';
+import type { ChatMessage, OrchestratorProvider, OrchestratorRuntime, VaultOperation } from '../../src/types';
+import { attachToolsBlocks, buildToolsBlocksByAnchor } from './session-timeline';
+import { isChatTimelineReinjectEnabled } from './chat-compaction-trigger';
+import {
+  resolveOrchestratorSelection,
+  resolveSubscriptionSelectionFor,
+  InvalidOrchestratorSelectionError,
+} from './orchestrator-selection';
 import type { OrchestratorSelection } from './orchestrator-selection';
 import { runSubscriptionPromptWithFallback } from './memory-pipeline/oneshot-subscription';
 import { EmptyProviderResponseError } from './agent-runtime/llm-error';
@@ -58,7 +80,7 @@ let memoryGateReserved = false;
 export async function withMemoryGateLock<T>(fn: () => Promise<T>): Promise<T> {
   const prev = memoryGateMutex;
   let release!: () => void;
-  memoryGateMutex = new Promise<void>(resolve => {
+  memoryGateMutex = new Promise<void>((resolve) => {
     release = resolve;
   });
   await prev;
@@ -111,15 +133,48 @@ function readUserMd(): string {
   }
 }
 
+export type CompactionStepErrorCode = 'COMPACT-SUMMARY-FAILED' | 'COMPACT-MEMORY-FAILED';
+
+export class CompactionStepError extends Error {
+  readonly code: CompactionStepErrorCode;
+  readonly cause: unknown;
+
+  constructor(code: CompactionStepErrorCode, cause: unknown) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    super(
+      code === 'COMPACT-SUMMARY-FAILED'
+        ? `Sumarizador falhou: ${detail}`
+        : `Gate de memoria / MEMORY.md / USER.md falhou: ${detail}`,
+    );
+    this.name = 'CompactionStepError';
+    this.code = code;
+    this.cause = cause;
+  }
+}
+
+export function isCompactionStepError(err: unknown): err is CompactionStepError {
+  return err instanceof CompactionStepError;
+}
+
+export interface CompactionWarning {
+  step: 'embeddings' | 'graph' | 'transcript' | 'report' | 'compaction_log';
+  detail: string;
+}
+
+export const EMBEDDINGS_PROVIDER_MISSING_WARNING = 'configure um provedor de embeddings em Settings';
+
 export interface RunCompactionOptions {
   onModelLabel?: (label: string) => void;
   sinceMessageId?: number;
   priorSummary?: string;
   skipDailySummary?: boolean;
+  transcriptName?: string;
+  dreamingMutex?: 'acquire' | 'held';
 }
 
 export interface RunCompactionResult {
   executiveSummary: string;
+  warnings: CompactionWarning[];
 }
 
 export async function runCompaction(
@@ -128,36 +183,66 @@ export async function runCompaction(
   sessionId?: string,
   opts?: RunCompactionOptions,
 ): Promise<RunCompactionResult | undefined> {
+  if (opts?.dreamingMutex === 'held') {
+    return runCompactionUnderMutex(periodStart, periodEnd, sessionId, opts);
+  }
+  const release = await acquireDreamingMutex();
+  try {
+    return await runCompactionUnderMutex(periodStart, periodEnd, sessionId, opts);
+  } finally {
+    release();
+  }
+}
+
+async function runCompactionUnderMutex(
+  periodStart: Date,
+  periodEnd: Date,
+  sessionId?: string,
+  opts?: RunCompactionOptions,
+): Promise<RunCompactionResult | undefined> {
   const db = getDb();
+  const warnings: CompactionWarning[] = [];
 
   let messages: Array<Record<string, unknown>>;
   if (sessionId) {
     if (opts?.sinceMessageId !== undefined) {
-      messages = db.prepare(`
+      messages = db
+        .prepare(
+          `
         SELECT m.*, s.title as session_title
         FROM messages m
         JOIN sessions s ON m.session_id = s.id
         WHERE m.session_id = ? AND m.id > ?
         ORDER BY m.created_at ASC
-      `).all(sessionId, opts.sinceMessageId) as Array<Record<string, unknown>>;
+      `,
+        )
+        .all(sessionId, opts.sinceMessageId) as Array<Record<string, unknown>>;
     } else {
-      messages = db.prepare(`
+      messages = db
+        .prepare(
+          `
         SELECT m.*, s.title as session_title
         FROM messages m
         JOIN sessions s ON m.session_id = s.id
         WHERE m.session_id = ?
         ORDER BY m.created_at ASC
-      `).all(sessionId) as Array<Record<string, unknown>>;
+      `,
+        )
+        .all(sessionId) as Array<Record<string, unknown>>;
     }
   } else {
     const formatForSQLite = (d: Date) => d.toISOString().replace('T', ' ').replace('Z', '');
-    messages = db.prepare(`
+    messages = db
+      .prepare(
+        `
       SELECT m.*, s.title as session_title
       FROM messages m
       JOIN sessions s ON m.session_id = s.id
       WHERE m.created_at >= ? AND m.created_at <= ?
       ORDER BY m.created_at ASC
-    `).all(formatForSQLite(periodStart), formatForSQLite(periodEnd)) as Array<Record<string, unknown>>;
+    `,
+      )
+      .all(formatForSQLite(periodStart), formatForSQLite(periodEnd)) as Array<Record<string, unknown>>;
   }
 
   if (messages.length === 0) {
@@ -167,12 +252,17 @@ export async function runCompaction(
 
   logger.info({ count: messages.length }, 'Compacting messages');
 
-  const selection = await resolveCompactionSelection();
+  let selection: CompactionSelection;
+  try {
+    selection = await resolveCompactionSelection();
+  } catch (error) {
+    logger.error({ error }, 'Compaction selection failed');
+    throw new CompactionStepError('COMPACT-SUMMARY-FAILED', error);
+  }
   const plainInvoker = makePlainCompactionInvoker(selection);
 
   const budget = resolveCompactionInputBudget(selection.kind);
-  let priorSummary =
-    opts?.priorSummary && opts.priorSummary.trim().length > 0 ? opts.priorSummary : undefined;
+  let priorSummary = opts?.priorSummary && opts.priorSummary.trim().length > 0 ? opts.priorSummary : undefined;
   const budgetFloor = Math.ceil(budget * 0.5);
   let budgetMsgs = budget - estimateTokens(buildCompactionBasePrompt('', priorSummary));
   if (budgetMsgs < budgetFloor && priorSummary && estimateTokens(priorSummary) > 1500) {
@@ -224,7 +314,7 @@ export async function runCompaction(
     summary = await summarizeMessages(messageText, selection, opts?.onModelLabel, priorSummary);
   } catch (error) {
     logger.error({ error }, 'Summarization failed');
-    throw error;
+    throw new CompactionStepError('COMPACT-SUMMARY-FAILED', error);
   }
 
   let gateResult: DreamingGateResult | undefined;
@@ -238,13 +328,14 @@ export async function runCompaction(
       const candidateAdds = Array.isArray(wmu?.add) ? wmu.add : [];
       const candidateRemoves = Array.isArray(wmu?.remove) ? wmu.remove : [];
       const upu = summary.user_profile_updates;
-      const userCandidates = Array.isArray(upu) && upu.length > 0
-        ? upu.map(u => ({ action: u.action, section: u.section, fact: u.fact }))
-        : undefined;
+      const userCandidates =
+        Array.isArray(upu) && upu.length > 0
+          ? upu.map((u) => ({ action: u.action, section: u.section, fact: u.fact }))
+          : undefined;
       gateResult = await runDreamingGate({
         candidates: [
-          ...candidateAdds.map(text => ({ kind: 'add' as const, text })),
-          ...candidateRemoves.map(text => ({ kind: 'remove' as const, text })),
+          ...candidateAdds.map((text) => ({ kind: 'add' as const, text })),
+          ...candidateRemoves.map((text) => ({ kind: 'remove' as const, text })),
         ],
         ...(userCandidates ? { userCandidates } : {}),
         currentMemoryMd: memoryMd,
@@ -258,59 +349,98 @@ export async function runCompaction(
       });
     });
   } catch (err) {
-    logger.warn({ err }, 'Dreaming gate / MEMORY.md apply failed (catch-and-warn, ciclo segue — taxonomia 5.4)');
+    logger.error({ err }, 'Dreaming gate / MEMORY.md / USER.md apply failed (Clear recusado, D3 passo 2)');
+    throw new CompactionStepError('COMPACT-MEMORY-FAILED', err);
   }
 
   if (gateResult) {
     try {
       await saveDreamingReport(gateResult);
     } catch (err) {
-      logger.warn({ err }, 'saveDreamingReport failed (catch-and-warn, ciclo segue)');
+      const detail = err instanceof Error ? err.message : String(err);
+      logger.warn({ err }, 'saveDreamingReport failed (aviso, ciclo segue)');
+      warnings.push({ step: 'report', detail });
     }
   }
   setLastGateRunAt(Date.now());
 
-
-  try {
-    for (const chunk of summary.semantic_chunks) {
-      try {
-        const result = await generateEmbeddingProvider(chunk.content);
-        if (result.ok) {
-          insertChunkWithEmbedding(chunk.content, chunk.topic, result.embedding);
-          logger.debug({ provider: result.provider, model: result.model, dims: result.dimensions }, 'Chunk embedded');
-          continue;
-        }
-        logger.warn(
-          { code: result.code, provider: result.provider, status: result.status, reason: result.reason },
-          'Embedding generation failed, saving chunk without vector',
-        );
-      } catch (err) {
-        logger.warn({ err }, 'Embedding generation failed, saving chunk without vector');
-      }
-      insertChunkPlainWithFTS(chunk.content, chunk.topic);
+  const totalChunks = summary.semantic_chunks.length;
+  let chunksSkipped = 0;
+  let lastEmbeddingFailure = '';
+  let embeddingsProviderMissing = false;
+  for (const chunk of summary.semantic_chunks) {
+    if (embeddingsProviderMissing) {
+      chunksSkipped++;
+      continue;
     }
-  } catch (err) {
-    logger.warn({ err }, 'Semantic chunk persistence failed (catch-and-warn, ciclo segue)');
+    try {
+      const result = await generateEmbeddingProvider(chunk.content);
+      if (result.ok) {
+        insertChunkWithEmbedding(chunk.content, chunk.topic, result.embedding);
+        logger.debug({ provider: result.provider, model: result.model, dims: result.dimensions }, 'Chunk embedded');
+        continue;
+      }
+      chunksSkipped++;
+      if (result.provider === 'none') {
+        embeddingsProviderMissing = true;
+        logger.warn({ reason: result.reason }, 'Embeddings sem provedor: nenhum chunk gravado');
+        continue;
+      }
+      lastEmbeddingFailure = result.reason;
+      logger.warn(
+        { code: result.code, provider: result.provider, status: result.status, reason: result.reason },
+        'Embedding generation failed: chunk NAO gravado (nunca texto sem vetor)',
+      );
+    } catch (err) {
+      chunksSkipped++;
+      lastEmbeddingFailure = err instanceof Error ? err.message : String(err);
+      logger.warn({ err }, 'Embedding generation threw: chunk NAO gravado (nunca texto sem vetor)');
+    }
+  }
+  if (embeddingsProviderMissing) {
+    warnings.push({
+      step: 'embeddings',
+      detail: `${EMBEDDINGS_PROVIDER_MISSING_WARNING} (${chunksSkipped} de ${totalChunks} chunks nao gravados)`,
+    });
+  } else if (chunksSkipped > 0) {
+    warnings.push({
+      step: 'embeddings',
+      detail: `${chunksSkipped} de ${totalChunks} chunks nao gravados por falha de embedding: ${lastEmbeddingFailure}`,
+    });
   }
 
   try {
     if (getSetting('mgraph_mode') === 'true' && summary.vault_operations && summary.vault_operations.length > 0) {
       let opsProcessed = 0;
+      let opsFailed = 0;
+      let lastOpError = '';
       for (const op of summary.vault_operations) {
         try {
           const result = executeVaultOperation(op);
           if (result.success) {
             opsProcessed++;
-            appendVaultLog(`[${new Date().toISOString()}] ${op.action.toUpperCase()} ${op.path} "${op.title}" (source:compaction)`);
+            appendVaultLog(
+              `[${new Date().toISOString()}] ${op.action.toUpperCase()} ${op.path} "${op.title}" (source:compaction)`,
+            );
           } else {
+            opsFailed++;
+            lastOpError = result.error ?? 'erro desconhecido';
             logger.warn({ path: op.path, error: result.error }, 'Vault operation failed');
             appendVaultLog(`[${new Date().toISOString()}] FAILED ${op.path} "${op.title}" error:${result.error}`);
           }
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
+          opsFailed++;
+          lastOpError = errMsg;
           logger.warn({ path: op.path, error: errMsg }, 'Vault operation threw error');
           appendVaultLog(`[${new Date().toISOString()}] ERROR ${op.path} "${op.title}" error:${errMsg}`);
         }
+      }
+      if (opsFailed > 0) {
+        warnings.push({
+          step: 'graph',
+          detail: `${opsFailed} de ${summary.vault_operations.length} operacoes do graph falharam: ${lastOpError}`,
+        });
       }
 
       regenerateVaultIndex();
@@ -324,17 +454,21 @@ export async function runCompaction(
       logger.info({ operations: opsProcessed }, 'Memory graph updated');
     }
   } catch (err) {
-    logger.warn({ err }, 'Vault operations block failed (catch-and-warn, ciclo segue)');
+    const detail = err instanceof Error ? err.message : String(err);
+    logger.warn({ err }, 'Vault operations block failed (aviso, ciclo segue)');
+    warnings.push({ step: 'graph', detail });
   }
 
   const dateStr = periodStart.toISOString().split('T')[0];
   if (!opts?.skipDailySummary) {
     try {
-      db.prepare(`
+      db.prepare(
+        `
         INSERT OR REPLACE INTO daily_summaries
         (date, summary, decisions, tasks_created, facts_extracted, message_count, subagents_used)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(
+      `,
+      ).run(
         dateStr,
         summary.executive_summary,
         JSON.stringify(summary.decisions),
@@ -349,10 +483,12 @@ export async function runCompaction(
   }
 
   try {
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO compaction_log (period_start, period_end, messages_processed, chunks_created, facts_updated)
       VALUES (?, ?, ?, ?, ?)
-    `).run(
+    `,
+    ).run(
       periodStart.toISOString(),
       periodEnd.toISOString(),
       messages.length,
@@ -360,28 +496,61 @@ export async function runCompaction(
       summary.facts.length,
     );
   } catch (err) {
-    logger.warn({ err }, 'compaction_log write failed (catch-and-warn, ciclo segue)');
+    const detail = err instanceof Error ? err.message : String(err);
+    logger.warn({ err }, 'compaction_log write failed (aviso, ciclo segue)');
+    warnings.push({ step: 'compaction_log', detail });
   }
 
   try {
-    archiveTranscript(messages, dateStr, summary.executive_summary);
+    archiveTranscript(messages, dateStr, summary.executive_summary, opts?.transcriptName);
   } catch (err) {
-    logger.warn({ err }, 'archiveTranscript failed (catch-and-warn, ciclo segue)');
+    const detail = err instanceof Error ? err.message : String(err);
+    logger.warn({ err }, 'archiveTranscript failed (aviso, ciclo segue)');
+    warnings.push({ step: 'transcript', detail });
   }
 
-  logger.info({
-    messages: messages.length,
-    chunks: summary.semantic_chunks.length,
-    facts: summary.facts.length,
-  }, 'Compaction complete');
+  logger.info(
+    {
+      messages: messages.length,
+      chunks: summary.semantic_chunks.length,
+      chunksSkipped,
+      facts: summary.facts.length,
+      warnings: warnings.length,
+    },
+    'Compaction complete',
+  );
 
-  return { executiveSummary: summary.executive_summary };
+  return { executiveSummary: summary.executive_summary, warnings };
 }
 
 export interface SummarizeLightweightOptions {
   sinceMessageId?: number;
   priorSummary?: string;
   onModelLabel?: (label: string) => void;
+}
+
+function toSummarizerMessages(rows: Array<Record<string, unknown>>): Array<{ role: string; content: string }> {
+  return rows.map((row) => ({ role: row['role'] as string, content: row['content'] as string }));
+}
+
+function toSummarizerMessagesWithTools(
+  sessionId: string,
+  rows: Array<Record<string, unknown>>,
+  fence: number | null,
+): Array<{ role: string; content: string }> {
+  const messages: ChatMessage[] = rows.map((row) => ({
+    id: row['id'] as number,
+    sessionId,
+    role: row['role'] as ChatMessage['role'],
+    content: row['content'] as string,
+    createdAt: row['created_at'] as string,
+  }));
+
+  const toolsByAnchor = buildToolsBlocksByAnchor(sessionId, messages, fence);
+  return attachToolsBlocks(messages, toolsByAnchor).map(({ message, toolsBlock }) => ({
+    role: message.role,
+    content: toolsBlock === undefined ? message.content : `${message.content}\n\n${toolsBlock}`,
+  }));
 }
 
 export async function summarizeLightweight(
@@ -392,21 +561,29 @@ export async function summarizeLightweight(
 
   let messages: Array<Record<string, unknown>>;
   if (opts?.sinceMessageId !== undefined) {
-    messages = db.prepare(`
-      SELECT m.*, s.title as session_title
+    messages = db
+      .prepare(
+        `
+      SELECT m.id, m.role, m.content, m.created_at, s.title as session_title
       FROM messages m
       JOIN sessions s ON m.session_id = s.id
       WHERE m.session_id = ? AND m.id > ?
-      ORDER BY m.created_at ASC
-    `).all(sessionId, opts.sinceMessageId) as Array<Record<string, unknown>>;
+      ORDER BY m.created_at ASC, m.id ASC
+    `,
+      )
+      .all(sessionId, opts.sinceMessageId) as Array<Record<string, unknown>>;
   } else {
-    messages = db.prepare(`
-      SELECT m.*, s.title as session_title
+    messages = db
+      .prepare(
+        `
+      SELECT m.id, m.role, m.content, m.created_at, s.title as session_title
       FROM messages m
       JOIN sessions s ON m.session_id = s.id
       WHERE m.session_id = ?
-      ORDER BY m.created_at ASC
-    `).all(sessionId) as Array<Record<string, unknown>>;
+      ORDER BY m.created_at ASC, m.id ASC
+    `,
+      )
+      .all(sessionId) as Array<Record<string, unknown>>;
   }
 
   if (messages.length === 0) {
@@ -418,8 +595,7 @@ export async function summarizeLightweight(
   const plainInvoker = makePlainCompactionInvoker(selection);
 
   const budget = resolveCompactionInputBudget(selection.kind);
-  let priorSummary =
-    opts?.priorSummary && opts.priorSummary.trim().length > 0 ? opts.priorSummary : undefined;
+  let priorSummary = opts?.priorSummary && opts.priorSummary.trim().length > 0 ? opts.priorSummary : undefined;
   const budgetFloor = Math.ceil(budget * 0.5);
   let budgetMsgs = budget - estimateTokens(buildCompactionBasePrompt('', priorSummary));
   if (budgetMsgs < budgetFloor && priorSummary && estimateTokens(priorSummary) > 1500) {
@@ -428,11 +604,15 @@ export async function summarizeLightweight(
   }
   if (budgetMsgs < budgetFloor) budgetMsgs = budgetFloor;
 
-  const built = await buildBudgetedMessageText(
-    messages.map((m) => ({ role: m['role'] as string, content: m['content'] as string })),
-    budgetMsgs,
-    { kind: selection.kind, invoker: plainInvoker, clampBudgetTokens: budget },
-  );
+  const summarizerMessages = isChatTimelineReinjectEnabled()
+    ? toSummarizerMessagesWithTools(sessionId, messages, opts?.sinceMessageId ?? null)
+    : toSummarizerMessages(messages);
+
+  const built = await buildBudgetedMessageText(summarizerMessages, budgetMsgs, {
+    kind: selection.kind,
+    invoker: plainInvoker,
+    clampBudgetTokens: budget,
+  });
 
   logger.info(
     {
@@ -446,7 +626,7 @@ export async function summarizeLightweight(
   );
 
   const summary = await summarizeMessages(built.messageText, selection, opts?.onModelLabel, priorSummary);
-  return { executiveSummary: summary.executive_summary };
+  return { executiveSummary: summary.executive_summary, warnings: [] };
 }
 
 function parseCompactionResultLenient(text: string): CompactionResult {
@@ -463,8 +643,7 @@ function parseCompactionResultLenient(text: string): CompactionResult {
           );
           return parsed;
         }
-      } catch {
-      }
+      } catch {}
     }
     throw strictError;
   }
@@ -579,9 +758,7 @@ REGRA DO RESUMO ROLANTE: o campo "executive_summary" do JSON deve ser UM UNICO r
 }
 
 function buildCompactionBasePrompt(messageText: string, priorSummary?: string): string {
-  let basePrompt = COMPACTION_PROMPT
-    .replace('{{TODAY}}', formatToday())
-    .replace('{{MESSAGES}}', () => messageText);
+  let basePrompt = COMPACTION_PROMPT.replace('{{TODAY}}', formatToday()).replace('{{MESSAGES}}', () => messageText);
   if (priorSummary && priorSummary.trim().length > 0) {
     basePrompt += buildPriorSummaryBlock(priorSummary);
   }
@@ -639,7 +816,6 @@ function makePlainCompactionInvoker(selection: CompactionSelection): PlainPrompt
   return (prompt, o) => runClaudePrompt(prompt, { maxTokens: o.maxTokens, model: selection.model });
 }
 
-
 type LionCompactionProvider = Extract<OrchestratorProvider, 'ollama' | 'lmstudio' | 'openai-compatible' | 'vertex-ai'>;
 
 interface LionCompactionSelection {
@@ -651,15 +827,21 @@ interface LionCompactionSelection {
 }
 
 export type CompactionSelection =
-  | { kind: 'lion-sdk'; provider: LionCompactionProvider; model: string; baseUrl?: string; apiKey?: string; source: 'chat' | 'explicit' }
-  | { kind: 'subscription'; selection: OrchestratorSelection } // SPEC-008 §5.1: subscription/credential of the active orchestrator
+  | {
+      kind: 'lion-sdk';
+      provider: LionCompactionProvider;
+      model: string;
+      baseUrl?: string;
+      apiKey?: string;
+      source: 'chat' | 'explicit';
+    }
+  | { kind: 'subscription'; selection: OrchestratorSelection }
   | { kind: 'claude'; model: string };
 
 function isLionCompactionProvider(provider: string | undefined): provider is LionCompactionProvider {
-  return provider === 'ollama'
-    || provider === 'lmstudio'
-    || provider === 'openai-compatible'
-    || provider === 'vertex-ai';
+  return (
+    provider === 'ollama' || provider === 'lmstudio' || provider === 'openai-compatible' || provider === 'vertex-ai'
+  );
 }
 
 const SUBSCRIPTION_PROVIDER_RUNTIME: Partial<Record<OrchestratorProvider, OrchestratorRuntime>> = {
@@ -677,19 +859,20 @@ function isSubscriptionCompactionProvider(provider: string | undefined): provide
 }
 
 function isSubscriptionRuntime(runtime: string): runtime is OrchestratorRuntime {
-  return runtime === 'claude-sdk'
-    || runtime === 'claude-compat-sdk'
-    || runtime === 'codex-sdk'
-    || runtime === 'kimi-sdk'
-    || runtime === 'grok-sdk'
-    || runtime === 'cursor-sdk';
+  return (
+    runtime === 'claude-sdk' ||
+    runtime === 'claude-compat-sdk' ||
+    runtime === 'codex-sdk' ||
+    runtime === 'kimi-sdk' ||
+    runtime === 'grok-sdk' ||
+    runtime === 'cursor-sdk'
+  );
 }
 
 export async function resolveCompactionSelection(): Promise<CompactionSelection> {
   try {
     const selection = await resolveCompactionSelectionCore();
-    const model =
-      selection.kind === 'subscription' ? selection.selection.model : selection.model;
+    const model = selection.kind === 'subscription' ? selection.selection.model : selection.model;
     smokeAudit('compaction_selection', { kind: selection.kind, model });
     return selection;
   } catch (err) {
@@ -713,16 +896,11 @@ async function resolveCompactionSelectionCore(): Promise<CompactionSelection> {
       return { kind: 'lion-sdk', ...lionSel };
     }
     if (isSubscriptionCompactionProvider(compactionProvider)) {
-      const subRuntime: OrchestratorRuntime =
-        isSubscriptionRuntime(compactionRuntime)
-          ? compactionRuntime
-          : SUBSCRIPTION_PROVIDER_RUNTIME[compactionProvider]!;
+      const subRuntime: OrchestratorRuntime = isSubscriptionRuntime(compactionRuntime)
+        ? compactionRuntime
+        : SUBSCRIPTION_PROVIDER_RUNTIME[compactionProvider]!;
       try {
-        const selection = await resolveSubscriptionSelectionFor(
-          subRuntime,
-          compactionProvider,
-          compactionModel,
-        );
+        const selection = await resolveSubscriptionSelectionFor(subRuntime, compactionProvider, compactionModel);
         return { kind: 'subscription', selection };
       } catch (err) {
         if (err instanceof InvalidOrchestratorSelectionError) {
@@ -738,10 +916,9 @@ async function resolveCompactionSelectionCore(): Promise<CompactionSelection> {
   if (runtime === 'lion-sdk') {
     const chatModel = (getSetting('orchestrator_model') || '').trim();
     if (!isLionCompactionProvider(chatProvider) || !chatModel) {
-      throw new Error(
-        'Lion-SDK compaction Auto(chat) nao conseguiu resolver o provider/modelo atual do chat.',
-      );
+      throw new Error('Lion-SDK compaction Auto(chat) nao conseguiu resolver o provider/modelo atual do chat.');
     }
+    await assertAutoCompactionProviderAvailable('lion-sdk', chatProvider);
     const lionSel = await resolveLionSdkBaseUrl(chatProvider, chatModel, 'chat');
     return { kind: 'lion-sdk', ...lionSel };
   }
@@ -756,6 +933,7 @@ async function resolveCompactionSelectionCore(): Promise<CompactionSelection> {
   ) {
     try {
       const selection = await resolveOrchestratorSelection({ surface: 'compaction' });
+      await assertAutoCompactionProviderAvailable(selection.runtime, selection.provider);
       return { kind: 'subscription', selection };
     } catch (err) {
       if (err instanceof InvalidOrchestratorSelectionError) {
@@ -769,6 +947,22 @@ async function resolveCompactionSelectionCore(): Promise<CompactionSelection> {
 
   throw new CompactionProviderUnavailableError(
     `Compaction sem provider resolvido (runtime="${runtime || '(vazio)'}").`,
+  );
+}
+
+export const COMPACTION_PROVIDER_OFF_HINT = 'configure o Modelo de compactacao em Settings';
+
+async function assertAutoCompactionProviderAvailable(
+  runtime: OrchestratorRuntime,
+  provider: OrchestratorProvider,
+): Promise<void> {
+  const { listProviderStatuses } = await import('./provider-availability');
+  const statuses = await listProviderStatuses();
+  const status = statuses.find((entry) => entry.runtime === runtime && entry.provider === provider);
+  if (!status || status.available) return;
+  throw new CompactionProviderUnavailableError(
+    `Compaction Auto: o provider "${provider}" do orquestrador esta indisponivel` +
+      `${status.reason ? ` (${status.reason})` : ''}; ${COMPACTION_PROVIDER_OFF_HINT}.`,
   );
 }
 
@@ -813,7 +1007,6 @@ async function resolveLionSdkBaseUrl(
   return { provider, model, baseUrl, apiKey, source };
 }
 
-
 function createLionCompactionAdapter(selection: LionCompactionSelection): LionAdapter {
   if (selection.provider === 'ollama') {
     return createOllamaAdapter({ baseUrl: selection.baseUrl || 'http://localhost:11434' });
@@ -842,11 +1035,7 @@ function lionCompactionExtraFor(adapter: LionAdapter): Record<string, unknown> {
   return { max_tokens: 20000, temperature: 0.1 };
 }
 
-
-export async function runClaudePrompt(
-  prompt: string,
-  opts: { model: string; maxTokens?: number },
-): Promise<string> {
+export async function runClaudePrompt(prompt: string, opts: { model: string; maxTokens?: number }): Promise<string> {
   const { default: Anthropic } = await import('@anthropic-ai/sdk');
   const { getApiKey } = await import('./secrets-vault');
   const apiKey = await getApiKey();
@@ -921,17 +1110,13 @@ export async function runLionSdkPrompt(
   return text;
 }
 
-
 export interface RunStructuredMemoryLlmOptions {
   modelOverride?: string;
   providerOverride?: 'claude';
   maxTokens?: number;
 }
 
-export async function runStructuredMemoryLlm(
-  prompt: string,
-  options?: RunStructuredMemoryLlmOptions,
-): Promise<string> {
+export async function runStructuredMemoryLlm(prompt: string, options?: RunStructuredMemoryLlmOptions): Promise<string> {
   let selection = await resolveCompactionSelection();
 
   if (options?.providerOverride === 'claude') {
@@ -975,7 +1160,6 @@ export async function runStructuredMemoryLlm(
   }
 }
 
-
 async function summarizeWithLionSdk(
   selection: LionCompactionSelection,
   messageText: string,
@@ -994,7 +1178,12 @@ async function summarizeWithLionSdk(
   }
 
   logger.info(
-    { provider: selection.provider, model: selection.model, source: selection.source, messageLength: messageText.length },
+    {
+      provider: selection.provider,
+      model: selection.model,
+      source: selection.source,
+      messageLength: messageText.length,
+    },
     'Calling Lion-SDK provider for memory summarization',
   );
 
@@ -1038,7 +1227,12 @@ async function summarizeWithSubscription(
   const prompt = 'CRITICAL: respond ONLY with valid JSON, no markdown, no explanation.\n\n' + basePrompt;
 
   logger.info(
-    { runtime: selection.runtime, provider: selection.provider, model: selection.model, messageLength: messageText.length },
+    {
+      runtime: selection.runtime,
+      provider: selection.provider,
+      model: selection.model,
+      messageLength: messageText.length,
+    },
     'Calling orchestrator subscription for memory summarization',
   );
 
@@ -1082,7 +1276,10 @@ async function summarizeWithClaude(
   try {
     const prompt = buildCompactionBasePrompt(messageText, priorSummary);
 
-    logger.info({ messageLength: messageText.length, promptLength: prompt.length, model }, 'Calling Anthropic for summarization');
+    logger.info(
+      { messageLength: messageText.length, promptLength: prompt.length, model },
+      'Calling Anthropic for summarization',
+    );
 
     const text = await runClaudePrompt(prompt, { model });
 
@@ -1098,16 +1295,21 @@ async function summarizeWithClaude(
     } catch (parseError) {
       const debugPath = path.join(getLionClawPath(), 'data', 'last-compaction-response.txt');
       fs.writeFileSync(debugPath, text, 'utf-8');
-      logger.error({ parseError: (parseError as Error).message, debugPath, first200: text.substring(0, 200) }, 'JSON parse failed on summarization response');
+      logger.error(
+        { parseError: (parseError as Error).message, debugPath, first200: text.substring(0, 200) },
+        'JSON parse failed on summarization response',
+      );
       throw parseError;
     }
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
-    logger.error({ error: errMsg, stack: error instanceof Error ? error.stack : undefined }, 'Anthropic summarization call failed');
+    logger.error(
+      { error: errMsg, stack: error instanceof Error ? error.stack : undefined },
+      'Anthropic summarization call failed',
+    );
     throw error;
   }
 }
-
 
 const MEMORY_SKELETON = [
   '## Decisoes ativas',
@@ -1126,18 +1328,9 @@ const SECTION_HEADERS: Record<MemorySection, string> = {
   referencias_externas: '## Referencias externas',
 };
 
-const SECTION_ORDER: MemorySection[] = [
-  'decisoes_ativas',
-  'workarounds',
-  'estado_de_projetos',
-  'referencias_externas',
-];
+const SECTION_ORDER: MemorySection[] = ['decisoes_ativas', 'workarounds', 'estado_de_projetos', 'referencias_externas'];
 
-
-async function updateWorkingMemory(input: {
-  add: GateOutputApplyItem[];
-  remove: string[];
-}): Promise<void> {
+async function updateWorkingMemory(input: { add: GateOutputApplyItem[]; remove: string[] }): Promise<void> {
   if (input.add.length === 0 && input.remove.length === 0) {
     return;
   }
@@ -1182,29 +1375,29 @@ function transformWorkingMemory(
   if (input.remove.length > 0) {
     const fileLines = rawContent.split('\n');
     const removedSet = new Set(input.remove);
-    const filtered = fileLines.filter(line => !removedSet.has(line));
+    const filtered = fileLines.filter((line) => !removedSet.has(line));
     rawContent = filtered.join('\n');
   }
 
   let blocks = splitIntoSections(rawContent);
 
-  const CANONICAL_HEADERS = new Set<string>(SECTION_ORDER.map(s => SECTION_HEADERS[s]));
+  const CANONICAL_HEADERS = new Set<string>(SECTION_ORDER.map((s) => SECTION_HEADERS[s]));
   const beforeFilter = blocks.length;
-  blocks = blocks.filter(block => {
+  blocks = blocks.filter((block) => {
     if (block.header === null) {
-      const hasContent = block.lines.some(l => l.trim().length > 0);
+      const hasContent = block.lines.some((l) => l.trim().length > 0);
       if (hasContent) {
         logger.warn(
-          { lineCount: block.lines.filter(l => l.trim().length > 0).length },
+          { lineCount: block.lines.filter((l) => l.trim().length > 0).length },
           'updateWorkingMemory: descartado conteudo orfao antes do primeiro header',
         );
         return false;
       }
-      return true; // bloco vazio antes de header e ok
+      return true;
     }
     if (!CANONICAL_HEADERS.has(block.header)) {
       logger.warn(
-        { header: block.header, lineCount: block.lines.filter(l => l.trim().length > 0).length },
+        { header: block.header, lineCount: block.lines.filter((l) => l.trim().length > 0).length },
         'updateWorkingMemory: descartado header desconhecido (apenas 4 secoes canonicas sao permitidas)',
       );
       return false;
@@ -1218,8 +1411,7 @@ function transformWorkingMemory(
     );
   }
 
-  const findBlock = (header: string): number =>
-    blocks.findIndex(b => b.header === header);
+  const findBlock = (header: string): number => blocks.findIndex((b) => b.header === header);
 
   for (const section of SECTION_ORDER) {
     const header = SECTION_HEADERS[section];
@@ -1258,8 +1450,8 @@ function transformWorkingMemory(
   let nonEmptyCount = countNonEmptyLines(content);
 
   if (nonEmptyCount > 50) {
-    const pruneIdx = blocks.findIndex(b => b.header === pruneHeader);
-    if (pruneIdx === -1 || blocks[pruneIdx].lines.filter(l => l.trim().length > 0).length === 0) {
+    const pruneIdx = blocks.findIndex((b) => b.header === pruneHeader);
+    if (pruneIdx === -1 || blocks[pruneIdx].lines.filter((l) => l.trim().length > 0).length === 0) {
       logger.warn(
         { nonEmptyCount, limit: 50 },
         'updateWorkingMemory: MEMORY.md over 50 non-empty lines but "Estado de projetos" is empty — cannot prune other sections',
@@ -1267,7 +1459,7 @@ function transformWorkingMemory(
     } else {
       const pruneBlock = blocks[pruneIdx];
       while (nonEmptyCount > 50) {
-        const firstNonEmpty = pruneBlock.lines.findIndex(l => l.trim().length > 0);
+        const firstNonEmpty = pruneBlock.lines.findIndex((l) => l.trim().length > 0);
         if (firstNonEmpty === -1) {
           logger.warn(
             { nonEmptyCount, limit: 50 },
@@ -1289,10 +1481,7 @@ function transformWorkingMemory(
   return { content, nonEmptyCount };
 }
 
-export async function applyMemoryUpdates(input: {
-  add: GateOutputApplyItem[];
-  remove: string[];
-}): Promise<void> {
+export async function applyMemoryUpdates(input: { add: GateOutputApplyItem[]; remove: string[] }): Promise<void> {
   return updateWorkingMemory(input);
 }
 
@@ -1303,19 +1492,12 @@ function archiveTranscript(
   messages: Array<Record<string, unknown>>,
   dateStr: string,
   summary: string,
+  transcriptName?: string,
 ): void {
   const archiveDir = path.join(getLionClawPath(), 'conversations');
   fs.mkdirSync(archiveDir, { recursive: true });
 
-  const lines = [
-    `# Conversa ${dateStr}`,
-    '',
-    `## Resumo`,
-    summary,
-    '',
-    `## Mensagens`,
-    '',
-  ];
+  const lines = [`# Conversa ${dateStr}`, '', `## Resumo`, summary, '', `## Mensagens`, ''];
 
   for (const msg of messages) {
     const role = msg['role'] as string;
@@ -1326,7 +1508,7 @@ function archiveTranscript(
     lines.push('');
   }
 
-  const filename = `${dateStr}.md`;
+  const filename = `${transcriptName ?? dateStr}.md`;
   fs.writeFileSync(path.join(archiveDir, filename), lines.join('\n'), 'utf-8');
   logger.info({ filename }, 'Transcript archived');
 }
@@ -1335,12 +1517,15 @@ function reciprocalRankFusion(
   rankedLists: Array<Array<{ id: number; content: string; topic: string; created_at: string }>>,
   k: number = 60,
 ): Array<{ id: number; content: string; topic: string; created_at: string; rrf_score: number }> {
-  const scores = new Map<number, { score: number; item: { id: number; content: string; topic: string; created_at: string } }>();
+  const scores = new Map<
+    number,
+    { score: number; item: { id: number; content: string; topic: string; created_at: string } }
+  >();
 
   for (const list of rankedLists) {
     for (let rank = 0; rank < list.length; rank++) {
       const item = list[rank];
-      const rrfContribution = 1.0 / (k + rank + 1); // rank is 0-indexed, so +1
+      const rrfContribution = 1.0 / (k + rank + 1);
       const existing = scores.get(item.id);
       if (existing) {
         existing.score += rrfContribution;
@@ -1365,7 +1550,7 @@ export interface HybridSearchResult {
 }
 
 export async function hybridMemorySearch(query: string, limit: number = 10): Promise<HybridSearchResult[]> {
-  const candidateLimit = Math.max(limit * 3, 30); // fetch more candidates for better fusion
+  const candidateLimit = Math.max(limit * 3, 30);
   const rankedLists: Array<Array<{ id: number; content: string; topic: string; created_at: string }>> = [];
   const sourceMap = new Map<number, Set<string>>();
 
@@ -1411,20 +1596,24 @@ export async function hybridMemorySearch(query: string, limit: number = 10): Pro
   if (rankedLists.length === 0) {
     logger.info('No BM25 or vector results, falling back to LIKE search');
     const db = getDb();
-    const rows = db.prepare(`
+    const rows = db
+      .prepare(
+        `
       SELECT id, content, topic, created_at
       FROM semantic_memories
       WHERE content LIKE ?
       ORDER BY created_at DESC
       LIMIT ?
-    `).all(`%${query}%`, limit) as Array<{ id: number; content: string; topic: string; created_at: string }>;
+    `,
+      )
+      .all(`%${query}%`, limit) as Array<{ id: number; content: string; topic: string; created_at: string }>;
 
-    return rows.map(r => ({ ...r, rrf_score: 0, sources: ['like'] }));
+    return rows.map((r) => ({ ...r, rrf_score: 0, sources: ['like'] }));
   }
 
   const fused = reciprocalRankFusion(rankedLists);
 
-  return fused.slice(0, limit).map(r => ({
+  return fused.slice(0, limit).map((r) => ({
     ...r,
     sources: Array.from(sourceMap.get(r.id) || []),
   }));
@@ -1438,11 +1627,15 @@ export function cleanOldMessages(retentionDays: number): void {
   const db = getDb();
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
 
-  const result = db.prepare(`
+  const result = db
+    .prepare(
+      `
     DELETE FROM messages WHERE created_at < ? AND session_id IN (
       SELECT id FROM sessions WHERE updated_at < ?
     )
-  `).run(cutoff, cutoff);
+  `,
+    )
+    .run(cutoff, cutoff);
 
   if ((result.changes as number) > 0) {
     logger.info({ deleted: result.changes, cutoff }, 'Old messages cleaned');
@@ -1453,9 +1646,7 @@ export function archiveConversation(sessionId: string): string {
   const session = getSession(sessionId);
   const messages = getSessionMessages(sessionId);
 
-  const dateStr = session
-    ? session.createdAt.split('T')[0]
-    : new Date().toISOString().split('T')[0];
+  const dateStr = session ? session.createdAt.split('T')[0] : new Date().toISOString().split('T')[0];
 
   const rawTitle = session?.title || sessionId;
   const titleSlug = rawTitle
@@ -1474,11 +1665,7 @@ export function archiveConversation(sessionId: string): string {
     '',
   ].join('\n');
 
-  const lines: string[] = [
-    frontmatter,
-    `# ${rawTitle}`,
-    '',
-  ];
+  const lines: string[] = [frontmatter, `# ${rawTitle}`, ''];
 
   for (const msg of messages) {
     const time = msg.createdAt.split('T')[1]?.substring(0, 5) || '';

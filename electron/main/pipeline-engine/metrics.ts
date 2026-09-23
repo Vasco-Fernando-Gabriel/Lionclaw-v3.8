@@ -1,4 +1,3 @@
-
 import { emitIPC } from '../pipeline-shared/ipc-emitter';
 import { getPipelinePhaseMetricsRows, savePipelinePhaseMetrics } from '../db';
 import { getPhaseName, PHASE_NAMES } from './registry';
@@ -24,11 +23,7 @@ export interface MetricsSpawnResult {
   metadata?: {
     costEstimationKind?: 'subscription-equivalent-payg';
     sessionIds?: string[];
-    costSource?:
-      | 'sdk_total_cost_usd'
-      | 'sdk_model_usage'
-      | 'calculated'
-      | 'provider-reported-equivalent';
+    costSource?: 'sdk_total_cost_usd' | 'sdk_model_usage' | 'calculated' | 'provider-reported-equivalent';
     pricingSnapshot?: {
       pricingVersion: string;
       model: string;
@@ -40,16 +35,19 @@ export interface MetricsSpawnResult {
         longContext?: { thresholdTokens: number; inputMultiplier: number; outputMultiplier: number };
       } | null;
     };
-    modelUsage?: Record<string, {
-      inputTokens: number;
-      outputTokens: number;
-      cacheReadInputTokens: number;
-      cacheCreationInputTokens: number;
-      costUSD: number;
-      reasoningTokens?: number;
-      modelCalls?: number;
-      costUsdTicks?: number;
-    }>;
+    modelUsage?: Record<
+      string,
+      {
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadInputTokens: number;
+        cacheCreationInputTokens: number;
+        costUSD: number;
+        reasoningTokens?: number;
+        modelCalls?: number;
+        costUsdTicks?: number;
+      }
+    >;
     grok?: {
       reasoningTokens?: number;
       modelCalls?: number;
@@ -92,10 +90,7 @@ export function createEmptyMetrics(): MetricsSpawnResult['metrics'] {
   };
 }
 
-export function mergeMetrics(
-  accum: MetricsSpawnResult['metrics'],
-  result: MetricsSpawnResult['metrics'],
-): void {
+export function mergeMetrics(accum: MetricsSpawnResult['metrics'], result: MetricsSpawnResult['metrics']): void {
   accum.inputTokens += result.inputTokens;
   accum.outputTokens += result.outputTokens;
   accum.cacheReadTokens += result.cacheReadTokens;
@@ -180,11 +175,7 @@ export function mergeUsageMetadata(
   }
 }
 
-export function accumulateMetrics(
-  state: MetricsPhaseState,
-  phaseNumber: number,
-  result: MetricsSpawnResult,
-): void {
+export function accumulateMetrics(state: MetricsPhaseState, phaseNumber: number, result: MetricsSpawnResult): void {
   let accum = state.phaseMetricAccum.get(phaseNumber);
   if (!accum) {
     accum = {
@@ -245,17 +236,16 @@ export function flushAccumulatedMetrics(
         durationMs: persisted.durationMs,
         toolUses: persisted.toolUses,
         apiRequests: persisted.apiRequests,
-        ...(persistedMetadata['costStatus'] === 'known'
-          || persistedMetadata['costStatus'] === 'unknown'
-          || persistedMetadata['costStatus'] === 'estimated-partial'
+        ...(persistedMetadata['costStatus'] === 'known' ||
+        persistedMetadata['costStatus'] === 'unknown' ||
+        persistedMetadata['costStatus'] === 'estimated-partial'
           ? { costStatus: persistedMetadata['costStatus'] }
           : {}),
-        ...(persistedMetadata['tokenStatus'] === 'reported'
-          || persistedMetadata['tokenStatus'] === 'not_reported'
+        ...(persistedMetadata['tokenStatus'] === 'reported' || persistedMetadata['tokenStatus'] === 'not_reported'
           ? { tokenStatus: persistedMetadata['tokenStatus'] }
           : {}),
-        ...(persistedMetadata['costUnknownReason'] === 'unknown-pricing'
-          || persistedMetadata['costUnknownReason'] === 'no-usage-reported'
+        ...(persistedMetadata['costUnknownReason'] === 'unknown-pricing' ||
+        persistedMetadata['costUnknownReason'] === 'no-usage-reported'
           ? { costUnknownReason: persistedMetadata['costUnknownReason'] }
           : {}),
       });
@@ -270,7 +260,8 @@ export function flushAccumulatedMetrics(
     }
   }
 
-  const phaseName = (projectCtx ? getPhaseName(phaseNumber, projectCtx) : PHASE_NAMES[phaseNumber]) ?? `Phase ${phaseNumber}`;
+  const phaseName =
+    (projectCtx ? getPhaseName(phaseNumber, projectCtx) : PHASE_NAMES[phaseNumber]) ?? `Phase ${phaseNumber}`;
 
   const metadataFields: Record<string, unknown> = {};
   if (accum.provider !== undefined) {
@@ -336,7 +327,8 @@ export function collectMetrics(
   status: 'completed' | 'failed',
   projectCtx?: { pipelineType?: string },
 ): void {
-  const phaseNameStr = (projectCtx ? getPhaseName(phaseNumber, projectCtx) : PHASE_NAMES[phaseNumber]) ?? `Phase ${phaseNumber}`;
+  const phaseNameStr =
+    (projectCtx ? getPhaseName(phaseNumber, projectCtx) : PHASE_NAMES[phaseNumber]) ?? `Phase ${phaseNumber}`;
 
   const metadataFields: Record<string, unknown> = {
     provider: result.provider,

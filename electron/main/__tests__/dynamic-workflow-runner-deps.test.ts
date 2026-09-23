@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const realKimiBackendState = vi.hoisted(() => ({
@@ -64,20 +63,11 @@ import {
   resolveWallTimeoutMsFromSetting,
   DYNAMIC_WORKFLOW_WALL_TIMEOUT_SETTING_KEY,
 } from '../dynamic-workflows/workflow-runner-deps';
-import {
-  getDynamicWorkflowRun as getRunDbMock,
-  getDynamicWorkflowDefinition as getDefinitionDbMock,
-} from '../db';
+import { getDynamicWorkflowRun as getRunDbMock, getDynamicWorkflowDefinition as getDefinitionDbMock } from '../db';
 import { runDirFor as runDirForD14 } from '../dynamic-workflows/workflow-create';
 import { readFileSync as readFileSyncD14, existsSync as existsSyncD14 } from 'node:fs';
-import type {
-  SandboxProcessFactory,
-  SandboxProcessHandle,
-} from '../dynamic-workflows/workflow-sandbox';
-import type {
-  SandboxParentMessage,
-  SandboxChildMessage,
-} from '../dynamic-workflows/sandbox-protocol';
+import type { SandboxProcessFactory, SandboxProcessHandle } from '../dynamic-workflows/workflow-sandbox';
+import type { SandboxParentMessage, SandboxChildMessage } from '../dynamic-workflows/sandbox-protocol';
 import type {
   DynamicWorkflowRun,
   DynamicWorkflowDefinition,
@@ -85,15 +75,11 @@ import type {
   DynamicWorkflowNodeRun,
 } from '../dynamic-workflows/types';
 import type { GitRunResult } from '../dynamic-workflows/workflow-git';
-import type {
-  CloserTurnResult,
-  CloserAgentTurnRunner,
-} from '../dynamic-workflows/workflow-closer';
+import type { CloserTurnResult, CloserAgentTurnRunner } from '../dynamic-workflows/workflow-closer';
 import type { NodeRunResult, RunNodeAgentInput } from '../dynamic-workflows/workflow-agent-adapter';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
 
 interface CoordinatorCtx {
   phase: (name: string) => Promise<unknown>;
@@ -175,7 +161,6 @@ function makeFakeSandboxFactory(coordinator: Coordinator): SandboxProcessFactory
     },
   };
 }
-
 
 interface FakeState {
   runs: Map<string, DynamicWorkflowRun>;
@@ -471,7 +456,6 @@ async function waitForStatus(
   return crud.getRun(runId)?.status ?? 'unknown';
 }
 
-
 let tmpRoot: string;
 
 beforeEach(() => {
@@ -486,10 +470,7 @@ function cleanup(): void {
   rmSync(tmpRoot, { recursive: true, force: true });
 }
 
-function withFakes(
-  base: WorkflowRunnerDeps,
-  coordinator: Coordinator,
-): WorkflowRunnerDeps {
+function withFakes(base: WorkflowRunnerDeps, coordinator: Coordinator): WorkflowRunnerDeps {
   return {
     ...base,
     sandboxFactory: makeFakeSandboxFactory(coordinator),
@@ -499,7 +480,6 @@ function withFakes(
     loadActiveAgentIds: () => [],
   };
 }
-
 
 describe('SPEC orquestrador-driver D14: events.jsonl ligado por default', () => {
   it('createDefaultRunnerDeps() seta appendJsonl e grava logs/events.jsonl no run dir resolvido por run', () => {
@@ -620,7 +600,6 @@ describe('DEFECT-3: fabrica unica de deps do runner sempre carrega o closer', ()
   });
 });
 
-
 describe('F3 makeRealClaudeCompatBackend: override + pricing', () => {
   const fakeConfig = {
     model: 'opus-default',
@@ -715,7 +694,6 @@ describe('F3 makeRealClaudeCompatBackend: override + pricing', () => {
     expect(out.costStatus).toBe('known');
   });
 });
-
 
 describe('S4 makeRealClaudeCompatBackend: override de effort', () => {
   const fakeConfig = {
@@ -891,7 +869,6 @@ describe('S4 realKimiBackend: provenance do override de effort', () => {
     expect(realKimiBackendState.config.effort).toBe('low');
   });
 });
-
 
 describe('D11: getWallTimeoutMs por setting dynamic_workflow_wall_timeout_minutes', () => {
   beforeEach(() => {

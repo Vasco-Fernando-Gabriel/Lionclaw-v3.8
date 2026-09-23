@@ -54,7 +54,7 @@ export function ensureInitialSessionTitle(sessionId: string, message: string): v
 export async function generateSessionTitle(sessionId: string): Promise<void> {
   try {
     const messages = getSessionMessages(sessionId);
-    if (messages.length < 2) return; // Precisa de pelo menos 1 pergunta + 1 resposta
+    if (messages.length < 2) return;
 
     const contextMessages = messages.slice(0, 6);
     const conversationSnippet = contextMessages
@@ -77,10 +77,10 @@ Titulo:`,
 
     titleText = titleText
       .trim()
-      .replace(/^["']|["']$/g, '')  // Remover aspas
-      .replace(/\.+$/, '')           // Remover pontos finais
-      .replace(/^titulo:\s*/i, '')   // Remover prefixo "Titulo:"
-      .substring(0, 60);            // Limitar tamanho
+      .replace(/^["']|["']$/g, '')
+      .replace(/\.+$/, '')
+      .replace(/^titulo:\s*/i, '')
+      .substring(0, 60);
 
     if (!titleText || titleText.length < 3) {
       logger.warn({ sessionId }, 'Title generation returned empty/short result, skipping');

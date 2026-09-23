@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -51,6 +50,7 @@ import {
   getSecret,
   setSecret,
   getSecretsHealth,
+  KEYTAR_MAX_SECRET_BYTES,
   getSecretReadError,
   resetSecretsHealthForTests,
 } from '../secrets-vault';
@@ -133,6 +133,21 @@ describe('SB-9 — store corrompido preservado (AC-B22)', () => {
     expect(getSecretReadError('ANTHROPIC_API_KEY')).toBeUndefined();
   });
 
+  it('segredo maior que o limite do keychain vai so para o arquivo, sem abrir o circuit breaker', async () => {
+    keytarMock.setPassword.mockRejectedValue(new Error('O fragmento de codigo recebeu dados incorretos.'));
+    const big = JSON.stringify({
+      files: [{ path: 'x_tokens.json', contentBase64: 'A'.repeat(KEYTAR_MAX_SECRET_BYTES) }],
+    });
+    await setSecret('HIGGSFIELD_MCP_SESSION', big);
+    expect(keytarMock.setPassword).not.toHaveBeenCalled();
+    expect(getSecretsHealth().keytarDegraded).toBe(false);
+    await expect(getSecret('HIGGSFIELD_MCP_SESSION')).resolves.toBe(big);
+
+    keytarMock.setPassword.mockResolvedValue(undefined);
+    await setSecret('PEQUENO', 'valor');
+    expect(keytarMock.setPassword).toHaveBeenCalledTimes(1);
+  });
+
   it('AC-B22 (KEYTAR-DEGRADED): falha do Keychain abre o circuit breaker e evita novos prompts no processo', async () => {
     keytarUnavailable();
     await getSecret('X');
@@ -148,7 +163,7 @@ describe('SB-9 — store corrompido preservado (AC-B22)', () => {
 
 describe('SB-9 — revoke Google honesto (AC-B21)', () => {
   async function seedGoogleTokens(): Promise<void> {
-    keytarUnavailable(); // usa o file store
+    keytarUnavailable();
     await setSecret('GOOGLE_ACCESS_TOKEN', 'ya29.token');
     await setSecret('GOOGLE_REFRESH_TOKEN', '1//refresh');
   }
@@ -172,7 +187,10 @@ describe('SB-9 — revoke Google honesto (AC-B21)', () => {
 
   it('AC-B21: revoke remoto com HTTP nao-ok (400) tambem reporta REVOKE-UNCONFIRMED', async () => {
     await seedGoogleTokens();
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('invalid_token', { status: 400 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('invalid_token', { status: 400 })),
+    );
 
     const result = await revokeGoogleAuth();
     expect(result.remoteRevoked).toBe(false);
@@ -181,7 +199,10 @@ describe('SB-9 — revoke Google honesto (AC-B21)', () => {
 
   it('AC-B21: revoke remoto confirmado (200) NAO carrega warning', async () => {
     await seedGoogleTokens();
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('', { status: 200 })),
+    );
 
     const result = await revokeGoogleAuth();
     expect(result.localCleared).toBe(true);

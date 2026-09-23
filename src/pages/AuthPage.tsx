@@ -43,7 +43,7 @@ export function AuthPage({ mode }: AuthPageProps) {
       setError('');
       if (providerConnect) {
         const result = await providerConnect();
-        if ('error' in result) return result; // panel shows error; do NOT call finishSdkSetup
+        if ('error' in result) return result;
       }
       const result = await window.lionclaw.settings.update({
         ...patch,
@@ -149,8 +149,7 @@ export function AuthPage({ mode }: AuthPageProps) {
     try {
       await window.lionclaw.auth.logout();
       await checkAuth();
-    } catch {
-    }
+    } catch {}
   };
 
   const handleContinueSdkChoice = () => {
@@ -301,9 +300,7 @@ export function AuthPage({ mode }: AuthPageProps) {
           {logo}
           <div className="flex flex-col items-center gap-4 p-6 bg-zinc-900 border border-zinc-800 rounded-xl">
             <AlertTriangle size={28} className="text-amber-500" />
-            <p className="text-sm text-zinc-300 text-center leading-relaxed">
-              SDK nao reconhecido.
-            </p>
+            <p className="text-sm text-zinc-300 text-center leading-relaxed">SDK nao reconhecido.</p>
           </div>
           <button
             onClick={() => setStep('sdk-choice')}
@@ -375,9 +372,7 @@ export function AuthPage({ mode }: AuthPageProps) {
                   autoFocus
                 />
               </div>
-              <p className="text-xs text-zinc-600 mt-1.5">
-                Armazenada no keychain do SO, nunca em plaintext
-              </p>
+              <p className="text-xs text-zinc-600 mt-1.5">Armazenada no keychain do SO, nunca em plaintext</p>
             </div>
           </div>
         )}
@@ -410,9 +405,7 @@ export function AuthPage({ mode }: AuthPageProps) {
         )}
 
         {/* Error */}
-        {error && (
-          <p className="text-sm text-red-400 mt-3">{error}</p>
-        )}
+        {error && <p className="text-sm text-red-400 mt-3">{error}</p>}
 
         {/* Action button for password / apikey / login steps.
             At this point in the render path, step is always 'password' or 'apikey'
@@ -427,7 +420,11 @@ export function AuthPage({ mode }: AuthPageProps) {
             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
           ) : (
             <>
-              {isSetup && step === 'password' ? 'Continuar' : isSetup || (mode === 'continue-sdk' && step === 'apikey') ? 'Iniciar LionClaw' : 'Entrar'}
+              {isSetup && step === 'password'
+                ? 'Continuar'
+                : isSetup || (mode === 'continue-sdk' && step === 'apikey')
+                  ? 'Iniciar LionClaw'
+                  : 'Entrar'}
               <ArrowRight size={16} />
             </>
           )}

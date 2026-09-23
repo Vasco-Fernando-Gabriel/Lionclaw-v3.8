@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
 
@@ -17,12 +16,8 @@ import {
   PERM_DEFAULT_NO_BYPASS,
   PERM_DEFAULT_WITH_GUARD,
 } from '../agent-runtime/permission-profiles';
-import type {
-  AgentExecutionRequest,
-  AgentPermissionProfile,
-} from '../agent-runtime/types';
+import type { AgentExecutionRequest, AgentPermissionProfile } from '../agent-runtime/types';
 import type { AgentQueryConfig } from '../agent-config-resolver';
-
 
 function makeReq(
   permission: AgentPermissionProfile,
@@ -52,18 +47,12 @@ function makeConfig(overrides: Partial<AgentQueryConfig> = {}): AgentQueryConfig
   } as unknown as AgentQueryConfig;
 }
 
-
 describe('cloud-executor — permission profile wiring (S1.0.2)', () => {
   it('PERM_BYPASS_NO_GUARD → opts honor bypass + skip-perms, NO canUseTool', () => {
     const childAbort = new AbortController();
     const req = makeReq(PERM_BYPASS_NO_GUARD);
 
-    const opts = buildClaudeQueryOptions(
-      req,
-      makeConfig(),
-      '/path/to/cli.js',
-      childAbort,
-    );
+    const opts = buildClaudeQueryOptions(req, makeConfig(), '/path/to/cli.js', childAbort);
 
     expect(opts.permissionMode).toBe('bypassPermissions');
     expect(opts.allowDangerouslySkipPermissions).toBe(true);
@@ -74,12 +63,7 @@ describe('cloud-executor — permission profile wiring (S1.0.2)', () => {
     const childAbort = new AbortController();
     const req = makeReq(PERM_DEFAULT_NO_BYPASS);
 
-    const opts = buildClaudeQueryOptions(
-      req,
-      makeConfig(),
-      '/path/to/cli.js',
-      childAbort,
-    );
+    const opts = buildClaudeQueryOptions(req, makeConfig(), '/path/to/cli.js', childAbort);
 
     expect(opts.permissionMode).toBe('default');
     expect(opts.allowDangerouslySkipPermissions).toBe(false);
@@ -95,28 +79,18 @@ describe('cloud-executor — permission profile wiring (S1.0.2)', () => {
     const profile = PERM_DEFAULT_WITH_GUARD(mockGuard);
     const req = makeReq(profile);
 
-    const opts = buildClaudeQueryOptions(
-      req,
-      makeConfig(),
-      '/path/to/cli.js',
-      childAbort,
-    );
+    const opts = buildClaudeQueryOptions(req, makeConfig(), '/path/to/cli.js', childAbort);
 
     expect(opts.permissionMode).toBe('default');
     expect(opts.allowDangerouslySkipPermissions).toBe(false);
-    expect(opts.canUseTool).toBe(mockGuard); // identity, not a wrapper
+    expect(opts.canUseTool).toBe(mockGuard);
   });
 
   it('does not hardcode bypassPermissions when permission profile says default', () => {
     const childAbort = new AbortController();
     const req = makeReq(PERM_DEFAULT_NO_BYPASS);
 
-    const opts = buildClaudeQueryOptions(
-      req,
-      makeConfig(),
-      '/path/to/cli.js',
-      childAbort,
-    );
+    const opts = buildClaudeQueryOptions(req, makeConfig(), '/path/to/cli.js', childAbort);
 
     expect(opts.permissionMode).not.toBe('bypassPermissions');
     expect(opts.allowDangerouslySkipPermissions).not.toBe(true);

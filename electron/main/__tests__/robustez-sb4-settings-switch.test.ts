@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { store, getSetting, setSetting, setOrchestratorCompactionSelection } = vi.hoisted(() => {
@@ -9,24 +8,28 @@ const { store, getSetting, setSetting, setOrchestratorCompactionSelection } = vi
     setSetting: vi.fn((key: string, value: string): void => {
       s.set(key, value);
     }),
-    setOrchestratorCompactionSelection: vi.fn((selection: {
-      runtime: string;
-      provider: string;
-      model: string;
-    } | null): void => {
-      const keys = [
-        'orchestrator_compaction_runtime',
-        'orchestrator_compaction_provider',
-        'orchestrator_compaction_model',
-      ] as const;
-      if (!selection) {
-        keys.forEach((key) => s.delete(key));
-        return;
-      }
-      s.set(keys[0], selection.runtime);
-      s.set(keys[1], selection.provider);
-      s.set(keys[2], selection.model);
-    }),
+    setOrchestratorCompactionSelection: vi.fn(
+      (
+        selection: {
+          runtime: string;
+          provider: string;
+          model: string;
+        } | null,
+      ): void => {
+        const keys = [
+          'orchestrator_compaction_runtime',
+          'orchestrator_compaction_provider',
+          'orchestrator_compaction_model',
+        ] as const;
+        if (!selection) {
+          keys.forEach((key) => s.delete(key));
+          return;
+        }
+        s.set(keys[0], selection.runtime);
+        s.set(keys[1], selection.provider);
+        s.set(keys[2], selection.model);
+      },
+    ),
   };
 });
 
@@ -96,14 +99,7 @@ describe('SB-4 settings:update — troca de orquestrador best-effort (P5, AC-B10
     register();
   });
 
-  it('AC-B10: compaction_failed NAO lanca — a troca CONCLUI e grava os orchestrator_*', async () => {
-    compactActiveChatSession.mockResolvedValue({
-      success: false,
-      reason: 'compaction_failed',
-      error: 'quota estourada',
-      newSessionId: 'sess-nova',
-    });
-
+  it('AC-16 (lanes V1): trocar runtime/provider do Orquestrador padrao NAO dispara Clear e nao devolve compaction', async () => {
     const result = await callUpdate({
       orchestratorRuntime: 'codex-sdk',
       orchestratorProvider: 'codex',
@@ -111,39 +107,14 @@ describe('SB-4 settings:update — troca de orquestrador best-effort (P5, AC-B10
     });
 
     expect(result.success).toBe(true);
-    expect(result.compaction).toEqual({
-      success: false,
-      reason: 'compaction_failed',
-      error: 'quota estourada',
-      newSessionId: 'sess-nova',
-    });
+    expect(result).not.toHaveProperty('compaction');
+    expect(compactActiveChatSession).not.toHaveBeenCalled();
     expect(store.get('orchestrator_runtime')).toBe('codex-sdk');
     expect(store.get('orchestrator_provider')).toBe('codex');
     expect(store.get('orchestrator_model')).toBe('gpt-5.5');
-    expect(compactActiveChatSession).toHaveBeenCalledWith(
-      expect.any(Function),
-      'orchestrator-switch',
-    );
   });
 
-  it('AC-B10: compactacao com sucesso segue identica (regressao zero)', async () => {
-    compactActiveChatSession.mockResolvedValue({
-      success: true,
-      newSessionId: 'sess-ok',
-    });
-
-    const result = await callUpdate({
-      orchestratorRuntime: 'codex-sdk',
-      orchestratorProvider: 'codex',
-      orchestratorModel: 'gpt-5.5',
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.compaction).toEqual({ success: true, newSessionId: 'sess-ok' });
-    expect(store.get('orchestrator_runtime')).toBe('codex-sdk');
-  });
-
-  it('AC-B10: update sem mudanca de runtime/provider nao dispara compactacao (fronteira intacta)', async () => {
+  it('update sem mudanca de runtime/provider tambem nao toca o Clear', async () => {
     const result = await callUpdate({
       orchestratorRuntime: 'claude-sdk',
       orchestratorProvider: 'anthropic',
@@ -284,25 +255,22 @@ describe('SB-4 settings:update — troca de orquestrador best-effort (P5, AC-B10
   it.each([
     ['grok-sdk', 'grok', 'grok-4.5'],
     ['kimi-sdk', 'kimi', 'kimi-code/kimi-for-coding'],
-  ] as const)(
-    'rejeita compactacao %s quando availability.usable nao e true',
-    async (runtime, provider, model) => {
-      checkProvider.mockResolvedValue({ usable: false, reason: 'gate pendente' });
+  ] as const)('rejeita compactacao %s quando availability.usable nao e true', async (runtime, provider, model) => {
+    checkProvider.mockResolvedValue({ usable: false, reason: 'gate pendente' });
 
-      const result = await callUpdate({
-        orchestratorCompactionRuntime: runtime,
-        orchestratorCompactionProvider: provider,
-        orchestratorCompactionModel: model,
-      });
+    const result = await callUpdate({
+      orchestratorCompactionRuntime: runtime,
+      orchestratorCompactionProvider: provider,
+      orchestratorCompactionModel: model,
+    });
 
-      expect(result.error).toMatch(/gate pendente/i);
-      expect(checkProvider).toHaveBeenCalledWith(runtime, provider);
-      expect(store.has('orchestrator_compaction_runtime')).toBe(false);
-      expect(store.has('orchestrator_compaction_provider')).toBe(false);
-      expect(store.has('orchestrator_compaction_model')).toBe(false);
-      expect(setSetting).not.toHaveBeenCalled();
-    },
-  );
+    expect(result.error).toMatch(/gate pendente/i);
+    expect(checkProvider).toHaveBeenCalledWith(runtime, provider);
+    expect(store.has('orchestrator_compaction_runtime')).toBe(false);
+    expect(store.has('orchestrator_compaction_provider')).toBe(false);
+    expect(store.has('orchestrator_compaction_model')).toBe(false);
+    expect(setSetting).not.toHaveBeenCalled();
+  });
 
   it('persiste triple de compactacao completo e valido somente apos validacao', async () => {
     checkProvider.mockResolvedValue({ usable: true });

@@ -36,10 +36,7 @@ import {
   type CloserSpawnContext,
   type CloserSpawnReason,
 } from '../dynamic-workflows/workflow-closer';
-import type {
-  CloserGitAuditEvent,
-  CloserGitConfirmRequest,
-} from '../dynamic-workflows/closer-permission-guard';
+import type { CloserGitAuditEvent, CloserGitConfirmRequest } from '../dynamic-workflows/closer-permission-guard';
 import {
   createDefaultRunnerDeps,
   realCloserAgentTurn,
@@ -73,29 +70,18 @@ import { runDirFor } from '../dynamic-workflows/workflow-create';
 import { listRunBundle } from '../dynamic-workflows/run-bundle';
 import type { RunBundleEntry } from '../../../src/types/dynamic-workflow-cockpit';
 import { validateWorkflowPackage } from '../dynamic-workflows/workflow-validator';
-import {
-  WorkflowRunner,
-  getWorkflowRunner,
-} from '../dynamic-workflows/workflow-runner';
+import { WorkflowRunner, getWorkflowRunner } from '../dynamic-workflows/workflow-runner';
 import { resolveAgentQueryConfig } from '../agent-config-resolver';
-import {
-  resolveSwitchAgentVerdict,
-  makePersistSwitchedDefinition,
-} from '../dynamic-workflows/switch-agent-validation';
+import { resolveSwitchAgentVerdict, makePersistSwitchedDefinition } from '../dynamic-workflows/switch-agent-validation';
 import type { DynamicWorkflowManifest as DwManifest } from '../dynamic-workflows/types';
 
 const logger = createLogger('dynamic-workflow-ipc');
 
-export {
-  makeRealCloserAgentTurn,
-  closerGuardToSdkCanUseTool,
-  type RealClaudeCompatBackendDeps,
-};
+export { makeRealCloserAgentTurn, closerGuardToSdkCanUseTool, type RealClaudeCompatBackendDeps };
 
 function getRunner(): WorkflowRunner {
   return getWorkflowRunner(createDefaultRunnerDeps());
 }
-
 
 function loadAgentCatalogSnapshot(): DynamicWorkflowAgentSummary[] {
   return getAllAgents()
@@ -120,7 +106,6 @@ function listSchemaFiles(runDir: string): string[] {
     return [];
   }
 }
-
 
 function buildCloserDeps(): CloserEngineDeps {
   return {
@@ -200,10 +185,7 @@ function resolveRepoRootForRun(run: DynamicWorkflowRun): string {
   return def?.projectPath ?? '';
 }
 
-const MERGE_FRICTION_EVENT_TYPES = new Set<string>([
-  'merge-conflict',
-  'merge-recheck-failed',
-]);
+const MERGE_FRICTION_EVENT_TYPES = new Set<string>(['merge-conflict', 'merge-recheck-failed']);
 
 export function closerReasonFromState(
   run: DynamicWorkflowRun,
@@ -211,15 +193,9 @@ export function closerReasonFromState(
 ): CloserSpawnReason {
   if (run.status === 'delivered') return 'delivery';
 
-  const inFriction =
-    run.status === 'blocked' ||
-    run.status === 'failed' ||
-    run.status === 'interrupted';
-  const liveWorktree =
-    run.workspaceMode === 'run-worktree' && !!run.worktreePath;
-  const hasMergeConflictSignal = recentEvents.some((ev) =>
-    MERGE_FRICTION_EVENT_TYPES.has(ev.type),
-  );
+  const inFriction = run.status === 'blocked' || run.status === 'failed' || run.status === 'interrupted';
+  const liveWorktree = run.workspaceMode === 'run-worktree' && !!run.worktreePath;
+  const hasMergeConflictSignal = recentEvents.some((ev) => MERGE_FRICTION_EVENT_TYPES.has(ev.type));
 
   if (inFriction && liveWorktree && hasMergeConflictSignal) {
     return 'merge-conflict';
@@ -248,7 +224,6 @@ function broadcastCloserMessage(runId: string, message: DynamicWorkflowMessage):
   broadcastWorkflowStreamChunk({ emit: emitIPC }, chunk);
 }
 
-
 export function buildReplanLinkage(
   prevDef: DynamicWorkflowDefinition,
   newDefinitionId: string,
@@ -276,7 +251,6 @@ export function buildReplanLinkage(
   };
   return { newDefInput, prevDefPatch: { supersedesDefinitionId: newDefinitionId } };
 }
-
 
 const persistSwitchedDefinitionReal = makePersistSwitchedDefinition({
   createDefinition: createDynamicWorkflowDefinition,
@@ -322,7 +296,6 @@ export function registerDynamicWorkflowHandlers(ctx: IpcContext): void {
     },
   });
 
-
   ipcMain.handle('dynamic-workflow:list-runs', (): DynamicWorkflowRun[] => {
     try {
       return listDynamicWorkflowRuns();
@@ -332,36 +305,30 @@ export function registerDynamicWorkflowHandlers(ctx: IpcContext): void {
     }
   });
 
-  ipcMain.handle(
-    'dynamic-workflow:get-run',
-    (_event, runId: string): DynamicWorkflowRun | null => {
-      try {
-        const run = getDynamicWorkflowRun(runId);
-        if (!run) return null;
-        const def = getDynamicWorkflowDefinition(run.definitionId);
-        const p = def?.projectPath;
-        const projectPath = p && p.trim() ? p : null;
-        return { ...run, projectPath };
-      } catch (err) {
-        logger.error({ err, runId }, 'dynamic-workflow:get-run failed');
-        return null;
-      }
-    },
-  );
+  ipcMain.handle('dynamic-workflow:get-run', (_event, runId: string): DynamicWorkflowRun | null => {
+    try {
+      const run = getDynamicWorkflowRun(runId);
+      if (!run) return null;
+      const def = getDynamicWorkflowDefinition(run.definitionId);
+      const p = def?.projectPath;
+      const projectPath = p && p.trim() ? p : null;
+      return { ...run, projectPath };
+    } catch (err) {
+      logger.error({ err, runId }, 'dynamic-workflow:get-run failed');
+      return null;
+    }
+  });
 
-  ipcMain.handle(
-    'dynamic-workflow:get-nodes',
-    (_event, runId: string): DynamicWorkflowNode[] => {
-      try {
-        const run = getDynamicWorkflowRun(runId);
-        if (!run) return [];
-        return listDynamicWorkflowNodes(run.definitionId);
-      } catch (err) {
-        logger.error({ err, runId }, 'dynamic-workflow:get-nodes failed');
-        return [];
-      }
-    },
-  );
+  ipcMain.handle('dynamic-workflow:get-nodes', (_event, runId: string): DynamicWorkflowNode[] => {
+    try {
+      const run = getDynamicWorkflowRun(runId);
+      if (!run) return [];
+      return listDynamicWorkflowNodes(run.definitionId);
+    } catch (err) {
+      logger.error({ err, runId }, 'dynamic-workflow:get-nodes failed');
+      return [];
+    }
+  });
 
   ipcMain.handle(
     'dynamic-workflow:get-events',
@@ -396,19 +363,16 @@ export function registerDynamicWorkflowHandlers(ctx: IpcContext): void {
     return { runDir };
   };
 
-  ipcMain.handle(
-    'dynamic-workflow:get-run-bundle',
-    (_event, runId: string): RunBundleEntry[] | { error: string } => {
-      try {
-        const resolved = resolveRunDirForIpc(runId);
-        if ('error' in resolved) return resolved;
-        return listRunBundle(resolved.runDir);
-      } catch (err) {
-        logger.error({ err, runId }, 'dynamic-workflow:get-run-bundle failed');
-        return { error: err instanceof Error ? err.message : String(err) };
-      }
-    },
-  );
+  ipcMain.handle('dynamic-workflow:get-run-bundle', (_event, runId: string): RunBundleEntry[] | { error: string } => {
+    try {
+      const resolved = resolveRunDirForIpc(runId);
+      if ('error' in resolved) return resolved;
+      return listRunBundle(resolved.runDir);
+    } catch (err) {
+      logger.error({ err, runId }, 'dynamic-workflow:get-run-bundle failed');
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
 
   ipcMain.handle(
     'dynamic-workflow:open-run-dir',
@@ -426,91 +390,71 @@ export function registerDynamicWorkflowHandlers(ctx: IpcContext): void {
     },
   );
 
-  ipcMain.handle(
-    'dynamic-workflow:get-artifacts',
-    (_event, runId: string): DynamicWorkflowArtifact[] => {
-      try {
-        return listDynamicWorkflowArtifacts(runId);
-      } catch (err) {
-        logger.error({ err, runId }, 'dynamic-workflow:get-artifacts failed');
-        return [];
-      }
-    },
-  );
+  ipcMain.handle('dynamic-workflow:get-artifacts', (_event, runId: string): DynamicWorkflowArtifact[] => {
+    try {
+      return listDynamicWorkflowArtifacts(runId);
+    } catch (err) {
+      logger.error({ err, runId }, 'dynamic-workflow:get-artifacts failed');
+      return [];
+    }
+  });
 
-  ipcMain.handle(
-    'dynamic-workflow:get-messages',
-    (_event, runId: string): DynamicWorkflowMessage[] => {
-      try {
-        return listDynamicWorkflowMessages(runId);
-      } catch (err) {
-        logger.error({ err, runId }, 'dynamic-workflow:get-messages failed');
-        return [];
-      }
-    },
-  );
+  ipcMain.handle('dynamic-workflow:get-messages', (_event, runId: string): DynamicWorkflowMessage[] => {
+    try {
+      return listDynamicWorkflowMessages(runId);
+    } catch (err) {
+      logger.error({ err, runId }, 'dynamic-workflow:get-messages failed');
+      return [];
+    }
+  });
 
-
-  ipcMain.handle(
-    'dynamic-workflow:validate',
-    (_event, runId: string): DynamicWorkflowValidateResult => {
-      try {
-        const run = getDynamicWorkflowRun(runId);
-        if (!run) return { error: `run nao encontrado: ${runId}` };
-        const def = getDynamicWorkflowDefinition(run.definitionId);
-        if (!def) {
-          return { error: `definition nao encontrada: ${run.definitionId}` };
-        }
-        const workflowJsSource = readFileSync(def.workflowJsPath, 'utf8');
-        const manifest = JSON.parse(def.manifestJson) as DynamicWorkflowManifest;
-        const catalogAgentIds = loadAgentCatalogSnapshot().map((a) => a.id);
-        const runDir = dirname(def.workflowJsPath);
-        const schemaFileNames = listSchemaFiles(runDir);
-        const report = validateWorkflowPackage({
-          workflowJsSource,
-          manifest,
-          catalogAgentIds,
-          schemaFileNames,
-        });
-        return { ok: true, report };
-      } catch (err) {
-        logger.error({ err, runId }, 'dynamic-workflow:validate failed');
-        return { error: (err as Error).message };
+  ipcMain.handle('dynamic-workflow:validate', (_event, runId: string): DynamicWorkflowValidateResult => {
+    try {
+      const run = getDynamicWorkflowRun(runId);
+      if (!run) return { error: `run nao encontrado: ${runId}` };
+      const def = getDynamicWorkflowDefinition(run.definitionId);
+      if (!def) {
+        return { error: `definition nao encontrada: ${run.definitionId}` };
       }
-    },
-  );
+      const workflowJsSource = readFileSync(def.workflowJsPath, 'utf8');
+      const manifest = JSON.parse(def.manifestJson) as DynamicWorkflowManifest;
+      const catalogAgentIds = loadAgentCatalogSnapshot().map((a) => a.id);
+      const runDir = dirname(def.workflowJsPath);
+      const schemaFileNames = listSchemaFiles(runDir);
+      const report = validateWorkflowPackage({
+        workflowJsSource,
+        manifest,
+        catalogAgentIds,
+        schemaFileNames,
+      });
+      return { ok: true, report };
+    } catch (err) {
+      logger.error({ err, runId }, 'dynamic-workflow:validate failed');
+      return { error: (err as Error).message };
+    }
+  });
 
-  ipcMain.handle(
-    'dynamic-workflow:start',
-    async (_event, runId: string): Promise<DynamicWorkflowOkResult> => {
-      try {
-        return await getRunner().start(runId);
-      } catch (err) {
-        logger.error({ err, runId }, 'dynamic-workflow:start failed');
-        return { error: (err as Error).message };
-      }
-    },
-  );
+  ipcMain.handle('dynamic-workflow:start', async (_event, runId: string): Promise<DynamicWorkflowOkResult> => {
+    try {
+      return await getRunner().start(runId);
+    } catch (err) {
+      logger.error({ err, runId }, 'dynamic-workflow:start failed');
+      return { error: (err as Error).message };
+    }
+  });
 
-  ipcMain.handle(
-    'dynamic-workflow:pause',
-    async (_event, runId: string): Promise<DynamicWorkflowOkResult> => {
-      try {
-        return await getRunner().pause(runId);
-      } catch (err) {
-        logger.error({ err, runId }, 'dynamic-workflow:pause failed');
-        return { error: (err as Error).message };
-      }
-    },
-  );
+  ipcMain.handle('dynamic-workflow:pause', async (_event, runId: string): Promise<DynamicWorkflowOkResult> => {
+    try {
+      return await getRunner().pause(runId);
+    } catch (err) {
+      logger.error({ err, runId }, 'dynamic-workflow:pause failed');
+      return { error: (err as Error).message };
+    }
+  });
 
   ipcMain.handle(
     'dynamic-workflow:resume',
-    async (
-      _event,
-      runId: string,
-      opts?: DynamicWorkflowResumeOptions,
-    ): Promise<DynamicWorkflowOkResult> => {
+    async (_event, runId: string, opts?: DynamicWorkflowResumeOptions): Promise<DynamicWorkflowOkResult> => {
       try {
         return await getRunner().resume(runId, opts);
       } catch (err) {
@@ -520,112 +464,90 @@ export function registerDynamicWorkflowHandlers(ctx: IpcContext): void {
     },
   );
 
-  ipcMain.handle(
-    'dynamic-workflow:abort',
-    async (_event, runId: string): Promise<DynamicWorkflowOkResult> => {
-      try {
-        return await getRunner().abort(runId);
-      } catch (err) {
-        logger.error({ err, runId }, 'dynamic-workflow:abort failed');
-        return { error: (err as Error).message };
-      }
-    },
-  );
+  ipcMain.handle('dynamic-workflow:abort', async (_event, runId: string): Promise<DynamicWorkflowOkResult> => {
+    try {
+      return await getRunner().abort(runId);
+    } catch (err) {
+      logger.error({ err, runId }, 'dynamic-workflow:abort failed');
+      return { error: (err as Error).message };
+    }
+  });
 
-  ipcMain.handle(
-    'dynamic-workflow:reopen',
-    async (_event, runId: string): Promise<DynamicWorkflowOkResult> => {
-      try {
-        return await getRunner().reopen(runId);
-      } catch (err) {
-        logger.error({ err, runId }, 'dynamic-workflow:reopen failed');
-        return { error: (err as Error).message };
-      }
-    },
-  );
+  ipcMain.handle('dynamic-workflow:reopen', async (_event, runId: string): Promise<DynamicWorkflowOkResult> => {
+    try {
+      return await getRunner().reopen(runId);
+    } catch (err) {
+      logger.error({ err, runId }, 'dynamic-workflow:reopen failed');
+      return { error: (err as Error).message };
+    }
+  });
 
-  ipcMain.handle(
-    'dynamic-workflow:delete',
-    async (_event, runId: string): Promise<DynamicWorkflowOkResult> => {
+  ipcMain.handle('dynamic-workflow:delete', async (_event, runId: string): Promise<DynamicWorkflowOkResult> => {
+    try {
+      const run = getDynamicWorkflowRun(runId);
+      if (!run) return { error: `run nao encontrado: ${runId}` };
       try {
-        const run = getDynamicWorkflowRun(runId);
-        if (!run) return { error: `run nao encontrado: ${runId}` };
-        try {
-          await getRunner().abort(runId);
-        } catch (abortErr) {
-          logger.warn(
-            { err: abortErr, runId },
-            'dynamic-workflow:delete: abort previo falhou (segue para remocao)',
-          );
-        }
-        try {
-          releaseProjectLock(runId);
-        } catch {
-        }
-        try {
-          const definition = getDynamicWorkflowDefinition(run.definitionId);
-          if (definition?.projectPath) {
-            const runDir = runDirFor(definition.projectPath, runId);
-            if (existsSync(runDir)) {
-              const finalRun = getDynamicWorkflowRun(runId) ?? run;
-              const nodeRuns = listDynamicWorkflowNodeRuns(runId);
-              const summary = {
-                exportedAt: new Date().toISOString(),
-                run: finalRun,
-                cost: getDynamicWorkflowRunCostAggregate(runId),
-                nodeRuns: nodeRuns.map((nr) => ({
-                  id: nr.id,
-                  nodeId: nr.nodeId,
-                  phaseId: nr.phaseId,
-                  agentId: nr.agentId,
-                  status: nr.status,
-                  attempt: nr.attempt,
-                  failureClass: nr.failureClass ?? null,
-                  error: nr.error ?? null,
-                  inputTokens: nr.inputTokens,
-                  outputTokens: nr.outputTokens,
-                  costUsd: nr.costUsd,
-                  startedAt: nr.startedAt ?? null,
-                  completedAt: nr.completedAt ?? null,
-                })),
-                gateDecisions: listDynamicWorkflowGateDecisions(runId),
-                sprints: listDynamicWorkflowSprints(runId),
-                events: listDynamicWorkflowEvents(runId, { limit: Number.MAX_SAFE_INTEGER }),
-                journal: listDynamicWorkflowJournalEntries(runId),
-              };
-              writeFileSync(
-                join(runDir, 'run-summary.json'),
-                JSON.stringify(summary, null, 2),
-                'utf8',
-              );
-              logger.info({ runId }, 'dynamic-workflow:delete: run-summary.json exportado');
-            }
+        await getRunner().abort(runId);
+      } catch (abortErr) {
+        logger.warn({ err: abortErr, runId }, 'dynamic-workflow:delete: abort previo falhou (segue para remocao)');
+      }
+      try {
+        releaseProjectLock(runId);
+      } catch {}
+      try {
+        const definition = getDynamicWorkflowDefinition(run.definitionId);
+        if (definition?.projectPath) {
+          const runDir = runDirFor(definition.projectPath, runId);
+          if (existsSync(runDir)) {
+            const finalRun = getDynamicWorkflowRun(runId) ?? run;
+            const nodeRuns = listDynamicWorkflowNodeRuns(runId);
+            const summary = {
+              exportedAt: new Date().toISOString(),
+              run: finalRun,
+              cost: getDynamicWorkflowRunCostAggregate(runId),
+              nodeRuns: nodeRuns.map((nr) => ({
+                id: nr.id,
+                nodeId: nr.nodeId,
+                phaseId: nr.phaseId,
+                agentId: nr.agentId,
+                status: nr.status,
+                attempt: nr.attempt,
+                failureClass: nr.failureClass ?? null,
+                error: nr.error ?? null,
+                inputTokens: nr.inputTokens,
+                outputTokens: nr.outputTokens,
+                costUsd: nr.costUsd,
+                startedAt: nr.startedAt ?? null,
+                completedAt: nr.completedAt ?? null,
+              })),
+              gateDecisions: listDynamicWorkflowGateDecisions(runId),
+              sprints: listDynamicWorkflowSprints(runId),
+              events: listDynamicWorkflowEvents(runId, { limit: Number.MAX_SAFE_INTEGER }),
+              journal: listDynamicWorkflowJournalEntries(runId),
+            };
+            writeFileSync(join(runDir, 'run-summary.json'), JSON.stringify(summary, null, 2), 'utf8');
+            logger.info({ runId }, 'dynamic-workflow:delete: run-summary.json exportado');
           }
-        } catch (exportErr) {
-          logger.warn(
-            { err: exportErr, runId },
-            'dynamic-workflow:delete: export do run-summary falhou (segue para remocao)',
-          );
         }
-        const removed = deleteDynamicWorkflowRun(runId);
-        if (!removed) return { error: `run nao encontrado: ${runId}` };
-        logger.info({ runId }, 'dynamic-workflow:delete: run removido (acao explicita do dono)');
-        return { ok: true };
-      } catch (err) {
-        logger.error({ err, runId }, 'dynamic-workflow:delete failed');
-        return { error: (err as Error).message };
+      } catch (exportErr) {
+        logger.warn(
+          { err: exportErr, runId },
+          'dynamic-workflow:delete: export do run-summary falhou (segue para remocao)',
+        );
       }
-    },
-  );
+      const removed = deleteDynamicWorkflowRun(runId);
+      if (!removed) return { error: `run nao encontrado: ${runId}` };
+      logger.info({ runId }, 'dynamic-workflow:delete: run removido (acao explicita do dono)');
+      return { ok: true };
+    } catch (err) {
+      logger.error({ err, runId }, 'dynamic-workflow:delete failed');
+      return { error: (err as Error).message };
+    }
+  });
 
   ipcMain.handle(
     'dynamic-workflow:send-message',
-    async (
-      _event,
-      runId: string,
-      message: string,
-      _attachments?: string[],
-    ): Promise<DynamicWorkflowOkResult> => {
+    async (_event, runId: string, message: string, _attachments?: string[]): Promise<DynamicWorkflowOkResult> => {
       try {
         const run = getDynamicWorkflowRun(runId);
         if (!run) return { error: `run nao encontrado: ${runId}` };
@@ -657,11 +579,7 @@ export function registerDynamicWorkflowHandlers(ctx: IpcContext): void {
 
   ipcMain.handle(
     'dynamic-workflow:intervene',
-    async (
-      _event,
-      runId: string,
-      intervention: DynamicWorkflowIntervention,
-    ): Promise<DynamicWorkflowOkResult> => {
+    async (_event, runId: string, intervention: DynamicWorkflowIntervention): Promise<DynamicWorkflowOkResult> => {
       try {
         if (intervention.type === 'switch-agent') {
           return await handleSwitchAgentIntervention(runId, intervention);
@@ -676,11 +594,7 @@ export function registerDynamicWorkflowHandlers(ctx: IpcContext): void {
 
   ipcMain.handle(
     'dynamic-workflow:request-replan',
-    (
-      _event,
-      runId: string,
-      request: DynamicWorkflowReplanRequest,
-    ): DynamicWorkflowReplanResult => {
+    (_event, runId: string, request: DynamicWorkflowReplanRequest): DynamicWorkflowReplanResult => {
       try {
         const run = getDynamicWorkflowRun(runId);
         if (!run) return { error: `run nao encontrado: ${runId}` };
@@ -689,13 +603,8 @@ export function registerDynamicWorkflowHandlers(ctx: IpcContext): void {
           return { error: `definition nao encontrada: ${run.definitionId}` };
         }
 
-        const newDefinitionId = `dwfd_${Date.now().toString(36)}_${Math.random()
-          .toString(36)
-          .slice(2, 10)}`;
-        const { newDefInput, prevDefPatch } = buildReplanLinkage(
-          prevDef,
-          newDefinitionId,
-        );
+        const newDefinitionId = `dwfd_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+        const { newDefInput, prevDefPatch } = buildReplanLinkage(prevDef, newDefinitionId);
 
         createDynamicWorkflowDefinition(newDefInput);
         updateDynamicWorkflowDefinition(prevDef.id, prevDefPatch);
@@ -754,16 +663,11 @@ export function registerDynamicWorkflowHandlers(ctx: IpcContext): void {
         if (!run) return { error: `run nao encontrado: ${runId}` };
         const context: CloserSpawnContext = {
           reason: closerReasonForRun(run),
-          motive:
-            (reason ?? '').trim() ||
-            'Usuario pediu ajuda do agente de fechamento (Resolver com agente).',
+          motive: (reason ?? '').trim() || 'Usuario pediu ajuda do agente de fechamento (Resolver com agente).',
         };
-        const result = await openCloserSession(
-          runId,
-          context,
-          buildCloserDeps(),
-          { repoRoot: resolveRepoRootForRun(run) },
-        );
+        const result = await openCloserSession(runId, context, buildCloserDeps(), {
+          repoRoot: resolveRepoRootForRun(run),
+        });
         broadcastCloserMessage(runId, result.message);
         return { ok: true };
       } catch (err) {
@@ -785,13 +689,9 @@ export function registerDynamicWorkflowHandlers(ctx: IpcContext): void {
           reason: closerReasonForRun(run),
           motive: 'Conversa de fechamento (closer).',
         };
-        const result = await sendCloserMessage(
-          runId,
-          text,
-          context,
-          buildCloserDeps(),
-          { repoRoot: resolveRepoRootForRun(run) },
-        );
+        const result = await sendCloserMessage(runId, text, context, buildCloserDeps(), {
+          repoRoot: resolveRepoRootForRun(run),
+        });
         broadcastCloserMessage(runId, result.message);
         return { ok: true };
       } catch (err) {
@@ -801,29 +701,23 @@ export function registerDynamicWorkflowHandlers(ctx: IpcContext): void {
     },
   );
 
-  ipcMain.handle(
-    'dynamic-workflow:finalize',
-    (_event, runId: string): DynamicWorkflowOkResult => {
-      try {
-        return getRunner().finalize(runId);
-      } catch (err) {
-        logger.error({ err, runId }, 'dynamic-workflow:finalize failed');
-        return { error: (err as Error).message };
-      }
-    },
-  );
+  ipcMain.handle('dynamic-workflow:finalize', (_event, runId: string): DynamicWorkflowOkResult => {
+    try {
+      return getRunner().finalize(runId);
+    } catch (err) {
+      logger.error({ err, runId }, 'dynamic-workflow:finalize failed');
+      return { error: (err as Error).message };
+    }
+  });
 
-  ipcMain.handle(
-    'dynamic-workflow:get-snapshot',
-    (_event, runId: string): DynamicWorkflowSnapshotResult => {
-      try {
-        const snapshot = getRunner().getSnapshot(runId);
-        if (!snapshot) return { error: `run nao encontrado: ${runId}` };
-        return snapshot;
-      } catch (err) {
-        logger.error({ err, runId }, 'dynamic-workflow:get-snapshot failed');
-        return { error: (err as Error).message };
-      }
-    },
-  );
+  ipcMain.handle('dynamic-workflow:get-snapshot', (_event, runId: string): DynamicWorkflowSnapshotResult => {
+    try {
+      const snapshot = getRunner().getSnapshot(runId);
+      if (!snapshot) return { error: `run nao encontrado: ${runId}` };
+      return snapshot;
+    } catch (err) {
+      logger.error({ err, runId }, 'dynamic-workflow:get-snapshot failed');
+      return { error: (err as Error).message };
+    }
+  });
 }

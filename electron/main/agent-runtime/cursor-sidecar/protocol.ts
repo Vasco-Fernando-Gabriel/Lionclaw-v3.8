@@ -1,6 +1,4 @@
-
 export const CURSOR_SIDECAR_RPC_PREFIX = '@@LIONRPC@@';
-
 
 export interface CursorCustomToolDeclaration {
   name: string;
@@ -22,7 +20,6 @@ export interface CursorSidecarExecuteConfig {
   customTools: CursorCustomToolDeclaration[];
   resumeAgentId?: string;
 }
-
 
 export interface CursorHostExecuteMessage {
   type: 'execute';
@@ -65,7 +62,6 @@ export type CursorSidecarHostMessage =
   | CursorHostPingMessage
   | CursorHostShutdownMessage
   | CursorHostListModelsMessage;
-
 
 export interface CursorSidecarUsage {
   inputTokens: number;
@@ -157,7 +153,6 @@ export type CursorSidecarMessage =
   | CursorSidecarPongMessage
   | CursorSidecarFatalMessage
   | CursorSidecarModelsResultMessage;
-
 
 export function encodeSidecarLine(msg: CursorSidecarHostMessage | CursorSidecarMessage): string {
   return CURSOR_SIDECAR_RPC_PREFIX + JSON.stringify(msg) + '\n';

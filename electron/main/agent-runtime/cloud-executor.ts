@@ -1,13 +1,11 @@
+import { createSwarmProcessOwner } from './swarm-process';
+import { swarmSdkHooks } from './swarm-sdk-hooks';
 
 import fs from 'fs';
 import { createLogger } from '../logger';
 import { processAgentStream } from '../stream-processor';
 import { calculateCost, getPricingSnapshot } from '../pricing';
-import {
-  getClaudeSdkProcessOptions,
-  ensureNodeInPath,
-  ensureAuthForSDK,
-} from '../pipeline-shared/sdk-bootstrap';
+import { getClaudeSdkProcessOptions, ensureNodeInPath, ensureAuthForSDK } from '../pipeline-shared/sdk-bootstrap';
 import type { AgentQueryConfig } from '../agent-config-resolver';
 import type { RuntimeExecutor, AgentExecutionRequest, AgentExecutionResult } from './types';
 import { SDK_DISALLOWED_TOOLS, toSdkToolNames } from './sdk-tool-names';
@@ -15,13 +13,16 @@ import { sanitizeSubprocessEnv } from './subprocess-env';
 
 const logger = createLogger('cloud-executor');
 
-type ClaudeModelUsage = Record<string, {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadInputTokens: number;
-  cacheCreationInputTokens: number;
-  costUSD: number;
-}>;
+type ClaudeModelUsage = Record<
+  string,
+  {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadInputTokens: number;
+    cacheCreationInputTokens: number;
+    costUSD: number;
+  }
+>;
 
 interface CloudCostInput {
   model: string;
@@ -44,14 +45,14 @@ export function reconcileCloudCost(input: CloudCostInput): CloudCostResult {
   const sdkModelUsageCost = input.modelUsage
     ? Object.values(input.modelUsage).reduce((sum, usage) => sum + usage.costUSD, 0)
     : undefined;
-  const sdkReportedCostUsd = input.totalCostUsd && input.totalCostUsd > 0
-    ? input.totalCostUsd
-    : sdkModelUsageCost && sdkModelUsageCost > 0
-      ? sdkModelUsageCost
-      : undefined;
-  const sdkSource = input.totalCostUsd && input.totalCostUsd > 0
-    ? 'sdk_total_cost_usd' as const
-    : 'sdk_model_usage' as const;
+  const sdkReportedCostUsd =
+    input.totalCostUsd && input.totalCostUsd > 0
+      ? input.totalCostUsd
+      : sdkModelUsageCost && sdkModelUsageCost > 0
+        ? sdkModelUsageCost
+        : undefined;
+  const sdkSource =
+    input.totalCostUsd && input.totalCostUsd > 0 ? ('sdk_total_cost_usd' as const) : ('sdk_model_usage' as const);
 
   const streamCost = calculateCost(
     input.model,
@@ -61,19 +62,24 @@ export function reconcileCloudCost(input: CloudCostInput): CloudCostResult {
     input.cacheCreationTokens,
   );
   const modelUsageCost = input.modelUsage
-    ? Object.entries(input.modelUsage).reduce((sum, [model, usage]) => sum + calculateCost(
-      model,
-      usage.inputTokens + usage.cacheReadInputTokens + usage.cacheCreationInputTokens,
-      usage.outputTokens,
-      usage.cacheReadInputTokens,
-      usage.cacheCreationInputTokens,
-    ), 0)
+    ? Object.entries(input.modelUsage).reduce(
+        (sum, [model, usage]) =>
+          sum +
+          calculateCost(
+            model,
+            usage.inputTokens + usage.cacheReadInputTokens + usage.cacheCreationInputTokens,
+            usage.outputTokens,
+            usage.cacheReadInputTokens,
+            usage.cacheCreationInputTokens,
+          ),
+        0,
+      )
     : 0;
   const canonicalCost = Math.max(streamCost, modelUsageCost);
 
   if (sdkReportedCostUsd !== undefined && canonicalCost > 0) {
     const relativeDelta = Math.abs(sdkReportedCostUsd - canonicalCost) / canonicalCost;
-    if (relativeDelta > 0.10) {
+    if (relativeDelta > 0.1) {
       return {
         costUsd: Math.round(canonicalCost * 1_000_000) / 1_000_000,
         costSource: 'calculated',
@@ -96,25 +102,26 @@ export function buildClaudeQueryOptions(
   cliPath: string,
   childAbort: AbortController,
 ): Record<string, unknown> {
-  const mcpServersObj = config.mcpServers.length > 0
-    ? Object.fromEntries(config.mcpServers.flatMap((s) => Object.entries(s)))
-    : undefined;
+  const mcpServersObj =
+    config.mcpServers.length > 0 ? Object.fromEntries(config.mcpServers.flatMap((s) => Object.entries(s))) : undefined;
 
   const modelLower = config.model.toLowerCase();
   const suppressThinking = modelLower.startsWith('claude-fable-');
 
   const isOpus5 = modelLower.startsWith('claude-opus-5');
-  const resolvedEffort = req.inheritedEffort !== undefined
-    ? req.inheritedEffort.claude
-    : config.effort;
+  const thinkingAlwaysOn = modelLower.startsWith('claude-opus-5-5');
+  const resolvedEffort = req.inheritedEffort !== undefined ? req.inheritedEffort.claude : config.effort;
 
   return {
     pathToClaudeCodeExecutable: cliPath,
     cwd: req.cwd,
     model: config.model,
     systemPrompt: config.systemPrompt || '',
-    allowedTools: toSdkToolNames(config.allowedTools),
+    allowedTools: req.executionAgent ? [] : toSdkToolNames(config.allowedTools),
     disallowedTools: [...SDK_DISALLOWED_TOOLS],
+    ...(req.executionAgent
+      ? { tools: toSdkToolNames(config.allowedTools), settingSources: [], hooks: swarmSdkHooks(req) }
+      : {}),
     permissionMode: req.permission.mode,
     allowDangerouslySkipPermissions: req.permission.dangerouslySkipPermissions,
     ...(req.permission.canUseTool ? { canUseTool: req.permission.canUseTool } : {}),
@@ -134,13 +141,11 @@ export function buildClaudeQueryOptions(
         ? {
             thinking: {
               type: 'enabled' as const,
-              ...(config.thinkingBudget !== undefined && !isOpus5
-                ? { budgetTokens: config.thinkingBudget }
-                : {}),
+              ...(config.thinkingBudget !== undefined && !isOpus5 ? { budgetTokens: config.thinkingBudget } : {}),
             },
           }
         : config.thinking === 'disabled'
-          ? isOpus5 && resolvedEffort === 'max'
+          ? thinkingAlwaysOn || (isOpus5 && resolvedEffort === 'max')
             ? {}
             : { thinking: { type: 'disabled' as const } }
           : {}),
@@ -151,10 +156,7 @@ export function buildClaudeQueryOptions(
   };
 }
 
-async function run(
-  req: AgentExecutionRequest,
-  config: AgentQueryConfig,
-): Promise<AgentExecutionResult> {
+async function run(req: AgentExecutionRequest, config: AgentQueryConfig): Promise<AgentExecutionResult> {
   ensureNodeInPath();
   await ensureAuthForSDK();
 
@@ -181,11 +183,13 @@ async function run(
     req.abortController.signal.removeEventListener('abort', onParentAbort);
   };
 
+  const swarmOwner = req.executionAgent ? createSwarmProcessOwner(req.swarmOwnerDirectory) : null;
   const q = (query as (opts: Record<string, unknown>) => unknown)({
     prompt: req.prompt,
     options: {
       ...buildClaudeQueryOptions(req, config, cliPath, childAbort),
       ...processOptions,
+      ...(swarmOwner ? { spawnClaudeCodeProcess: swarmOwner.spawnProcess } : {}),
     },
   }) as AsyncIterable<Record<string, unknown>>;
 
@@ -199,7 +203,7 @@ async function run(
   let resultError: Awaited<ReturnType<typeof processAgentStream>>['resultError'];
 
   try {
-    const result = await processAgentStream(q, {
+    const result = await processAgentStream(withRuntimeActivity(q, req.onActivity), {
       shouldAbort: () => childAbort.signal.aborted,
       onText: req.onText,
       onThinking: req.onThinking,
@@ -216,6 +220,7 @@ async function run(
     resultError = result.resultError;
   } finally {
     cleanupParentListener();
+    await swarmOwner?.closeConfirmed();
   }
 
   const durationMs = Date.now() - startedAt;
@@ -230,13 +235,16 @@ async function run(
     modelUsage,
   });
   if (reconciledCost.reconciliationRelativeDelta !== undefined) {
-    logger.warn({
-      agentId: req.agentId,
-      model: config.model,
-      sdkReportedCostUsd: reconciledCost.sdkReportedCostUsd,
-      reconciledCostUsd: reconciledCost.costUsd,
-      relativeDelta: reconciledCost.reconciliationRelativeDelta,
-    }, 'Claude SDK cost diverged from canonical pricing; using local calculation');
+    logger.warn(
+      {
+        agentId: req.agentId,
+        model: config.model,
+        sdkReportedCostUsd: reconciledCost.sdkReportedCostUsd,
+        reconciledCostUsd: reconciledCost.costUsd,
+        relativeDelta: reconciledCost.reconciliationRelativeDelta,
+      },
+      'Claude SDK cost diverged from canonical pricing; using local calculation',
+    );
   }
 
   return {
@@ -258,9 +266,7 @@ async function run(
     textBlocks,
     metadata: {
       costSource: reconciledCost.costSource,
-      ...(reconciledCost.costSource === 'calculated'
-        ? { pricingSnapshot: getPricingSnapshot(config.model) }
-        : {}),
+      ...(reconciledCost.costSource === 'calculated' ? { pricingSnapshot: getPricingSnapshot(config.model) } : {}),
       ...(reconciledCost.sdkReportedCostUsd !== undefined
         ? { sdkReportedCostUsd: reconciledCost.sdkReportedCostUsd }
         : {}),
@@ -275,3 +281,10 @@ async function run(
 }
 
 export const cloudExecutor: RuntimeExecutor = { run };
+
+async function* withRuntimeActivity<T>(source: AsyncIterable<T>, onActivity?: () => void): AsyncIterable<T> {
+  for await (const event of source) {
+    onActivity?.();
+    yield event;
+  }
+}

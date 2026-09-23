@@ -1,9 +1,6 @@
 import { AudioLines } from 'lucide-react';
 import type { AppSettings, VoiceTranscriptionModel } from '@/types';
-import {
-  DEFAULT_VOICE_TRANSCRIPTION_MODEL,
-  VOICE_TRANSCRIPTION_MODELS,
-} from '@/constants/transcription-models';
+import { DEFAULT_VOICE_TRANSCRIPTION_MODEL, VOICE_TRANSCRIPTION_MODELS } from '@/constants/transcription-models';
 
 interface Props {
   settings: AppSettings;

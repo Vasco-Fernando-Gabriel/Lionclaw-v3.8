@@ -32,7 +32,7 @@ describe('CTX-FINAL wiring — compat (GLM/MiniMax)', () => {
 describe('CTX-FINAL wiring — codex (tokenUsage.last)', () => {
   const src = readSource('../codex-sdk/index.ts');
   it('importa o helper compartilhado', () => {
-    expect(src).toContain('from "../agent-runtime/context-measure"');
+    expect(src).toContain("from '../agent-runtime/context-measure'");
   });
   it('o contador ativo NAO usa mais estimateTokens(prompt + persistedFinalText)', () => {
     const region = activeContextRegion(src);
@@ -41,7 +41,7 @@ describe('CTX-FINAL wiring — codex (tokenUsage.last)', () => {
   it('usa response.lastUsage normalizado como shape codex', () => {
     const region = activeContextRegion(src);
     expect(region).toContain('response.lastUsage');
-    expect(region).toContain('normalizeUsage(response.lastUsage, "codex")');
+    expect(region).toContain("normalizeUsage(response.lastUsage, 'codex')");
     expect(region).toContain('reconcileActiveContext');
   });
 });
@@ -49,7 +49,7 @@ describe('CTX-FINAL wiring — codex (tokenUsage.last)', () => {
 describe('CTX-FINAL wiring — kimi', () => {
   const src = readSource('../kimi-sdk/index.ts');
   it('importa o helper e reconcilia usage vs PISO FORTE (SPEC contexto-vivo)', () => {
-    expect(src).toContain('from "../agent-runtime/context-measure"');
+    expect(src).toContain("from '../agent-runtime/context-measure'");
     expect(src).toContain('reconcileActiveContext');
     expect(src).toContain('estimateStrongFloor');
   });

@@ -1,10 +1,8 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import net from 'net';
 import os from 'os';
 import path from 'path';
-
 
 let SANDBOX = '';
 
@@ -22,7 +20,31 @@ const hoisted = vi.hoisted(() => {
     };
   const state: { activeChatSession: { id: string } | null } = { activeChatSession: null };
   const auditEntries: Array<Record<string, unknown>> = [];
-  return { logEntries, makeLevel, state, auditEntries };
+  const kanbanCalls: Array<{ method: string; args: unknown[] }> = [];
+  return { logEntries, makeLevel, state, auditEntries, kanbanCalls };
+});
+
+vi.mock('../kanban-engine', () => {
+  const record =
+    (method: string) =>
+    (...args: unknown[]) => {
+      hoisted.kanbanCalls.push({ method, args });
+      return { ok: true, method, args };
+    };
+  return {
+    getKanbanEngine: () => ({
+      createBoard: record('createBoard'),
+      listBoards: () => ({ ok: true, boards: [{ prefix: 'LC', repoPath: 'C:/repo' }] }),
+      createCard: record('createCard'),
+      getCard: record('getCard'),
+      queryCards: record('queryCards'),
+      updateCard: record('updateCard'),
+      moveCard: record('moveCard'),
+      deliverCard: record('deliverCard'),
+      deleteCard: record('deleteCard'),
+      attachFile: record('attachFile'),
+    }),
+  };
 });
 
 vi.mock('../logger', () => ({
@@ -40,6 +62,10 @@ vi.mock('../paths', () => ({
   getBackgroundCwd: () => path.join(SANDBOX, 'background'),
 }));
 
+vi.mock('../in-flight-desktop-session', () => ({
+  getInFlightDesktopSession: () => hoisted.state.activeChatSession?.id ?? null,
+  setInFlightDesktopSession: () => {},
+}));
 vi.mock('../db', () => ({
   getAllAgents: () => [],
   getAgent: () => undefined,
@@ -82,17 +108,13 @@ vi.mock('../pipeline-control-core', () => ({
   normalizeApproveMetadata: (m: unknown) => m,
 }));
 
-
 import {
   startLocalIpcServer,
   stopLocalIpcServer,
   getCurrentEndpoint,
+  publishExternalClientServers,
 } from '../local-ipc';
-import {
-  dispatch,
-  resolveGatedCallTurnContext,
-  type JsonRpcContext,
-} from '../local-ipc/jsonrpc-methods';
+import { dispatch, resolveGatedCallTurnContext, type JsonRpcContext } from '../local-ipc/jsonrpc-methods';
 import {
   mintHelperToken,
   isValidHelperToken,
@@ -108,7 +130,6 @@ import { LocalIpcClient } from '../../../mcp-servers/_shared/local-ipc-client';
 import { generateWrapper, CHAT_GATED_HELPER_IDS } from '../codex-sdk/mcp-wrapper-generator';
 
 const IS_POSIX = process.platform !== 'win32';
-
 
 interface LineReader {
   next: () => Promise<string>;
@@ -165,15 +186,10 @@ interface RawResponse {
   error?: { code: number; message: string };
 }
 
-async function rpcRaw(
-  socket: net.Socket,
-  reader: LineReader,
-  frame: Record<string, unknown>,
-): Promise<RawResponse> {
+async function rpcRaw(socket: net.Socket, reader: LineReader, frame: Record<string, unknown>): Promise<RawResponse> {
   socket.write(JSON.stringify(frame) + '\n');
   return JSON.parse(await reader.next()) as RawResponse;
 }
-
 
 function handshakeAuthLogs(): number {
   return hoisted.logEntries.filter((e) => e.msg.includes('autenticada via handshake')).length;
@@ -189,12 +205,14 @@ function shadowLogs(): Array<{ data: Record<string, unknown>; msg: string }> {
     .map((e) => ({ data: (e.data ?? {}) as Record<string, unknown>, msg: e.msg }));
 }
 
-
 beforeEach(async () => {
   const shortRoot = IS_POSIX ? '/tmp' : os.tmpdir();
   SANDBOX = await fs.promises.mkdtemp(path.join(shortRoot, 'lc-hs-'));
   hoisted.logEntries.length = 0;
   hoisted.auditEntries.length = 0;
+  hoisted.kanbanCalls.length = 0;
+  delete process.env['LIONCLAW_CLIENT'];
+  delete process.env['LIONCLAW_CLIENT_DETAIL'];
   hoisted.state.activeChatSession = null;
   delete process.env[LIONCLAW_HELPER_TOKEN_ENV];
   __resetHelperIdentityForTests();
@@ -203,14 +221,14 @@ beforeEach(async () => {
 
 afterEach(async () => {
   delete process.env[LIONCLAW_HELPER_TOKEN_ENV];
+  delete process.env['LIONCLAW_CLIENT'];
+  delete process.env['LIONCLAW_CLIENT_DETAIL'];
   try {
     await stopLocalIpcServer();
-  } catch {
-  }
+  } catch {}
   try {
     await fs.promises.rm(SANDBOX, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
 });
 
 async function startServer(): Promise<string> {
@@ -229,7 +247,6 @@ function seedActiveDesktopTurn(sessionId = 'sess-1', turnId = 'turn-1'): void {
   });
   setActiveChatTurn({ sessionId, lane: 'desktop', turnId });
 }
-
 
 describe('handshake por conexao (server local-ipc)', () => {
   it('token valido marca a conexao como authenticated helper', async () => {
@@ -254,7 +271,7 @@ describe('handshake por conexao (server local-ipc)', () => {
         jsonrpc: '2.0',
         id: 2,
         method: 'pipeline_list',
-        params: {},
+        params: { sessionId: 'sess-1', turnId: 'turn-1' },
       });
       expect(gated.error).toBeUndefined();
       expect(gated.result).toEqual([{ id: 'p1', name: 'Pipe 1' }]);
@@ -298,11 +315,12 @@ describe('handshake por conexao (server local-ipc)', () => {
       expect(skills.result).toEqual([]);
 
       hoisted.state.activeChatSession = { id: 'sess-1' };
+      seedActiveDesktopTurn('sess-1', 'turn-1');
       const gated = await rpcRaw(socket, reader, {
         jsonrpc: '2.0',
         id: 3,
         method: 'pipeline_list',
-        params: {},
+        params: { sessionId: 'sess-1', turnId: 'turn-1' },
       });
       expect(gated.error).toBeUndefined();
       expect(gated.result).toEqual([{ id: 'p1', name: 'Pipe 1' }]);
@@ -357,11 +375,12 @@ describe('handshake por conexao (server local-ipc)', () => {
       expect(skills.result).toEqual([]);
 
       hoisted.state.activeChatSession = { id: 'sess-1' };
+      seedActiveDesktopTurn('sess-1', 'turn-1');
       const gated = await rpcRaw(socket, reader, {
         jsonrpc: '2.0',
         id: 2,
         method: 'pipeline_list',
-        params: {},
+        params: { sessionId: 'sess-1', turnId: 'turn-1' },
       });
       expect(gated.error).toBeUndefined();
       expect(gated.result).toEqual([{ id: 'p1', name: 'Pipe 1' }]);
@@ -370,7 +389,6 @@ describe('handshake por conexao (server local-ipc)', () => {
     }
   });
 });
-
 
 describe('LocalIpcClient: handshake no connect e re-handshake no reconnect', () => {
   it('com token no env, envia handshake em TODA conexao nova (inclui reconexao)', async () => {
@@ -423,7 +441,6 @@ describe('LocalIpcClient: handshake no connect e re-handshake no reconnect', () 
   });
 });
 
-
 describe('resolveGatedCallTurnContext (0.7 item 3)', () => {
   const authedCtx: JsonRpcContext = {
     getWindow: () => null,
@@ -443,16 +460,25 @@ describe('resolveGatedCallTurnContext (0.7 item 3)', () => {
     ).toEqual({ ok: false, reason: 'unauthenticated-connection' });
   });
 
-  it('autenticada sem turno desktop ativo -> no-active-desktop-turn', () => {
+  it('autenticada sem binding de sessao -> turn-binding-required (turn_binding_required)', () => {
     expect(resolveGatedCallTurnContext(authedCtx)).toEqual({
       ok: false,
+      reason: 'turn-binding-required',
+      code: 'turn_binding_required',
+    });
+  });
+
+  it('autenticada com sessionId sem turno desktop ativo -> no-active-desktop-turn', () => {
+    expect(resolveGatedCallTurnContext(authedCtx, undefined, { lane: 'desktop', sessionId: 'sess-9' })).toEqual({
+      ok: false,
       reason: 'no-active-desktop-turn',
+      code: 'turn_binding_required',
     });
   });
 
   it('turno ativo sem turn-context vivo -> turn-context-missing (com a chave resolvida)', () => {
     setActiveChatTurn({ sessionId: 'sess-9', lane: 'desktop', turnId: 'turn-9' });
-    expect(resolveGatedCallTurnContext(authedCtx)).toEqual({
+    expect(resolveGatedCallTurnContext(authedCtx, undefined, { lane: 'desktop', sessionId: 'sess-9' })).toEqual({
       ok: false,
       reason: 'turn-context-missing',
       sessionId: 'sess-9',
@@ -462,7 +488,11 @@ describe('resolveGatedCallTurnContext (0.7 item 3)', () => {
 
   it('degraus completos -> ok com turn-context do turno ativo da lane desktop', () => {
     seedActiveDesktopTurn('sess-2', 'turn-7');
-    const resolution = resolveGatedCallTurnContext(authedCtx);
+    const resolution = resolveGatedCallTurnContext(authedCtx, undefined, {
+      lane: 'desktop',
+      sessionId: 'sess-2',
+      turnId: 'turn-7',
+    });
     expect(resolution.ok).toBe(true);
     expect(resolution.reason).toBe('ok');
     expect(resolution.sessionId).toBe('sess-2');
@@ -476,9 +506,10 @@ describe('resolveGatedCallTurnContext (0.7 item 3)', () => {
 
   it('SHADOW no dispatch: loga o fail-closed e NAO nega a chamada gated', async () => {
     hoisted.state.activeChatSession = { id: 'sess-1' };
+    seedActiveDesktopTurn('sess-1', 'turn-1');
     const res = await dispatch(
       { getWindow: () => null },
-      { jsonrpc: '2.0', id: 5, method: 'pipeline_list', params: {} },
+      { jsonrpc: '2.0', id: 5, method: 'pipeline_list', params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' } } },
     );
     expect(res.error).toBeUndefined();
     expect(res.result).toEqual([{ id: 'p1', name: 'Pipe 1' }]);
@@ -502,13 +533,12 @@ describe('resolveGatedCallTurnContext (0.7 item 3)', () => {
     setActiveChatTurn({ sessionId: 'sess-1', lane: 'desktop', turnId: 'turn-1' });
     await dispatch(
       { getWindow: () => null, connection: { authenticatedHelper: true } },
-      { jsonrpc: '2.0', id: 6, method: 'pipeline_list', params: {} },
+      { jsonrpc: '2.0', id: 6, method: 'pipeline_list', params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' } } },
     );
     const serialized = JSON.stringify(hoisted.logEntries);
     expect(serialized).not.toContain('LEASE-SECRETA-NUNCA-LOGAR');
   });
 });
-
 
 describe('mint_helper_token (wrapper codex)', () => {
   const ctx: JsonRpcContext = { getWindow: () => null };
@@ -518,7 +548,11 @@ describe('mint_helper_token (wrapper codex)', () => {
       jsonrpc: '2.0',
       id: 1,
       method: 'mint_helper_token',
-      params: { server_id: 'lionclaw-pipeline-control', caller_pid: 4242 },
+      params: {
+        ...{ sessionId: 'sess-1', turnId: 'turn-1' },
+        server_id: 'lionclaw-pipeline-control',
+        caller_pid: 4242,
+      },
     });
     expect(res.error).toBeUndefined();
     const token = (res.result as { token: string }).token;
@@ -537,7 +571,7 @@ describe('mint_helper_token (wrapper codex)', () => {
       jsonrpc: '2.0',
       id: 2,
       method: 'mint_helper_token',
-      params: { server_id: 'google-gmail', caller_pid: 1 },
+      params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' }, server_id: 'google-gmail', caller_pid: 1 },
     });
     expect(res.result).toBeUndefined();
     expect(res.error?.code).toBe(-32000);
@@ -550,7 +584,7 @@ describe('mint_helper_token (wrapper codex)', () => {
       jsonrpc: '2.0',
       id: 3,
       method: 'mint_helper_token',
-      params: { server_id: 'lionclaw-dynamic-workflows', caller_pid: 7 },
+      params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' }, server_id: 'lionclaw-dynamic-workflows', caller_pid: 7 },
     });
     const token = (minted.result as { token: string }).token;
 
@@ -574,17 +608,11 @@ describe('mint_helper_token (wrapper codex)', () => {
   });
 });
 
-
 describe('generateWrapper com fetchHelperToken (S3b item 4)', () => {
   it('helpers gated: o wrapper busca mint_helper_token e injeta LIONCLAW_HELPER_TOKEN', () => {
-    const source = generateWrapper(
-      'lionclaw-pipeline-control',
-      'node',
-      ['/x/pc.js'],
-      [],
-      '/home/x/.lionclaw',
-      { fetchHelperToken: true },
-    );
+    const source = generateWrapper('lionclaw-pipeline-control', 'node', ['/x/pc.js'], [], '/home/x/.lionclaw', {
+      fetchHelperToken: true,
+    });
     expect(source).toContain('const FETCH_HELPER_TOKEN = true;');
     expect(source).toContain('mint_helper_token');
     expect(source).toContain(`"${LIONCLAW_HELPER_TOKEN_ENV}"`);
@@ -604,9 +632,271 @@ describe('generateWrapper com fetchHelperToken (S3b item 4)', () => {
   });
 
   it('CHAT_GATED_HELPER_IDS espelha os helpers gated da S3a', () => {
-    expect([...CHAT_GATED_HELPER_IDS].sort()).toEqual([
-      'lionclaw-dynamic-workflows',
-      'lionclaw-pipeline-control',
-    ]);
+    expect([...CHAT_GATED_HELPER_IDS].sort()).toEqual(['lionclaw-dynamic-workflows', 'lionclaw-pipeline-control']);
+  });
+});
+
+function externalClientLogs(): number {
+  return hoisted.logEntries.filter((e) => e.msg.includes('identificada como cliente externo')).length;
+}
+
+describe('handshake de cliente externo (LionCode) e Kanban sem turno de chat', () => {
+  it('client lioncode identifica a conexao, devolve a versao do protocolo e libera o Kanban com actor lioncode', async () => {
+    const address = await startServer();
+    const socket = await connectRaw(address);
+    const reader = attachLineReader(socket);
+    try {
+      const hs = await rpcRaw(socket, reader, {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'handshake',
+        params: { client: 'lioncode', clientDetail: 'Claude Opus 5' },
+      });
+      expect(hs.error).toBeUndefined();
+      expect(hs.result).toEqual({
+        ok: true,
+        authenticated: false,
+        externalClient: 'lioncode',
+        kanbanProtocol: 1,
+      });
+      expect(externalClientLogs()).toBe(1);
+
+      const list = await rpcRaw(socket, reader, {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'kanban_board_list',
+        params: {},
+      });
+      expect(list.error).toBeUndefined();
+      expect(list.result).toEqual({ ok: true, boards: [{ prefix: 'LC', repoPath: 'C:/repo' }] });
+
+      const create = await rpcRaw(socket, reader, {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'kanban_card_create',
+        params: { board: 'LC', title: 'Card do LionCode' },
+      });
+      expect(create.error).toBeUndefined();
+      const createCall = hoisted.kanbanCalls.find((c) => c.method === 'createCard');
+      expect(createCall?.args[1]).toEqual({ actor: 'lioncode', detail: 'Claude Opus 5' });
+
+      const move = await rpcRaw(socket, reader, {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'kanban_card_move',
+        params: { board: 'LC', local_id: 1, to_column: 'Desenvolvimento' },
+      });
+      expect(move.error).toBeUndefined();
+      const moveCall = hoisted.kanbanCalls.find((c) => c.method === 'moveCard');
+      expect(moveCall?.args[4]).toEqual({ actor: 'lioncode', detail: 'Claude Opus 5' });
+    } finally {
+      socket.destroy();
+    }
+  });
+
+  it('cliente externo NAO cria quadro nem apaga definitivamente; arquivar (hard=false) segue livre', async () => {
+    const address = await startServer();
+    const socket = await connectRaw(address);
+    const reader = attachLineReader(socket);
+    try {
+      await rpcRaw(socket, reader, {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'handshake',
+        params: { client: 'lioncode' },
+      });
+      const board = await rpcRaw(socket, reader, {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'kanban_board_create',
+        params: { prefix: 'XX', repo_path: 'C:/repo' },
+      });
+      expect(board.result).toEqual({ error: expect.stringContaining('criacao de quadro') });
+
+      const hard = await rpcRaw(socket, reader, {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'kanban_card_delete',
+        params: { board: 'LC', local_id: 1, hard: true },
+      });
+      expect(hard.result).toEqual({ error: expect.stringContaining('delecao definitiva') });
+      expect(hoisted.kanbanCalls.some((c) => c.method === 'deleteCard')).toBe(false);
+
+      const soft = await rpcRaw(socket, reader, {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'kanban_card_delete',
+        params: { board: 'LC', local_id: 1 },
+      });
+      expect(soft.error).toBeUndefined();
+      const softCall = hoisted.kanbanCalls.find((c) => c.method === 'deleteCard');
+      expect(softCall?.args[2]).toBe(false);
+      expect(softCall?.args[3]).toEqual({ actor: 'lioncode', detail: null });
+    } finally {
+      socket.destroy();
+    }
+  });
+
+  it('cliente externo desconhecido e recusado (-32002) e a conexao segue anonima: Kanban exige turno', async () => {
+    const address = await startServer();
+    const socket = await connectRaw(address);
+    const reader = attachLineReader(socket);
+    try {
+      const hs = await rpcRaw(socket, reader, {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'handshake',
+        params: { client: 'intruso' },
+      });
+      expect(hs.error?.code).toBe(-32002);
+      expect(externalClientLogs()).toBe(0);
+
+      const list = await rpcRaw(socket, reader, {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'kanban_board_list',
+        params: {},
+      });
+      expect(list.error?.message).toMatch(/turn_binding_required/);
+    } finally {
+      socket.destroy();
+    }
+  });
+
+  it('cliente externo so alcanca kanban_*: qualquer outro metodo volta -32003; handshake seguinte reseta a identidade', async () => {
+    const address = await startServer();
+    const socket = await connectRaw(address);
+    const reader = attachLineReader(socket);
+    try {
+      await rpcRaw(socket, reader, {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'handshake',
+        params: { client: 'lioncode', clientDetail: 'Claude\u0000\nOpus' },
+      });
+      const other = await rpcRaw(socket, reader, {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'list_skills',
+        params: {},
+      });
+      expect(other.error?.code).toBe(-32003);
+      expect(other.error?.message).toMatch(/kanban_\*/);
+
+      const anon = await rpcRaw(socket, reader, {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'handshake',
+        params: {},
+      });
+      expect(anon.result).toEqual({ ok: true, authenticated: false });
+      const list = await rpcRaw(socket, reader, {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'kanban_board_list',
+        params: {},
+      });
+      expect(list.error?.message).toMatch(/turn_binding_required/);
+    } finally {
+      socket.destroy();
+    }
+  });
+
+  it('LocalIpcClient com LIONCLAW_CLIENT no env faz o handshake externo em toda conexao e valida o protocolo', async () => {
+    await startServer();
+    process.env['LIONCLAW_CLIENT'] = 'lioncode';
+    process.env['LIONCLAW_CLIENT_DETAIL'] = 'Kimi K3';
+
+    const client = new LocalIpcClient({
+      lionclawHome: SANDBOX,
+      maxRetries: 2,
+      baseBackoffMs: 50,
+      maxBackoffMs: 500,
+      callTimeoutMs: 5000,
+      expectedKanbanProtocol: 1,
+    });
+    try {
+      const first = await client.callMethod('kanban_board_list', {});
+      expect(first).toEqual({ ok: true, boards: [{ prefix: 'LC', repoPath: 'C:/repo' }] });
+      expect(externalClientLogs()).toBe(1);
+
+      const inner = (client as unknown as { socket: net.Socket | null }).socket;
+      inner!.destroy();
+      await new Promise((r) => setTimeout(r, 50));
+
+      await client.callMethod('kanban_card_create', { board: 'LC', title: 'x' });
+      expect(externalClientLogs()).toBe(2);
+      const createCall = hoisted.kanbanCalls.find((c) => c.method === 'createCard');
+      expect(createCall?.args[1]).toEqual({ actor: 'lioncode', detail: 'Kimi K3' });
+    } finally {
+      client.close();
+    }
+  });
+
+  it('LocalIpcClient falha fechado quando o protocolo do kanban nao bate ou o cliente e recusado', async () => {
+    await startServer();
+    process.env['LIONCLAW_CLIENT'] = 'lioncode';
+    const mismatch = new LocalIpcClient({
+      lionclawHome: SANDBOX,
+      maxRetries: 1,
+      baseBackoffMs: 50,
+      maxBackoffMs: 500,
+      callTimeoutMs: 5000,
+      expectedKanbanProtocol: 99,
+    });
+    try {
+      await expect(mismatch.callMethod('kanban_board_list', {})).rejects.toThrow(/protocolo do kanban incompativel/);
+      await expect(mismatch.callMethod('kanban_board_list', {})).rejects.toThrow(/protocolo do kanban incompativel/);
+    } finally {
+      mismatch.close();
+    }
+
+    process.env['LIONCLAW_CLIENT'] = 'intruso';
+    const refused = new LocalIpcClient({
+      lionclawHome: SANDBOX,
+      maxRetries: 1,
+      baseBackoffMs: 50,
+      maxBackoffMs: 500,
+      callTimeoutMs: 5000,
+    });
+    try {
+      await expect(refused.callMethod('kanban_board_list', {})).rejects.toThrow(/handshake recusado pelo LionClaw/);
+    } finally {
+      refused.close();
+    }
+  });
+});
+
+describe('publicacao do entrypoint do MCP para clientes externos', () => {
+  it('publicado ANTES do start (ordem do boot): o arquivo ja nasce com externalClientServers', async () => {
+    await publishExternalClientServers({ 'lionclaw-kanban': 'C:/lionclaw/boot/index.js' });
+    await startServer();
+    const file = path.join(SANDBOX, 'runtime', 'ipc-endpoint.json');
+    const parsed = JSON.parse(await fs.promises.readFile(file, 'utf8')) as Record<string, unknown>;
+    expect(parsed['externalClientServers']).toEqual({ 'lionclaw-kanban': 'C:/lionclaw/boot/index.js' });
+  });
+
+  it('ipc-endpoint.json ganha externalClientServers e continua legivel pelo LocalIpcClient', async () => {
+    await startServer();
+    await publishExternalClientServers({ 'lionclaw-kanban': 'C:/lionclaw/mcp/kanban/index.js' });
+    const file = path.join(SANDBOX, 'runtime', 'ipc-endpoint.json');
+    const parsed = JSON.parse(await fs.promises.readFile(file, 'utf8')) as Record<string, unknown>;
+    expect(parsed['externalClientServers']).toEqual({
+      'lionclaw-kanban': 'C:/lionclaw/mcp/kanban/index.js',
+    });
+    expect(typeof parsed['address']).toBe('string');
+
+    const client = new LocalIpcClient({
+      lionclawHome: SANDBOX,
+      maxRetries: 1,
+      baseBackoffMs: 50,
+      maxBackoffMs: 500,
+      callTimeoutMs: 5000,
+    });
+    try {
+      expect(await client.callMethod('list_skills', {})).toEqual([]);
+    } finally {
+      client.close();
+    }
   });
 });

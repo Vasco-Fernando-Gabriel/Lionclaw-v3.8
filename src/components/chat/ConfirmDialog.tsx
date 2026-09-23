@@ -3,11 +3,12 @@ import type { ConfirmAction } from '@/types';
 
 interface ConfirmDialogProps {
   action: ConfirmAction;
+  laneLabel?: string | null;
   onApprove: () => void;
   onDeny: () => void;
 }
 
-export function ConfirmDialog({ action, onApprove, onDeny }: ConfirmDialogProps) {
+export function ConfirmDialog({ action, laneLabel, onApprove, onDeny }: ConfirmDialogProps) {
   const riskColors: Record<string, string> = {
     medium: 'border-amber-500/50 bg-amber-500/5',
     high: 'border-orange-500/50 bg-orange-500/5',
@@ -33,6 +34,14 @@ export function ConfirmDialog({ action, onApprove, onDeny }: ConfirmDialogProps)
             <span className={`text-[10px] font-medium uppercase px-2 py-0.5 rounded-full ${riskBadge[action.risk]}`}>
               {action.risk}
             </span>
+            {laneLabel && (
+              <span
+                className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-semibold"
+                data-testid="confirm-lane-label"
+              >
+                {laneLabel}
+              </span>
+            )}
           </div>
         </div>
 

@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const CREATE_CHAT_SESSION_FEATURES = `
   CREATE TABLE IF NOT EXISTS chat_session_features (
     session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,

@@ -19,7 +19,8 @@ export function applyMigrationV58(db: Database.Database): void {
     {
       id: 'pipe2-prd-completo',
       name: 'Pipe2 PRD Completo',
-      description: 'Gera o PRD Completo do pipeline development-v2 incorporando o design lock aprovado. Prompt placeholder — conteudo completo na Sprint 6.',
+      description:
+        'Gera o PRD Completo do pipeline development-v2 incorporando o design lock aprovado. Prompt placeholder — conteudo completo na Sprint 6.',
       systemPrompt: 'Voce e o pipe2-prd-completo. Prompt placeholder — sera atualizado na Sprint 6.',
       model: 'claude-opus-4-7',
       effort: 'high',
@@ -38,7 +39,8 @@ export function applyMigrationV58(db: Database.Database): void {
     {
       id: 'pipe2-tech-frontend',
       name: 'Pipe2 Frontend Tecnico',
-      description: 'Decisoes tecnicas de Frontend no pipeline development-v2, considerando o design lock e artifact HTML. Prompt placeholder — conteudo completo na Sprint 6.',
+      description:
+        'Decisoes tecnicas de Frontend no pipeline development-v2, considerando o design lock e artifact HTML. Prompt placeholder — conteudo completo na Sprint 6.',
       systemPrompt: 'Voce e o pipe2-tech-frontend. Prompt placeholder — sera atualizado na Sprint 6.',
       model: 'claude-sonnet-4-6',
       effort: 'high',
@@ -57,7 +59,8 @@ export function applyMigrationV58(db: Database.Database): void {
     {
       id: 'pipe2-spec-builder',
       name: 'Pipe2 Spec Builder',
-      description: 'Gera a SPEC do pipeline development-v2 incorporando rotas, telas, componentes, tokens e path do artifact HTML. Prompt placeholder — conteudo completo na Sprint 6.',
+      description:
+        'Gera a SPEC do pipeline development-v2 incorporando rotas, telas, componentes, tokens e path do artifact HTML. Prompt placeholder — conteudo completo na Sprint 6.',
       systemPrompt: 'Voce e o pipe2-spec-builder. Prompt placeholder — sera atualizado na Sprint 6.',
       model: 'claude-opus-4-7',
       effort: 'high',
@@ -76,7 +79,8 @@ export function applyMigrationV58(db: Database.Database): void {
     {
       id: 'pipe2-spec-validator',
       name: 'Pipe2 Spec Validator',
-      description: 'Valida a SPEC do pipeline development-v2 contra PRD, user stories e design lock. Prompt placeholder — conteudo completo na Sprint 6.',
+      description:
+        'Valida a SPEC do pipeline development-v2 contra PRD, user stories e design lock. Prompt placeholder — conteudo completo na Sprint 6.',
       systemPrompt: 'Voce e o pipe2-spec-validator. Prompt placeholder — sera atualizado na Sprint 6.',
       model: 'claude-sonnet-4-6',
       effort: 'high',
@@ -95,7 +99,8 @@ export function applyMigrationV58(db: Database.Database): void {
     {
       id: 'pipe2-spec-enricher',
       name: 'Pipe2 Spec Enricher',
-      description: 'Enriquece a SPEC do pipeline development-v2 com edge cases, UI states e paths alternativos considerando o design lock. Prompt placeholder — conteudo completo na Sprint 6.',
+      description:
+        'Enriquece a SPEC do pipeline development-v2 com edge cases, UI states e paths alternativos considerando o design lock. Prompt placeholder — conteudo completo na Sprint 6.',
       systemPrompt: 'Voce e o pipe2-spec-enricher. Prompt placeholder — sera atualizado na Sprint 6.',
       model: 'claude-sonnet-4-6',
       effort: 'high',

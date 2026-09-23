@@ -4,10 +4,11 @@ import type { AskQuestionRequest, AskQuestionResponse, AskQuestion } from '@/typ
 
 interface AskQuestionDialogProps {
   request: AskQuestionRequest;
+  laneLabel?: string | null;
   onSubmit: (response: AskQuestionResponse) => void;
 }
 
-export function AskQuestionDialog({ request, onSubmit }: AskQuestionDialogProps) {
+export function AskQuestionDialog({ request, laneLabel, onSubmit }: AskQuestionDialogProps) {
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
 
@@ -22,9 +23,7 @@ export function AskQuestionDialog({ request, onSubmit }: AskQuestionDialogProps)
   const handleSelect = (question: AskQuestion, label: string) => {
     if (question.multiSelect) {
       const current = (answers[question.question] as string[]) || [];
-      const next = current.includes(label)
-        ? current.filter((l) => l !== label)
-        : [...current, label];
+      const next = current.includes(label) ? current.filter((l) => l !== label) : [...current, label];
       setAnswers({ ...answers, [question.question]: next });
     } else {
       setAnswers({ ...answers, [question.question]: label });
@@ -66,6 +65,14 @@ export function AskQuestionDialog({ request, onSubmit }: AskQuestionDialogProps)
             <MessageCircleQuestion size={16} className="text-amber-400" />
           </div>
           <span className="text-sm font-medium text-zinc-200">O agente precisa da sua resposta</span>
+          {laneLabel && (
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 font-semibold"
+              data-testid="ask-lane-label"
+            >
+              {laneLabel}
+            </span>
+          )}
         </div>
 
         {/* Questions */}
@@ -77,9 +84,7 @@ export function AskQuestionDialog({ request, onSubmit }: AskQuestionDialogProps)
                 <span className="text-[10px] font-semibold uppercase text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">
                   {q.header}
                 </span>
-                {q.multiSelect && (
-                  <span className="text-[10px] text-zinc-500">(multipla escolha)</span>
-                )}
+                {q.multiSelect && <span className="text-[10px] text-zinc-500">(multipla escolha)</span>}
               </div>
               <p className="text-sm text-zinc-300 mb-3">{q.question}</p>
 
@@ -99,14 +104,21 @@ export function AskQuestionDialog({ request, onSubmit }: AskQuestionDialogProps)
                     >
                       <div className="flex items-start gap-2.5">
                         {/* Radio/Checkbox indicator */}
-                        <div className={`mt-0.5 w-4 h-4 rounded-${q.multiSelect ? 'sm' : 'full'} border flex items-center justify-center shrink-0 ${
-                          selected
-                            ? 'border-amber-500 bg-amber-500'
-                            : 'border-zinc-600'
-                        }`}>
+                        <div
+                          className={`mt-0.5 w-4 h-4 rounded-${q.multiSelect ? 'sm' : 'full'} border flex items-center justify-center shrink-0 ${
+                            selected ? 'border-amber-500 bg-amber-500' : 'border-zinc-600'
+                          }`}
+                        >
                           {selected && (
                             <svg width="10" height="10" viewBox="0 0 10 10" className="text-white">
-                              <path d="M2 5l2 2 4-4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                              <path
+                                d="M2 5l2 2 4-4"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                fill="none"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
                             </svg>
                           )}
                         </div>

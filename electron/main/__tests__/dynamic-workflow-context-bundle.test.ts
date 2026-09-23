@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -94,7 +93,7 @@ describe('context bundle: build-detection (packageScripts/hasBuildScript)', () =
   });
 
   it('package.json ausente => hasBuildScript=false, packageScripts={} (sem throw)', () => {
-    const deps = depsWith({}); // nenhum package.json
+    const deps = depsWith({});
 
     const { bundle } = buildContextBundle(baseInput(), deps);
 

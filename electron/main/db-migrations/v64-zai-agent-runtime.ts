@@ -47,4 +47,3 @@ export function applyMigrationV64(db: Database.Database): void {
     ALTER TABLE agents_new RENAME TO agents;
   `);
 }
-

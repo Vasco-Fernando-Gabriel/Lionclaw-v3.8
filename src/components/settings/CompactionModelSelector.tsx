@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { PackageSearch } from 'lucide-react';
 import type {
@@ -26,12 +25,7 @@ const SUBSCRIPTION_PROVIDERS: ReadonlyArray<SubscriptionProviderDescriptor> = [
   { runtime: 'cursor-sdk', provider: 'cursor', label: 'Cursor SDK' },
 ];
 
-const LION_PROVIDERS: ReadonlyArray<OrchestratorProvider> = [
-  'ollama',
-  'lmstudio',
-  'openai-compatible',
-  'vertex-ai',
-];
+const LION_PROVIDERS: ReadonlyArray<OrchestratorProvider> = ['ollama', 'lmstudio', 'openai-compatible', 'vertex-ai'];
 
 const LION_PROVIDER_LABELS: Record<string, string> = {
   ollama: 'Ollama',
@@ -73,10 +67,7 @@ export interface CompactionGroups {
   orchestratorDisconnected: boolean;
 }
 
-export function buildCompactionGroups(
-  statuses: ProviderStatusEntry[],
-  settings: AppSettings,
-): CompactionGroups {
+export function buildCompactionGroups(statuses: ProviderStatusEntry[], settings: AppSettings): CompactionGroups {
   const orchRuntime = settings.orchestratorRuntime;
   const orchProvider = settings.orchestratorProvider;
 
@@ -133,10 +124,7 @@ export function reconcileCompactionSelection(
   return { selectedProvider: savedProvider, offline };
 }
 
-export function compactionProviderMissingCredential(
-  settings: AppSettings,
-  statuses: ProviderStatusEntry[],
-): boolean {
+export function compactionProviderMissingCredential(settings: AppSettings, statuses: ProviderStatusEntry[]): boolean {
   const { selectedProvider, offline } = reconcileCompactionSelection(settings, statuses);
   return selectedProvider !== null && offline;
 }
@@ -181,10 +169,7 @@ export function CompactionModelSelector({ settings, onUpdate }: Props) {
     [onUpdate],
   );
 
-  const { subscriptionGroups, lionGroups, orchestratorDisconnected } = buildCompactionGroups(
-    statuses,
-    settings,
-  );
+  const { subscriptionGroups, lionGroups, orchestratorDisconnected } = buildCompactionGroups(statuses, settings);
   const { selectedProvider, offline } = reconcileCompactionSelection(settings, statuses);
   const missingCredential = compactionProviderMissingCredential(settings, statuses);
 
@@ -253,47 +238,38 @@ export function CompactionModelSelector({ settings, onUpdate }: Props) {
       </div>
 
       <p className="text-xs text-zinc-500">
-        Vazio = usar o mesmo modelo do chat. Escolha qualquer provedor de assinatura conectado ou um provedor local conectado (Ollama/LM Studio). Vale para compactacao e dreaming.
+        Vazio = usar o Orquestrador padrao. Escolha qualquer provedor de assinatura conectado ou um provedor local
+        conectado (Ollama/LM Studio). Vale para compactacao e dreaming.
       </p>
 
       {missingCredential && (
         <p className="text-xs text-amber-400/90" role="alert">
-          O provedor de compactacao selecionado nao tem credencial conectada. A
-          compactacao vai falhar e retentar no proximo ciclo (o contexto fica
-          intacto). Conecte o provedor em External Providers ou escolha Auto (chat).
+          O provedor de compactacao selecionado nao tem credencial conectada. A compactacao vai falhar e retentar no
+          proximo ciclo (o contexto fica intacto). Conecte o provedor em External Providers ou escolha Auto
+          (Orquestrador padrao).
         </p>
       )}
 
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 px-4 py-3 space-y-3">
         {showDisconnectedWarning && (
-          <p className="text-xs text-amber-400/80">
-            Conecte um provedor em External Providers
-          </p>
+          <p className="text-xs text-amber-400/80">Conecte um provedor em External Providers</p>
         )}
 
         {/* Grupo 1: provedores de assinatura conectados */}
         {subscriptionGroups.length > 0 && (
           <div className="space-y-1.5">
-            <p className="text-[10px] uppercase tracking-wide text-zinc-500">
-              Provedores de assinatura
-            </p>
+            <p className="text-[10px] uppercase tracking-wide text-zinc-500">Provedores de assinatura</p>
             <div className="flex flex-wrap gap-1">
               {subscriptionGroups.map((g) => {
                 const isActiveOrch =
-                  settings.orchestratorRuntime === g.runtime &&
-                  settings.orchestratorProvider === g.provider;
+                  settings.orchestratorRuntime === g.runtime && settings.orchestratorProvider === g.provider;
                 const chipLabel = isActiveOrch ? `${g.label} (atual)` : g.label;
-                return renderProviderChip(
-                  `sub-${g.provider}`,
-                  chipLabel,
-                  selectedProvider === g.provider,
-                  () => {
-                    const firstModel = g.models[0]?.id ?? '';
-                    if (firstModel) {
-                      handleModelChange(g.runtime, g.provider, firstModel);
-                    }
-                  },
-                );
+                return renderProviderChip(`sub-${g.provider}`, chipLabel, selectedProvider === g.provider, () => {
+                  const firstModel = g.models[0]?.id ?? '';
+                  if (firstModel) {
+                    handleModelChange(g.runtime, g.provider, firstModel);
+                  }
+                });
               })}
             </div>
           </div>
@@ -302,22 +278,15 @@ export function CompactionModelSelector({ settings, onUpdate }: Props) {
         {/* Grupo 2: locais / lion conectados */}
         {lionGroups.length > 0 && (
           <div className="space-y-1.5">
-            <p className="text-[10px] uppercase tracking-wide text-zinc-500">
-              Locais / Lion conectados
-            </p>
+            <p className="text-[10px] uppercase tracking-wide text-zinc-500">Locais / Lion conectados</p>
             <div className="flex flex-wrap gap-1">
               {lionGroups.map((g) =>
-                renderProviderChip(
-                  `lion-${g.provider}`,
-                  g.label,
-                  selectedProvider === g.provider,
-                  () => {
-                    const firstModel = g.models[0]?.id ?? '';
-                    if (firstModel) {
-                      handleModelChange('lion-sdk', g.provider, firstModel);
-                    }
-                  },
-                ),
+                renderProviderChip(`lion-${g.provider}`, g.label, selectedProvider === g.provider, () => {
+                  const firstModel = g.models[0]?.id ?? '';
+                  if (firstModel) {
+                    handleModelChange('lion-sdk', g.provider, firstModel);
+                  }
+                }),
               )}
             </div>
           </div>
@@ -331,35 +300,29 @@ export function CompactionModelSelector({ settings, onUpdate }: Props) {
           !subscriptionGroups.some((g) => g.provider === selectedProvider) &&
           !lionGroups.some((g) => g.provider === selectedProvider) && (
             <div className="space-y-1.5">
-              <p className="text-[10px] uppercase tracking-wide text-zinc-500">
-                Escolha salva
-              </p>
+              <p className="text-[10px] uppercase tracking-wide text-zinc-500">Escolha salva</p>
               <div className="flex flex-wrap gap-1">
                 {renderProviderChip(
                   `offline-${selectedProvider}`,
                   savedProviderLabel(selectedProvider),
                   true,
-                  () => {
-                  },
+                  () => {},
                   { offline: true },
                 )}
               </div>
             </div>
           )}
 
-        {/* Auto (chat) sempre presente */}
+        {/* Auto (Orquestrador padrao) sempre presente */}
         <div className="flex flex-wrap gap-1">
-          {renderProviderChip('auto', 'Auto (chat)', isAuto, handleClear)}
+          {renderProviderChip('auto', 'Auto (Orquestrador padrao)', isAuto, handleClear)}
         </div>
 
         {/* Dropdown de modelos do provider selecionado */}
         {!isAuto && selectedRuntime && selectedModels.length > 0 && (
           <select
             value={savedModel ?? selectedModels[0]?.id ?? ''}
-            onChange={(e) =>
-              selectedProvider &&
-              handleModelChange(selectedRuntime, selectedProvider, e.target.value)
-            }
+            onChange={(e) => selectedProvider && handleModelChange(selectedRuntime, selectedProvider, e.target.value)}
             className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50"
           >
             {selectedModels.map((m) => (
@@ -371,9 +334,7 @@ export function CompactionModelSelector({ settings, onUpdate }: Props) {
         )}
 
         {!isAuto && selectedProvider && selectedModels.length === 0 && !offline && (
-          <p className="text-xs text-zinc-500">
-            Nenhum modelo disponivel reportado pelo provedor.
-          </p>
+          <p className="text-xs text-zinc-500">Nenhum modelo disponivel reportado pelo provedor.</p>
         )}
       </div>
     </section>

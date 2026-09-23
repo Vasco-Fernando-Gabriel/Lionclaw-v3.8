@@ -1,7 +1,5 @@
-
 import type { AgentPermissionProfile } from '../agent-runtime/types';
 import type { ChatFeatureToggles } from '../../../src/types';
-
 
 export const TOOL_SCRIPT_DEFAULT_TOOLS: readonly string[] = [
   'read_file',
@@ -25,7 +23,6 @@ export const TOOL_SCRIPT_DEFAULT_MAX_TOOL_CALLS = 50;
 
 export const TOOL_SCRIPT_HARD_BUFFER_CAP_BYTES = 5 * 1024 * 1024;
 
-
 export interface ToolScriptRpcRequestFrame {
   id: number;
   tool: string;
@@ -45,7 +42,6 @@ export interface ToolScriptHeartbeatFrame {
   heartbeat: true;
 }
 
-
 export interface ToolScriptRpcCall {
   id: number;
   tool: string;
@@ -63,10 +59,7 @@ export interface ToolScriptDispatchContext {
   resumeTimeout(): void;
 }
 
-export type ToolScriptRpcDispatcher = (
-  call: ToolScriptRpcCall,
-  ctx: ToolScriptDispatchContext,
-) => Promise<string>;
+export type ToolScriptRpcDispatcher = (call: ToolScriptRpcCall, ctx: ToolScriptDispatchContext) => Promise<string>;
 
 export interface ToolScriptEngineDeps {
   dispatchRpc: ToolScriptRpcDispatcher;
@@ -79,7 +72,6 @@ export interface ToolScriptEngineDeps {
   maxToolCalls?: number;
   pythonPath?: string;
 }
-
 
 export interface ToolScriptResult {
   stdout: string;
@@ -94,12 +86,8 @@ export interface ToolScriptResult {
   toolCallLimitExceeded: boolean;
 }
 
-
 export type ToolScriptErrorCode =
-  | 'turn-context-missing'
-  | 'turn-context-incomplete'
-  | 'python-unavailable'
-  | 'invalid-tool-name';
+  'turn-context-missing' | 'turn-context-incomplete' | 'python-unavailable' | 'invalid-tool-name';
 
 export class ToolScriptError extends Error {
   readonly code: ToolScriptErrorCode;

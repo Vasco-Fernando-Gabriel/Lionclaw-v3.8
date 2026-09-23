@@ -1,4 +1,3 @@
-
 import { extractOpenAiEmbeddedError, type OpenAiEmbeddedError } from './openai-compat-errors';
 
 export interface OpenAiSseDelta {
@@ -33,9 +32,7 @@ export interface ParsedSseEvent {
   error?: OpenAiEmbeddedError;
 }
 
-export async function* parseOpenAiSse(
-  stream: ReadableStream<Uint8Array>,
-): AsyncGenerator<ParsedSseEvent, void, void> {
+export async function* parseOpenAiSse(stream: ReadableStream<Uint8Array>): AsyncGenerator<ParsedSseEvent, void, void> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -58,8 +55,7 @@ export async function* parseOpenAiSse(
       }
       if (parsed.usage) yield { kind: 'usage', chunk: parsed };
       yield { kind: 'chunk', chunk: parsed };
-    } catch {
-    }
+    } catch {}
     return false;
   }
 
@@ -92,7 +88,7 @@ export async function* parseOpenAiSse(
           if (flushed.some((ev) => ev.kind === 'done')) return;
           continue;
         }
-        if (rawLine.startsWith(':')) continue; // SSE comment
+        if (rawLine.startsWith(':')) continue;
         if (rawLine.startsWith('data:')) {
           if (eventData.length > 0 && isCompleteJsonPayload(eventData)) {
             const flushed = [...flushEvent()];
@@ -117,6 +113,10 @@ export async function* parseOpenAiSse(
       return;
     }
   } finally {
-    try { reader.releaseLock(); } catch { /* noop */ }
+    try {
+      reader.releaseLock();
+    } catch {
+      /* noop */
+    }
   }
 }

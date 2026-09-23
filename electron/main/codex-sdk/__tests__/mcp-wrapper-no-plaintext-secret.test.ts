@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -15,8 +14,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   try {
     fs.rmSync(SANDBOX, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
   vi.resetModules();
 });
 

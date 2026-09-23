@@ -1,4 +1,3 @@
-
 import { createRequire } from 'module';
 import { spawn } from 'child_process';
 import os from 'os';
@@ -15,11 +14,7 @@ import {
   distributionRuntimeTarget,
   isPackagedDistributionRuntime,
 } from '../distribution-runtime';
-import type {
-  Options as ClaudeSdkOptions,
-  SpawnOptions,
-  SpawnedProcess,
-} from '@anthropic-ai/claude-agent-sdk';
+import type { Options as ClaudeSdkOptions, SpawnOptions, SpawnedProcess } from '@anthropic-ai/claude-agent-sdk';
 
 const logger = createLogger('sdk-bootstrap');
 
@@ -91,8 +86,7 @@ function fallbackAppRoots(): string[] {
     const electron = require('electron') as { app?: { getAppPath?: () => string } };
     const appPath = electron.app?.getAppPath?.();
     if (typeof appPath === 'string' && appPath.length > 0) roots.push(appPath);
-  } catch {
-  }
+  } catch {}
   roots.push(path.join(__dirname, '..', '..', '..'));
   return roots;
 }
@@ -111,8 +105,7 @@ function resolveClaudeEntry(): ResolvedClaudeEntry {
         'claude_cli_binary_path configurado mas nao e um arquivo existente; usando resolucao automatica',
       );
     }
-  } catch {
-  }
+  } catch {}
 
   try {
     return { entry: resolvePackagedClaudeCliEntry(), source: 'staged', packaged };
@@ -125,8 +118,7 @@ function resolveClaudeEntry(): ResolvedClaudeEntry {
   try {
     const req = createRequire(import.meta.url);
     roots.push(nodeModulesRootFromSdkEntry(req.resolve('@anthropic-ai/claude-agent-sdk')));
-  } catch {
-  }
+  } catch {}
   roots.push(...fallbackAppRoots());
 
   const seen = new Set<string>();
@@ -147,17 +139,14 @@ function resolveClaudeEntry(): ResolvedClaudeEntry {
     }
   }
 
-  throw new Error(
-    `Claude Code engine nao encontrado; candidatos tentados: ${attempted.join(' | ')}`,
-  );
+  throw new Error(`Claude Code engine nao encontrado; candidatos tentados: ${attempted.join(' | ')}`);
 }
 
 export function getClaudeCodeExecutablePath(): string {
   return resolveClaudeEntry().entry;
 }
 
-export type ClaudeSdkProcessOptions =
-  Required<Pick<ClaudeSdkOptions, 'pathToClaudeCodeExecutable' | 'executable'>> &
+export type ClaudeSdkProcessOptions = Required<Pick<ClaudeSdkOptions, 'pathToClaudeCodeExecutable' | 'executable'>> &
   Pick<ClaudeSdkOptions, 'spawnClaudeCodeProcess'>;
 
 export function getClaudeSdkProcessOptions(): ClaudeSdkProcessOptions {
@@ -237,8 +226,9 @@ export async function ensureAuthForSDK(): Promise<void> {
       logger.info('Auth: injected ANTHROPIC_API_KEY from Vault');
       return;
     }
-  } catch {
-  }
+  } catch {}
 
-  logger.warn('Auth: no ANTHROPIC_API_KEY and no ~/.claude found. CLI may fail to authenticate. Run "claude login" or configure API key in Vault.');
+  logger.warn(
+    'Auth: no ANTHROPIC_API_KEY and no ~/.claude found. CLI may fail to authenticate. Run "claude login" or configure API key in Vault.',
+  );
 }

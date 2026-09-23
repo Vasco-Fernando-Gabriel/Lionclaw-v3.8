@@ -1,4 +1,3 @@
-
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, relative, resolve, win32 } from 'node:path';
@@ -9,7 +8,6 @@ import { sanitizeSubprocessEnv } from '../agent-runtime/subprocess-env';
 import type { DynamicWorkflowGateMode } from './types';
 
 const logger = createLogger('dynamic-workflow-gates');
-
 
 export interface CommandCheckSpec {
   kind: 'command';
@@ -50,7 +48,6 @@ export type GateCheckSpec =
   | SchemaCheckSpec
   | ExpectedFilesCheckSpec
   | { kind: string; id: string; [extra: string]: unknown };
-
 
 export interface GateCheckResult {
   id: string;
@@ -98,11 +95,7 @@ export interface ResolvedSpawnTarget {
 
 const WIN32_DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD';
 
-function findOnWin32Path(
-  bin: string,
-  env: NodeJS.ProcessEnv,
-  existsFn: (p: string) => boolean,
-): string | null {
+function findOnWin32Path(bin: string, env: NodeJS.ProcessEnv, existsFn: (p: string) => boolean): string | null {
   const pathEnv = env.PATH ?? env.Path ?? '';
   const exts = (env.PATHEXT ?? WIN32_DEFAULT_PATHEXT).split(';').filter(Boolean);
   const hasExt = win32.extname(bin) !== '';
@@ -188,7 +181,6 @@ export interface RunGateChecksDeps {
   runCommand?: CommandRunner;
 }
 
-
 function countMatches(text: string, pattern: string): number {
   let re: RegExp;
   try {
@@ -216,11 +208,7 @@ function evalCommand(spec: CommandCheckSpec, runner: CommandRunner): GateCheckRe
     };
   }
 
-  const ranForReal =
-    result.status !== null &&
-    !result.error &&
-    !result.signal &&
-    !result.timedOut;
+  const ranForReal = result.status !== null && !result.error && !result.signal && !result.timedOut;
 
   if (!ranForReal) {
     const reason = result.error
@@ -318,9 +306,7 @@ function evalContainment(spec: ContainmentCheckSpec): GateCheckResult {
     id: spec.id,
     kind: 'containment',
     ok,
-    reason: ok
-      ? 'nenhum protected path tocado'
-      : `${violations.length} protected path(s) tocado(s)`,
+    reason: ok ? 'nenhum protected path tocado' : `${violations.length} protected path(s) tocado(s)`,
     detail: { violations },
   };
 }
@@ -358,9 +344,7 @@ function evalExpectedFiles(spec: ExpectedFilesCheckSpec): GateCheckResult {
     }
     if (f.sha256) {
       try {
-        const actual = createHash('sha256')
-          .update(readFileSync(abs))
-          .digest('hex');
+        const actual = createHash('sha256').update(readFileSync(abs)).digest('hex');
         if (actual !== f.sha256) hashMismatch.push(f.path);
       } catch {
         hashMismatch.push(f.path);
@@ -379,13 +363,7 @@ function evalExpectedFiles(spec: ExpectedFilesCheckSpec): GateCheckResult {
   };
 }
 
-
-const DETERMINISTIC_KINDS = new Set([
-  'command',
-  'containment',
-  'schema',
-  'expected-files',
-]);
+const DETERMINISTIC_KINDS = new Set(['command', 'containment', 'schema', 'expected-files']);
 
 export function runGateChecks(
   checks: GateCheckSpec[],

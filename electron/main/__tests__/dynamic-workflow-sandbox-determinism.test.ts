@@ -1,10 +1,6 @@
-
 import { describe, it, expect } from 'vitest';
 import vm from 'node:vm';
-import {
-  buildSandboxGlobals,
-  createSandboxVmContext,
-} from '../dynamic-workflows/workflow-sandbox-child';
+import { buildSandboxGlobals, createSandboxVmContext } from '../dynamic-workflows/workflow-sandbox-child';
 import { compileWorkflowJs } from '../dynamic-workflows/workflow-js-compiler';
 import { parseParentMessage } from '../dynamic-workflows/sandbox-protocol';
 
@@ -14,7 +10,6 @@ function runInSandbox(source: string, input?: Record<string, unknown>): unknown 
   return new vm.Script(source, { filename: 'workflow.js' }).runInContext(context);
 }
 
-
 describe('determinismo em runtime no vm: Date.now', () => {
   it('acesso computado globalThis["Da"+"te"].now() LANCA com a mensagem de determinismo', () => {
     expect(() => runInSandbox('globalThis["Da" + "te"].now()')).toThrow(
@@ -23,12 +18,9 @@ describe('determinismo em runtime no vm: Date.now', () => {
   });
 
   it('acesso direto Date.now() tambem lanca (defesa alem do regex de compile)', () => {
-    expect(() => runInSandbox('Date.now()')).toThrow(
-      /Determinismo do workflow: Date\.now\(\) e proibido/,
-    );
+    expect(() => runInSandbox('Date.now()')).toThrow(/Determinismo do workflow: Date\.now\(\) e proibido/);
   });
 });
-
 
 describe('determinismo em runtime no vm: Math.random', () => {
   it('acesso computado globalThis["Ma"+"th"].random() LANCA com a mensagem de determinismo', () => {
@@ -42,7 +34,6 @@ describe('determinismo em runtime no vm: Math.random', () => {
     expect(runInSandbox('Math.PI')).toBeCloseTo(Math.PI);
   });
 });
-
 
 describe('determinismo em runtime no vm: new Date()', () => {
   it('new Date() SEM argumentos lanca com a mensagem de determinismo', () => {
@@ -64,9 +55,7 @@ describe('determinismo em runtime no vm: new Date()', () => {
   });
 
   it('Date.parse e Date.UTC continuam ok (so o relogio corrente e proibido)', () => {
-    expect(runInSandbox("Date.parse('2026-01-02T03:04:05.000Z')")).toBe(
-      Date.parse('2026-01-02T03:04:05.000Z'),
-    );
+    expect(runInSandbox("Date.parse('2026-01-02T03:04:05.000Z')")).toBe(Date.parse('2026-01-02T03:04:05.000Z'));
     expect(runInSandbox('Date.UTC(2026, 0, 2)')).toBe(Date.UTC(2026, 0, 2));
   });
 
@@ -76,7 +65,6 @@ describe('determinismo em runtime no vm: new Date()', () => {
     expect(new Date()).toBeInstanceOf(Date);
   });
 });
-
 
 describe('global args (paridade claude-code)', () => {
   it('args === input no sandbox (mesma referencia, alias aditivo)', () => {
@@ -112,7 +100,6 @@ describe('global args (paridade claude-code)', () => {
     expect(out.mesmo).toBe(true);
   });
 });
-
 
 describe('budget removido por completo: sem stub no ctx nem no protocolo', () => {
   it('o ctx do vm NAO expoe global budget (nem stub)', () => {

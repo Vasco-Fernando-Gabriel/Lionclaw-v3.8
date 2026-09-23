@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const OLD_BLOCK = `   - Use SOMENTE agentes ATIVOS no catalogo fornecido na execucao
    - Sem especialista adequado, use o coder generico fornecido
    - A stack escolhe SO o CODER. Os validadores sao FIXOS por EIXO (regressao, spec, testes) e o host os aplica automaticamente: DEIXE \`validatorAgentIds\` VAZIO ([]). NUNCA invente um validador por stack (ex: \`typescript-validator\`, \`<stack>-validator\`) - ele nao existe no catalogo e reprova a materializacao`;

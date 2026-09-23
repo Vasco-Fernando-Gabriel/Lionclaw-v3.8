@@ -1,4 +1,3 @@
-
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
 vi.mock('../../logger', () => ({
@@ -114,8 +113,14 @@ describe('OpenAI-compatible adapter - S5.3 usage emission', () => {
   it('emits exactly one usage event even if multiple SSE chunks have usage fields', async () => {
     globalThis.fetch = vi.fn(async () =>
       makeSseResponse([
-        sseLine({ choices: [{ index: 0, delta: { content: 'a' } }], usage: { prompt_tokens: 5, completion_tokens: 1 } }),
-        sseLine({ choices: [{ index: 0, delta: { content: 'b' }, finish_reason: 'stop' }], usage: { prompt_tokens: 5, completion_tokens: 2 } }),
+        sseLine({
+          choices: [{ index: 0, delta: { content: 'a' } }],
+          usage: { prompt_tokens: 5, completion_tokens: 1 },
+        }),
+        sseLine({
+          choices: [{ index: 0, delta: { content: 'b' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 5, completion_tokens: 2 },
+        }),
         'data: [DONE]\n',
       ]),
     ) as unknown as typeof globalThis.fetch;

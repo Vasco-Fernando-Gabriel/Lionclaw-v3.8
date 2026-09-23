@@ -79,7 +79,7 @@ export function aggregateMetricsBySprint(
     if (!row) {
       row = {
         key,
-        label: sprintId ? prettySprintLabel(sprintId) : (nr.phaseId || 'Outros'),
+        label: sprintId ? prettySprintLabel(sprintId) : nr.phaseId || 'Outros',
         isSprint: sprintId != null,
         inputTokens: 0,
         outputTokens: 0,
@@ -127,9 +127,7 @@ export function TotalPill({ icon, label, value, highlight = false }: TotalPillPr
         {icon}
         {label}
       </span>
-      <span
-        className={`font-mono text-[15px] font-bold ${highlight ? 'text-amber-400' : 'text-zinc-100'}`}
-      >
+      <span className={`font-mono text-[15px] font-bold ${highlight ? 'text-amber-400' : 'text-zinc-100'}`}>
         {value}
       </span>
     </div>
@@ -142,11 +140,7 @@ export interface WorkflowDeliveryMetricsProps {
   totalCostUsd?: number | null;
 }
 
-export function WorkflowDeliveryMetrics({
-  nodeRuns,
-  nodes,
-  totalCostUsd,
-}: WorkflowDeliveryMetricsProps) {
+export function WorkflowDeliveryMetrics({ nodeRuns, nodes, totalCostUsd }: WorkflowDeliveryMetricsProps) {
   const { rows, totals } = aggregateMetricsBySprint(nodeRuns, nodes);
   const costStr = formatCost(totalCostUsd != null && totalCostUsd > 0 ? totalCostUsd : totals.costUsd);
 
@@ -174,12 +168,7 @@ export function WorkflowDeliveryMetrics({
       {/* Totais do run */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <TotalPill icon={<Clock size={11} />} label="Tempo" value={formatDuration(totals.durationMs)} />
-        <TotalPill
-          icon={<Coins size={11} />}
-          label="Custo"
-          value={costStr}
-          highlight
-        />
+        <TotalPill icon={<Coins size={11} />} label="Custo" value={costStr} highlight />
         <TotalPill
           icon={<BarChart3 size={11} />}
           label="Tokens"
@@ -220,15 +209,11 @@ export function WorkflowDeliveryMetrics({
                     {row.label}
                   </span>
                 </td>
-                <td className="px-3 py-1.5 text-right font-mono text-zinc-400">
-                  {formatDuration(row.durationMs)}
-                </td>
+                <td className="px-3 py-1.5 text-right font-mono text-zinc-400">{formatDuration(row.durationMs)}</td>
                 <td className="px-3 py-1.5 text-right font-mono text-zinc-400">
                   {formatTokens(row.inputTokens)} / {formatTokens(row.outputTokens)}
                 </td>
-                <td className="px-3 py-1.5 text-right font-mono text-zinc-200">
-                  {formatCost(row.costUsd)}
-                </td>
+                <td className="px-3 py-1.5 text-right font-mono text-zinc-200">{formatCost(row.costUsd)}</td>
                 <td className="px-3 py-1.5 text-right font-mono text-zinc-500">{row.nodeCount}</td>
               </tr>
             ))}

@@ -1,6 +1,4 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-
 
 const h = vi.hoisted(() => ({
   queryMock: vi.fn<(args: { prompt: string; options: Record<string, unknown> }) => unknown>(),
@@ -9,8 +7,10 @@ const h = vi.hoisted(() => ({
   getActiveSessionMock: vi.fn(),
   getActiveChatSessionMock: vi.fn(),
   insertMessageMock: vi.fn(() => 1),
+  getHarnessProjectMock: vi.fn((_id: string): unknown => null),
+  getDriveSessionIdMock: vi.fn((_id: string): string | null => null),
+  isDriveEngagedMock: vi.fn((_id: string): boolean => false),
 }));
-
 
 vi.mock('../logger', () => ({
   createLogger: () => ({
@@ -79,6 +79,8 @@ vi.mock('../lion-sdk', () => ({
 }));
 
 vi.mock('../db', () => ({
+  threadIdOf: (s: { id: string; sdkSessionId?: string | null }) => s.sdkSessionId ?? s.id,
+  getSessionOrchestrator: () => null,
   getAllAgents: () => [],
   getAgent: () => undefined,
   insertMessage: (...args: unknown[]) => h.insertMessageMock(...(args as [])),
@@ -94,7 +96,9 @@ vi.mock('../db', () => ({
   insertTaskExecution: vi.fn(),
   getTurnIndexForUserMessage: vi.fn(() => 1),
   getLatestUserTurnIndex: vi.fn(() => 1),
-  getHarnessProject: vi.fn(() => null),
+  getHarnessProject: (id: string) => h.getHarnessProjectMock(id),
+  getDriveSessionId: (id: string) => h.getDriveSessionIdMock(id),
+  isDriveEngaged: (id: string) => h.isDriveEngagedMock(id),
 }));
 
 vi.mock('../activity-log', () => ({
@@ -140,6 +144,11 @@ vi.mock('../paths', () => ({
   getLionClawHome: () => '/tmp',
 }));
 vi.mock('../codex-agents-mcp', () => ({ getCodexAgentsServer: () => undefined }));
+vi.mock('../pipeline-shared/sdk-bootstrap', () => ({
+  ensureNodeInPath: vi.fn(),
+  getClaudeCodeExecutablePath: () => '/tmp/claude-cli.js',
+  getClaudeSdkProcessOptions: () => ({ pathToClaudeCodeExecutable: '/tmp/claude-cli.js', executable: 'node' }),
+}));
 vi.mock('../title-generator', () => ({
   ensureInitialSessionTitle: vi.fn(),
   generateSessionTitle: vi.fn(),
@@ -161,7 +170,6 @@ vi.mock('../prompt-builder-repo-graph', () => ({
   buildRepoGraphSubagentSection: () => '',
 }));
 
-
 import {
   executeTelegramLaneQuery,
   executeCronQuery,
@@ -170,14 +178,19 @@ import {
   stopCronQuery,
   resetTelegramSessionState,
   resetCronSessionState,
+  submitMessage,
+  shouldDiscardStaleDriveTurn,
 } from '../orchestrator';
+import { reportDriveTurnComplete } from '../drive-usage-sink';
+import { clearingSessions, markSessionClearing } from '../clearing-sessions';
+import { getDesktopLane, resetDesktopLanesForTests } from '../desktop-lanes';
+import { getInFlightDesktopSessions, resetInFlightDesktopSessionsForTests } from '../in-flight-desktop-session';
 
 const fakeGetWindow = () => null;
 
 function okQueryResult() {
   return {
-    async *[Symbol.asyncIterator]() {
-    },
+    async *[Symbol.asyncIterator]() {},
     toggleMcpServer: async () => {},
   };
 }
@@ -214,25 +227,26 @@ beforeEach(() => {
   h.getActiveSessionMock.mockClear();
   h.getActiveChatSessionMock.mockClear();
   h.insertMessageMock.mockClear();
+  h.getHarnessProjectMock.mockReset();
+  h.getHarnessProjectMock.mockReturnValue(null);
+  h.getDriveSessionIdMock.mockReset();
+  h.getDriveSessionIdMock.mockReturnValue(null);
+  h.isDriveEngagedMock.mockReset();
+  h.isDriveEngagedMock.mockReturnValue(false);
   resetTelegramSessionState();
   resetCronSessionState();
 });
 
-
 describe('guard de sessao explicita (SPEC 1.4 / AC-5)', () => {
   it('telegramLane sem sessionId rejeita e NUNCA cai em getActiveSession()', async () => {
-    await expect(
-      executeTelegramLaneQuery('oi', {}, fakeGetWindow),
-    ).rejects.toThrow(/sessionId explicito/);
+    await expect(executeTelegramLaneQuery('oi', {}, fakeGetWindow)).rejects.toThrow(/sessionId explicito/);
     expect(h.getActiveSessionMock).not.toHaveBeenCalled();
     expect(h.getActiveChatSessionMock).not.toHaveBeenCalled();
     expect(h.queryMock).not.toHaveBeenCalled();
   });
 
   it('cronLane sem sessionId rejeita e NUNCA cai em getActiveSession()', async () => {
-    await expect(
-      executeCronQuery('tarefa', {}, fakeGetWindow),
-    ).rejects.toThrow(/sessionId explicito/);
+    await expect(executeCronQuery('tarefa', {}, fakeGetWindow)).rejects.toThrow(/sessionId explicito/);
     expect(h.getActiveSessionMock).not.toHaveBeenCalled();
     expect(h.getActiveChatSessionMock).not.toHaveBeenCalled();
     expect(h.queryMock).not.toHaveBeenCalled();
@@ -244,7 +258,6 @@ describe('guard de sessao explicita (SPEC 1.4 / AC-5)', () => {
     expect(h.queryMock).toHaveBeenCalledTimes(1);
   });
 });
-
 
 describe('contrato de erro das filas (SPEC 1.3 / AC-71)', () => {
   it('telegram: job 1 falha -> Promise do JOB rejeita com o erro real; job 2 executa', async () => {
@@ -278,15 +291,12 @@ describe('contrato de erro das filas (SPEC 1.3 / AC-71)', () => {
   });
 });
 
-
 describe('contrato de efemeridade do cron (SPEC 7.1)', () => {
   it('sessao com mensagens rejeita SEM tocar o SDK', async () => {
-    h.getSessionMessagesMock.mockImplementation((id: string) =>
-      id === 'c-usada' ? [{ id: 1 }] : [],
+    h.getSessionMessagesMock.mockImplementation((id: string) => (id === 'c-usada' ? [{ id: 1 }] : []));
+    await expect(executeCronQuery('tarefa', { sessionId: 'c-usada', silent: true }, fakeGetWindow)).rejects.toThrow(
+      /SEM mensagens/,
     );
-    await expect(
-      executeCronQuery('tarefa', { sessionId: 'c-usada', silent: true }, fakeGetWindow),
-    ).rejects.toThrow(/SEM mensagens/);
     expect(h.queryMock).not.toHaveBeenCalled();
   });
 
@@ -301,7 +311,6 @@ describe('contrato de efemeridade do cron (SPEC 7.1)', () => {
   });
 });
 
-
 describe('seletor de CWD 3-vias (SPEC 1.5)', () => {
   it('cronLane roda em getCronCwd(); telegramLane roda em getAgentCwd() (persona principal)', async () => {
     await executeCronQuery('tarefa', { sessionId: 'c-cwd', silent: true }, fakeGetWindow);
@@ -312,12 +321,9 @@ describe('seletor de CWD 3-vias (SPEC 1.5)', () => {
   });
 });
 
-
 describe('fast-path do Telegram e reset por lane (AC-11)', () => {
   it('resume -> continue; cron no meio NAO derruba o continue; reset volta para resume', async () => {
-    h.getSessionMessagesMock.mockImplementation((id: string) =>
-      id === 't-live' ? [{ id: 1 }] : [],
-    );
+    h.getSessionMessagesMock.mockImplementation((id: string) => (id === 't-live' ? [{ id: 1 }] : []));
 
     await executeTelegramLaneQuery('a', { sessionId: 't-live', silent: true }, fakeGetWindow);
     expect(sdkOptionsOfCall(0).resume).toBe('t-live');
@@ -336,13 +342,10 @@ describe('fast-path do Telegram e reset por lane (AC-11)', () => {
   });
 });
 
-
 describe('filas independentes e stop por lane (SPEC 1.2)', () => {
   it('cron pendurado nao atrasa o Telegram; stopCronQuery aborta APENAS a cronLane', async () => {
     const hang = hangingQueryResult();
-    h.queryMock
-      .mockImplementationOnce(() => hang.result) // cron pendura
-      .mockImplementation(() => okQueryResult()); // telegram conclui
+    h.queryMock.mockImplementationOnce(() => hang.result).mockImplementation(() => okQueryResult());
 
     const cronJob = executeCronQuery('tarefa longa', { sessionId: 'c-hang', silent: true }, fakeGetWindow);
     await new Promise((r) => setTimeout(r, 10));
@@ -350,7 +353,14 @@ describe('filas independentes e stop por lane (SPEC 1.2)', () => {
 
     await expect(telegramJob).resolves.toBeUndefined();
     let cronSettled = false;
-    void cronJob.then(() => { cronSettled = true; }, () => { cronSettled = true; });
+    void cronJob.then(
+      () => {
+        cronSettled = true;
+      },
+      () => {
+        cronSettled = true;
+      },
+    );
     await new Promise((r) => setTimeout(r, 20));
     expect(cronSettled).toBe(false);
 
@@ -367,28 +377,29 @@ describe('filas independentes e stop por lane (SPEC 1.2)', () => {
   });
 });
 
-
 describe('enqueueTelegramLaneTask: compactacao serializada na fila (SPEC 5.3 / AC-16)', () => {
   it('a tarefa espera o turno pendente e o turno seguinte espera a tarefa (nenhum intercala com o re-seed)', async () => {
     const order: string[] = [];
     const hang = hangingQueryResult();
-    h.queryMock
-      .mockImplementationOnce(() => hang.result) // turno 1 pendura
-      .mockImplementation(() => okQueryResult()); // turno 2 conclui
+    h.queryMock.mockImplementationOnce(() => hang.result).mockImplementation(() => okQueryResult());
 
-    const turn1 = executeTelegramLaneQuery('turno 1', { sessionId: 't-1', silent: true }, fakeGetWindow)
-      .then(() => { order.push('turn1'); });
+    const turn1 = executeTelegramLaneQuery('turno 1', { sessionId: 't-1', silent: true }, fakeGetWindow).then(() => {
+      order.push('turn1');
+    });
 
     let releaseTask: () => void = () => {};
-    const taskGate = new Promise<void>((res) => { releaseTask = res; });
+    const taskGate = new Promise<void>((res) => {
+      releaseTask = res;
+    });
     const task = enqueueTelegramLaneTask(async () => {
       order.push('task-start');
       await taskGate;
       order.push('task-end');
     });
 
-    const turn2 = executeTelegramLaneQuery('turno 2', { sessionId: 't-1', silent: true }, fakeGetWindow)
-      .then(() => { order.push('turn2'); });
+    const turn2 = executeTelegramLaneQuery('turno 2', { sessionId: 't-1', silent: true }, fakeGetWindow).then(() => {
+      order.push('turn2');
+    });
 
     await new Promise((r) => setTimeout(r, 15));
     expect(order).toEqual([]);
@@ -399,7 +410,7 @@ describe('enqueueTelegramLaneTask: compactacao serializada na fila (SPEC 5.3 / A
     await vi.waitFor(() => expect(order).toContain('task-start'));
     await new Promise((r) => setTimeout(r, 15));
     expect(order).not.toContain('turn2');
-    expect(h.queryMock).toHaveBeenCalledTimes(1); // turno 2 nem chegou no SDK
+    expect(h.queryMock).toHaveBeenCalledTimes(1);
 
     releaseTask();
     await task;
@@ -410,7 +421,9 @@ describe('enqueueTelegramLaneTask: compactacao serializada na fila (SPEC 5.3 / A
 
   it('falha da tarefa rejeita o Promise do caller e a fila continua viva (contrato SPEC 1.3)', async () => {
     await expect(
-      enqueueTelegramLaneTask(async () => { throw new Error('compactacao quebrou'); }),
+      enqueueTelegramLaneTask(async () => {
+        throw new Error('compactacao quebrou');
+      }),
     ).rejects.toThrow('compactacao quebrou');
 
     await expect(
@@ -420,8 +433,207 @@ describe('enqueueTelegramLaneTask: compactacao serializada na fila (SPEC 5.3 / A
   });
 
   it('retorna o valor da tarefa ao caller (desfecho tipado da compactacao)', async () => {
-    await expect(
-      enqueueTelegramLaneTask(async () => ({ ok: true as const })),
-    ).resolves.toEqual({ ok: true });
+    await expect(enqueueTelegramLaneTask(async () => ({ ok: true as const }))).resolves.toEqual({ ok: true });
+  });
+});
+
+describe('AC-12 (drive): turno system-event numa lane interrupted e descartado com sinal ao coordenador', () => {
+  it('submitMessage recusa a lane em Clear e emite reportDriveTurnComplete(discarded) sem enfileirar', () => {
+    vi.mocked(reportDriveTurnComplete).mockClear();
+    markSessionClearing('s-interrupted', 'interrupted', 1);
+    try {
+      submitMessage(
+        'wake do drive',
+        {
+          sessionId: 's-interrupted',
+          origin: 'system-event',
+          driveProjectId: 'proj-1',
+          driveTurnId: 'dt-1',
+        },
+        fakeGetWindow,
+      );
+      expect(reportDriveTurnComplete).toHaveBeenCalledWith('proj-1', 'dt-1', 'discarded');
+      expect(h.queryMock).not.toHaveBeenCalled();
+    } finally {
+      clearingSessions.clear();
+    }
+  });
+
+  it('turno humano numa lane em Clear e recusado sem sinal de drive', () => {
+    vi.mocked(reportDriveTurnComplete).mockClear();
+    markSessionClearing('s-interrupted', 'interrupted', 1);
+    try {
+      submitMessage('oi', { sessionId: 's-interrupted' }, fakeGetWindow);
+      expect(reportDriveTurnComplete).not.toHaveBeenCalled();
+      expect(h.queryMock).not.toHaveBeenCalled();
+    } finally {
+      clearingSessions.clear();
+    }
+  });
+});
+
+describe('AC-20: dois turnos desktop no mesmo cwd usam a PROPRIA thread (resume), nunca continue', () => {
+  beforeEach(() => {
+    resetDesktopLanesForTests();
+    resetInFlightDesktopSessionsForTests();
+  });
+
+  it('A e B em paralelo: cada query() recebe resume da propria sessao; wake dw-drive-* roda em paralelo com o humano', async () => {
+    await import('@anthropic-ai/claude-agent-sdk');
+    h.getSessionMessagesMock.mockImplementation(() => [{ id: 1 }]);
+    const hangs = [hangingQueryResult(), hangingQueryResult(), hangingQueryResult()];
+    h.queryMock
+      .mockImplementationOnce(() => hangs[0]!.result)
+      .mockImplementationOnce(() => hangs[1]!.result)
+      .mockImplementationOnce(() => hangs[2]!.result);
+
+    submitMessage('a', { sessionId: 'lane-a', silent: true }, fakeGetWindow);
+    await vi.waitFor(() => expect(h.queryMock).toHaveBeenCalledTimes(1));
+    submitMessage('b', { sessionId: 'lane-b', silent: true }, fakeGetWindow);
+    await vi.waitFor(() => expect(h.queryMock).toHaveBeenCalledTimes(2));
+
+    const human = [sdkOptionsOfCall(0), sdkOptionsOfCall(1)];
+    expect(human.map((o) => o.resume).sort()).toEqual(['lane-a', 'lane-b']);
+    expect(human.every((o) => o.continue === undefined)).toBe(true);
+    expect(human[0]!.cwd).toBe(human[1]!.cwd);
+    expect(human[0]!.abortController).not.toBe(human[1]!.abortController);
+    expect(getInFlightDesktopSessions().sort()).toEqual(['lane-a', 'lane-b']);
+
+    submitMessage(
+      'wake',
+      {
+        sessionId: 'dw-drive-run-x',
+        silent: true,
+        origin: 'system-event',
+        driveProjectId: 'run-x',
+        driveTurnId: 'dt-1',
+      },
+      fakeGetWindow,
+    );
+    await vi.waitFor(() => expect(h.queryMock).toHaveBeenCalledTimes(3));
+    expect(sdkOptionsOfCall(2).resume).toBe('dw-drive-run-x');
+    expect(sdkOptionsOfCall(2).continue).toBeUndefined();
+    expect(getInFlightDesktopSessions()).toHaveLength(3);
+
+    for (const hang of hangs) hang.release();
+    await vi.waitFor(() => expect(getInFlightDesktopSessions()).toEqual([]));
+    expect(getDesktopLane('lane-a').sdkActiveSessionId).toBe('lane-a');
+    expect(getDesktopLane('lane-b').sdkActiveSessionId).toBe('lane-b');
+  });
+
+  it('segundo turno da MESMA lane tambem usa resume (desktop nunca continue, mesmo com a thread viva no processo)', async () => {
+    h.getSessionMessagesMock.mockImplementation(() => [{ id: 1 }]);
+    submitMessage('um', { sessionId: 'lane-c', silent: true }, fakeGetWindow);
+    submitMessage('dois', { sessionId: 'lane-c', silent: true }, fakeGetWindow);
+    await vi.waitFor(() => expect(h.queryMock).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(getInFlightDesktopSessions()).toEqual([]));
+    expect(sdkOptionsOfCall(0).resume).toBe('lane-c');
+    expect(sdkOptionsOfCall(1).resume).toBe('lane-c');
+    expect(sdkOptionsOfCall(1).continue).toBeUndefined();
+  });
+});
+
+describe('5.3: checagem DEFENSIVA de lane no dequeue do turno de drive', () => {
+  const driveProject = {
+    id: 'proj_a',
+    name: 'Demo',
+    pipelineType: 'development-v2',
+    status: 'running',
+    pipelineCurrentPhase: 3,
+  };
+
+  function engageOnLaneA(): void {
+    h.getHarnessProjectMock.mockReturnValue(driveProject);
+    h.isDriveEngagedMock.mockReturnValue(true);
+    h.getDriveSessionIdMock.mockReturnValue('lane-A');
+  }
+
+  it('turno de P1 enfileirado em B com a coluna apontando para A e descartado', () => {
+    engageOnLaneA();
+    expect(
+      shouldDiscardStaleDriveTurn(
+        { sessionId: 'lane-B', origin: 'system-event', driveProjectId: 'proj_a', drivePhase: 3 },
+        'lane-B',
+      ),
+    ).toBe(true);
+  });
+
+  it('descarta mesmo com pipelineCurrentPhase null (nao depende do retorno por fase real)', () => {
+    h.getHarnessProjectMock.mockReturnValue({ ...driveProject, pipelineCurrentPhase: null });
+    h.isDriveEngagedMock.mockReturnValue(true);
+    h.getDriveSessionIdMock.mockReturnValue('lane-A');
+
+    expect(
+      shouldDiscardStaleDriveTurn(
+        { sessionId: 'lane-B', origin: 'system-event', driveProjectId: 'proj_a', drivePhase: 3 },
+        'lane-B',
+      ),
+    ).toBe(true);
+  });
+
+  it('turno na PROPRIA lane do drive passa', () => {
+    engageOnLaneA();
+    expect(
+      shouldDiscardStaleDriveTurn(
+        { sessionId: 'lane-A', origin: 'system-event', driveProjectId: 'proj_a', drivePhase: 3 },
+        'lane-A',
+      ),
+    ).toBe(false);
+  });
+
+  it('projeto NAO engajado nao entra na checagem de lane (fica com os guards antigos)', () => {
+    h.getHarnessProjectMock.mockReturnValue(driveProject);
+    h.isDriveEngagedMock.mockReturnValue(false);
+    h.getDriveSessionIdMock.mockReturnValue('lane-A');
+
+    expect(
+      shouldDiscardStaleDriveTurn(
+        { sessionId: 'lane-B', origin: 'system-event', driveProjectId: 'proj_a', drivePhase: 3 },
+        'lane-B',
+      ),
+    ).toBe(false);
+  });
+
+  it('lane dw-drive-* (workflow) escapa da checagem de lane', () => {
+    engageOnLaneA();
+    expect(
+      shouldDiscardStaleDriveTurn(
+        {
+          sessionId: 'dw-drive-run-x',
+          origin: 'system-event',
+          driveProjectId: 'proj_a',
+          drivePhase: 3,
+        },
+        'dw-drive-run-x',
+      ),
+    ).toBe(false);
+  });
+
+  it('turno SEM drivePhase (workflow) escapa por construcao', () => {
+    engageOnLaneA();
+    expect(
+      shouldDiscardStaleDriveTurn({ sessionId: 'lane-B', origin: 'system-event', driveProjectId: 'proj_a' }, 'lane-B'),
+    ).toBe(false);
+  });
+
+  it('no dequeue, o descarte por lane sinaliza reportDriveTurnComplete(discarded) e nao chama o SDK', async () => {
+    vi.mocked(reportDriveTurnComplete).mockClear();
+    engageOnLaneA();
+
+    submitMessage(
+      'wake do drive',
+      {
+        sessionId: 'lane-B',
+        origin: 'system-event',
+        driveProjectId: 'proj_a',
+        driveTurnId: 'dt-lane',
+        drivePhase: 3,
+        silent: true,
+      },
+      fakeGetWindow,
+    );
+
+    await vi.waitFor(() => expect(reportDriveTurnComplete).toHaveBeenCalledWith('proj_a', 'dt-lane', 'discarded'));
+    expect(h.queryMock).not.toHaveBeenCalled();
   });
 });

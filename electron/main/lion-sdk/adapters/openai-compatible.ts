@@ -1,4 +1,3 @@
-
 import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { Readable } from 'node:stream';
@@ -10,13 +9,7 @@ import {
   normalizeOpenAiCompatTransportError,
 } from './openai-compat-errors';
 import { parseOpenAiSse } from './openai-sse';
-import type {
-  AdapterConfig,
-  LionAdapter,
-  LionChatMessage,
-  LionStreamEvent,
-  LionStreamRequest,
-} from './types';
+import type { AdapterConfig, LionAdapter, LionChatMessage, LionStreamEvent, LionStreamRequest } from './types';
 import type { NativeToolCall } from '../tool-parser';
 
 const logger = createLogger('lion-adapter-openai-compat');
@@ -171,7 +164,11 @@ async function readWebStreamText(stream: ReadableStream<Uint8Array>): Promise<st
     out += decoder.decode();
     return out;
   } finally {
-    try { reader.releaseLock(); } catch { /* noop */ }
+    try {
+      reader.releaseLock();
+    } catch {
+      /* noop */
+    }
   }
 }
 
@@ -214,22 +211,25 @@ function postJsonStreamWithoutBodyTimeout(
       return;
     }
 
-    const request = requestImpl({
-      protocol: parsed.protocol,
-      hostname: parsed.hostname,
-      port: parsed.port,
-      path: `${parsed.pathname}${parsed.search}`,
-      method: 'POST',
-      headers: {
-        ...init.headers,
-        'Content-Length': Buffer.byteLength(init.body),
+    const request = requestImpl(
+      {
+        protocol: parsed.protocol,
+        hostname: parsed.hostname,
+        port: parsed.port,
+        path: `${parsed.pathname}${parsed.search}`,
+        method: 'POST',
+        headers: {
+          ...init.headers,
+          'Content-Length': Buffer.byteLength(init.body),
+        },
       },
-    }, (res) => {
-      response = res;
-      settled = true;
-      res.once('close', cleanup);
-      resolve(nodeResponseToStreamResponse(res));
-    });
+      (res) => {
+        response = res;
+        settled = true;
+        res.once('close', cleanup);
+        resolve(nodeResponseToStreamResponse(res));
+      },
+    );
 
     init.signal?.addEventListener('abort', onAbort, { once: true });
 
@@ -254,7 +254,7 @@ export function createOpenAiCompatibleAdapter(opts: OpenAiCompatibleAdapterOptio
     throw new Error('OpenAI-compatible adapter requires baseUrl');
   }
   const endpointPath = opts.endpointPath ?? '/v1/chat/completions';
-  const requireApiKey = opts.requireApiKey !== false; // default true
+  const requireApiKey = opts.requireApiKey !== false;
   const isKimiCompatible = /moonshot|kimi/i.test(base);
 
   return {
@@ -294,16 +294,16 @@ export function createOpenAiCompatibleAdapter(opts: OpenAiCompatibleAdapterOptio
         const serializedBody = JSON.stringify(body);
         response = opts.localStreamNoBodyTimeout
           ? await postJsonStreamWithoutBodyTimeout(`${base}${endpointPath}`, {
-            headers,
-            body: serializedBody,
-            signal: req.abortSignal,
-          })
+              headers,
+              body: serializedBody,
+              signal: req.abortSignal,
+            })
           : await fetch(`${base}${endpointPath}`, {
-            method: 'POST',
-            headers,
-            body: serializedBody,
-            signal: req.abortSignal,
-          });
+              method: 'POST',
+              headers,
+              body: serializedBody,
+              signal: req.abortSignal,
+            });
       } catch (e) {
         const norm = normalizeOpenAiCompatTransportError(e, { provider: 'openai-compatible' });
         yield { type: 'error', error: `OpenAI-compat fetch falhou: ${norm.userMessage}` };

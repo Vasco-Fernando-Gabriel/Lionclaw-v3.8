@@ -27,8 +27,12 @@ function run(
       clearTimeout(timer);
       resolve(result);
     };
-    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
-    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
     child.on('error', (error) => finish({ ok: false, stdout, stderr: error.message }));
     child.on('close', (code) => finish({ ok: code === 0, stdout, stderr }));
     const timer = setTimeout(() => {
@@ -38,11 +42,7 @@ function run(
   });
 }
 
-type SpawnProcess = (
-  executable: string,
-  args: readonly string[],
-  options: SpawnOptions,
-) => ChildProcess;
+type SpawnProcess = (executable: string, args: readonly string[], options: SpawnOptions) => ChildProcess;
 
 function spawnDetachedConfirmed(
   executable: string,
@@ -109,17 +109,11 @@ function sortedEnvAssignments(env: NodeJS.ProcessEnv): string[] {
     .map(([key, value]) => `${key}=${value}`);
 }
 
-export function buildPosixGrokLoginArgv(
-  binary: string,
-  childEnv: NodeJS.ProcessEnv,
-): string[] {
+export function buildPosixGrokLoginArgv(binary: string, childEnv: NodeJS.ProcessEnv): string[] {
   return ['env', '-i', ...sortedEnvAssignments(childEnv), binary, 'login', '--device-auth'];
 }
 
-export function buildMacGrokLoginCommand(
-  binary: string,
-  childEnv: NodeJS.ProcessEnv,
-): string {
+export function buildMacGrokLoginCommand(binary: string, childEnv: NodeJS.ProcessEnv): string {
   const assignments = sortedEnvAssignments(childEnv).map(shellEscapePOSIX);
   return ['env', '-i', ...assignments, shellEscapePOSIX(binary), 'login', '--device-auth'].join(' ');
 }
@@ -128,7 +122,7 @@ export function registerGrokHandlers(_ctx: IpcContext): void {
   ipcMain.handle('grok:status', async () => {
     const { isGrokAvailable } = await import('../agent-runtime/grok-availability');
     return {
-      ...await isGrokAvailable(),
+      ...(await isGrokAvailable()),
       binaryPath: getSetting('grok_binary_path') || '',
     };
   });
@@ -146,13 +140,8 @@ export function registerGrokHandlers(_ctx: IpcContext): void {
   });
 
   ipcMain.handle('grok:open-login', async () => {
-    const {
-      assertGrokChildEnv,
-      buildGrokChildEnv,
-      ensureGrokHome,
-      resolveGrokBinary,
-      resolveGrokHome,
-    } = await import('../agent-runtime/grok-availability');
+    const { assertGrokChildEnv, buildGrokChildEnv, ensureGrokHome, resolveGrokBinary, resolveGrokHome } =
+      await import('../agent-runtime/grok-availability');
     const binary = (await resolveGrokBinary()) || getSetting('grok_binary_path') || 'grok';
     ensureGrokHome();
     const childEnv: NodeJS.ProcessEnv = buildGrokChildEnv(resolveGrokHome());
@@ -171,9 +160,15 @@ export function registerGrokHandlers(_ctx: IpcContext): void {
           childEnv,
         );
       } else if (platform === 'win32') {
-        await spawnDetachedConfirmed('cmd', ['/c', 'start', '', 'cmd', '/k', `${cmdQuote(binary)} login --device-auth`], childEnv, spawn, {
-          windowsVerbatimArguments: true,
-        });
+        await spawnDetachedConfirmed(
+          'cmd',
+          ['/c', 'start', '', 'cmd', '/k', `${cmdQuote(binary)} login --device-auth`],
+          childEnv,
+          spawn,
+          {
+            windowsVerbatimArguments: true,
+          },
+        );
       } else {
         await launchLinuxGrokLoginTerminal(binary, childEnv, spawn, launcherEnv);
       }
@@ -185,7 +180,8 @@ export function registerGrokHandlers(_ctx: IpcContext): void {
   });
 
   ipcMain.handle('grok:logout', async () => {
-    const { buildGrokChildEnv, resolveGrokBinary, resolveGrokHome } = await import('../agent-runtime/grok-availability');
+    const { buildGrokChildEnv, resolveGrokBinary, resolveGrokHome } =
+      await import('../agent-runtime/grok-availability');
     const binary = (await resolveGrokBinary()) || getSetting('grok_binary_path') || 'grok';
     const result = await run(binary, ['logout'], buildGrokChildEnv(resolveGrokHome()));
     invalidateProviderStatusCache();

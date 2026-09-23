@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
 
@@ -54,10 +53,7 @@ import { getSessionConfig, setSessionConfig } from '../open-design/session-confi
 import { getOpenDesignConfig } from '../open-design/config';
 import { ensureSession } from '../open-design/bootstrap';
 import { recordSystemActivity } from '../activity-log';
-import {
-  maybeAutostartDesignSession,
-  isDriveStartPending,
-} from '../open-design/drive-autostart';
+import { maybeAutostartDesignSession, isDriveStartPending } from '../open-design/drive-autostart';
 import { CLAUDE_DEFAULT_MODEL } from '../../../src/constants/claude-models';
 import type { OpenDesignSessionConfig } from '../../../src/types/open-design';
 
@@ -170,7 +166,6 @@ describe('maybeAutostartDesignSession (I5)', () => {
     await expect(maybeAutostartDesignSession(PROJECT_ID)).resolves.toBeUndefined();
   });
 
-
   it('W3.0-AC1 + AC-20: startGeneration=false sem ultimo-usado -> ABORTA (nao inventa config, zero ensureSession)', async () => {
     await expect(maybeAutostartDesignSession(PROJECT_ID, false)).resolves.toBeUndefined();
 
@@ -227,7 +222,6 @@ describe('maybeAutostartDesignSession (I5)', () => {
     expect(ensureSessionMock).toHaveBeenCalledWith(PROJECT_ID);
   });
 });
-
 
 const ENGAGED_DRIVE = {
   driver: 'orchestrator',
@@ -306,7 +300,6 @@ describe('isDriveStartPending (W3.0 - anti-furo pela UI)', () => {
   });
 });
 
-
 describe('maybeAutostartDesignSession - A1: config resolvido so via settings/fallback', () => {
   it('autostart usa lastSessionConfig (settings global) e semeia para o projeto pedido', async () => {
     getSettingMock.mockReturnValue(
@@ -331,9 +324,7 @@ describe('maybeAutostartDesignSession - A1: config resolvido so via settings/fal
   it('sem ultimo-usado: ABORTA sem semear (fallback removido, AC-20)', async () => {
     getSettingMock.mockReturnValue(undefined);
 
-    await expect(
-      maybeAutostartDesignSession('projeto_limpo', false),
-    ).resolves.toBeUndefined();
+    await expect(maybeAutostartDesignSession('projeto_limpo', false)).resolves.toBeUndefined();
 
     expect(setSessionConfigMock).not.toHaveBeenCalled();
     expect(getOpenDesignConfigMock).not.toHaveBeenCalled();

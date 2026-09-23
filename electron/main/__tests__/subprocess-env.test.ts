@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   SUBPROCESS_ENV_STRIPPED_KEYS,
@@ -28,7 +27,12 @@ const DEV_ENV: NodeJS.ProcessEnv = {
 
 describe('subprocess-env (L1.7): lista fechada', () => {
   it('a lista fechada e exatamente NODE_ENV, ELECTRON_RENDERER_URL, ELECTRON_RUN_AS_NODE, DEBUG + prefixo VITE_', () => {
-    expect([...SUBPROCESS_ENV_STRIPPED_KEYS]).toEqual(['NODE_ENV', 'ELECTRON_RENDERER_URL', 'ELECTRON_RUN_AS_NODE', 'DEBUG']);
+    expect([...SUBPROCESS_ENV_STRIPPED_KEYS]).toEqual([
+      'NODE_ENV',
+      'ELECTRON_RENDERER_URL',
+      'ELECTRON_RUN_AS_NODE',
+      'DEBUG',
+    ]);
     expect([...SUBPROCESS_ENV_STRIPPED_PREFIXES]).toEqual(['VITE_']);
     expect(isStrippedSubprocessEnvKey('VITE_X')).toBe(true);
     expect(isStrippedSubprocessEnvKey('NODE_ENV')).toBe(true);

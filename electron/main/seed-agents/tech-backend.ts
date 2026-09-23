@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const TECH_BACKEND_ID = 'tech-backend';
@@ -6,8 +5,7 @@ export const TECH_BACKEND_ID = 'tech-backend';
 export const techBackend: Omit<AgentConfig, 'sortOrder'> = {
   id: TECH_BACKEND_ID,
   name: 'Tech Backend',
-  description:
-    'Agente responsavel pelas decisoes tecnicas de Backend, servicos e API do projeto.',
+  description: 'Agente responsavel pelas decisoes tecnicas de Backend, servicos e API do projeto.',
   model: 'claude-sonnet-4-6',
   effort: 'high' as const,
   thinking: 'enabled' as const,

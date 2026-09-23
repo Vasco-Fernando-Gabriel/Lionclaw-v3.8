@@ -4,7 +4,6 @@ import { Search, Trash2, X, AlertTriangle } from 'lucide-react';
 import type { NoteListItem, BacklinkResult } from '@/types';
 import ReactMarkdown from 'react-markdown';
 
-
 interface NoteListViewProps {
   type: string;
   icon: React.ComponentType<{ size?: number; className?: string }>;
@@ -17,7 +16,6 @@ interface DeleteDialogState {
   backlinks: BacklinkResult[];
   loading: boolean;
 }
-
 
 function SkeletonCard() {
   return (
@@ -32,7 +30,6 @@ function SkeletonCard() {
     </div>
   );
 }
-
 
 interface NoteCardProps {
   note: NoteListItem;
@@ -80,17 +77,12 @@ function NoteCard({ note, onDelete, onClick }: NoteCardProps) {
         </div>
       )}
 
-      {note.snippet && (
-        <p className="text-xs text-zinc-500 mt-1.5 line-clamp-2 leading-relaxed">{note.snippet}</p>
-      )}
+      {note.snippet && <p className="text-xs text-zinc-500 mt-1.5 line-clamp-2 leading-relaxed">{note.snippet}</p>}
 
-      {formattedDate && (
-        <p className="text-[10px] text-zinc-600 mt-1.5">{formattedDate}</p>
-      )}
+      {formattedDate && <p className="text-[10px] text-zinc-600 mt-1.5">{formattedDate}</p>}
     </div>
   );
 }
-
 
 interface DeleteDialogProps {
   state: DeleteDialogState;
@@ -151,7 +143,6 @@ function DeleteDialog({ state, onConfirm, onCancel }: DeleteDialogProps) {
   );
 }
 
-
 interface PreviewPanelProps {
   note: NoteListItem | null;
   content: string;
@@ -185,20 +176,21 @@ function PreviewPanel({ note, content, loading, onClose }: PreviewPanelProps) {
   );
 }
 
-
 export function NoteListView({ type, icon: Icon, label }: NoteListViewProps) {
   const [notes, setNotes] = useState<NoteListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState>({
-    open: false, note: null, backlinks: [], loading: false,
+    open: false,
+    note: null,
+    backlinks: [],
+    loading: false,
   });
   const [previewNote, setPreviewNote] = useState<NoteListItem | null>(null);
   const [previewContent, setPreviewContent] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
   const listContainerRef = useRef<HTMLDivElement>(null);
   const [listHeight, setListHeight] = useState(400);
-
 
   const loadNotes = useCallback(async () => {
     setLoading(true);
@@ -216,7 +208,6 @@ export function NoteListView({ type, icon: Icon, label }: NoteListViewProps) {
     loadNotes();
   }, [loadNotes]);
 
-
   useEffect(() => {
     if (!listContainerRef.current) return;
     const observer = new ResizeObserver((entries) => {
@@ -227,14 +218,12 @@ export function NoteListView({ type, icon: Icon, label }: NoteListViewProps) {
     return () => observer.disconnect();
   }, []);
 
-
   const filtered = searchQuery.trim()
     ? notes.filter((n) => {
         const q = searchQuery.toLowerCase();
         return n.title.toLowerCase().includes(q) || n.tags.some((t) => t.toLowerCase().includes(q));
       })
     : notes;
-
 
   const handleDeleteClick = useCallback(async (note: NoteListItem) => {
     setDeleteDialog({ open: true, note, backlinks: [], loading: true });
@@ -246,61 +235,62 @@ export function NoteListView({ type, icon: Icon, label }: NoteListViewProps) {
     }
   }, []);
 
-  const handleDeleteConfirm = useCallback(async (force: boolean) => {
-    if (!deleteDialog.note) return;
-    const notePath = deleteDialog.note.path;
-    setDeleteDialog((d) => ({ ...d, open: false }));
+  const handleDeleteConfirm = useCallback(
+    async (force: boolean) => {
+      if (!deleteDialog.note) return;
+      const notePath = deleteDialog.note.path;
+      setDeleteDialog((d) => ({ ...d, open: false }));
 
-    try {
-      await window.lionclaw.mgraph.deleteNote(notePath, { force });
-      if (previewNote?.path === notePath) {
-        setPreviewNote(null);
-        setPreviewContent('');
-      }
-      loadNotes();
-    } catch {
-    }
-  }, [deleteDialog.note, previewNote, loadNotes]);
+      try {
+        await window.lionclaw.mgraph.deleteNote(notePath, { force });
+        if (previewNote?.path === notePath) {
+          setPreviewNote(null);
+          setPreviewContent('');
+        }
+        loadNotes();
+      } catch {}
+    },
+    [deleteDialog.note, previewNote, loadNotes],
+  );
 
   const handleDeleteCancel = useCallback(() => {
     setDeleteDialog({ open: false, note: null, backlinks: [], loading: false });
   }, []);
 
-
-  const handleNoteClick = useCallback(async (note: NoteListItem) => {
-    if (previewNote?.path === note.path) {
-      setPreviewNote(null);
+  const handleNoteClick = useCallback(
+    async (note: NoteListItem) => {
+      if (previewNote?.path === note.path) {
+        setPreviewNote(null);
+        setPreviewContent('');
+        return;
+      }
+      setPreviewNote(note);
       setPreviewContent('');
-      return;
-    }
-    setPreviewNote(note);
-    setPreviewContent('');
-    setPreviewLoading(true);
-    try {
-      const content = await window.lionclaw.mgraph.read(note.path);
-      setPreviewContent(typeof content === 'string' ? content : '');
-    } catch {
-      setPreviewContent('Erro ao carregar conteúdo.');
-    } finally {
-      setPreviewLoading(false);
-    }
-  }, [previewNote]);
+      setPreviewLoading(true);
+      try {
+        const content = await window.lionclaw.mgraph.read(note.path);
+        setPreviewContent(typeof content === 'string' ? content : '');
+      } catch {
+        setPreviewContent('Erro ao carregar conteúdo.');
+      } finally {
+        setPreviewLoading(false);
+      }
+    },
+    [previewNote],
+  );
 
-
-  const Row = useCallback(({ index, style }: ListChildComponentProps) => {
-    const note = filtered[index];
-    if (!note) return null;
-    return (
-      <div style={style}>
-        <NoteCard
-          note={note}
-          onDelete={handleDeleteClick}
-          onClick={handleNoteClick}
-        />
-      </div>
-    );
-  }, [filtered, handleDeleteClick, handleNoteClick]);
-
+  const Row = useCallback(
+    ({ index, style }: ListChildComponentProps) => {
+      const note = filtered[index];
+      if (!note) return null;
+      return (
+        <div style={style}>
+          <NoteCard note={note} onDelete={handleDeleteClick} onClick={handleNoteClick} />
+        </div>
+      );
+    },
+    [filtered, handleDeleteClick, handleNoteClick],
+  );
 
   return (
     <div className="flex flex-1 min-h-0">
@@ -311,9 +301,7 @@ export function NoteListView({ type, icon: Icon, label }: NoteListViewProps) {
           <div className="flex items-center gap-2 mb-2">
             <Icon size={14} className="text-amber-500" />
             <span className="text-sm font-semibold text-zinc-200">{label}</span>
-            {!loading && (
-              <span className="text-xs text-zinc-500">({notes.length})</span>
-            )}
+            {!loading && <span className="text-xs text-zinc-500">({notes.length})</span>}
           </div>
           <div className="relative">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
@@ -348,12 +336,7 @@ export function NoteListView({ type, icon: Icon, label }: NoteListViewProps) {
               <p className="text-sm text-zinc-600">Nenhum resultado para "{searchQuery}"</p>
             </div>
           ) : (
-            <FixedSizeList
-              height={listHeight}
-              itemCount={filtered.length}
-              itemSize={110}
-              width="100%"
-            >
+            <FixedSizeList height={listHeight} itemCount={filtered.length} itemSize={110} width="100%">
               {Row}
             </FixedSizeList>
           )}
@@ -365,15 +348,14 @@ export function NoteListView({ type, icon: Icon, label }: NoteListViewProps) {
         note={previewNote}
         content={previewContent}
         loading={previewLoading}
-        onClose={() => { setPreviewNote(null); setPreviewContent(''); }}
+        onClose={() => {
+          setPreviewNote(null);
+          setPreviewContent('');
+        }}
       />
 
       {/* Delete dialog */}
-      <DeleteDialog
-        state={deleteDialog}
-        onConfirm={handleDeleteConfirm}
-        onCancel={handleDeleteCancel}
-      />
+      <DeleteDialog state={deleteDialog} onConfirm={handleDeleteConfirm} onCancel={handleDeleteCancel} />
     </div>
   );
 }

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 
 vi.mock('zustand/middleware', async (importOriginal) => {
@@ -53,11 +52,7 @@ beforeAll(() => {
 import { usePipelineStore } from '@/stores/pipeline-store';
 import type { PipelineProject } from '@/types';
 
-function makeProject(
-  id: string,
-  pipelineType: string,
-  overrides: Partial<PipelineProject> = {},
-): PipelineProject {
+function makeProject(id: string, pipelineType: string, overrides: Partial<PipelineProject> = {}): PipelineProject {
   return {
     id,
     name: id,
@@ -199,7 +194,6 @@ describe('TB-43: nao-regressao do security', () => {
     expect(getProjectCalls).toEqual([]);
   });
 });
-
 
 describe('TB-38 (ii): slug vem de agentSlug quando presente, derivacao historica quando nao', () => {
   function snapshot(agentId: string, agentSlug?: string): Record<string, unknown> {

@@ -50,7 +50,8 @@ export interface KanbanUiFilters {
 export function matchesFilters(card: KanbanCard, f: KanbanUiFilters): boolean {
   const q = f.search.trim().toLowerCase();
   if (q) {
-    const haystack = `${card.boardPrefix}-${card.localId} ${card.title} ${card.problem ?? ''} ${card.body ?? ''}`.toLowerCase();
+    const haystack =
+      `${card.boardPrefix}-${card.localId} ${card.title} ${card.problem ?? ''} ${card.body ?? ''}`.toLowerCase();
     if (!haystack.includes(q)) return false;
   }
   if (f.filterType && card.type !== f.filterType) return false;
@@ -86,8 +87,30 @@ export type AttachmentFamily = 'image' | 'pdf' | 'markdown' | 'text' | 'other';
 const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp']);
 const MARKDOWN_EXTS = new Set(['md', 'markdown']);
 const TEXT_EXTS = new Set([
-  'txt', 'log', 'json', 'csv', 'yaml', 'yml', 'toml', 'ini', 'xml', 'sql', 'sh',
-  'ts', 'tsx', 'js', 'jsx', 'py', 'rs', 'go', 'java', 'c', 'cpp', 'h', 'css', 'html',
+  'txt',
+  'log',
+  'json',
+  'csv',
+  'yaml',
+  'yml',
+  'toml',
+  'ini',
+  'xml',
+  'sql',
+  'sh',
+  'ts',
+  'tsx',
+  'js',
+  'jsx',
+  'py',
+  'rs',
+  'go',
+  'java',
+  'c',
+  'cpp',
+  'h',
+  'css',
+  'html',
 ]);
 
 export function attachmentFamily(filename: string): AttachmentFamily {

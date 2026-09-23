@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -27,11 +26,7 @@ import {
   clearRepoGraphTurnSession,
   setRepoGraphTurnContext,
 } from '../repo-graph/turn-context';
-import type {
-  RepoGraphContext,
-  RepoGraphReader,
-  RepoGraphSymbol,
-} from '../repo-graph/types';
+import type { RepoGraphContext, RepoGraphReader, RepoGraphSymbol } from '../repo-graph/types';
 import type { StreamChunk } from '../../../src/types';
 
 const ROOT = '/abs/fake-repo';
@@ -101,9 +96,7 @@ describe('composeMinimalContext — caps e paths absolutos (11.2 / AC-7)', () =>
       repositoryId: 'repo-1',
       task: 'minha tarefa',
     });
-    expect(Buffer.byteLength(ctx.renderedMarkdown, 'utf8')).toBeLessThanOrEqual(
-      MINIMAL_CONTEXT_MAX_MARKDOWN_BYTES,
-    );
+    expect(Buffer.byteLength(ctx.renderedMarkdown, 'utf8')).toBeLessThanOrEqual(MINIMAL_CONTEXT_MAX_MARKDOWN_BYTES);
     expect(ctx.renderedMarkdown).toContain('## Contexto do repositorio (CodeGraph)');
     expect(ctx.renderedMarkdown).toContain(ROOT);
     expect(ctx.renderedMarkdown).toContain('minha tarefa');
@@ -142,9 +135,7 @@ describe('renderContextMarkdown — limite duro de 10KB com truncamento avisado'
       symbols: [],
       callEdges: [],
     });
-    expect(Buffer.byteLength(markdown, 'utf8')).toBeLessThanOrEqual(
-      MINIMAL_CONTEXT_MAX_MARKDOWN_BYTES,
-    );
+    expect(Buffer.byteLength(markdown, 'utf8')).toBeLessThanOrEqual(MINIMAL_CONTEXT_MAX_MARKDOWN_BYTES);
     expect(markdown).toContain('[contexto truncado em 10KB]');
   });
 
@@ -175,7 +166,7 @@ describe('prefetchRepoGraphTurnContext — baseline do turno (A3)', () => {
 
   function setTurnComRepo(): void {
     setRepoGraphTurnSession('sess-1', 'codex-sdk');
-    setRepoGraphTurnContext({
+    setRepoGraphTurnContext('sess-1', {
       repositoryId: 'repo-1',
       canonicalRootPath: ROOT,
       status: 'ready',
@@ -187,6 +178,7 @@ describe('prefetchRepoGraphTurnContext — baseline do turno (A3)', () => {
     const reader = makeReader();
     const emitChunk = vi.fn();
     const result = await prefetchRepoGraphTurnContext('tarefa', {
+      sessionId: 'sess-1',
       getReader: async () => reader,
       emitChunk,
     });
@@ -199,6 +191,7 @@ describe('prefetchRepoGraphTurnContext — baseline do turno (A3)', () => {
     setRepoGraphTurnSession('sess-1', 'codex-sdk');
     const emitChunk = vi.fn();
     const result = await prefetchRepoGraphTurnContext('tarefa', {
+      sessionId: 'sess-1',
       getReader: async () => makeReader(),
       emitChunk,
     });
@@ -211,6 +204,7 @@ describe('prefetchRepoGraphTurnContext — baseline do turno (A3)', () => {
     setTurnComRepo();
     const chunks: StreamChunk[] = [];
     const result = await prefetchRepoGraphTurnContext('onde X e definido?', {
+      sessionId: 'sess-1',
       getReader: async () => makeReader(),
       emitChunk: (chunk) => chunks.push(chunk),
     });
@@ -227,9 +221,7 @@ describe('prefetchRepoGraphTurnContext — baseline do turno (A3)', () => {
     expect(row['toolName']).toBe('repo_graph_minimal_context');
     expect(row['turnIndex']).toBe(3);
     expect(row['resultCount']).toBe(2);
-    expect(row['bytesReturned']).toBe(
-      Buffer.byteLength(fakeContext.renderedMarkdown, 'utf8'),
-    );
+    expect(row['bytesReturned']).toBe(Buffer.byteLength(fakeContext.renderedMarkdown, 'utf8'));
 
     expect(chunks.length).toBe(1);
     expect(chunks[0]!.type).toBe('repo_graph');
@@ -245,7 +237,7 @@ describe('prefetchRepoGraphTurnContext — baseline do turno (A3)', () => {
       }),
     );
     const chunks: StreamChunk[] = [];
-    const deps = { getReader: async () => reader, emitChunk: (c: StreamChunk) => chunks.push(c) };
+    const deps = { sessionId: 'sess-1', getReader: async () => reader, emitChunk: (c: StreamChunk) => chunks.push(c) };
 
     const first = await prefetchRepoGraphTurnContext('tarefa', deps);
     expect(first).toBeNull();

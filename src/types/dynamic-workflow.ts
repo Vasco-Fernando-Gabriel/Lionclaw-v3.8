@@ -1,6 +1,5 @@
 import type { RunBundleEntry } from './dynamic-workflow-cockpit';
 
-
 export const DYNAMIC_WORKFLOW_NODE_STATUSES = [
   'pending',
   'running',
@@ -12,8 +11,7 @@ export const DYNAMIC_WORKFLOW_NODE_STATUSES = [
   'cancelled',
 ] as const;
 
-export type DynamicWorkflowNodeStatus =
-  (typeof DYNAMIC_WORKFLOW_NODE_STATUSES)[number];
+export type DynamicWorkflowNodeStatus = (typeof DYNAMIC_WORKFLOW_NODE_STATUSES)[number];
 
 export const DYNAMIC_WORKFLOW_RUN_STATUSES = [
   'created',
@@ -27,30 +25,15 @@ export const DYNAMIC_WORKFLOW_RUN_STATUSES = [
   'aborted',
 ] as const;
 
-export type DynamicWorkflowRunStatus =
-  (typeof DYNAMIC_WORKFLOW_RUN_STATUSES)[number];
+export type DynamicWorkflowRunStatus = (typeof DYNAMIC_WORKFLOW_RUN_STATUSES)[number];
 
-export const DYNAMIC_WORKFLOW_SPRINT_STATUSES = [
-  'pending',
-  'running',
-  'passed',
-  'failed',
-  'skipped',
-] as const;
+export const DYNAMIC_WORKFLOW_SPRINT_STATUSES = ['pending', 'running', 'passed', 'failed', 'skipped'] as const;
 
-export type DynamicWorkflowSprintStatus =
-  (typeof DYNAMIC_WORKFLOW_SPRINT_STATUSES)[number];
+export type DynamicWorkflowSprintStatus = (typeof DYNAMIC_WORKFLOW_SPRINT_STATUSES)[number];
 
-export const DYNAMIC_WORKFLOW_SPRINT_MERGE_STATUSES = [
-  'pending',
-  'merging',
-  'merged',
-  'conflict',
-  'skipped',
-] as const;
+export const DYNAMIC_WORKFLOW_SPRINT_MERGE_STATUSES = ['pending', 'merging', 'merged', 'conflict', 'skipped'] as const;
 
-export type DynamicWorkflowSprintMergeStatus =
-  (typeof DYNAMIC_WORKFLOW_SPRINT_MERGE_STATUSES)[number];
+export type DynamicWorkflowSprintMergeStatus = (typeof DYNAMIC_WORKFLOW_SPRINT_MERGE_STATUSES)[number];
 
 export const DYNAMIC_WORKFLOW_FAILURE_CLASSES = [
   'provider-limit',
@@ -62,17 +45,11 @@ export const DYNAMIC_WORKFLOW_FAILURE_CLASSES = [
   'cancelled',
 ] as const;
 
-export type DynamicWorkflowFailureClass =
-  (typeof DYNAMIC_WORKFLOW_FAILURE_CLASSES)[number];
+export type DynamicWorkflowFailureClass = (typeof DYNAMIC_WORKFLOW_FAILURE_CLASSES)[number];
 
-export const DYNAMIC_WORKFLOW_GATE_MODES = [
-  'auto',
-  'orchestrator',
-  'human',
-] as const;
+export const DYNAMIC_WORKFLOW_GATE_MODES = ['auto', 'orchestrator', 'human'] as const;
 
-export type DynamicWorkflowGateMode =
-  (typeof DYNAMIC_WORKFLOW_GATE_MODES)[number];
+export type DynamicWorkflowGateMode = (typeof DYNAMIC_WORKFLOW_GATE_MODES)[number];
 
 export const DYNAMIC_WORKFLOW_GATE_DECISIONS = [
   'approved',
@@ -81,8 +58,7 @@ export const DYNAMIC_WORKFLOW_GATE_DECISIONS = [
   'override-rejected',
 ] as const;
 
-export type DynamicWorkflowGateDecisionValue =
-  (typeof DYNAMIC_WORKFLOW_GATE_DECISIONS)[number];
+export type DynamicWorkflowGateDecisionValue = (typeof DYNAMIC_WORKFLOW_GATE_DECISIONS)[number];
 
 export const DYNAMIC_WORKFLOW_MESSAGE_SOURCES = [
   'human',
@@ -93,29 +69,17 @@ export const DYNAMIC_WORKFLOW_MESSAGE_SOURCES = [
   'closer',
 ] as const;
 
-export type DynamicWorkflowMessageSource =
-  (typeof DYNAMIC_WORKFLOW_MESSAGE_SOURCES)[number];
+export type DynamicWorkflowMessageSource = (typeof DYNAMIC_WORKFLOW_MESSAGE_SOURCES)[number];
 
-export const DYNAMIC_WORKFLOW_INTERVENTION_SOURCES = [
-  'human',
-  'orchestrator',
-  'workflow-orchestrator-agent',
-] as const;
+export const DYNAMIC_WORKFLOW_INTERVENTION_SOURCES = ['human', 'orchestrator', 'workflow-orchestrator-agent'] as const;
 
-export type DynamicWorkflowInterventionSource =
-  (typeof DYNAMIC_WORKFLOW_INTERVENTION_SOURCES)[number];
-
+export type DynamicWorkflowInterventionSource = (typeof DYNAMIC_WORKFLOW_INTERVENTION_SOURCES)[number];
 
 export type DynamicWorkflowNodeAccess = 'read-only' | 'workspace-write';
 
 export type DynamicWorkflowNodeIsolation = 'shared-readonly' | 'run-workspace';
 
-export type DynamicWorkflowNodeType =
-  | 'agent'
-  | 'parallel'
-  | 'gate'
-  | 'artifact'
-  | 'checkpoint';
+export type DynamicWorkflowNodeType = 'agent' | 'parallel' | 'gate' | 'artifact' | 'checkpoint';
 
 export type DynamicWorkflowWorkspaceMode = 'run-worktree' | 'fresh-project';
 
@@ -123,12 +87,7 @@ export type DynamicWorkflowCloserStatus = 'idle' | 'active' | 'closed';
 
 export type DynamicWorkflowAutonomyMode = 'auto';
 
-export type DynamicWorkflowPendingDecisionType =
-  | 'gate'
-  | 'question'
-  | 'error'
-  | 'provider';
-
+export type DynamicWorkflowPendingDecisionType = 'gate' | 'question' | 'error' | 'provider';
 
 export interface DynamicWorkflowManifestPhase {
   id: string;
@@ -191,7 +150,6 @@ export interface DynamicWorkflowSprintPlanConfig {
   maxDevRounds?: number;
 }
 
-
 export interface PlannedSprintFeature {
   id: string;
   name: string;
@@ -223,7 +181,6 @@ export type PlanValidationError = {
   code: string;
   message: string;
 };
-
 
 export interface DynamicWorkflowBaselineCommand {
   id: string;
@@ -281,7 +238,6 @@ export interface DynamicWorkflowContextBundle {
   createdAt: string;
 }
 
-
 export interface WorkflowNodeExecutionPolicy {
   runId: string;
   nodeId: string;
@@ -304,7 +260,6 @@ export interface WorkflowNodeExecutionPolicy {
   costCeilingUsd: number;
 }
 
-
 export interface DynamicWorkflowRetryPolicy {
   maxAutoRetries: number;
   backoff: 'exponential-jitter';
@@ -312,7 +267,6 @@ export interface DynamicWorkflowRetryPolicy {
   blockOn: DynamicWorkflowFailureClass[];
   escalateAfterRetries: boolean;
 }
-
 
 export type DynamicWorkflowIntervention =
   | { type: 'reply'; message: string; targetNodeId?: string }
@@ -337,7 +291,6 @@ export type DynamicWorkflowIntervention =
   | { type: 'switch-agent'; nodeId: string; newAgentId: string; reason: string }
   | { type: 'adjust-next-node'; nodeId: string; instruction: string }
   | { type: 'request-replan'; scope: 'remaining' | 'phase' | 'node'; reason: string };
-
 
 export interface DynamicWorkflowSnapshot {
   runId: string;
@@ -366,13 +319,7 @@ export interface DynamicWorkflowSnapshot {
   lastOutcomes?: OutcomeDigest[];
 }
 
-export type OutcomeVerdict =
-  | 'green'
-  | 'attention'
-  | 'pending'
-  | 'needs-decision'
-  | 'needs-human'
-  | 'blocked';
+export type OutcomeVerdict = 'green' | 'attention' | 'pending' | 'needs-decision' | 'needs-human' | 'blocked';
 
 export interface OutcomeDigest {
   seq: number;
@@ -397,7 +344,6 @@ export interface OutcomeDigest {
   suggestion?: 'resume';
 }
 
-
 export interface DynamicWorkflowValidationIssue {
   code: string;
   message: string;
@@ -411,7 +357,6 @@ export interface DynamicWorkflowValidationReport {
   manifestHash?: string;
   checkedAt: string;
 }
-
 
 export interface DynamicWorkflowDefinition {
   id: string;
@@ -619,13 +564,7 @@ export interface DynamicWorkflowGateDecision {
   createdAt: string;
 }
 
-
-export type DynamicWorkflowStreamChunkKind =
-  | 'node'
-  | 'closer'
-  | 'runner'
-  | 'builder'
-  | 'narrator';
+export type DynamicWorkflowStreamChunkKind = 'node' | 'closer' | 'runner' | 'builder' | 'narrator';
 
 export interface DynamicWorkflowStreamChunk {
   kind: DynamicWorkflowStreamChunkKind;
@@ -639,7 +578,6 @@ export interface DynamicWorkflowStreamChunk {
   payload?: unknown;
   final?: boolean;
 }
-
 
 export interface DynamicWorkflowIpcError {
   error: string;
@@ -659,23 +597,16 @@ export interface DynamicWorkflowGateDecisionInput {
 }
 
 export type DynamicWorkflowCreateResult =
-  | { runId: string; fallback?: boolean; fallbackReason?: string }
-  | DynamicWorkflowIpcError;
+  { runId: string; fallback?: boolean; fallbackReason?: string } | DynamicWorkflowIpcError;
 
 export type DynamicWorkflowOkResult = { ok: true } | DynamicWorkflowIpcError;
 
 export type DynamicWorkflowValidateResult =
-  | { ok: true; report: DynamicWorkflowValidationReport }
-  | DynamicWorkflowIpcError;
+  { ok: true; report: DynamicWorkflowValidationReport } | DynamicWorkflowIpcError;
 
-export type DynamicWorkflowReplanResult =
-  | { ok: true; definitionId?: string }
-  | DynamicWorkflowIpcError;
+export type DynamicWorkflowReplanResult = { ok: true; definitionId?: string } | DynamicWorkflowIpcError;
 
-export type DynamicWorkflowSnapshotResult =
-  | DynamicWorkflowSnapshot
-  | DynamicWorkflowIpcError;
-
+export type DynamicWorkflowSnapshotResult = DynamicWorkflowSnapshot | DynamicWorkflowIpcError;
 
 export interface DynamicWorkflowResumeOptions {
   scheduledAt?: string;
@@ -688,39 +619,20 @@ export interface DynamicWorkflowAPI {
   validate(runId: string): Promise<DynamicWorkflowValidateResult>;
   start(runId: string): Promise<DynamicWorkflowOkResult>;
   pause(runId: string): Promise<DynamicWorkflowOkResult>;
-  resume(
-    runId: string,
-    opts?: DynamicWorkflowResumeOptions,
-  ): Promise<DynamicWorkflowOkResult>;
+  resume(runId: string, opts?: DynamicWorkflowResumeOptions): Promise<DynamicWorkflowOkResult>;
   abort(runId: string): Promise<DynamicWorkflowOkResult>;
   reopen(runId: string): Promise<DynamicWorkflowOkResult>;
   deleteRun(runId: string): Promise<DynamicWorkflowOkResult>;
-  sendMessage(
-    runId: string,
-    message: string,
-    attachments?: string[],
-  ): Promise<DynamicWorkflowOkResult>;
-  intervene(
-    runId: string,
-    intervention: DynamicWorkflowIntervention,
-  ): Promise<DynamicWorkflowOkResult>;
-  requestReplan(
-    runId: string,
-    request: DynamicWorkflowReplanRequest,
-  ): Promise<DynamicWorkflowReplanResult>;
+  sendMessage(runId: string, message: string, attachments?: string[]): Promise<DynamicWorkflowOkResult>;
+  intervene(runId: string, intervention: DynamicWorkflowIntervention): Promise<DynamicWorkflowOkResult>;
+  requestReplan(runId: string, request: DynamicWorkflowReplanRequest): Promise<DynamicWorkflowReplanResult>;
   approveGate(
     runId: string,
     gateId: string,
     decision: DynamicWorkflowGateDecisionInput,
   ): Promise<DynamicWorkflowOkResult>;
-  resolveWithCloser(
-    runId: string,
-    reason: string,
-  ): Promise<DynamicWorkflowOkResult>;
-  sendCloserMessage(
-    runId: string,
-    message: string,
-  ): Promise<DynamicWorkflowOkResult>;
+  resolveWithCloser(runId: string, reason: string): Promise<DynamicWorkflowOkResult>;
+  sendCloserMessage(runId: string, message: string): Promise<DynamicWorkflowOkResult>;
   finalizeWorkflow(runId: string): Promise<DynamicWorkflowOkResult>;
   getRun(runId: string): Promise<DynamicWorkflowRun | null>;
   getSnapshot(runId: string): Promise<DynamicWorkflowSnapshotResult>;

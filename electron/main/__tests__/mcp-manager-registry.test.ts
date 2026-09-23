@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 interface RecordedCall {
   sql: string;
@@ -81,13 +79,10 @@ beforeEach(() => {
   state.stub = stub;
 });
 
-
 describe('saveMCPToolsToRegistry - UPSERT', () => {
   it('persiste as 5 colunas via INSERT ... ON CONFLICT DO UPDATE (description/schema/timestamp)', () => {
     const schema = { type: 'object', required: ['to'], properties: { to: { type: 'string' } } };
-    saveMCPToolsToRegistry('gmail', [
-      { name: 'send_email', description: 'Envia um email', inputSchema: schema },
-    ]);
+    saveMCPToolsToRegistry('gmail', [{ name: 'send_email', description: 'Envia um email', inputSchema: schema }]);
 
     const upserts = stub.runs.filter((r) => r.sql.includes('INSERT INTO mcp_tool_registry'));
     expect(upserts).toHaveLength(1);
@@ -108,9 +103,7 @@ describe('saveMCPToolsToRegistry - UPSERT', () => {
   });
 
   it('re-discovery re-emite o UPSERT com a description/schema novos (DO UPDATE atualiza in place)', () => {
-    saveMCPToolsToRegistry('gmail', [
-      { name: 'send_email', description: 'v1', inputSchema: { type: 'object' } },
-    ]);
+    saveMCPToolsToRegistry('gmail', [{ name: 'send_email', description: 'v1', inputSchema: { type: 'object' } }]);
     saveMCPToolsToRegistry('gmail', [
       { name: 'send_email', description: 'v2', inputSchema: { type: 'object', required: ['to'] } },
     ]);
@@ -123,20 +116,13 @@ describe('saveMCPToolsToRegistry - UPSERT', () => {
   });
 
   it('poda tools que sumiram do server (DELETE ... NOT IN) sem apagar as que ficaram', () => {
-    saveMCPToolsToRegistry('gmail', [
-      { name: 'send_email', description: 'd' },
-      { name: 'list_labels' },
-    ]);
+    saveMCPToolsToRegistry('gmail', [{ name: 'send_email', description: 'd' }, { name: 'list_labels' }]);
 
     const prunes = stub.runs.filter((r) => r.sql.includes('NOT IN'));
     expect(prunes).toHaveLength(1);
-    expect(prunes[0].sql).toMatch(
-      /DELETE FROM mcp_tool_registry WHERE mcp_id = \? AND tool_name NOT IN \(\?, \?\)/,
-    );
+    expect(prunes[0].sql).toMatch(/DELETE FROM mcp_tool_registry WHERE mcp_id = \? AND tool_name NOT IN \(\?, \?\)/);
     expect(prunes[0].args).toEqual(['gmail', 'send_email', 'list_labels']);
-    const blindWipes = stub.runs.filter(
-      (r) => r.sql === 'DELETE FROM mcp_tool_registry WHERE mcp_id = ?',
-    );
+    const blindWipes = stub.runs.filter((r) => r.sql === 'DELETE FROM mcp_tool_registry WHERE mcp_id = ?');
     expect(blindWipes).toHaveLength(0);
   });
 
@@ -147,9 +133,9 @@ describe('saveMCPToolsToRegistry - UPSERT', () => {
     expect(upserts).toHaveLength(2);
     for (const call of upserts) {
       expect(call.args[0]).toBe('legacy');
-      expect(call.args[2]).toBeNull(); // description
-      expect(call.args[3]).toBeNull(); // input_schema
-      expect(call.args[4]).toMatch(ISO_RE); // last_discovered_at sempre gravado
+      expect(call.args[2]).toBeNull();
+      expect(call.args[3]).toBeNull();
+      expect(call.args[4]).toMatch(ISO_RE);
     }
   });
 
@@ -167,7 +153,6 @@ describe('saveMCPToolsToRegistry - UPSERT', () => {
   });
 });
 
-
 describe('deleteMCPServer - prune do registry', () => {
   it('encadeia o DELETE do registry ANTES do DELETE do server', () => {
     deleteMCPServer('gmail');
@@ -182,7 +167,6 @@ describe('deleteMCPServer - prune do registry', () => {
     expect(stub.runs[serverIdx].args).toEqual(['gmail']);
   });
 });
-
 
 const REGISTRY_ROWS = [
   {
@@ -249,7 +233,6 @@ describe('getMcpToolRegistryEntries - getter novo', () => {
     expect(stub.alls[0].args).toEqual([]);
   });
 });
-
 
 describe('getMCPToolsFromRegistry - formato preservado', () => {
   beforeEach(() => {

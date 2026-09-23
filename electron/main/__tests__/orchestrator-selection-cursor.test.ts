@@ -30,12 +30,17 @@ describe('Cursor orchestrator selection (F2 item 1)', () => {
   });
 
   it('resolves the exact (cursor-sdk, cursor, catalog-model) triple without effort', async () => {
-    getSettingMock.mockImplementation((key: string) => ({
-      orchestrator_runtime: 'cursor-sdk',
-      orchestrator_provider: 'cursor',
-      orchestrator_model: 'composer-2.5',
-    } as Record<string, string>)[key]);
-    await expect(resolveOrchestratorSelection({ surface: 'main-chat' })).resolves.toEqual({
+    getSettingMock.mockImplementation(
+      (key: string) =>
+        (
+          ({
+            orchestrator_runtime: 'cursor-sdk',
+            orchestrator_provider: 'cursor',
+            orchestrator_model: 'composer-2.5',
+          }) as Record<string, string>
+        )[key],
+    );
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).resolves.toEqual({
       runtime: 'cursor-sdk',
       provider: 'cursor',
       model: 'composer-2.5',
@@ -44,44 +49,67 @@ describe('Cursor orchestrator selection (F2 item 1)', () => {
   });
 
   it('accepts a requestedModel from the curated Cursor catalog', async () => {
-    getSettingMock.mockImplementation((key: string) => ({
-      orchestrator_runtime: 'cursor-sdk',
-      orchestrator_provider: 'cursor',
-      orchestrator_model: 'composer-2.5',
-    } as Record<string, string>)[key]);
+    getSettingMock.mockImplementation(
+      (key: string) =>
+        (
+          ({
+            orchestrator_runtime: 'cursor-sdk',
+            orchestrator_provider: 'cursor',
+            orchestrator_model: 'composer-2.5',
+          }) as Record<string, string>
+        )[key],
+    );
     await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat', requestedModel: 'claude-sonnet-5' }),
+      resolveOrchestratorSelection({ surface: 'default', requestedModel: 'claude-sonnet-5' }),
     ).resolves.toMatchObject({ runtime: 'cursor-sdk', model: 'claude-sonnet-5', source: 'request' });
   });
 
   it('rejects a model outside the curated Cursor catalog', async () => {
-    getSettingMock.mockImplementation((key: string) => ({
-      orchestrator_runtime: 'cursor-sdk',
-      orchestrator_provider: 'cursor',
-      orchestrator_model: 'cursor-future-model',
-    } as Record<string, string>)[key]);
-    await expect(resolveOrchestratorSelection({ surface: 'main-chat' }))
-      .rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    getSettingMock.mockImplementation(
+      (key: string) =>
+        (
+          ({
+            orchestrator_runtime: 'cursor-sdk',
+            orchestrator_provider: 'cursor',
+            orchestrator_model: 'cursor-future-model',
+          }) as Record<string, string>
+        )[key],
+    );
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 
   it('rejects an agent-model override outside the curated Cursor catalog', async () => {
-    getSettingMock.mockImplementation((key: string) => ({
-      orchestrator_runtime: 'cursor-sdk',
-      orchestrator_provider: 'cursor',
-      orchestrator_model: 'composer-2.5',
-    } as Record<string, string>)[key]);
-    await expect(resolveOrchestratorSelection({ surface: 'main-chat', agentModel: 'gpt-nao-existe' }))
-      .rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    getSettingMock.mockImplementation(
+      (key: string) =>
+        (
+          ({
+            orchestrator_runtime: 'cursor-sdk',
+            orchestrator_provider: 'cursor',
+            orchestrator_model: 'composer-2.5',
+          }) as Record<string, string>
+        )[key],
+    );
+    await expect(
+      resolveOrchestratorSelection({ surface: 'default', agentModel: 'gpt-nao-existe' }),
+    ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
   });
 
   it('rejects a mismatched provider for the cursor-sdk runtime', async () => {
-    getSettingMock.mockImplementation((key: string) => ({
-      orchestrator_runtime: 'cursor-sdk',
-      orchestrator_provider: 'grok',
-      orchestrator_model: 'composer-2.5',
-    } as Record<string, string>)[key]);
-    await expect(resolveOrchestratorSelection({ surface: 'main-chat' }))
-      .rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    getSettingMock.mockImplementation(
+      (key: string) =>
+        (
+          ({
+            orchestrator_runtime: 'cursor-sdk',
+            orchestrator_provider: 'grok',
+            orchestrator_model: 'composer-2.5',
+          }) as Record<string, string>
+        )[key],
+    );
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 
   it('resolves cursor-sdk as a compaction subscription runtime (one-shot via sidecar)', async () => {
@@ -94,7 +122,8 @@ describe('Cursor orchestrator selection (F2 item 1)', () => {
   });
 
   it('still rejects a cross-provider compaction triple for cursor-sdk', async () => {
-    await expect(resolveSubscriptionSelectionFor('cursor-sdk', 'kimi', 'composer-2.5'))
-      .rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    await expect(resolveSubscriptionSelectionFor('cursor-sdk', 'kimi', 'composer-2.5')).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 });

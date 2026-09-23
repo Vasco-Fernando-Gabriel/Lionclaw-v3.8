@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -131,7 +130,7 @@ describe('switch-agent via intervene (SM-21) chama runner.switchAgent COM s17Ove
     expect(args[0]).toBe('run-1');
     expect(args[1]).toBe('coder-s1');
     expect(args[2]).toBe('a-especialista');
-    expect(args[4]).toBe('orchestrator'); // source = orquestrador (Maestro)
+    expect(args[4]).toBe('orchestrator');
     expect(typeof args[5].validateSwitchAgent).toBe('function');
     expect(args[5].persistSwitchedDefinition).toBeTruthy();
     const verdict = args[5].validateSwitchAgent() as {

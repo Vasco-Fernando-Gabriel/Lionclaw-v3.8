@@ -1,4 +1,3 @@
-
 export const GIT_RESTRICTIONS_BLOCK = `## Restricoes git (apenas leitura)
 
 PERMITIDO:

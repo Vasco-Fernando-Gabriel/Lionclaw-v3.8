@@ -33,23 +33,37 @@ function legacyDatabase(): Database.Database {
 describe('migration v138 task execution ledger', () => {
   it('adiciona ancestry/owner/provider sem invalidar linhas legadas', () => {
     const db = legacyDatabase();
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO task_executions (
         session_id, task_id, agent_name, model, description, status
       ) VALUES ('legacy-session', 'legacy-task', 'legacy', 'old', 'old', 'completed')
-    `).run();
+    `,
+    ).run();
 
     applyMigrationV138(db);
 
     const columns = db.pragma('table_info(task_executions)') as Array<{ name: string }>;
     const names = new Set(columns.map((column) => column.name));
     for (const name of [
-      'execution_id', 'root_execution_id', 'parent_execution_id', 'execution_kind',
-      'owner_kind', 'owner_id', 'runtime', 'provider', 'cost_status', 'token_status',
-      'cost_unknown_reason', 'metadata',
-    ]) expect(names.has(name)).toBe(true);
-    expect(db.prepare('SELECT execution_id, owner_kind FROM task_executions').get())
-      .toEqual({ execution_id: null, owner_kind: null });
+      'execution_id',
+      'root_execution_id',
+      'parent_execution_id',
+      'execution_kind',
+      'owner_kind',
+      'owner_id',
+      'runtime',
+      'provider',
+      'cost_status',
+      'token_status',
+      'cost_unknown_reason',
+      'metadata',
+    ])
+      expect(names.has(name)).toBe(true);
+    expect(db.prepare('SELECT execution_id, owner_kind FROM task_executions').get()).toEqual({
+      execution_id: null,
+      owner_kind: null,
+    });
     db.close();
   });
 
@@ -72,18 +86,30 @@ describe('migration v138 task execution ledger', () => {
   it('rejeita enums desconhecidos no novo contrato', () => {
     const db = legacyDatabase();
     applyMigrationV138(db);
-    expect(() => db.prepare(`
+    expect(() =>
+      db
+        .prepare(
+          `
       INSERT INTO task_executions (
         task_id, agent_name, model, description, status, execution_id,
         root_execution_id, execution_kind, owner_kind, owner_id
       ) VALUES ('task', 'agent', 'model', 'desc', 'running', 'exec', 'exec', 'root', 'other', 'x')
-    `).run()).toThrow();
-    expect(() => db.prepare(`
+    `,
+        )
+        .run(),
+    ).toThrow();
+    expect(() =>
+      db
+        .prepare(
+          `
       INSERT INTO task_executions (
         task_id, agent_name, model, description, status, execution_id,
         root_execution_id, execution_kind, owner_kind, owner_id
       ) VALUES ('enrich-task', 'agent', 'model', 'desc', 'running', 'enrich-exec', 'enrich-exec', 'root', 'enrich', 'enrich-1')
-    `).run()).not.toThrow();
+    `,
+        )
+        .run(),
+    ).not.toThrow();
     db.close();
   });
 

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -20,9 +19,7 @@ const h = vi.hoisted(() => ({
     run: () => undefined,
   })),
   runCompactionMock: vi.fn(),
-  executeTelegramLaneQueryMock: vi.fn(
-    async (_message: string, ..._args: unknown[]) => undefined,
-  ),
+  executeTelegramLaneQueryMock: vi.fn(async (_message: string, ..._args: unknown[]) => undefined),
   enqueueTelegramLaneTaskMock: vi.fn((fn: () => Promise<unknown>) => fn()),
   resetTelegramSessionStateMock: vi.fn(),
   parseFileMock: vi.fn(async (_filePath: string, _fileType: string): Promise<{ text: string }> => ({ text: '' })),
@@ -82,7 +79,6 @@ import {
   __telegramInternal,
 } from '../telegram-bridge';
 
-
 interface FakeBot {
   sendMessage: ReturnType<typeof vi.fn>;
   sendChatAction: ReturnType<typeof vi.fn>;
@@ -103,12 +99,14 @@ function makeFakeBot(): FakeBot {
   };
 }
 
-function makeDocMessage(overrides: {
-  fileName?: string;
-  mimeType?: string;
-  fileSize?: number;
-  caption?: string;
-} = {}): Record<string, unknown> {
+function makeDocMessage(
+  overrides: {
+    fileName?: string;
+    mimeType?: string;
+    fileSize?: number;
+    caption?: string;
+  } = {},
+): Record<string, unknown> {
   return {
     message_id: 7,
     chat: { id: 42 },
@@ -156,7 +154,6 @@ afterEach(() => {
   __telegramInternal.setActiveSessionIdForTests(null);
 });
 
-
 describe('limites e formatBytes (SPEC 8.4)', () => {
   it('constantes centrais: 20MB download, 50MB upload, 10MB foto', () => {
     expect(TELEGRAM_MAX_DOWNLOAD_BYTES).toBe(20 * 1024 * 1024);
@@ -172,7 +169,6 @@ describe('limites e formatBytes (SPEC 8.4)', () => {
   });
 });
 
-
 describe('detectTelegramDocumentType (SPEC 8.1)', () => {
   it('detecta cada tipo suportado por extensao', () => {
     expect(detectTelegramDocumentType('a.pdf')).toBe('pdf');
@@ -186,7 +182,9 @@ describe('detectTelegramDocumentType (SPEC 8.1)', () => {
 
   it('detecta por mime quando a extensao nao ajuda', () => {
     expect(detectTelegramDocumentType('sem-ext', 'application/pdf')).toBe('pdf');
-    expect(detectTelegramDocumentType('sem-ext', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).toBe('xlsx');
+    expect(
+      detectTelegramDocumentType('sem-ext', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'),
+    ).toBe('xlsx');
     expect(detectTelegramDocumentType('sem-ext', 'text/csv')).toBe('csv');
     expect(detectTelegramDocumentType('sem-ext', 'text/plain')).toBe('txt');
   });
@@ -202,12 +200,25 @@ describe('detectTelegramDocumentType (SPEC 8.1)', () => {
   });
 });
 
-
 describe('extractTelegramDocumentText', () => {
   it('XLSX: cada aba vira texto tabular com cabecalho proprio; parser de CSV nao e chamado', async () => {
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['produto', 'total'], ['abacate', 10]]), 'Vendas');
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['item', 'gasto'], ['luz', 200]]), 'Custos');
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([
+        ['produto', 'total'],
+        ['abacate', 10],
+      ]),
+      'Vendas',
+    );
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([
+        ['item', 'gasto'],
+        ['luz', 200],
+      ]),
+      'Custos',
+    );
     const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
 
     const text = await extractTelegramDocumentText(buffer, 'xlsx', 'planilha.xlsx');
@@ -245,9 +256,9 @@ describe('extractTelegramDocumentText', () => {
       throw new Error('pdf corrompido');
     });
 
-    await expect(
-      extractTelegramDocumentText(Buffer.from('lixo'), 'pdf', 'quebrado.pdf'),
-    ).rejects.toThrow('pdf corrompido');
+    await expect(extractTelegramDocumentText(Buffer.from('lixo'), 'pdf', 'quebrado.pdf')).rejects.toThrow(
+      'pdf corrompido',
+    );
     expect(seenTempPath).not.toBe('');
     expect(fs.existsSync(seenTempPath)).toBe(false);
   });
@@ -263,7 +274,6 @@ describe('extractTelegramDocumentText', () => {
     expect(seen[0]).not.toBe(seen[1]);
   });
 });
-
 
 describe('buildTelegramDocumentPrompt', () => {
   it('monta [Documento recebido] + caption como instrucao + conteudo', () => {
@@ -291,7 +301,6 @@ describe('buildTelegramDocumentPrompt', () => {
     expect(prompt).toContain('inteiro');
   });
 });
-
 
 describe('handleIncomingDocument — limites (AC-28)', () => {
   it('file_size acima de 20MB: NAO baixa e avisa com limite e tamanho reais', async () => {
@@ -322,7 +331,10 @@ describe('handleIncomingDocument — limites (AC-28)', () => {
 
   it('file_size undefined + download passou mas acima do limite: avisa com tamanho real', async () => {
     const big = new ArrayBuffer(TELEGRAM_MAX_DOWNLOAD_BYTES + 1024);
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: async () => big })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, arrayBuffer: async () => big })),
+    );
     const msg = makeDocMessage({ fileName: 'surpresa.txt', mimeType: 'text/plain', fileSize: undefined });
 
     await __telegramInternal.handleIncomingDocument(msg as never, 42, 'Breno');
@@ -354,19 +366,26 @@ describe('handleIncomingDocument — limites (AC-28)', () => {
   });
 
   it('caminho feliz TXT: baixa, parseia e o prompt do turno leva o conteudo (AC-26)', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => ({
-      ok: true,
-      arrayBuffer: async () => new TextEncoder().encode('linha um do doc').buffer,
-    })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        arrayBuffer: async () => new TextEncoder().encode('linha um do doc').buffer,
+      })),
+    );
     h.parseFileMock.mockResolvedValue({ text: 'linha um do doc' });
     h.prepareImpl.mockImplementation((sql: string) => ({
-      get: () => (sql.includes('content, metadata')
-        ? { id: 9, content: 'analise pronta', metadata: undefined }
-        : undefined),
+      get: () =>
+        sql.includes('content, metadata') ? { id: 9, content: 'analise pronta', metadata: undefined } : undefined,
       all: () => [],
       run: () => undefined,
     }));
-    const msg = makeDocMessage({ fileName: 'notas.txt', mimeType: 'text/plain', fileSize: 1024, caption: 'resuma isto' });
+    const msg = makeDocMessage({
+      fileName: 'notas.txt',
+      mimeType: 'text/plain',
+      fileSize: 1024,
+      caption: 'resuma isto',
+    });
 
     await __telegramInternal.handleIncomingDocument(msg as never, 42, 'Breno');
 
@@ -379,16 +398,23 @@ describe('handleIncomingDocument — limites (AC-28)', () => {
   });
 
   it('falha de parse: temp nao vaza e o usuario recebe erro claro', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => ({
-      ok: true,
-      arrayBuffer: async () => new TextEncoder().encode('lixo binario').buffer,
-    })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        arrayBuffer: async () => new TextEncoder().encode('lixo binario').buffer,
+      })),
+    );
     let seenTempPath = '';
     h.parseFileMock.mockImplementation(async (filePath: string) => {
       seenTempPath = filePath;
       throw new Error('docx corrompido');
     });
-    const msg = makeDocMessage({ fileName: 'quebrado.docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', fileSize: 512 });
+    const msg = makeDocMessage({
+      fileName: 'quebrado.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      fileSize: 512,
+    });
 
     await __telegramInternal.handleIncomingDocument(msg as never, 42, 'Breno');
 
@@ -398,7 +424,6 @@ describe('handleIncomingDocument — limites (AC-28)', () => {
     expect(h.executeTelegramLaneQueryMock).not.toHaveBeenCalled();
   });
 });
-
 
 describe('saida de arquivo (SPEC 8.3 / 8.4)', () => {
   it('sendTelegramDocument envia buffer com filename/contentType e caption <= 1024', async () => {
@@ -417,7 +442,7 @@ describe('saida de arquivo (SPEC 8.3 / 8.4)', () => {
     const dir = makeTempDir();
     const bigPath = path.join(dir, 'relatorio.zip');
     fs.writeFileSync(bigPath, 'x');
-    fs.truncateSync(bigPath, TELEGRAM_MAX_UPLOAD_BYTES + 1024 * 1024); // sparse
+    fs.truncateSync(bigPath, TELEGRAM_MAX_UPLOAD_BYTES + 1024 * 1024);
 
     await __telegramInternal.sendDocumentPathViaTelegram(42, bigPath);
 
@@ -454,9 +479,14 @@ describe('saida de arquivo (SPEC 8.3 / 8.4)', () => {
     const docPath = path.join(dir, 'resultado.pdf');
     fs.writeFileSync(docPath, 'pdf fake');
     h.prepareImpl.mockImplementation((sql: string) => ({
-      get: () => (sql.includes('content, metadata')
-        ? { id: 9, content: `Segue o relatorio!\nENVIAR_ARQUIVO: ${docPath}\nQualquer duvida avisa.`, metadata: undefined }
-        : undefined),
+      get: () =>
+        sql.includes('content, metadata')
+          ? {
+              id: 9,
+              content: `Segue o relatorio!\nENVIAR_ARQUIVO: ${docPath}\nQualquer duvida avisa.`,
+              metadata: undefined,
+            }
+          : undefined,
       all: () => [],
       run: () => undefined,
     }));
@@ -475,15 +505,18 @@ describe('saida de arquivo (SPEC 8.3 / 8.4)', () => {
     const docPath = path.join(dir, 'unico.csv');
     fs.writeFileSync(docPath, 'a;b');
     const metadata = JSON.stringify({
-      artifacts: [{
-        type: 'document',
-        data: { filePath: docPath, fileName: 'unico.csv', size: 3, mimeType: 'text/csv' },
-      }],
+      artifacts: [
+        {
+          type: 'document',
+          data: { filePath: docPath, fileName: 'unico.csv', size: 3, mimeType: 'text/csv' },
+        },
+      ],
     });
     h.prepareImpl.mockImplementation((sql: string) => ({
-      get: () => (sql.includes('content, metadata')
-        ? { id: 9, content: `Pronto.\nENVIAR_ARQUIVO: ${docPath}`, metadata }
-        : undefined),
+      get: () =>
+        sql.includes('content, metadata')
+          ? { id: 9, content: `Pronto.\nENVIAR_ARQUIVO: ${docPath}`, metadata }
+          : undefined,
       all: () => [],
       run: () => undefined,
     }));
@@ -498,9 +531,10 @@ describe('saida de arquivo (SPEC 8.3 / 8.4)', () => {
     const docPath = path.join(dir, 'so-arquivo.txt');
     fs.writeFileSync(docPath, 'x');
     h.prepareImpl.mockImplementation((sql: string) => ({
-      get: () => (sql.includes('content, metadata')
-        ? { id: 9, content: `ENVIAR_ARQUIVO: ${docPath}`, metadata: undefined }
-        : undefined),
+      get: () =>
+        sql.includes('content, metadata')
+          ? { id: 9, content: `ENVIAR_ARQUIVO: ${docPath}`, metadata: undefined }
+          : undefined,
       all: () => [],
       run: () => undefined,
     }));
@@ -511,7 +545,6 @@ describe('saida de arquivo (SPEC 8.3 / 8.4)', () => {
     expect(response).toBe('Arquivo enviado.');
   });
 });
-
 
 describe('anexos nao processaveis (AC-27)', () => {
   it('cada tipo recebe resposta clara e especifica', async () => {
@@ -538,27 +571,27 @@ describe('anexos nao processaveis (AC-27)', () => {
   });
 });
 
-
 describe('audio de saida via base64 (AC-31)', () => {
   it('logout durante o agente descarta todos os efeitos e artefatos do turno antigo', async () => {
     let releaseQuery: () => void = () => {
       throw new Error('query ainda nao iniciou');
     };
     h.executeTelegramLaneQueryMock.mockImplementationOnce(
-      () => new Promise<undefined>((resolve) => {
-        releaseQuery = () => resolve(undefined);
-      }),
+      () =>
+        new Promise<undefined>((resolve) => {
+          releaseQuery = () => resolve(undefined);
+        }),
     );
     const metadata = JSON.stringify({
-      artifacts: [{
-        type: 'audio',
-        data: { audioBase64: Buffer.from('audio antigo').toString('base64') },
-      }],
+      artifacts: [
+        {
+          type: 'audio',
+          data: { audioBase64: Buffer.from('audio antigo').toString('base64') },
+        },
+      ],
     });
     h.prepareImpl.mockImplementation((sql: string) => ({
-      get: () => (sql.includes('content, metadata')
-        ? { id: 9, content: 'resposta antiga', metadata }
-        : undefined),
+      get: () => (sql.includes('content, metadata') ? { id: 9, content: 'resposta antiga', metadata } : undefined),
       all: () => [],
       run: () => undefined,
     }));
@@ -587,15 +620,15 @@ describe('audio de saida via base64 (AC-31)', () => {
   it('audioBase64 presente: envia da memoria SEM reler disco', async () => {
     const audioBase64 = Buffer.from('audio fake').toString('base64');
     const metadata = JSON.stringify({
-      artifacts: [{
-        type: 'audio',
-        data: { audioBase64, mimeType: 'audio/mpeg', filePath: '/caminho/que/nao/existe.mp3' },
-      }],
+      artifacts: [
+        {
+          type: 'audio',
+          data: { audioBase64, mimeType: 'audio/mpeg', filePath: '/caminho/que/nao/existe.mp3' },
+        },
+      ],
     });
     h.prepareImpl.mockImplementation((sql: string) => ({
-      get: () => (sql.includes('content, metadata')
-        ? { id: 9, content: 'segue o audio', metadata }
-        : undefined),
+      get: () => (sql.includes('content, metadata') ? { id: 9, content: 'segue o audio', metadata } : undefined),
       all: () => [],
       run: () => undefined,
     }));
@@ -618,9 +651,7 @@ describe('audio de saida via base64 (AC-31)', () => {
       artifacts: [{ type: 'audio', data: { filePath: audioPath } }],
     });
     h.prepareImpl.mockImplementation((sql: string) => ({
-      get: () => (sql.includes('content, metadata')
-        ? { id: 9, content: 'segue o audio', metadata }
-        : undefined),
+      get: () => (sql.includes('content, metadata') ? { id: 9, content: 'segue o audio', metadata } : undefined),
       all: () => [],
       run: () => undefined,
     }));

@@ -5,12 +5,8 @@ import { pipe2DesignPlanner } from '../seed-agents/pipe2-design-planner';
 
 export function applyMigrationV136(db: Database.Database): void {
   const seeds = [pipe2SpecBuilder, pipe2DesignPlanValidator, pipe2DesignPlanner];
-  const updateDescription = db.prepare(
-    'UPDATE agents SET description = ? WHERE id = ? AND description = ?',
-  );
-  const updatePrompt = db.prepare(
-    'UPDATE agents SET system_prompt = ? WHERE id = ? AND system_prompt = ?',
-  );
+  const updateDescription = db.prepare('UPDATE agents SET description = ? WHERE id = ? AND description = ?');
+  const updatePrompt = db.prepare('UPDATE agents SET system_prompt = ? WHERE id = ? AND system_prompt = ?');
   for (const seed of seeds) {
     const oldDescription = seed.description.replaceAll('LionDesign', 'Open Design');
     const oldPrompt = seed.systemPrompt.replaceAll('LionDesign', 'Open Design');

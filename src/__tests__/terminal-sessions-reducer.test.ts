@@ -43,7 +43,7 @@ describe('terminalSessionsReducer', () => {
 
   it('remove aba NAO-ativa: ativa inalterada', () => {
     let s = initTerminalSessionsState();
-    s = terminalSessionsReducer(s, add); // [T1, T2], ativa T2
+    s = terminalSessionsReducer(s, add);
     const t1 = s.sessions[0].id;
     const activeBefore = s.activeId;
     s = terminalSessionsReducer(s, remove(t1));
@@ -54,7 +54,7 @@ describe('terminalSessionsReducer', () => {
   it('remove aba ATIVA: reassina para o vizinho (min(idx, len-1))', () => {
     let s = initTerminalSessionsState();
     s = terminalSessionsReducer(s, add);
-    s = terminalSessionsReducer(s, add); // [T1, T2, T3]
+    s = terminalSessionsReducer(s, add);
     const [t1, t2, t3] = s.sessions.map((x) => x.id);
     s = terminalSessionsReducer(s, setActive(t2));
     s = terminalSessionsReducer(s, remove(t2));

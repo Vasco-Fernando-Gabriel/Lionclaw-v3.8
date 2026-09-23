@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { parseEvaluationOutput } from '../harness-evaluator';
 
@@ -75,16 +74,12 @@ After reviewing all criteria:
 
   it('throws a clear error when no JSON object is present at all', () => {
     const rawOutput = "I'll start by reading the files to understand the codebase.";
-    expect(() => parseEvaluationOutput(rawOutput, 1)).toThrow(
-      /no JSON object|no valid JSON/i,
-    );
+    expect(() => parseEvaluationOutput(rawOutput, 1)).toThrow(/no JSON object|no valid JSON/i);
   });
 
   it('throws when JSON exists but missing sprint_id, verdict, and criteria', () => {
     const rawOutput = '{"some_random_key": "value"}';
-    expect(() => parseEvaluationOutput(rawOutput, 1)).toThrow(
-      /sprint_id|no valid JSON/i,
-    );
+    expect(() => parseEvaluationOutput(rawOutput, 1)).toThrow(/sprint_id|no valid JSON/i);
   });
 
   it('throws with first 500 chars of raw output in error message', () => {

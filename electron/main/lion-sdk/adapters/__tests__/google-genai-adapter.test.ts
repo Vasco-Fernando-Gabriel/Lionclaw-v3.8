@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 const { generateContentStreamMock, insertAuditEntryMock, googleGenAIConstructorMock } = vi.hoisted(() => ({
   generateContentStreamMock: vi.fn(),
@@ -50,9 +48,7 @@ async function* asyncGenFrom<T>(items: T[]): AsyncGenerator<T> {
   }
 }
 
-async function drain(
-  iter: AsyncIterable<LionStreamEvent>,
-): Promise<LionStreamEvent[]> {
+async function drain(iter: AsyncIterable<LionStreamEvent>): Promise<LionStreamEvent[]> {
   const out: LionStreamEvent[] = [];
   for await (const ev of iter) out.push(ev);
   return out;
@@ -67,23 +63,21 @@ beforeEach(() => {
 describe('createGoogleGenAiAdapter', () => {
   describe('S4.5 — basic streaming', () => {
     it('emits text deltas from chunk.text and done at end', async () => {
-      generateContentStreamMock.mockResolvedValue(
-        asyncGenFrom([{ text: 'Hello' }, { text: ' world' }, { text: '!' }]),
-      );
+      generateContentStreamMock.mockResolvedValue(asyncGenFrom([{ text: 'Hello' }, { text: ' world' }, { text: '!' }]));
       const adapter = createGoogleGenAiAdapter({ apiKey: 'k' });
       const events = await drain(adapter.streamCompletion({ model: 'gemini-3-flash-preview', messages: [] }));
-      expect(events.filter((e) => e.type === 'text').map((e) => (e as { delta: string }).delta)).toEqual(
-        ['Hello', ' world', '!'],
-      );
+      expect(events.filter((e) => e.type === 'text').map((e) => (e as { delta: string }).delta)).toEqual([
+        'Hello',
+        ' world',
+        '!',
+      ]);
       expect(events.at(-1)).toEqual({ type: 'done' });
     });
 
     it('errors when apiKey is empty', async () => {
       const adapter = createGoogleGenAiAdapter({ apiKey: '' });
       const events = await drain(adapter.streamCompletion({ model: 'gemini-3-flash-preview', messages: [] }));
-      expect(events).toEqual([
-        { type: 'error', error: expect.stringMatching(/requer apiKey/) },
-      ]);
+      expect(events).toEqual([{ type: 'error', error: expect.stringMatching(/requer apiKey/) }]);
     });
   });
 
@@ -105,8 +99,7 @@ describe('createGoogleGenAiAdapter', () => {
       const adapter = createGoogleGenAiAdapter({ apiKey: 'k' });
       const events = await drain(adapter.streamCompletion({ model: 'gemini-3-flash-preview', messages: [] }));
       const usage = events.find((e) => e.type === 'usage') as
-        | { type: 'usage'; usage: { inputTokens: number; outputTokens: number } }
-        | undefined;
+        { type: 'usage'; usage: { inputTokens: number; outputTokens: number } } | undefined;
       expect(usage).toBeDefined();
       expect(usage!.usage.inputTokens).toBe(150);
       expect(usage!.usage.outputTokens).toBe(275);
@@ -128,9 +121,8 @@ describe('createGoogleGenAiAdapter', () => {
       const adapter = createGoogleGenAiAdapter({ apiKey: 'k' });
       const events = await drain(adapter.streamCompletion({ model: 'gemini-3-flash-preview', messages: [] }));
       const usage = events.find((e) => e.type === 'usage') as
-        | { type: 'usage'; usage: { inputTokens: number; outputTokens: number } }
-        | undefined;
-      expect(usage!.usage.inputTokens).toBe(100); // NOT 130
+        { type: 'usage'; usage: { inputTokens: number; outputTokens: number } } | undefined;
+      expect(usage!.usage.inputTokens).toBe(100);
     });
 
     it('does NOT include totalTokenCount (avoid double-count)', async () => {
@@ -149,8 +141,7 @@ describe('createGoogleGenAiAdapter', () => {
       const adapter = createGoogleGenAiAdapter({ apiKey: 'k' });
       const events = await drain(adapter.streamCompletion({ model: 'gemini-3-flash-preview', messages: [] }));
       const usage = events.find((e) => e.type === 'usage') as
-        | { type: 'usage'; usage: { inputTokens: number; outputTokens: number } }
-        | undefined;
+        { type: 'usage'; usage: { inputTokens: number; outputTokens: number } } | undefined;
       expect(usage!.usage.inputTokens).toBe(50);
       expect(usage!.usage.outputTokens).toBe(50);
     });
@@ -261,9 +252,7 @@ describe('createGoogleGenAiAdapter', () => {
       );
       const adapter = createGoogleGenAiAdapter({ apiKey: 'k' });
       const events = await drain(adapter.streamCompletion({ model: 'gemini-3-flash-preview', messages: [] }));
-      const tc = events.find((e) => e.type === 'tool_call_delta') as
-        | { toolCalls: Array<{ id: string }> }
-        | undefined;
+      const tc = events.find((e) => e.type === 'tool_call_delta') as { toolCalls: Array<{ id: string }> } | undefined;
       expect(tc!.toolCalls[0].id).toBe('sdk-id-xyz');
     });
   });

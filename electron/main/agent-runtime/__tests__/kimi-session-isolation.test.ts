@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const dispatchLionSubagentSpy = vi.hoisted(() => vi.fn());
@@ -53,10 +52,7 @@ vi.mock('../permission-profiles', () => ({
 }));
 
 vi.mock('../subagent-dispatch', () => ({
-  dispatchLionSubagent: async (
-    input: unknown,
-    host: { workspace: { cwd: string } },
-  ) => {
+  dispatchLionSubagent: async (input: unknown, host: { workspace: { cwd: string } }) => {
     dispatchLionSubagentSpy(input);
     const result = await executeAgentSpy({ cwd: host.workspace.cwd });
     return {
@@ -137,10 +133,7 @@ describe('Kimi per-session isolation (DONE CRITERION, SPEC-011 §11 Fase B / §1
     const argsA = buildArgs('chat', '/work/sessionA');
     const argsB = buildArgs('pipeline', '/work/sessionB');
 
-    const [sessionA, sessionB] = await Promise.all([
-      buildKimiSessionTools(argsA),
-      buildKimiSessionTools(argsB),
-    ]);
+    const [sessionA, sessionB] = await Promise.all([buildKimiSessionTools(argsA), buildKimiSessionTools(argsB)]);
 
     const namesA = new Set(sessionA.externalTools.map((t) => t.name));
     const namesB = new Set(sessionB.externalTools.map((t) => t.name));
@@ -164,9 +157,11 @@ describe('Kimi per-session isolation (DONE CRITERION, SPEC-011 §11 Fase B / §1
     expect(executeAgentSpy.mock.calls[0][0].cwd).toBe('/work/sessionA');
     expect(executeAgentSpy.mock.calls[0][0].cwd).not.toBe('/work/sessionB');
     expect(result.output).toContain('/work/sessionA');
-    expect(dispatchLionSubagentSpy).toHaveBeenCalledWith(expect.objectContaining({
-      transportCorrelation: { kind: 'mcp-request-id', value: '52' },
-    }));
+    expect(dispatchLionSubagentSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transportCorrelation: { kind: 'mcp-request-id', value: '52' },
+      }),
+    );
     expect(dispatchLionSubagentSpy.mock.calls[0]![0]).not.toHaveProperty('toolUseId');
 
     assertNoUnannouncedTool(sessionA.systemPrompt, namesA);
@@ -190,7 +185,9 @@ Skills vinculadas a voce: foo`;
       'memory-search': { command: 'node', args: ['memory.js'] },
       'skills': { command: 'node', args: ['skills.js'] },
     });
-    (mcpManager.getMCPToolsFromRegistry as unknown as { mockImplementation: (f: (ids: string[]) => string[]) => void }).mockImplementation?.((ids: string[]) => {
+    (
+      mcpManager.getMCPToolsFromRegistry as unknown as { mockImplementation: (f: (ids: string[]) => string[]) => void }
+    ).mockImplementation?.((ids: string[]) => {
       const map: Record<string, string[]> = {
         'memory-search': ['mcp__memory-search__search'],
         'skills': ['mcp__skills__list_skills', 'mcp__skills__load_skill', 'mcp__skills__get_skill_metadata'],
@@ -205,7 +202,12 @@ Skills vinculadas a voce: foo`;
 
     const [chat, pipe] = await Promise.all([
       buildKimiSessionTools({ profile: 'chat', config: cfgChat, cwd: '/a', abortController: new AbortController() }),
-      buildKimiSessionTools({ profile: 'pipeline', config: cfgPipe, cwd: '/b', abortController: new AbortController() }),
+      buildKimiSessionTools({
+        profile: 'pipeline',
+        config: cfgPipe,
+        cwd: '/b',
+        abortController: new AbortController(),
+      }),
     ]);
 
     const chatNames = new Set(chat.externalTools.map((t) => t.name));
@@ -246,10 +248,7 @@ Skills vinculadas a voce: foo`;
     expect(materializedMcp).toEqual([]);
 
     const wireMaterializedNames = new Set(materializedMcp.map((e) => e.id));
-    const reconciledForWire = stripUnmaterializedToolInstructions(
-      agentScoped.systemPrompt,
-      wireMaterializedNames,
-    );
+    const reconciledForWire = stripUnmaterializedToolInstructions(agentScoped.systemPrompt, wireMaterializedNames);
     expect(reconciledForWire).not.toContain('mcp__memory-search__search');
     expect(reconciledForWire).not.toContain('mcp__skills__load_skill');
     assertNoUnannouncedTool(reconciledForWire, wireMaterializedNames);

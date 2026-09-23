@@ -1,4 +1,3 @@
-
 export const DB_MIGRATION_ERROR_CODE = 'DB-MIGRATION';
 export const DB_INTEGRITY_ERROR_CODE = 'DB-INTEGRITY';
 export const DB_BACKUP_ERROR_CODE = 'DB-BACKUP';
@@ -23,12 +22,7 @@ export abstract class DatabaseInitError extends Error {
   readonly dbPath: string;
   readonly backupPath: string | null;
 
-  protected constructor(
-    message: string,
-    dbPath: string,
-    backupPath: string | null,
-    cause?: unknown,
-  ) {
+  protected constructor(message: string, dbPath: string, backupPath: string | null, cause?: unknown) {
     super(message, cause === undefined ? undefined : { cause });
     this.dbPath = dbPath;
     this.backupPath = backupPath;
@@ -99,12 +93,7 @@ export class DatabaseSchemaRepairError extends DatabaseInitError {
   readonly code = DB_SCHEMA_REPAIR_ERROR_CODE;
 
   constructor(dbPath: string, backupPath: string | null, cause: unknown) {
-    super(
-      `Falha no reparo de schema real: ${causeMessage(cause, 'erro desconhecido')}`,
-      dbPath,
-      backupPath,
-      cause,
-    );
+    super(`Falha no reparo de schema real: ${causeMessage(cause, 'erro desconhecido')}`, dbPath, backupPath, cause);
     this.name = 'DatabaseSchemaRepairError';
   }
 }
@@ -113,12 +102,7 @@ export class MigrationError extends DatabaseInitError {
   readonly version: number;
   readonly code = DB_MIGRATION_ERROR_CODE;
 
-  constructor(
-    version: number,
-    dbPath: string,
-    cause: unknown,
-    backupPath: string | null = null,
-  ) {
+  constructor(version: number, dbPath: string, cause: unknown, backupPath: string | null = null) {
     super(
       `Migration v${version} falhou: ${causeMessage(cause, 'erro desconhecido de migration')}`,
       dbPath,

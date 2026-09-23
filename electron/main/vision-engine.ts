@@ -1,4 +1,3 @@
-
 import { createLogger } from './logger';
 import { getSecret } from './secrets-vault';
 import { getSetting } from './db';
@@ -14,12 +13,7 @@ const logger = createLogger('vision-engine');
 
 const DEFAULT_VISION_TIMEOUT_MS = 120_000;
 
-const ANTHROPIC_IMAGE_MEDIA_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-] as const;
+const ANTHROPIC_IMAGE_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const;
 type AnthropicImageMediaType = (typeof ANTHROPIC_IMAGE_MEDIA_TYPES)[number];
 
 const VISION_TRANSCRIPTION_PROMPT = [
@@ -102,11 +96,7 @@ function timeoutSignal(timeoutMs: number): { signal: AbortSignal; cancel: () => 
   return { signal: controller.signal, cancel: () => clearTimeout(timer) };
 }
 
-async function describeWithOpenAI(
-  input: DescribeImageInput,
-  model: string,
-  timeoutMs: number,
-): Promise<string> {
+async function describeWithOpenAI(input: DescribeImageInput, model: string, timeoutMs: number): Promise<string> {
   const apiKey = await getSecret('OPENAI_API_KEY');
   if (!apiKey) {
     throw new VisionUnconfiguredError(
@@ -166,11 +156,7 @@ async function describeWithOpenAI(
   }
 }
 
-async function describeWithAnthropic(
-  input: DescribeImageInput,
-  model: string,
-  timeoutMs: number,
-): Promise<string> {
+async function describeWithAnthropic(input: DescribeImageInput, model: string, timeoutMs: number): Promise<string> {
   const apiKey = await getSecret('ANTHROPIC_API_KEY');
   if (!apiKey) {
     throw new VisionUnconfiguredError(
@@ -220,9 +206,7 @@ async function describeWithAnthropic(
     const isTimeout = err instanceof Error && err.name === 'AbortError';
     logger.error({ err: message, model, isTimeout }, 'Anthropic vision error');
     throw new VisionCallError(
-      isTimeout
-        ? `Anthropic vision expirou apos ${timeoutMs}ms.`
-        : `Anthropic vision falhou: ${message}`,
+      isTimeout ? `Anthropic vision expirou apos ${timeoutMs}ms.` : `Anthropic vision falhou: ${message}`,
     );
   } finally {
     cancel();

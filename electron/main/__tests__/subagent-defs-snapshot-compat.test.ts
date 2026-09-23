@@ -1,10 +1,8 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: () => {
-    const iter = (async function* () {
-    })();
+    const iter = (async function* () {})();
     return Object.assign(iter, { toggleMcpServer: vi.fn(async () => undefined) });
   },
 }));

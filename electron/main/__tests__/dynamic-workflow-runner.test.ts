@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   WorkflowRunner,
@@ -9,14 +8,8 @@ import {
   type WorkflowRunnerCrud,
   type WorkflowTimerHandle,
 } from '../dynamic-workflows/workflow-runner';
-import type {
-  SandboxProcessFactory,
-  SandboxProcessHandle,
-} from '../dynamic-workflows/workflow-sandbox';
-import type {
-  SandboxParentMessage,
-  SandboxChildMessage,
-} from '../dynamic-workflows/sandbox-protocol';
+import type { SandboxProcessFactory, SandboxProcessHandle } from '../dynamic-workflows/workflow-sandbox';
+import type { SandboxParentMessage, SandboxChildMessage } from '../dynamic-workflows/sandbox-protocol';
 import type {
   DynamicWorkflowRun,
   DynamicWorkflowDefinition,
@@ -25,11 +18,7 @@ import type {
   DynamicWorkflowGateDecisionInsertInput,
   DynamicWorkflowMessageInsertInput,
 } from '../dynamic-workflows/types';
-import {
-  runGit,
-  WORKFLOW_RUN_LOCK_FILE,
-  type GitRunResult,
-} from '../dynamic-workflows/workflow-git';
+import { runGit, WORKFLOW_RUN_LOCK_FILE, type GitRunResult } from '../dynamic-workflows/workflow-git';
 import type { WorkspaceHandle } from '../dynamic-workflows/workflow-worktree';
 import type { CloserTurnResult } from '../dynamic-workflows/workflow-closer';
 import type { NodeRunResult, RunNodeAgentInput } from '../dynamic-workflows/workflow-agent-adapter';
@@ -37,7 +26,6 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
 
 type Coordinator = (ctx: CoordinatorCtx) => Promise<unknown>;
 
@@ -156,7 +144,6 @@ function makeFakeSandboxFactory(coordinator: Coordinator): SandboxProcessFactory
   };
 }
 
-
 interface RunnerHarness {
   deps: WorkflowRunnerDeps;
   crud: WorkflowRunnerCrud;
@@ -213,10 +200,47 @@ function makeManifest(): DynamicWorkflowManifest {
       { id: 'Gate', name: 'Gate', order: 3 },
     ],
     nodes: [
-      { id: 'scout', type: 'agent', phaseId: 'Scout', agentId: 'a-scout', access: 'read-only', canResume: true, produces: ['scout'], consumes: [] },
-      { id: 'coder', type: 'agent', phaseId: 'Implementar', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], canResume: true, produces: ['impl'], consumes: ['scout'] },
-      { id: 'v0', type: 'agent', phaseId: 'Validar', agentId: 'a-val', access: 'read-only', canResume: true, produces: ['v0'], consumes: ['impl'] },
-      { id: 'v1', type: 'agent', phaseId: 'Validar', agentId: 'a-val', access: 'read-only', canResume: true, produces: ['v1'], consumes: ['impl'] },
+      {
+        id: 'scout',
+        type: 'agent',
+        phaseId: 'Scout',
+        agentId: 'a-scout',
+        access: 'read-only',
+        canResume: true,
+        produces: ['scout'],
+        consumes: [],
+      },
+      {
+        id: 'coder',
+        type: 'agent',
+        phaseId: 'Implementar',
+        agentId: 'a-coder',
+        access: 'workspace-write',
+        writeSet: ['src/**'],
+        canResume: true,
+        produces: ['impl'],
+        consumes: ['scout'],
+      },
+      {
+        id: 'v0',
+        type: 'agent',
+        phaseId: 'Validar',
+        agentId: 'a-val',
+        access: 'read-only',
+        canResume: true,
+        produces: ['v0'],
+        consumes: ['impl'],
+      },
+      {
+        id: 'v1',
+        type: 'agent',
+        phaseId: 'Validar',
+        agentId: 'a-val',
+        access: 'read-only',
+        canResume: true,
+        produces: ['v1'],
+        consumes: ['impl'],
+      },
       { id: 'gate-global', type: 'gate', phaseId: 'Gate', canResume: false, produces: [], consumes: [] },
     ],
     parallelism: { maxConcurrentAgents: 3, parallelWritersAllowed: false },
@@ -390,8 +414,7 @@ function makeRunnerHarness(opts: {
       const nr = state.nodeRuns.get(id);
       if (nr) Object.assign(nr, patch);
     },
-    listNodeRuns: (runId) =>
-      [...new Set([...state.nodeRuns.values()])].filter((n) => n.runId === runId),
+    listNodeRuns: (runId) => [...new Set([...state.nodeRuns.values()])].filter((n) => n.runId === runId),
     insertEvent: (input) => {
       const id = state.events.length + 1;
       state.events.push({ type: input.type, runId: input.runId, payload: input.payloadJson });
@@ -499,7 +522,9 @@ function makeRunnerHarness(opts: {
   return { deps, crud, state };
 }
 
-function defaultFakeGit(over?: (args: string[], cwd: string) => GitRunResult | null): (args: string[], cwd: string) => Promise<GitRunResult> {
+function defaultFakeGit(
+  over?: (args: string[], cwd: string) => GitRunResult | null,
+): (args: string[], cwd: string) => Promise<GitRunResult> {
   return async (args, cwd) => {
     const custom = over?.(args, cwd);
     if (custom) return custom;
@@ -530,7 +555,6 @@ function ok(stdout: string): GitRunResult {
   return { code: 0, stdout, stderr: '' };
 }
 
-
 let tmpRoot: string;
 
 beforeEach(() => {
@@ -559,7 +583,6 @@ async function waitForRunStatus(
   return crud.getRun(runId)?.status ?? 'unknown';
 }
 
-
 describe('workflow-runner: fluxo feliz', () => {
   it('scout -> coder -> validators -> gate humano aprovado conclui em delivered + closer (AC-9/AC-28)', async () => {
     const closerTurn = vi.fn(async () => ({ ok: true, output: 'walkthrough da entrega', costUsd: 0 }));
@@ -567,7 +590,13 @@ describe('workflow-runner: fluxo feliz', () => {
       await ctx.phase('Scout');
       await ctx.agent({ id: 'scout', agentId: 'a-scout', access: 'read-only', prompt: 's' });
       await ctx.phase('Implementar');
-      await ctx.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'impl' });
+      await ctx.agent({
+        id: 'coder',
+        agentId: 'a-coder',
+        access: 'workspace-write',
+        writeSet: ['src/**'],
+        prompt: 'impl',
+      });
       await ctx.phase('Validar');
       await ctx.parallel({
         thunks: [
@@ -610,13 +639,19 @@ describe('workflow-runner: writeSet enforcement DESLIGADO (decisao de produto)',
       const cmd = args.join(' ');
       if (cmd.includes('diff --name-only') || cmd.includes('diff-tree')) return ok('vendor/x.ts');
       if (cmd.includes('check-ignore')) return { code: 1, stdout: '', stderr: '' };
-      return null; // demais comandos -> default (commit/squash/rev-parse intactos)
+      return null;
     });
     const coordinator: Coordinator = async (ctx) => {
       await ctx.phase('Scout');
       await ctx.agent({ id: 'scout', agentId: 'a-scout', access: 'read-only', prompt: 's' });
       await ctx.phase('Implementar');
-      await ctx.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'impl' });
+      await ctx.agent({
+        id: 'coder',
+        agentId: 'a-coder',
+        access: 'workspace-write',
+        writeSet: ['src/**'],
+        prompt: 'impl',
+      });
       await ctx.phase('Gate');
       const decision = await ctx.gate({ id: 'gate-global', mode: 'human', checks: [] });
       return { ok: (decision as { ok: boolean }).ok };
@@ -630,7 +665,8 @@ describe('workflow-runner: writeSet enforcement DESLIGADO (decisao de produto)',
 
     expect(
       h.state.events.some(
-        (e) => e.type === 'node-failed' && (e.payload as { reason?: string } | undefined)?.reason === 'writeset-violation',
+        (e) =>
+          e.type === 'node-failed' && (e.payload as { reason?: string } | undefined)?.reason === 'writeset-violation',
       ),
     ).toBe(false);
 
@@ -646,7 +682,13 @@ describe('workflow-runner: #G gate orfao pos-restart (recuperabilidade)', () => 
     const closerTurn = vi.fn(async () => ({ ok: true, output: 'walkthrough', costUsd: 0 }));
     const coordinator: Coordinator = async (ctx) => {
       await ctx.phase('Implementar');
-      await ctx.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'impl' });
+      await ctx.agent({
+        id: 'coder',
+        agentId: 'a-coder',
+        access: 'workspace-write',
+        writeSet: ['src/**'],
+        prompt: 'impl',
+      });
       await ctx.phase('Gate');
       const decision = await ctx.gate({ id: 'gate-global', mode: 'human', checks: [] });
       return { ok: (decision as { ok: boolean }).ok };
@@ -661,7 +703,7 @@ describe('workflow-runner: #G gate orfao pos-restart (recuperabilidade)', () => 
 
     await runner.abort('run-1');
     await waitForRunStatus(h.crud, 'run-1', 'aborted');
-    await new Promise((r) => setTimeout(r, 20)); // deixa o finally liberar o lock
+    await new Promise((r) => setTimeout(r, 20));
     h.crud.updateRun('run-1', {
       status: 'blocked',
       completedAt: null,
@@ -701,7 +743,7 @@ describe('workflow-runner: #G gate orfao pos-restart (recuperabilidade)', () => 
 
     const wrong = await runner.approveGate('run-1', 'gate-inexistente', { decision: 'approve' });
     expect(wrong).toMatchObject({ error: expect.any(String) });
-    expect(h.crud.getRun('run-1')?.status).toBe('blocked'); // intacto
+    expect(h.crud.getRun('run-1')?.status).toBe('blocked');
     cleanup();
   });
 });
@@ -742,7 +784,6 @@ describe('workflow-runner: erro estrutural', () => {
     cleanup();
   });
 });
-
 
 describe('workflow-runner: merge pos-gate base divergente (8.6.2 passo 3)', () => {
   it('base ANDOU + merge limpo + re-checks VERDES conclui sem novo aceite humano', async () => {
@@ -817,10 +858,7 @@ describe('workflow-runner: merge pos-gate base divergente (8.6.2 passo 3)', () =
       return { ok: true };
     };
     const manifest = makeManifest();
-    const gateNode = manifest.nodes.find((n) => n.id === 'gate-global') as unknown as Record<
-      string,
-      unknown
-    >;
+    const gateNode = manifest.nodes.find((n) => n.id === 'gate-global') as unknown as Record<string, unknown>;
     gateNode.gateConfig = { checks: [{ kind: 'command', command: 'npm run typecheck', maxErrors: 0 }] };
     let gateCmdRan = false;
     const h = makeRunnerHarness({
@@ -831,7 +869,7 @@ describe('workflow-runner: merge pos-gate base divergente (8.6.2 passo 3)', () =
       manifest,
       runGateCommand: (command, cmdArgs) => {
         gateCmdRan = true;
-        expect(command).toBe('npm'); // provou o split simbolico->concreto
+        expect(command).toBe('npm');
         expect(cmdArgs).toEqual(['run', 'typecheck']);
         return { status: 1, stdout: 'error: boom', stderr: '', timedOut: false };
       },
@@ -841,7 +879,7 @@ describe('workflow-runner: merge pos-gate base divergente (8.6.2 passo 3)', () =
     await waitForRunStatus(h.crud, 'run-1', 'blocked');
     await runner.approveGate('run-1', 'gate-global', { decision: 'approve' });
     await new Promise((r) => setTimeout(r, 50));
-    expect(gateCmdRan).toBe(true); // os checks REAIS rodaram
+    expect(gateCmdRan).toBe(true);
     expect(h.state.events.some((e) => e.type === 'merge-recheck-failed')).toBe(true);
     expect(closerTurn).toHaveBeenCalled();
     cleanup();
@@ -853,7 +891,7 @@ describe('workflow-runner: fresh-project aceite final (AC-28)', () => {
     const git = defaultFakeGit((args) => {
       const cmd = args.join(' ');
       if (cmd.includes('rev-parse --is-inside-work-tree')) return ok('true');
-      if (cmd.includes('rev-parse --verify --quiet HEAD')) return ok(''); // unborn no probe
+      if (cmd.includes('rev-parse --verify --quiet HEAD')) return ok('');
       return null;
     });
     const closerTurn = vi.fn(async () => ({ ok: true, output: 'walkthrough', costUsd: 0 }));
@@ -892,7 +930,10 @@ describe('workflow-runner: intervencoes (14.1.1 / AC-14)', () => {
 
     const legacy = await runner.intervene(
       'run-1',
-      { type: 'set-autonomy', mode: 'full' } as unknown as import('../dynamic-workflows/types').DynamicWorkflowIntervention,
+      {
+        type: 'set-autonomy',
+        mode: 'full',
+      } as unknown as import('../dynamic-workflows/types').DynamicWorkflowIntervention,
       'human',
     );
     expect(legacy).toMatchObject({ error: expect.stringContaining('intervencao desconhecida') });
@@ -1032,9 +1073,7 @@ describe('workflow-runner: pause/resume/abort idempotentes', () => {
     const runner = new WorkflowRunner(h.deps);
     await runner.start('run-1');
     await vi.waitFor(() =>
-      expect(
-        [...h.state.nodeRuns.values()].some((n) => n.nodeId === 'scout' && n.status === 'running'),
-      ).toBe(true),
+      expect([...h.state.nodeRuns.values()].some((n) => n.nodeId === 'scout' && n.status === 'running')).toBe(true),
     );
 
     expect(await runner.abort('run-1')).toEqual({ ok: true });
@@ -1079,27 +1118,27 @@ describe('workflow-runner: resume destrava bloqueio informativo (gate inconclusi
 
       const evt = h.state.events.find((e) => e.type === 'run-info-block-accepted');
       expect(evt).toBeTruthy();
-      const payload =
-        typeof evt!.payload === 'string' ? JSON.parse(evt!.payload) : evt!.payload;
+      const payload = typeof evt!.payload === 'string' ? JSON.parse(evt!.payload) : evt!.payload;
       expect(payload).toMatchObject({ blockType });
 
       const terminal = await waitForRunStatus(h.crud, 'run-1', 'completed');
       expect(terminal).toBe('completed');
-      expect(
-        JSON.parse(h.crud.getRun('run-1')!.inputJson || '{}').pendingDecision,
-      ).toBeUndefined();
+      expect(JSON.parse(h.crud.getRun('run-1')!.inputJson || '{}').pendingDecision).toBeUndefined();
       cleanup();
     },
   );
 });
-
 
 class FakeScheduler {
   private timers: Array<{ cb: () => void; cancelled: boolean }> = [];
   schedule = (_delayMs: number, cb: () => void): WorkflowTimerHandle => {
     const t = { cb, cancelled: false };
     this.timers.push(t);
-    return { cancel: () => { t.cancelled = true; } };
+    return {
+      cancel: () => {
+        t.cancelled = true;
+      },
+    };
   };
   flush(): void {
     const active = this.timers.filter((t) => !t.cancelled);
@@ -1177,9 +1216,22 @@ describe('workflow-runner: DEFECT-4 provider-limit retry/backoff -> blocked (AC-
     const run = h.crud.getRun('run-1');
     expect(run?.status).not.toBe('failed');
     const pd = JSON.parse(run?.inputJson || '{}').pendingDecision as
-      | { type?: string; id?: string; gateId?: string; failureClass?: string; retriesExhausted?: boolean; actions?: string[] }
+      | {
+          type?: string;
+          id?: string;
+          gateId?: string;
+          failureClass?: string;
+          retriesExhausted?: boolean;
+          actions?: string[];
+        }
       | undefined;
-    expect(pd).toMatchObject({ type: 'provider', id: 'failure:coder', gateId: 'failure:coder', failureClass: 'provider-limit', retriesExhausted: true });
+    expect(pd).toMatchObject({
+      type: 'provider',
+      id: 'failure:coder',
+      gateId: 'failure:coder',
+      failureClass: 'provider-limit',
+      retriesExhausted: true,
+    });
     expect(pd?.actions).toEqual(['retry', 'switch-agent', 'skip', 'abort']);
     const retryCount = h.state.events.filter((e) => e.type === 'node-retry-scheduled').length;
     expect(retryCount).toBe(2);
@@ -1187,10 +1239,19 @@ describe('workflow-runner: DEFECT-4 provider-limit retry/backoff -> blocked (AC-
     const blockedPayload = (
       typeof blockedEv.payload === 'string' ? JSON.parse(blockedEv.payload) : blockedEv.payload
     ) as Record<string, unknown>;
-    expect(blockedPayload).toMatchObject({ failureClass: 'provider-limit', retriesExhausted: true, attemptsMade: 3, gateId: 'failure:coder' });
+    expect(blockedPayload).toMatchObject({
+      failureClass: 'provider-limit',
+      retriesExhausted: true,
+      attemptsMade: 3,
+      gateId: 'failure:coder',
+    });
     expect(blockedPayload).toHaveProperty('nodeError');
     const gateEv = h.state.events.find((e) => e.type === 'gate-blocked') as { payload?: unknown };
-    expect(JSON.parse(String(gateEv.payload))).toMatchObject({ gateId: 'failure:coder', mode: 'orchestrator', failure: true });
+    expect(JSON.parse(String(gateEv.payload))).toMatchObject({
+      gateId: 'failure:coder',
+      mode: 'orchestrator',
+      failure: true,
+    });
 
     const res = await runner.approveGate(
       'run-1',
@@ -1199,16 +1260,13 @@ describe('workflow-runner: DEFECT-4 provider-limit retry/backoff -> blocked (AC-
       'orchestrator',
     );
     expect(res).toEqual({ ok: true });
-    await vi.waitFor(() =>
-      expect(['delivered', 'completed']).toContain(h.crud.getRun('run-1')?.status),
-    );
+    await vi.waitFor(() => expect(['delivered', 'completed']).toContain(h.crud.getRun('run-1')?.status));
     const approved = h.state.events.find((e) => e.type === 'gate-approved') as { payload?: unknown };
     expect(JSON.parse(String(approved.payload))).toMatchObject({ gateId: 'failure:coder', action: 'skip' });
     expect(h.state.events.some((e) => e.type === 'run-failed')).toBe(false);
     cleanup();
   });
 });
-
 
 describe('computeGitTransientPaths (S4, repo git real)', () => {
   function gitSync(cwd: string, ...args: string[]): string {
@@ -1232,11 +1290,7 @@ describe('computeGitTransientPaths (S4, repo git real)', () => {
     return { repo, baseSha: gitSync(repo, 'rev-parse', 'HEAD') };
   }
 
-  function computeFor(
-    repo: string,
-    specPath: string,
-    baseCommitSha: string,
-  ): Promise<string[]> {
+  function computeFor(repo: string, specPath: string, baseCommitSha: string): Promise<string[]> {
     const h = makeRunnerHarness({
       coordinator: async () => ({}),
       projectPath: repo,
@@ -1258,10 +1312,7 @@ describe('computeGitTransientPaths (S4, repo git real)', () => {
     const runner = new WorkflowRunner(h.deps);
     const compute = (
       runner as unknown as {
-        computeGitTransientPaths(
-          d: DynamicWorkflowDefinition,
-          w: WorkspaceHandle,
-        ): Promise<string[]>;
+        computeGitTransientPaths(d: DynamicWorkflowDefinition, w: WorkspaceHandle): Promise<string[]>;
       }
     ).computeGitTransientPaths.bind(runner);
     return compute(definition, workspace);
@@ -1283,11 +1334,7 @@ describe('computeGitTransientPaths (S4, repo git real)', () => {
 
   it('(c) baseCommitSha INVALIDO -> inconclusivo -> SPEC FORA da lista (nunca inverter para o lado destrutivo)', async () => {
     const { repo } = setupRealRepo();
-    const paths = await computeFor(
-      repo,
-      'docs/spec-untracked.md',
-      'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
-    );
+    const paths = await computeFor(repo, 'docs/spec-untracked.md', 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef');
     expect(paths).toEqual([WORKFLOW_RUN_LOCK_FILE]);
     cleanup();
   });

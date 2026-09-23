@@ -1,10 +1,5 @@
-
 import { describe, it, expect } from 'vitest';
-import {
-  buildSnapshot,
-  derivePendingDecision,
-  type SnapshotDeps,
-} from '../dynamic-workflows/workflow-snapshot';
+import { buildSnapshot, derivePendingDecision, type SnapshotDeps } from '../dynamic-workflows/workflow-snapshot';
 import type {
   DynamicWorkflowRun,
   DynamicWorkflowEvent,
@@ -80,7 +75,10 @@ function makeDeps(run: DynamicWorkflowRun, events: DynamicWorkflowEvent[] = [], 
   };
 }
 
-function runWithPending(type: DynamicWorkflowPendingDecisionType, status: 'blocked' | 'failed' = 'blocked'): DynamicWorkflowRun {
+function runWithPending(
+  type: DynamicWorkflowPendingDecisionType,
+  status: 'blocked' | 'failed' = 'blocked',
+): DynamicWorkflowRun {
   return makeRun({
     status,
     inputJson: JSON.stringify({
@@ -103,11 +101,28 @@ describe('SPEC orquestrador-driver D12: since + lastOutcomes', () => {
     ];
     for (let i = 0; i < 14; i++) all[3 + i]!.nodeId = `n${i}`;
     all[17]!.nodeId = 'f1';
-    const deps: SnapshotDeps = { ...makeDeps(run, all.slice(-12)), listEventsSince: (_runId, afterSeq) => all.filter((e) => e.seq > afterSeq) };
+    const deps: SnapshotDeps = {
+      ...makeDeps(run, all.slice(-12)),
+      listEventsSince: (_runId, afterSeq) => all.filter((e) => e.seq > afterSeq),
+    };
     const snap = buildSnapshot('run-1', '/r', deps);
-    expect(snap!.since).toEqual({ nodes: 15, green: 14, attention: 0, pending: 0, failed: 1, costUsd: 7, durationMs: 14_000 });
+    expect(snap!.since).toEqual({
+      nodes: 15,
+      green: 14,
+      attention: 0,
+      pending: 0,
+      failed: 1,
+      costUsd: 7,
+      durationMs: 14_000,
+    });
     expect(snap!.lastOutcomes).toHaveLength(12);
-    expect(snap!.lastOutcomes![0]).toMatchObject({ type: 'node-failed', verdict: 'attention', failureClass: 'logic', errorExcerpt: 'boom', nodeId: 'f1' });
+    expect(snap!.lastOutcomes![0]).toMatchObject({
+      type: 'node-failed',
+      verdict: 'attention',
+      failureClass: 'logic',
+      errorExcerpt: 'boom',
+      nodeId: 'f1',
+    });
     expect(snap!.lastOutcomes![1]!.nodeId).toBe('n13');
     expect(snap!.lastOutcomes!.some((o) => o.agentId === 'old')).toBe(false);
     expect(snap!.recentEvents).toHaveLength(12);

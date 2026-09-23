@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi } from 'vitest';
-
 
 vi.mock('../logger', () => ({
   createLogger: () => ({
@@ -49,8 +47,6 @@ vi.mock('../pipeline-shared/sdk-bootstrap', () => ({
   getClaudeCodeExecutablePath: () => '/tmp/claude-cli.js',
 }));
 
-
-
 describe('SPEC-006 §11.1 + BUG 3 F4 — costSource switch', () => {
   function mapRuntimeToCostMetaMirror(
     runtime: 'cloud' | 'local' | 'external' | 'codex' | 'zai' | 'minimax-tp',
@@ -58,9 +54,7 @@ describe('SPEC-006 §11.1 + BUG 3 F4 — costSource switch', () => {
   ): { costSource: string; runtimeUsed: string } {
     switch (runtime) {
       case 'cloud': {
-        const sdkReported =
-          metadata?.costSource === 'sdk_total_cost_usd' ||
-          metadata?.costSource === 'sdk_model_usage';
+        const sdkReported = metadata?.costSource === 'sdk_total_cost_usd' || metadata?.costSource === 'sdk_model_usage';
         return { costSource: sdkReported ? 'sdk_anthropic' : 'calculated', runtimeUsed: 'cloud' };
       }
       case 'codex':
@@ -134,7 +128,6 @@ describe('SPEC-006 §11.1 + BUG 3 F4 — costSource switch', () => {
   });
 });
 
-
 import fs from 'fs';
 import path from 'path';
 
@@ -150,21 +143,13 @@ describe('SPEC-006 §11.1 — harness-engine.ts source verification', () => {
   it('harness-engine.ts labels match BUG 3 F4 (zai/codex calculated, codex runtime)', () => {
     const harnessEnginePath = path.join(__dirname, '..', 'harness-engine.ts');
     const source = fs.readFileSync(harnessEnginePath, 'utf-8');
-    expect(source).toContain('SPEC-006');
-    const zaiBlock = source.slice(
-      source.indexOf("case 'zai':"),
-      source.indexOf("case 'zai':") + 120,
-    );
+    const zaiBlock = source.slice(source.indexOf("case 'zai':"), source.indexOf("case 'zai':") + 120);
     expect(zaiBlock).toContain("costSource: 'calculated'");
     expect(zaiBlock).not.toContain('fallback_zero');
-    const codexBlock = source.slice(
-      source.indexOf("case 'codex':"),
-      source.indexOf("case 'codex':") + 120,
-    );
+    const codexBlock = source.slice(source.indexOf("case 'codex':"), source.indexOf("case 'codex':") + 120);
     expect(codexBlock).toContain("{ costSource: 'calculated', runtimeUsed: 'codex' }");
   });
 });
-
 
 describe('SPEC-006 Sprint 2.4.2 — execute.ts dispatch source verification', () => {
   it('execute.ts imports minimaxTokenplanExecutor', () => {
@@ -178,10 +163,7 @@ describe('SPEC-006 Sprint 2.4.2 — execute.ts dispatch source verification', ()
     const source = fs.readFileSync(executePath, 'utf-8');
 
     expect(source).toContain("case 'minimax-tp':");
-    const caseBlock = source.slice(
-      source.indexOf("case 'minimax-tp':"),
-      source.indexOf("case 'minimax-tp':") + 120,
-    );
+    const caseBlock = source.slice(source.indexOf("case 'minimax-tp':"), source.indexOf("case 'minimax-tp':") + 120);
     expect(caseBlock).toContain('minimaxTokenplanExecutor.run');
     expect(caseBlock).not.toContain('ainda nao tem executor implementado');
   });

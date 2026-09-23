@@ -1,4 +1,3 @@
-
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -50,9 +49,7 @@ function needsPrune(fullPath, pkg) {
   if (!fs.existsSync(nodeModules)) return false;
   const runtimeDeps = Object.keys(pkg.dependencies || {});
   if (runtimeDeps.length === 0) return true;
-  return ['esbuild', 'typescript'].some((devDep) =>
-    fs.existsSync(path.join(nodeModules, devDep)),
-  );
+  return ['esbuild', 'typescript'].some((devDep) => fs.existsSync(path.join(nodeModules, devDep)));
 }
 
 function pruneNodeModules(fullPath, pkg, dir) {
@@ -73,9 +70,7 @@ function pruneNodeModules(fullPath, pkg, dir) {
   }
 }
 
-const dirs = fs.readdirSync(mcpDir).filter(d =>
-  fs.statSync(path.join(mcpDir, d)).isDirectory()
-);
+const dirs = fs.readdirSync(mcpDir).filter((d) => fs.statSync(path.join(mcpDir, d)).isDirectory());
 
 let success = 0;
 let failed = 0;

@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { PT_BR_BLOCK } from './_shared/language-pt-br';
 
@@ -13,7 +12,7 @@ export const dynamicWorkflowBuilder: Omit<AgentConfig, 'sortOrder'> = {
   name: 'Dynamic Workflow Builder',
   description:
     'Gera o pacote do workflow dinamico (workflow.js, manifest, schemas, report e estimativa de custo) a partir de SPEC e context bundle. Read-only: nunca executa o workflow.',
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'enabled' as const,
   thinkingBudget: 6000,

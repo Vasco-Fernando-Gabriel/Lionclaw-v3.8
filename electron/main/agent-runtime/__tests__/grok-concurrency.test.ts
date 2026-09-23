@@ -12,15 +12,24 @@ describe('Grok concurrency pool', () => {
   it('com cap=1 admite filho cross-runtime e recusa somente ancestry Grok ativa', async () => {
     _resetGrokPoolForTests(1);
     const crossRuntimeChild = await acquireGrokSlot({
-      role: 'child', rootExecutionId: 'claude-root', executionDepth: 1,
+      role: 'child',
+      rootExecutionId: 'claude-root',
+      executionDepth: 1,
     });
     crossRuntimeChild();
     const parent = await acquireGrokSlot({
-      role: 'parent', toolBearing: true, rootExecutionId: 'grok-root', executionDepth: 0,
+      role: 'parent',
+      toolBearing: true,
+      rootExecutionId: 'grok-root',
+      executionDepth: 0,
     });
-    await expect(acquireGrokSlot({
-      role: 'child', rootExecutionId: 'grok-root', executionDepth: 1,
-    })).rejects.toBeInstanceOf(GrokConcurrencyError);
+    await expect(
+      acquireGrokSlot({
+        role: 'child',
+        rootExecutionId: 'grok-root',
+        executionDepth: 1,
+      }),
+    ).rejects.toBeInstanceOf(GrokConcurrencyError);
     parent();
     expect(_grokPoolStateForTests()).toMatchObject({ active: 0, queued: 0 });
   });
@@ -71,11 +80,13 @@ describe('Grok concurrency pool', () => {
       executionDepth: 1,
     });
 
-    await expect(acquireGrokSlot({
-      role: 'child',
-      rootExecutionId: 'root-1',
-      executionDepth: 2,
-    })).rejects.toThrow(/own tool-bearing ancestry saturates/);
+    await expect(
+      acquireGrokSlot({
+        role: 'child',
+        rootExecutionId: 'root-1',
+        executionDepth: 2,
+      }),
+    ).rejects.toThrow(/own tool-bearing ancestry saturates/);
     expect(_grokPoolStateForTests()).toMatchObject({ active: 2, queued: 0 });
 
     releaseChild();

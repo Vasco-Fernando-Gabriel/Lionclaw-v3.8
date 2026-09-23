@@ -1,18 +1,10 @@
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import {
-  RepoGraphEngine,
-  type RepoGraphEngineDb,
-  type RepoGraphProvider,
-} from '../repo-graph/engine';
-import {
-  checkRepoStaleness,
-  __clearStalenessThrottleForTests,
-} from '../repo-graph/staleness';
+import { RepoGraphEngine, type RepoGraphEngineDb, type RepoGraphProvider } from '../repo-graph/engine';
+import { checkRepoStaleness, __clearStalenessThrottleForTests } from '../repo-graph/staleness';
 import type {
   LocalRepositoryRecord,
   RepoGraphRunRecord,
@@ -105,8 +97,7 @@ function makeDb(repoRecord: LocalRepositoryRecord): RepoGraphEngineDb {
     },
     attachSessionRepository: () => undefined,
     detachSessionRepository: () => undefined,
-    getSessionActiveRepository: (sessionId) =>
-      sessionId === SESSION_ID ? { ...attach } : null,
+    getSessionActiveRepository: (sessionId) => (sessionId === SESSION_ID ? { ...attach } : null),
     setSessionGraphPromptSuppressed: () => undefined,
   };
 }

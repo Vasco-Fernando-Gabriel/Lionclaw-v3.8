@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -34,9 +33,7 @@ describe('workflow-gates: command check (typecheck/tests/build com baseline)', (
       stderr: '',
       timedOut: false,
     });
-    const checks: GateCheckSpec[] = [
-      { kind: 'command', id: 'typecheck', command: 'tsc', maxErrors: 123 },
-    ];
+    const checks: GateCheckSpec[] = [{ kind: 'command', id: 'typecheck', command: 'tsc', maxErrors: 123 }];
     const res = runGateChecks(checks, 'auto', { runCommand: runner });
     expect(res.ok).toBe(false);
     expect(res.checks[0]!.detail!['errorCount']).toBe(124);
@@ -45,17 +42,19 @@ describe('workflow-gates: command check (typecheck/tests/build com baseline)', (
   it('sem maxErrors exige exit 0', () => {
     const okRunner: CommandRunner = () => ({ status: 0, stdout: '', stderr: '', timedOut: false });
     const failRunner: CommandRunner = () => ({ status: 2, stdout: '', stderr: 'boom', timedOut: false });
-    expect(runGateChecks([{ kind: 'command', id: 'build', command: 'x' }], 'auto', { runCommand: okRunner }).ok).toBe(true);
-    expect(runGateChecks([{ kind: 'command', id: 'build', command: 'x' }], 'auto', { runCommand: failRunner }).ok).toBe(false);
+    expect(runGateChecks([{ kind: 'command', id: 'build', command: 'x' }], 'auto', { runCommand: okRunner }).ok).toBe(
+      true,
+    );
+    expect(runGateChecks([{ kind: 'command', id: 'build', command: 'x' }], 'auto', { runCommand: failRunner }).ok).toBe(
+      false,
+    );
   });
 
   it('timeout do comando reprova o check', () => {
     const runner: CommandRunner = () => ({ status: null, stdout: '', stderr: '', timedOut: true });
-    const res = runGateChecks(
-      [{ kind: 'command', id: 'tests', command: 'x', timeoutMs: 10 }],
-      'auto',
-      { runCommand: runner },
-    );
+    const res = runGateChecks([{ kind: 'command', id: 'tests', command: 'x', timeoutMs: 10 }], 'auto', {
+      runCommand: runner,
+    });
     expect(res.ok).toBe(false);
     expect(res.checks[0]!.reason).toContain('timeout');
   });
@@ -68,11 +67,9 @@ describe('workflow-gates: command check (typecheck/tests/build com baseline)', (
       timedOut: false,
       error: 'spawn tsc ENOENT',
     });
-    const res = runGateChecks(
-      [{ kind: 'command', id: 'typecheck', command: 'tsc', maxErrors: 123 }],
-      'auto',
-      { runCommand: runner },
-    );
+    const res = runGateChecks([{ kind: 'command', id: 'typecheck', command: 'tsc', maxErrors: 123 }], 'auto', {
+      runCommand: runner,
+    });
     expect(res.ok).toBe(false);
     expect(res.checks[0]!.ok).toBe(false);
     expect(res.checks[0]!.reason).toContain('ENOENT');
@@ -86,11 +83,9 @@ describe('workflow-gates: command check (typecheck/tests/build com baseline)', (
       stderr: '',
       timedOut: false,
     });
-    const res = runGateChecks(
-      [{ kind: 'command', id: 'typecheck', command: 'tsc', maxErrors: 123 }],
-      'auto',
-      { runCommand: runner },
-    );
+    const res = runGateChecks([{ kind: 'command', id: 'typecheck', command: 'tsc', maxErrors: 123 }], 'auto', {
+      runCommand: runner,
+    });
     expect(res.ok).toBe(false);
     expect(res.checks[0]!.reason).toContain('sem exit code');
   });
@@ -103,11 +98,9 @@ describe('workflow-gates: command check (typecheck/tests/build com baseline)', (
       timedOut: false,
       signal: 'SIGKILL',
     });
-    const res = runGateChecks(
-      [{ kind: 'command', id: 'tests', command: 'vitest', maxErrors: 0 }],
-      'auto',
-      { runCommand: runner },
-    );
+    const res = runGateChecks([{ kind: 'command', id: 'tests', command: 'vitest', maxErrors: 0 }], 'auto', {
+      runCommand: runner,
+    });
     expect(res.ok).toBe(false);
     expect(res.checks[0]!.reason).toContain('SIGKILL');
     expect(res.checks[0]!.detail!['signal']).toBe('SIGKILL');
@@ -121,11 +114,9 @@ describe('workflow-gates: command check (typecheck/tests/build com baseline)', (
       timedOut: false,
       error: 'spawn npm ENOENT',
     });
-    const res = runGateChecks(
-      [{ kind: 'command', id: 'build', command: 'npm', args: ['run', 'build'] }],
-      'auto',
-      { runCommand: runner },
-    );
+    const res = runGateChecks([{ kind: 'command', id: 'build', command: 'npm', args: ['run', 'build'] }], 'auto', {
+      runCommand: runner,
+    });
     expect(res.ok).toBe(false);
     expect(res.checks[0]!.reason).toContain('ENOENT');
   });
@@ -137,11 +128,9 @@ describe('workflow-gates: command check (typecheck/tests/build com baseline)', (
       stderr: '',
       timedOut: false,
     });
-    const res = runGateChecks(
-      [{ kind: 'command', id: 'typecheck', command: 'tsc', maxErrors: 123 }],
-      'auto',
-      { runCommand: runner },
-    );
+    const res = runGateChecks([{ kind: 'command', id: 'typecheck', command: 'tsc', maxErrors: 123 }], 'auto', {
+      runCommand: runner,
+    });
     expect(res.ok).toBe(true);
     expect(res.checks[0]!.detail!['errorCount']).toBe(100);
   });
@@ -176,9 +165,7 @@ describe('workflow-gates: containment check (protected paths via diff)', () => {
       'auto',
     );
     expect(res.ok).toBe(false);
-    expect(res.checks[0]!.detail!['violations']).toEqual([
-      'electron/main/pipeline-engine/index.ts',
-    ]);
+    expect(res.checks[0]!.detail!['violations']).toEqual(['electron/main/pipeline-engine/index.ts']);
   });
 
   it('nao confunde prefixo de nome (pipeline-engine-foo nao casa pipeline-engine)', () => {
@@ -230,10 +217,7 @@ describe('workflow-gates: schema check (resultado de node tem o shape minimo)', 
   });
 
   it('reprova quando o resultado nem e objeto', () => {
-    const res = runGateChecks(
-      [{ kind: 'schema', id: 'x', value: null, requiredKeys: ['a'] }],
-      'auto',
-    );
+    const res = runGateChecks([{ kind: 'schema', id: 'x', value: null, requiredKeys: ['a'] }], 'auto');
     expect(res.ok).toBe(false);
   });
 });
@@ -303,20 +287,14 @@ describe('workflow-gates: expected-files check', () => {
 
 describe('workflow-gates: regra 15 (gate auto exige check deterministico)', () => {
   it('gate AUTO com check sem impl deterministica e RECUSADO', () => {
-    const res = runGateChecks(
-      [{ kind: 'semantic-review', id: 'risco', note: 'avaliar risco de regressao' }],
-      'auto',
-    );
+    const res = runGateChecks([{ kind: 'semantic-review', id: 'risco', note: 'avaliar risco de regressao' }], 'auto');
     expect(res.ok).toBe(false);
     expect(res.checks[0]!.ok).toBe(false);
     expect(res.checks[0]!.reason).toBe('no-deterministic-impl');
   });
 
   it('mesmo check em gate HUMAN nao reprova sozinho (decisao semantica do humano)', () => {
-    const res = runGateChecks(
-      [{ kind: 'semantic-review', id: 'risco' }],
-      'human',
-    );
+    const res = runGateChecks([{ kind: 'semantic-review', id: 'risco' }], 'human');
     expect(res.checks[0]!.ok).toBe(true);
     expect(res.checks[0]!.reason).toContain('nao-deterministico');
   });
@@ -345,9 +323,7 @@ describe('workflow-gates: estado INCONCLUSIVO (doutrina do gate determinista)', 
       timedOut: false,
       error: 'spawn npm ENOENT',
     });
-    const checks: GateCheckSpec[] = [
-      { kind: 'command', id: 'typecheck', command: 'npm', args: ['run', 'typecheck'] },
-    ];
+    const checks: GateCheckSpec[] = [{ kind: 'command', id: 'typecheck', command: 'npm', args: ['run', 'typecheck'] }];
     const res = runGateChecks(checks, 'auto', { runCommand: runner });
     expect(res.ok).toBe(false);
     expect(res.inconclusive).toBe(true);
@@ -378,9 +354,7 @@ describe('workflow-gates: estado INCONCLUSIVO (doutrina do gate determinista)', 
       stderr: '',
       timedOut: false,
     });
-    const checks: GateCheckSpec[] = [
-      { kind: 'command', id: 'typecheck', command: 'npm', args: ['run', 'typecheck'] },
-    ];
+    const checks: GateCheckSpec[] = [{ kind: 'command', id: 'typecheck', command: 'npm', args: ['run', 'typecheck'] }];
     const res = runGateChecks(checks, 'auto', { runCommand: runner });
     expect(res.ok).toBe(false);
     expect(res.inconclusive).toBe(false);
@@ -486,9 +460,7 @@ describe('workflow-gates: endurecimento adversarial do spawn/veredito', () => {
       stderr: 'sh: npm: command not found',
       timedOut: false,
     });
-    const checks: GateCheckSpec[] = [
-      { kind: 'command', id: 'test', command: 'npm', args: ['run', 'test'] },
-    ];
+    const checks: GateCheckSpec[] = [{ kind: 'command', id: 'test', command: 'npm', args: ['run', 'test'] }];
     const res = runGateChecks(checks, 'auto', { runCommand: runner });
     expect(res.ok).toBe(false);
     expect(res.inconclusive).toBe(true);

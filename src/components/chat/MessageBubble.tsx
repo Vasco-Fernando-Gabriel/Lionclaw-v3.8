@@ -1,12 +1,11 @@
 import { useMemo, useState, useCallback } from 'react';
 import { User, Copy, Check, ChevronDown, ChevronRight, Image as ImageIcon } from 'lucide-react';
-import ReactMarkdown, { type Components } from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AudioPlayer } from '@/components/chat/AudioPlayer';
 import { splitVisionTranscription } from '@/constants/vision';
 import type { ChatAttachment, ChatAttachmentMeta } from '@/types';
 import { lionClawLogoUrl } from '@/assets/lionclaw-logo';
-
 
 function CodeBlock({ className, children }: { className?: string; children: React.ReactNode }) {
   const [copied, setCopied] = useState(false);
@@ -48,7 +47,6 @@ function CodeBlock({ className, children }: { className?: string; children: Reac
   );
 }
 
-
 function isLocalFilesystemImageSrc(src: unknown): boolean {
   if (typeof src !== 'string') return false;
   return /^(?:\/(?:Users|var|private|tmp|Volumes|home|opt|mnt)\/|[A-Za-z]:[\\/])/.test(src);
@@ -59,7 +57,7 @@ function resolveChatImageSrc(src: unknown): string | undefined {
   if (/^file:\/\//i.test(src)) {
     try {
       let p = decodeURIComponent(new URL(src).pathname);
-      if (/^\/[A-Za-z]:\//.test(p)) p = p.slice(1); // Windows: file:///C:/...
+      if (/^\/[A-Za-z]:\//.test(p)) p = p.slice(1);
       return `lionclaw-asset://host/local-image/${encodeURIComponent(p)}`;
     } catch {
       return undefined;
@@ -74,11 +72,32 @@ function resolveChatImageSrc(src: unknown): string | undefined {
   return src;
 }
 
+const LOCAL_FILE_HREF = /^(?:file:|[a-zA-Z]:[\\/]|\/(?!\/))/;
+
+function isLocalFileHref(href: string): boolean {
+  return LOCAL_FILE_HREF.test(href.trim());
+}
+
+function chatUrlTransform(url: string): string {
+  return isLocalFileHref(url) ? url : defaultUrlTransform(url);
+}
+
+async function openLocalFile(href: string): Promise<void> {
+  const result = await window.lionclaw.shell.openFile(href.trim());
+  if ('error' in result) {
+    window.alert(`Nao foi possivel abrir o arquivo: ${result.error}`);
+  }
+}
+
 const markdownComponents: Components = {
   code({ className, children, ...props }) {
     const isInline = !className && typeof children === 'string' && !children.includes('\n');
     if (isInline) {
-      return <code className={className} {...props}>{children}</code>;
+      return (
+        <code className={className} {...props}>
+          {children}
+        </code>
+      );
     }
     return <CodeBlock className={className}>{children}</CodeBlock>;
   },
@@ -86,12 +105,22 @@ const markdownComponents: Components = {
     return <>{children}</>;
   },
   a({ href, children }) {
+    const local = href !== undefined && isLocalFileHref(href);
     return (
       <a
         href={href}
-        target="_blank"
+        target={local ? undefined : '_blank'}
         rel="noopener noreferrer"
         className="text-blue-400 underline underline-offset-2 hover:text-blue-300"
+        onClick={
+          local
+            ? (event) => {
+                event.preventDefault();
+                void openLocalFile(href);
+              }
+            : undefined
+        }
+        title={local ? href : undefined}
       >
         {children}
       </a>
@@ -100,16 +129,9 @@ const markdownComponents: Components = {
   img({ src, alt }) {
     const resolved = resolveChatImageSrc(src);
     if (!resolved) return null;
-    return (
-      <img
-        src={resolved}
-        alt={alt ?? ''}
-        className="max-w-full rounded-lg border border-zinc-800"
-      />
-    );
+    return <img src={resolved} alt={alt ?? ''} className="max-w-full rounded-lg border border-zinc-800" />;
   },
 };
-
 
 export function VisionTranscriptionBlock({ transcription }: { transcription: string }) {
   const [expanded, setExpanded] = useState(false);
@@ -136,7 +158,6 @@ export function VisionTranscriptionBlock({ transcription }: { transcription: str
     </div>
   );
 }
-
 
 interface ImageThumb {
   id: string;
@@ -166,7 +187,6 @@ export function collectImageThumbs(
   return thumbs;
 }
 
-
 export function MessageBubble({
   role,
   content,
@@ -190,24 +210,15 @@ export function MessageBubble({
       return <div className="whitespace-pre-wrap break-words">{content}</div>;
     }
     return (
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={markdownComponents}
-      >
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents} urlTransform={chatUrlTransform}>
         {content}
       </ReactMarkdown>
     );
   }, [content, isStreaming, isUser]);
 
-  const userParts = useMemo(
-    () => (isUser ? splitVisionTranscription(content) : null),
-    [content, isUser],
-  );
+  const userParts = useMemo(() => (isUser ? splitVisionTranscription(content) : null), [content, isUser]);
 
-  const imageThumbs = useMemo(
-    () => collectImageThumbs(attachments, attachmentsMeta),
-    [attachments, attachmentsMeta],
-  );
+  const imageThumbs = useMemo(() => collectImageThumbs(attachments, attachmentsMeta), [attachments, attachmentsMeta]);
   const audioAttachments = (attachments ?? []).filter((att) => att.type === 'audio');
   const hasAttachmentRow = imageThumbs.length > 0 || audioAttachments.length > 0;
 
@@ -218,28 +229,24 @@ export function MessageBubble({
           isUser ? 'bg-zinc-700' : 'bg-amber-500/10'
         }`}
       >
-        {isUser ? <User size={14} className="text-zinc-300" /> : <img src={lionClawLogoUrl} alt="LionClaw" className="w-4 h-4" />}
+        {isUser ? (
+          <User size={14} className="text-zinc-300" />
+        ) : (
+          <img src={lionClawLogoUrl} alt="LionClaw" className="w-4 h-4" />
+        )}
       </div>
       <div
         className={`rounded-xl px-4 py-3 text-sm max-w-[85%] ${
-          isUser
-            ? 'bg-amber-600 text-white'
-            : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
+          isUser ? 'bg-amber-600 text-white' : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
         }`}
       >
         {subagent && !isUser && (
-          <span className="text-[10px] text-amber-500/70 font-medium uppercase block mb-1.5">
-            {subagent}
-          </span>
+          <span className="text-[10px] text-amber-500/70 font-medium uppercase block mb-1.5">{subagent}</span>
         )}
         {isUser && userParts ? (
           <>
-            {userParts.text && (
-              <p className="whitespace-pre-wrap selectable">{userParts.text}</p>
-            )}
-            {userParts.transcription !== null && (
-              <VisionTranscriptionBlock transcription={userParts.transcription} />
-            )}
+            {userParts.text && <p className="whitespace-pre-wrap selectable">{userParts.text}</p>}
+            {userParts.transcription !== null && <VisionTranscriptionBlock transcription={userParts.transcription} />}
           </>
         ) : (
           <div className="chat-markdown">
@@ -251,20 +258,11 @@ export function MessageBubble({
           <div className="flex gap-2 mt-2 flex-wrap">
             {audioAttachments.map((att) => (
               <div key={att.id} className="w-full">
-                <AudioPlayer
-                  audioBase64={att.data}
-                  mimeType={att.mimeType}
-                  label="Audio enviado"
-                />
+                <AudioPlayer audioBase64={att.data} mimeType={att.mimeType} label="Audio enviado" />
               </div>
             ))}
             {imageThumbs.map((thumb) => (
-              <img
-                key={thumb.id}
-                src={thumb.src}
-                alt={thumb.alt}
-                className="max-w-xs max-h-48 rounded-lg"
-              />
+              <img key={thumb.id} src={thumb.src} alt={thumb.alt} className="max-w-xs max-h-48 rounded-lg" />
             ))}
           </div>
         )}

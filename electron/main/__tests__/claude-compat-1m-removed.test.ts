@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
@@ -61,21 +60,12 @@ function splitCodeAndComments(source: string): SplitSource {
 
 describe('claude-compat-sdk: sufixo [1m] removido do codigo executavel (D9 / VA-11)', () => {
   const source = fs.readFileSync(COMPAT_SRC, 'utf8');
-  const { code, comments } = splitCodeAndComments(source);
+  const { code } = splitCodeAndComments(source);
   const codeOnly = code.join('\n');
 
   it('nenhuma ocorrencia de [1m] em codigo executavel', () => {
-    const offending = code
-      .map((line, idx) => ({ line, n: idx + 1 }))
-      .filter(({ line }) => line.includes('[1m]'));
+    const offending = code.map((line, idx) => ({ line, n: idx + 1 })).filter(({ line }) => line.includes('[1m]'));
     expect(offending).toEqual([]);
-  });
-
-  it('a evidencia F7/F8 fica registrada em comentario (o [1m] so aparece ali)', () => {
-    const inComments = comments.filter((c) => c.includes('[1m]'));
-    expect(inComments.length).toBeGreaterThan(0);
-    expect(comments.some((c) => c.includes('context-1m-2025-08-07'))).toBe(true);
-    expect(comments.some((c) => c.includes('CLAUDE_CODE_MAX_CONTEXT_TOKENS'))).toBe(true);
   });
 
   it('nao ha derivacao de sdkModel: se existir, e apenas `const sdkModel = model;`', () => {
@@ -88,9 +78,7 @@ describe('claude-compat-sdk: sufixo [1m] removido do codigo executavel (D9 / VA-
   });
 
   it('options.model do query() compat e o slug limpo (model / model: model / model: sdkModel)', () => {
-    const match = codeOnly.match(
-      /cwd: getAgentCwd\(isOnboarding\),\n\s+model(?:: (?:model|sdkModel))?,\n/,
-    );
+    const match = codeOnly.match(/cwd: getAgentCwd\(isOnboarding\),\n\s+model(?:: (?:model|sdkModel))?,\n/);
     expect(match).not.toBeNull();
   });
 

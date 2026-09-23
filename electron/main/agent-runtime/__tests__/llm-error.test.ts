@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   LLM_ERROR_TABLE,
@@ -13,13 +12,36 @@ import {
 
 describe('SB-2 — tabela de codigos B.2', () => {
   const B2_CODES: LlmErrorCode[] = [
-    'LLM-QUOTA', 'LLM-RATE-429', 'LLM-OVERLOADED-529', 'LLM-AUTH-401',
-    'LLM-MODEL-404', 'LLM-EMPTY', 'LLM-NET', 'LLM-TIMEOUT', 'LLM-LOCAL-DOWN',
-    'CODEX-EXIT', 'CODEX-WEDGE', 'COMPACT-EMPTY', 'COMPACT-SKIPPED',
-    'EMBED-FAIL', 'DB-MIGRATION', 'DB-FULL', 'DB-BUSY', 'DB-CORRUPT-ROW',
-    'VEC-UNAVAILABLE', 'MCP-START-FAIL', 'MCP-DISCOVERY-FAIL', 'MCP-EMPTY',
-    'SECRET-UNREADABLE', 'KEYTAR-DEGRADED', 'VAULT-CORRUPT',
-    'REVOKE-UNCONFIRMED', 'CRON-INVALID', 'STT-FAIL', 'TTS-FAIL', 'IMG-FAIL',
+    'LLM-QUOTA',
+    'LLM-RATE-429',
+    'LLM-OVERLOADED-529',
+    'LLM-AUTH-401',
+    'LLM-MODEL-404',
+    'LLM-EMPTY',
+    'LLM-NET',
+    'LLM-TIMEOUT',
+    'LLM-LOCAL-DOWN',
+    'CODEX-EXIT',
+    'CODEX-WEDGE',
+    'COMPACT-EMPTY',
+    'COMPACT-SKIPPED',
+    'EMBED-FAIL',
+    'DB-MIGRATION',
+    'DB-FULL',
+    'DB-BUSY',
+    'DB-CORRUPT-ROW',
+    'VEC-UNAVAILABLE',
+    'MCP-START-FAIL',
+    'MCP-DISCOVERY-FAIL',
+    'MCP-EMPTY',
+    'SECRET-UNREADABLE',
+    'KEYTAR-DEGRADED',
+    'VAULT-CORRUPT',
+    'REVOKE-UNCONFIRMED',
+    'CRON-INVALID',
+    'STT-FAIL',
+    'TTS-FAIL',
+    'IMG-FAIL',
   ];
 
   it('AC-B4: todos os 30 codigos da tabela B.2 existem com category + userMessage PT-BR + suggestedAction', () => {
@@ -83,7 +105,11 @@ describe('AC-B4 — translateProviderError classifica cada categoria', () => {
 
   it('AC-B4: mensagem de quota/credito -> LLM-QUOTA', () => {
     expect(translateProviderError(new Error('insufficient_quota for this key')).code).toBe('LLM-QUOTA');
-    expect(translateProviderError(new Error('Cota Kimi esgotada ou rate limit atingido; tente de novo apos a janela de quota renovar.')).code).toBe('LLM-QUOTA');
+    expect(
+      translateProviderError(
+        new Error('Cota Kimi esgotada ou rate limit atingido; tente de novo apos a janela de quota renovar.'),
+      ).code,
+    ).toBe('LLM-QUOTA');
   });
 
   it('AC-B4: mensagem de auth -> LLM-AUTH-401', () => {
@@ -96,7 +122,9 @@ describe('AC-B4 — translateProviderError classifica cada categoria', () => {
 
   it('AC-B4: mensagem de overload -> LLM-OVERLOADED-529', () => {
     expect(translateProviderError(new Error('overloaded_error: try again')).code).toBe('LLM-OVERLOADED-529');
-    expect(translateProviderError(new Error('Modelo Codex sobrecarregado nos servidores da OpenAI.')).code).toBe('LLM-OVERLOADED-529');
+    expect(translateProviderError(new Error('Modelo Codex sobrecarregado nos servidores da OpenAI.')).code).toBe(
+      'LLM-OVERLOADED-529',
+    );
   });
 
   it('AC-B4: ECONNREFUSED em runtime local -> LLM-LOCAL-DOWN', () => {
@@ -148,7 +176,7 @@ describe('AC-B4 — translateProviderError classifica cada categoria', () => {
     expect(t).toBeInstanceOf(TypedProviderError);
     expect(t.cause).toBe(raw);
     expect((t.cause as Error).stack).toBe(raw.stack);
-    expect(t.message).toBe(raw.message); // mensagem crua preservada (heuristicas a jusante)
+    expect(t.message).toBe(raw.message);
     expect(t.raw).toBe(raw.message);
     expect(t.userMessage).toBe(LLM_ERROR_TABLE['LLM-RATE-429'].userMessage);
   });

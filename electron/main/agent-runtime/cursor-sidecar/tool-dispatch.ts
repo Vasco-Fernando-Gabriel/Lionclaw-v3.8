@@ -1,22 +1,12 @@
-
 import { createLogger } from '../../logger';
 import type { McpInvocationContext } from '../../mcp-invocation-context';
-import type {
-  CursorToolDispatchContext,
-  CursorToolDispatcher,
-  CursorToolInvocation,
-} from './sidecar-manager';
+import type { CursorToolDispatchContext, CursorToolDispatcher, CursorToolInvocation } from './sidecar-manager';
 
 const logger = createLogger('cursor-tool-dispatch');
 
-export type CursorToolHandler = (
-  invocation: CursorToolInvocation,
-  ctx: CursorToolDispatchContext,
-) => Promise<string>;
+export type CursorToolHandler = (invocation: CursorToolInvocation, ctx: CursorToolDispatchContext) => Promise<string>;
 
-export function composeCursorToolDispatchers(
-  handlers: Record<string, CursorToolHandler>,
-): CursorToolDispatcher {
+export function composeCursorToolDispatchers(handlers: Record<string, CursorToolHandler>): CursorToolDispatcher {
   return async (invocation, ctx) => {
     const handler = handlers[invocation.toolName];
     if (!handler) {
@@ -28,7 +18,6 @@ export function composeCursorToolDispatchers(
     return handler(invocation, ctx);
   };
 }
-
 
 export interface CursorMcpInvokeScope {
   surface: string;
@@ -54,9 +43,7 @@ function parseMcpInvokeArgs(raw: Record<string, unknown>): McpInvokeArgs {
   }
   const argsRaw = raw['args'];
   const args =
-    argsRaw && typeof argsRaw === 'object' && !Array.isArray(argsRaw)
-      ? (argsRaw as Record<string, unknown>)
-      : {};
+    argsRaw && typeof argsRaw === 'object' && !Array.isArray(argsRaw) ? (argsRaw as Record<string, unknown>) : {};
   return { server, tool, args };
 }
 

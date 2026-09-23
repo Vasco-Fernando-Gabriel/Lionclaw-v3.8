@@ -1,4 +1,3 @@
-
 export interface KimiModelOption {
   slug: string;
   label: string;
@@ -59,15 +58,12 @@ export function normalizeKimiModelSelection(model: string): string {
   return getKimiModel(model)?.slug ?? KIMI_DEFAULT_MODEL;
 }
 
-export function resolveKimiStoredEffort(
-  model: string,
-  stored?: string,
-): KimiEffort | undefined {
+export function resolveKimiStoredEffort(model: string, stored?: string): KimiEffort | undefined {
   const metadata = getKimiModel(model);
   if (!metadata || metadata.efforts.length === 0) return undefined;
   return isKimiEffort(stored) && metadata.efforts.includes(stored)
     ? stored
-    : metadata.defaultEffort ?? metadata.efforts[metadata.efforts.length - 1];
+    : (metadata.defaultEffort ?? metadata.efforts[metadata.efforts.length - 1]);
 }
 
 export function isKimiEffort(value: string | undefined): value is KimiEffort {
@@ -94,14 +90,14 @@ export function resolveKimiEffectiveThinking(
     return { mode: 'boolean', effective: 'thinking-on', envEffort: undefined };
   }
   const fallback = metadata.defaultEffort ?? metadata.efforts[metadata.efforts.length - 1];
-  if (requested !== undefined
-    && (!isKimiEffort(requested) || !metadata.efforts.includes(requested))
-    && effortSource === 'explicit') {
+  if (
+    requested !== undefined &&
+    (!isKimiEffort(requested) || !metadata.efforts.includes(requested)) &&
+    effortSource === 'explicit'
+  ) {
     throw new KimiEffortUnsupportedError(model, requested);
   }
-  const effective = isKimiEffort(requested) && metadata.efforts.includes(requested)
-    ? requested
-    : fallback;
+  const effective = isKimiEffort(requested) && metadata.efforts.includes(requested) ? requested : fallback;
   return { mode: 'tiered', requested: isKimiEffort(requested) ? requested : fallback, effective, envEffort: effective };
 }
 
@@ -118,6 +114,8 @@ export function isManagedKimiSelectionUsable(
   status: { usable: boolean; availableModels: readonly string[] } | null,
   model: string,
 ): boolean {
-  return status?.usable === true && filterManagedKimiModels(status.availableModels)
-    .some((available) => available.slug === model);
+  return (
+    status?.usable === true &&
+    filterManagedKimiModels(status.availableModels).some((available) => available.slug === model)
+  );
 }

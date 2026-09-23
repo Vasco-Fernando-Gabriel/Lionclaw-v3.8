@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -35,9 +34,21 @@ vi.mock('../agent-runtime/kimi-availability', () => ({
     installed: false,
     version: null,
     authenticated: false,
-    authMode: 'none' as const,
+    authMode: 'none',
   })),
 }));
+
+const claudeCliStatusMock = vi.fn<() => Promise<import('../claude-cli-status').ClaudeCliStatus>>(async () => ({
+  installed: true,
+  authenticated: true,
+  authMode: 'oauth',
+  resolvedPath: '/fake/claude.exe',
+  resolveError: null,
+}));
+vi.mock('../claude-cli-status', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../claude-cli-status')>();
+  return { ...actual, detectClaudeCliStatus: () => claudeCliStatusMock() };
+});
 
 import { getSetting } from '../db';
 import { getSecret } from '../secrets-vault';
@@ -49,9 +60,26 @@ import {
   normalizeBaseUrl,
   probeOpenAiCompatibleModels,
 } from '../provider-availability';
-import { CLAUDE_MODELS } from '../../../src/constants/claude-models';
-import { CODEX_MODELS } from '../../../src/constants/codex-models';
 import { CLAUDE_COMPAT_PRESETS } from '../../../src/constants/claude-compat-presets';
+import { findCatalogEntry } from '../provider-models-catalog';
+
+function catalogIds(
+  runtime: 'claude-sdk' | 'codex-sdk' | 'claude-compat-sdk',
+  provider: 'anthropic' | 'codex' | 'zai',
+): string[] {
+  return (findCatalogEntry(runtime, provider)?.models ?? []).map((m) => m.id);
+}
+
+function dyn(id: string, contextWindow?: number) {
+  return {
+    id,
+    displayName: id,
+    label: id,
+    reasoningOptions: [],
+    defaultReasoning: null,
+    ...(contextWindow ? { contextWindow } : {}),
+  };
+}
 
 const mockedGetSetting = vi.mocked(getSetting);
 const mockedGetSecret = vi.mocked(getSecret);
@@ -92,7 +120,6 @@ afterEach(() => {
   }
 });
 
-
 describe('normalizeBaseUrl', () => {
   it('strips a trailing /v1', () => {
     expect(normalizeBaseUrl('http://localhost:1234/v1')).toBe('http://localhost:1234');
@@ -112,7 +139,6 @@ describe('normalizeBaseUrl', () => {
   });
 });
 
-
 describe('checkProvider: claude-sdk / anthropic', () => {
   it('returns connected=true with CLAUDE_MODELS and never probes the network', async () => {
     stubFetch(async () => makeResponse({ status: 500 }));
@@ -124,14 +150,40 @@ describe('checkProvider: claude-sdk / anthropic', () => {
       provider: 'anthropic',
       connected: true,
     });
-    expect(status.models).toEqual(
-      CLAUDE_MODELS.map(m => ({ id: m.id, displayName: m.displayName })),
-    );
+    expect(status.models?.map((m) => m.id)).toEqual(catalogIds('claude-sdk', 'anthropic'));
+    expect(status.models?.every((m) => m.reasoningOptions.length === 4 && m.defaultReasoning === 'high')).toBe(true);
+    expect(status.available).toBe(true);
     expect(fetchSpy?.mock.calls.length ?? 0).toBe(0);
     expect(mockedGetSecret).not.toHaveBeenCalled();
   });
-});
 
+  it('Claude "off" vem de claude-cli:status (7.3): sem engine ou sem auth = connected:false + reason, available:false', async () => {
+    claudeCliStatusMock.mockResolvedValueOnce({
+      installed: false,
+      authenticated: false,
+      authMode: 'none',
+      resolvedPath: '',
+      resolveError: 'engine ausente',
+    });
+    const off = await checkProvider('claude-sdk', 'anthropic');
+    expect(off.connected).toBe(false);
+    expect(off.available).toBe(false);
+    expect(off.reason).toMatch(/engine ausente/);
+    expect(off.models?.length).toBeGreaterThan(0);
+
+    claudeCliStatusMock.mockResolvedValueOnce({
+      installed: true,
+      authenticated: false,
+      authMode: 'none',
+      resolvedPath: '/fake/claude.exe',
+      resolveError: null,
+    });
+    const noAuth = await checkProvider('claude-sdk', 'anthropic');
+    expect(noAuth.connected).toBe(false);
+    expect(noAuth.available).toBe(false);
+    expect(noAuth.reason).toMatch(/autenticacao/i);
+  });
+});
 
 describe('checkProvider: claude-compat-sdk / zai', () => {
   it('returns connected=true with curated models when the vault key is present (no HTTP probe)', async () => {
@@ -146,10 +198,9 @@ describe('checkProvider: claude-compat-sdk / zai', () => {
       provider: 'zai',
       connected: true,
     });
-    const zaiPreset = CLAUDE_COMPAT_PRESETS.find(p => p.id === 'zai');
-    expect(status.models).toEqual(
-      (zaiPreset?.models ?? []).map(m => ({ id: m.id, displayName: m.displayName })),
-    );
+    const zaiPreset = CLAUDE_COMPAT_PRESETS.find((p) => p.id === 'zai');
+    expect(status.models?.map((m) => m.id)).toEqual(catalogIds('claude-compat-sdk', 'zai'));
+    expect(status.models?.map((m) => m.displayName)).toEqual((zaiPreset?.models ?? []).map((m) => m.displayName));
     expect(fetchSpy?.mock.calls.length ?? 0).toBe(0);
   });
 
@@ -178,12 +229,9 @@ describe('checkProvider: claude-compat-sdk / zai', () => {
   });
 });
 
-
 describe('checkProvider: cursor-sdk / cursor', () => {
   it('returns connected=true with the G6 catalog when CURSOR_API_KEY is in the vault (no HTTP probe)', async () => {
-    mockedGetSecret.mockImplementation(async (key: string) =>
-      key === 'CURSOR_API_KEY' ? 'key_abc' : null,
-    );
+    mockedGetSecret.mockImplementation(async (key: string) => (key === 'CURSOR_API_KEY' ? 'key_abc' : null));
     stubFetch(async () => makeResponse({ status: 500 }));
 
     const status = await checkProvider('cursor-sdk', 'cursor');
@@ -193,8 +241,8 @@ describe('checkProvider: cursor-sdk / cursor', () => {
       provider: 'cursor',
       connected: true,
     });
-    expect(status.models?.map(m => m.id)).toContain('composer-2.5');
-    expect(status.models?.every(m => typeof m.contextWindow === 'number')).toBe(true);
+    expect(status.models?.map((m) => m.id)).toContain('composer-2.5');
+    expect(status.models?.every((m) => typeof m.contextWindow === 'number')).toBe(true);
     expect(fetchSpy?.mock.calls.length ?? 0).toBe(0);
   });
 
@@ -210,7 +258,6 @@ describe('checkProvider: cursor-sdk / cursor', () => {
   });
 });
 
-
 describe('checkProvider: claude-compat-sdk / minimax', () => {
   it('returns connected=false with curated models when the vault setting is unset', async () => {
     setSettings({});
@@ -222,7 +269,7 @@ describe('checkProvider: claude-compat-sdk / minimax', () => {
     expect(status.provider).toBe('minimax');
     expect(status.connected).toBe(false);
     expect(status.reason).toMatch(/not configured/i);
-    const minimax = CLAUDE_COMPAT_PRESETS.find(p => p.id === 'minimax');
+    const minimax = CLAUDE_COMPAT_PRESETS.find((p) => p.id === 'minimax');
     expect(status.models?.length).toBe(minimax?.models.length);
     expect(status.models?.length).toBe(5);
     expect(fetchSpy?.mock.calls.length ?? 0).toBe(0);
@@ -240,7 +287,7 @@ describe('checkProvider: claude-compat-sdk / minimax', () => {
     expect(status.provider).toBe('minimax');
     expect(status.connected).toBe(true);
     expect(status.models?.length).toBe(5);
-    const ids = (status.models ?? []).map(m => m.id);
+    const ids = (status.models ?? []).map((m) => m.id);
     expect(ids).toEqual(
       expect.arrayContaining([
         'MiniMax-M2.7',
@@ -266,7 +313,6 @@ describe('checkProvider: claude-compat-sdk / minimax', () => {
   });
 });
 
-
 describe('checkProvider: codex-sdk / codex', () => {
   it('returns connected=true with CODEX_MODELS when isCodexAvailable reports installed + authenticated', async () => {
     mockedIsCodexAvailable.mockResolvedValueOnce({
@@ -283,9 +329,15 @@ describe('checkProvider: codex-sdk / codex', () => {
       provider: 'codex',
       connected: true,
     });
-    expect(status.models).toEqual(
-      CODEX_MODELS.map(m => ({ id: m.slug, displayName: m.label })),
-    );
+    expect(status.models?.map((m) => m.id)).toEqual(catalogIds('codex-sdk', 'codex'));
+    expect(status.models?.find((m) => m.id === 'gpt-6-astra')?.reasoningOptions).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+      'ultra',
+    ]);
   });
 
   it('returns connected=false when the codex binary is not installed', async () => {
@@ -326,7 +378,6 @@ describe('checkProvider: codex-sdk / codex', () => {
   });
 });
 
-
 describe('checkProvider: lion-sdk / ollama', () => {
   it('returns connected=true when GET {base}/api/tags returns 200', async () => {
     setSettings({ orchestrator_ollama_base_url: 'http://localhost:11434' });
@@ -343,10 +394,7 @@ describe('checkProvider: lion-sdk / ollama', () => {
     expect(status.connected).toBe(true);
     expect(status.runtime).toBe('lion-sdk');
     expect(status.provider).toBe('ollama');
-    expect(status.models).toEqual([
-      { id: 'llama3.1:8b', displayName: 'llama3.1:8b' },
-      { id: 'qwen2.5:7b', displayName: 'qwen2.5:7b' },
-    ]);
+    expect(status.models).toEqual([dyn('llama3.1:8b', 131_072), dyn('qwen2.5:7b', 131_072)]);
   });
 
   it('returns connected=false on a network error', async () => {
@@ -396,7 +444,6 @@ describe('checkProvider: lion-sdk / ollama', () => {
   });
 });
 
-
 describe('checkProvider: lion-sdk / lmstudio', () => {
   it('returns connected=true and enriches context when LM Studio reports it', async () => {
     setSettings({ orchestrator_lmstudio_base_url: 'http://localhost:1234' });
@@ -438,14 +485,8 @@ describe('checkProvider: lion-sdk / lmstudio', () => {
     const status = await checkProvider('lion-sdk', 'lmstudio');
 
     expect(status.connected).toBe(true);
-    expect(calls).toEqual([
-      'http://localhost:1234/v1/models',
-      'http://localhost:1234/api/v1/models',
-    ]);
-    expect(status.models).toEqual([
-      { id: 'qwen2.5-coder', displayName: 'qwen2.5-coder', contextWindow: 65536 },
-      { id: 'llama3.1-8b', displayName: 'llama3.1-8b', contextWindow: 131072 },
-    ]);
+    expect(calls).toEqual(['http://localhost:1234/v1/models', 'http://localhost:1234/api/v1/models']);
+    expect(status.models).toEqual([dyn('qwen2.5-coder', 65536), dyn('llama3.1-8b', 131072)]);
   });
 
   it('returns connected=false on a network error', async () => {
@@ -485,7 +526,6 @@ describe('checkProvider: lion-sdk / lmstudio', () => {
   });
 });
 
-
 describe('checkProvider: lion-sdk / openai-compatible', () => {
   it('returns connected=true when vault key present AND GET {base}/v1/models with Bearer returns 200', async () => {
     setSettings({
@@ -510,10 +550,7 @@ describe('checkProvider: lion-sdk / openai-compatible', () => {
     expect(status.connected).toBe(true);
     expect(calledUrl).toBe('https://api.deepseek.com/v1/models');
     expect(calledHeaders?.Authorization).toBe('Bearer sk-deepseek-xyz');
-    expect(status.models).toEqual([
-      { id: 'deepseek-chat', displayName: 'deepseek-chat' },
-      { id: 'deepseek-reasoner', displayName: 'deepseek-reasoner' },
-    ]);
+    expect(status.models).toEqual([dyn('deepseek-chat', 128_000), dyn('deepseek-reasoner', 128_000)]);
   });
 
   it('returns connected=false when the api key ref is unset', async () => {
@@ -578,10 +615,12 @@ describe('checkProvider: lion-sdk / openai-compatible', () => {
       orchestrator_openai_compat_preset: 'kimi-cn',
     });
     mockedGetSecret.mockResolvedValueOnce('sk-kimi-xyz');
-    stubFetch(async () => makeResponse({
-      status: 401,
-      body: JSON.stringify({ error: { message: 'invalid api key' } }),
-    }));
+    stubFetch(async () =>
+      makeResponse({
+        status: 401,
+        body: JSON.stringify({ error: { message: 'invalid api key' } }),
+      }),
+    );
 
     const status = await checkProvider('lion-sdk', 'openai-compatible');
 
@@ -603,18 +642,12 @@ describe('checkProvider: lion-sdk / openai-compatible', () => {
       });
     });
 
-    const probe = await probeOpenAiCompatibleModels(
-      'https://api.moonshot.ai/v1',
-      'sk-kimi-global',
-      'kimi',
-    );
+    const probe = await probeOpenAiCompatibleModels('https://api.moonshot.ai/v1', 'sk-kimi-global', 'kimi');
 
     expect(probe.ok).toBe(true);
     expect(calledUrl).toBe('https://api.moonshot.ai/v1/models');
     expect(calledHeaders?.Authorization).toBe('Bearer sk-kimi-global');
-    expect(probe.models).toEqual([
-      { id: 'moonshot-v1-128k', displayName: 'moonshot-v1-128k' },
-    ]);
+    expect(probe.models).toEqual([dyn('moonshot-v1-128k')]);
   });
 
   it('falls back to the preset static list when /v1/models returns an empty data array', async () => {
@@ -630,7 +663,7 @@ describe('checkProvider: lion-sdk / openai-compatible', () => {
 
     expect(status.connected).toBe(true);
     expect(status.models?.length).toBeGreaterThan(0);
-    expect(status.models?.some(m => m.id === 'deepseek-chat')).toBe(true);
+    expect(status.models?.some((m) => m.id === 'deepseek-chat')).toBe(true);
   });
 
   it('normalizes a trailing /v1 in the base URL before probing', async () => {
@@ -650,7 +683,6 @@ describe('checkProvider: lion-sdk / openai-compatible', () => {
     expect(calledUrl).toBe('https://api.deepseek.com/v1/models');
   });
 });
-
 
 describe('listProviderStatuses: 60s TTL cache and invalidation', () => {
   function arrangeAllProvidersHappy() {
@@ -687,7 +719,7 @@ describe('listProviderStatuses: 60s TTL cache and invalidation', () => {
     arrangeAllProvidersHappy();
 
     const statuses = await listProviderStatuses();
-    const pairs = statuses.map(s => `${s.runtime}/${s.provider}`).sort();
+    const pairs = statuses.map((s) => `${s.runtime}/${s.provider}`).sort();
 
     expect(pairs).toEqual(
       [
@@ -734,7 +766,7 @@ describe('listProviderStatuses: 60s TTL cache and invalidation', () => {
 
     await listProviderStatuses();
 
-    expect((fetchSpy?.mock.calls.length ?? 0)).toBeGreaterThan(fetchCallsAfterFirst);
+    expect(fetchSpy?.mock.calls.length ?? 0).toBeGreaterThan(fetchCallsAfterFirst);
     expect(mockedIsCodexAvailable.mock.calls.length).toBeGreaterThan(codexCallsAfterFirst);
   });
 

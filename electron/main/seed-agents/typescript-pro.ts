@@ -1,13 +1,13 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const TYPESCRIPT_PRO_ID = 'typescript-pro';
 
 export const typescriptPro: Omit<AgentConfig, 'sortOrder'> = {
   id: TYPESCRIPT_PRO_ID,
-  name: "Especialista TypeScript",
-  description: "Use quando precisar implementar código TypeScript com padrões avançados do sistema de tipos, generics complexos, programação em nível de tipos ou type safety end-to-end em aplicações fullstack",
-  model: "claude-opus-4-8",
+  name: 'Especialista TypeScript',
+  description:
+    'Use quando precisar implementar código TypeScript com padrões avançados do sistema de tipos, generics complexos, programação em nível de tipos ou type safety end-to-end em aplicações fullstack',
+  model: 'claude-opus-5-5',
   effort: 'medium' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,

@@ -24,10 +24,7 @@ vi.mock('../agent-runtime/subagent-dispatch', () => ({
   dispatchLionSubagent: (...args: unknown[]) => dispatchLionSubagentMock(...args),
 }));
 
-import {
-  buildCursorSessionTools,
-  stripUnmaterializedCursorTools,
-} from '../agent-runtime/cursor-session-config';
+import { buildCursorSessionTools, stripUnmaterializedCursorTools } from '../agent-runtime/cursor-session-config';
 import type { SubagentDispatchContext } from '../agent-runtime/types';
 import type { CursorToolInvocation } from '../agent-runtime/cursor-sidecar/sidecar-manager';
 
@@ -64,7 +61,12 @@ beforeEach(() => {
     gateway: { command: 'node', args: [] },
   });
   getMcpToolRegistryEntriesMock.mockReturnValue([
-    { mcpId: 'lionclaw-pipeline-control', toolName: 'pipeline_start', description: 'start', inputSchema: CATALOG_SCHEMA },
+    {
+      mcpId: 'lionclaw-pipeline-control',
+      toolName: 'pipeline_start',
+      description: 'start',
+      inputSchema: CATALOG_SCHEMA,
+    },
     { mcpId: 'gateway', toolName: 'mcp_invoke_inner', description: 'gw', inputSchema: CATALOG_SCHEMA },
     { mcpId: 'shopify', toolName: 'orders_list', description: 'fora', inputSchema: CATALOG_SCHEMA },
   ]);
@@ -123,16 +125,18 @@ describe('buildCursorSessionTools — perfil chat', () => {
       { signal: abort.signal },
     );
     expect(output).toBe('ok');
-    expect(invokeMcpToolMock).toHaveBeenCalledWith(expect.objectContaining({
-      serverId: 'lionclaw-pipeline-control',
-      toolName: 'pipeline_start',
-      surface: 'cursor-sdk',
-      sessionId: 'sess-1',
-      turnId: 'turn-9',
-      allowedServerIds: expect.arrayContaining(['lionclaw-pipeline-control', 'gateway']),
-      context: { surface: 'chat' },
-      signal: abort.signal,
-    }));
+    expect(invokeMcpToolMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        serverId: 'lionclaw-pipeline-control',
+        toolName: 'pipeline_start',
+        surface: 'cursor-sdk',
+        sessionId: 'sess-1',
+        turnId: 'turn-9',
+        allowedServerIds: expect.arrayContaining(['lionclaw-pipeline-control', 'gateway']),
+        context: { surface: 'chat' },
+        signal: abort.signal,
+      }),
+    );
   });
 
   it('runs LionClaw subagents through dispatchLionSubagent with abort propagation', async () => {
@@ -147,10 +151,9 @@ describe('buildCursorSessionTools — perfil chat', () => {
     dispatchLionSubagentMock.mockResolvedValue({ ok: true, executionId: 'x', output: 'feito' });
     const handler = tools.handlers['lion_run_subagent']!;
     const callAbort = new AbortController();
-    const output = await handler(
-      invocation('lion_run_subagent', { agentId: 'harness-coder', prompt: 'faz' }),
-      { signal: callAbort.signal },
-    );
+    const output = await handler(invocation('lion_run_subagent', { agentId: 'harness-coder', prompt: 'faz' }), {
+      signal: callAbort.signal,
+    });
     expect(output).toBe('feito');
     const [input, host] = dispatchLionSubagentMock.mock.calls[0] as [
       { agentId: string; prompt: string },

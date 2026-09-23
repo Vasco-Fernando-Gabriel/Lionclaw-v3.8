@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
 
@@ -130,10 +129,6 @@ describe('defaultTransportFactory -> argv do app-server', () => {
 
   it('sem extras: argv byte-identico ao atual (AC-C5)', async () => {
     await defaultTransportFactory({ binary: '/usr/local/bin/codex', cwd: '/tmp/project' });
-    expect(spawned.calls[0].args).toEqual([
-      'app-server',
-      '-c',
-      'sandbox_workspace_write.network_access=true',
-    ]);
+    expect(spawned.calls[0].args).toEqual(['app-server', '-c', 'sandbox_workspace_write.network_access=true']);
   });
 });

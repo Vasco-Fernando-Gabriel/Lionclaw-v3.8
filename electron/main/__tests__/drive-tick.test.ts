@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Mock } from 'vitest';
 import type { DriveState } from '../../../src/types';
@@ -58,10 +57,35 @@ function fakeSetDriveState(projectId: string, patch: Partial<DriveState>): Drive
   return merged;
 }
 
+function fakeGetDriveSessionId(projectId: string): string | null {
+  return projects.get(projectId)?.config.drive?.sessionId ?? null;
+}
+function fakeIsDriveEngaged(projectId: string): boolean {
+  const drive = fakeGetDriveState(projectId);
+  return !!drive && drive.driver === 'orchestrator' && drive.status !== 'stopped';
+}
+function fakeListHarnessProjectsBySession(sessionId: string): FakeProject[] {
+  return [...projects.values()].filter((p) => p.config.drive?.sessionId === sessionId);
+}
+function fakeFindEngagedDriveBySession(sessionId: string): FakeProject | null {
+  return fakeListHarnessProjectsBySession(sessionId).find((p) => fakeIsDriveEngaged(p.id)) ?? null;
+}
+function fakeGetOpenLaneSessionById(id: string): { id: string; laneBadge: number; title: string } | null {
+  if (!id || closedLanes.has(id)) return null;
+  return { id, laneBadge: Number(id.replace(/\D/g, '')) || 1, title: id };
+}
+const closedLanes = new Set<string>();
+
 vi.mock('../db', () => ({
   getHarnessProject: vi.fn((id: string) => fakeGetHarnessProject(id)),
   listHarnessProjects: vi.fn(() => fakeListHarnessProjects()),
+  listHarnessProjectsBySession: vi.fn((id: string) => fakeListHarnessProjectsBySession(id)),
+  findEngagedDriveBySession: vi.fn((id: string) => fakeFindEngagedDriveBySession(id)),
   getDriveState: vi.fn((id: string) => fakeGetDriveState(id)),
+  getDriveSessionId: vi.fn((id: string) => fakeGetDriveSessionId(id)),
+  isDriveEngaged: vi.fn((id: string) => fakeIsDriveEngaged(id)),
+  getOpenLaneSessionById: vi.fn((id: string) => fakeGetOpenLaneSessionById(id)),
+  getSession: vi.fn((id: string) => ({ id })),
   setDriveState: vi.fn((id: string, patch: Partial<DriveState>) => fakeSetDriveState(id, patch)),
   getLatestUserTurnIndex: vi.fn(() => 0),
 }));
@@ -84,9 +108,7 @@ vi.mock('../orchestrator', () => ({
 }));
 
 vi.mock('../pipeline-control-core', async () => {
-  const actual = await vi.importActual<typeof import('../pipeline-control-core')>(
-    '../pipeline-control-core',
-  );
+  const actual = await vi.importActual<typeof import('../pipeline-control-core')>('../pipeline-control-core');
   return {
     ...actual,
     resolvePendingQuestion: vi.fn(() => 'O agente da fase perguntou algo.'),
@@ -102,16 +124,8 @@ import {
   DRIVE_TICK_MAX_IDLE,
   MAX_ORCHESTRATOR_TURNS_PER_PHASE,
 } from '../pipeline-drive-coordinator';
-import {
-  startPipelineControlPhaseCache,
-  _resetPipelineControlPhaseCacheForTesting,
-} from '../pipeline-control-core';
-import {
-  reportDriveTurnComplete,
-  reportDriveTurnUsage,
-  _resetDriveUsageSinkForTesting,
-} from '../drive-usage-sink';
-
+import { startPipelineControlPhaseCache, _resetPipelineControlPhaseCacheForTesting } from '../pipeline-control-core';
+import { reportDriveTurnComplete, reportDriveTurnUsage, _resetDriveUsageSinkForTesting } from '../drive-usage-sink';
 
 function seedProject(over: Partial<FakeProject> = {}): FakeProject {
   const p: FakeProject = {
@@ -156,12 +170,7 @@ function drainInFlight(projectId: string): void {
   }
 }
 
-function emitPhaseChanged(
-  projectId: string,
-  phase: number | null,
-  status: string,
-  awaitingUser?: boolean,
-): void {
+function emitPhaseChanged(projectId: string, phase: number | null, status: string, awaitingUser?: boolean): void {
   pipelineEventBus.emit('pipeline:phase-changed', {
     projectId,
     phase,
@@ -170,11 +179,7 @@ function emitPhaseChanged(
   });
 }
 
-function engageDriveOnAutoPhase(
-  coord: PipelineDriveCoordinator,
-  projectId: string,
-  autoPhase: number,
-): void {
+function engageDriveOnAutoPhase(coord: PipelineDriveCoordinator, projectId: string, autoPhase: number): void {
   const project = projects.get(projectId)!;
   project.pipelineCurrentPhase = autoPhase;
   coord.startDrive(projectId, 'sess_1', 'semi');
@@ -185,7 +190,7 @@ function engageDriveOnAutoPhase(
 
 function advanceOneTick(): void {
   vi.advanceTimersByTime(DRIVE_TICK_INTERVAL_MS);
-  vi.advanceTimersByTime(1); // libera o setTimeout(0) do reacting
+  vi.advanceTimersByTime(1);
 }
 
 describe('drive tick (SPRINT-D / Parte D)', () => {
@@ -205,11 +210,10 @@ describe('drive tick (SPRINT-D / Parte D)', () => {
     vi.useRealTimers();
   });
 
-
   it('D-AC1: com drive engajado, tick dispara turno de verificacao (prompt distinto) a cada 10min ate o Iniciar desenvolvimento', () => {
     seedProject({ pipelineType: 'development', pipelineCurrentPhase: 3 });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 3); // PRD Validator (conversation), gate one-in-flight aberto
+    engageDriveOnAutoPhase(coord, 'proj_a', 3);
 
     const project = projects.get('proj_a')!;
 
@@ -229,11 +233,10 @@ describe('drive tick (SPRINT-D / Parte D)', () => {
     expect(latestPrompt()).toContain('RONDA PERIODICA');
   });
 
-
   it('D-AC2: transicao para fase tipo loop (Iniciar desenvolvimento) desliga o tick (resolvido por PhaseDefinition.type, nunca numero)', () => {
     seedProject({ pipelineType: 'development', pipelineCurrentPhase: 12 });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 12); // Sprint Validator (conversation)
+    engageDriveOnAutoPhase(coord, 'proj_a', 12);
 
     const project = projects.get('proj_a')!;
 
@@ -263,22 +266,26 @@ describe('drive tick (SPRINT-D / Parte D)', () => {
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
 
-
   it('D-AC3: 3 ticks ociosos consecutivos desligam o tick; turn-complete/usage dos PROPRIOS ticks nao impedem o desligamento (N ticks ociosos com sinais proprios ignorados); um evento real reseta o contador', () => {
     seedProject({ pipelineType: 'development', pipelineCurrentPhase: 3 });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 3); // estado estatico (nada muda entre ticks)
+    engageDriveOnAutoPhase(coord, 'proj_a', 3);
 
     advanceOneTick();
     expect(submitMock).toHaveBeenCalledTimes(1);
     const tickTurnId1 = latestTurnId();
-    reportDriveTurnUsage('sess_1', 1234);
+    reportDriveTurnUsage({
+      sessionId: 'sess_1',
+      projectId: 'proj_a',
+      driveTurnId: tickTurnId1,
+      tokens: 1234,
+    });
     reportDriveTurnComplete('proj_a', tickTurnId1);
     vi.advanceTimersByTime(1);
     submitMock.mockClear();
 
     advanceOneTick();
-    expect(submitMock).not.toHaveBeenCalled(); // ocioso: nao dispara ronda
+    expect(submitMock).not.toHaveBeenCalled();
 
     advanceOneTick();
     expect(submitMock).not.toHaveBeenCalled();
@@ -295,11 +302,16 @@ describe('drive tick (SPRINT-D / Parte D)', () => {
   it('D-AC3c: sinal do PROPRIO tick (usage) NAO reseta o contador - desligamento ocorre no 3o ocioso (exclusao load-bearing)', () => {
     seedProject({ pipelineType: 'development', pipelineCurrentPhase: 3 });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 3); // estado estatico
+    engageDriveOnAutoPhase(coord, 'proj_a', 3);
 
     advanceOneTick();
     expect(submitMock).toHaveBeenCalledTimes(1);
-    reportDriveTurnUsage('sess_1', 4321);
+    reportDriveTurnUsage({
+      sessionId: 'sess_1',
+      projectId: 'proj_a',
+      driveTurnId: latestTurnId(),
+      tokens: 4321,
+    });
     submitMock.mockClear();
 
     advanceOneTick();
@@ -345,7 +357,7 @@ describe('drive tick (SPRINT-D / Parte D)', () => {
     emitPhaseChanged('proj_a', 4, 'started', false);
     drainInFlight('proj_a');
     submitMock.mockClear();
-    advanceOneTick(); // estado novo -> dispara (1o snapshot pos-reset)
+    advanceOneTick();
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
 
@@ -374,11 +386,10 @@ describe('drive tick (SPRINT-D / Parte D)', () => {
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
 
-
   it('D-AC4: turno em voo -> tick pula (no-op, sem pendingFollowup); respeita one-in-flight', () => {
     seedProject({ pipelineType: 'development', pipelineCurrentPhase: 3 });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 3); // tick armado em t=0; gate one-in-flight aberto
+    engageDriveOnAutoPhase(coord, 'proj_a', 3);
 
     vi.advanceTimersByTime(DRIVE_TICK_INTERVAL_MS - 1000);
 
@@ -394,9 +405,8 @@ describe('drive tick (SPRINT-D / Parte D)', () => {
     expect(submitMock).not.toHaveBeenCalled();
   });
 
-
   it('D-AC-anti-runaway: fase no teto de turnos -> o tick ESCALA+PARA (nao dispara turno), herdando o anti-runaway do evaluate', () => {
-    seedProject({ pipelineType: 'development', pipelineCurrentPhase: 3 }); // PRD Validator (conversation)
+    seedProject({ pipelineType: 'development', pipelineCurrentPhase: 3 });
     const coord = makeCoordinator();
     engageDriveOnAutoPhase(coord, 'proj_a', 3);
 
@@ -414,7 +424,6 @@ describe('drive tick (SPRINT-D / Parte D)', () => {
     expect(submitMock).not.toHaveBeenCalled();
     expect(fakeGetDriveState('proj_a')?.status).toBe('stopped');
   });
-
 
   it('D-AC5: fase OD -> tick e no-op total (nao dispara, nao conta ocioso, nao reseta), com GO ja dado', () => {
     seedProject({
@@ -455,7 +464,6 @@ describe('drive tick (SPRINT-D / Parte D)', () => {
     expect(submitMock).not.toHaveBeenCalled();
   });
 
-
   it('borda: stopDrive cancela o tick (nenhum disparo apos parar)', () => {
     seedProject({ pipelineType: 'development', pipelineCurrentPhase: 3 });
     const coord = makeCoordinator();
@@ -494,7 +502,7 @@ describe('drive tick (SPRINT-D / Parte D)', () => {
   });
 
   it('borda: greeting que nunca fecha escala (3 min) e cancela o tick (sem rondas apos a escala)', () => {
-    seedProject({ pipelineType: 'development', pipelineCurrentPhase: 2 }); // PRD Generator (auto)
+    seedProject({ pipelineType: 'development', pipelineCurrentPhase: 2 });
     const coord = makeCoordinator();
     engageDriveOnAutoPhase(coord, 'proj_a', 2);
 
@@ -517,14 +525,14 @@ describe('drive tick (SPRINT-D / Parte D)', () => {
     advanceOneTick();
     drainInFlight('proj_a');
     submitMock.mockClear();
-    advanceOneTick(); // ocioso 1
-    advanceOneTick(); // ocioso 2
-    advanceOneTick(); // ocioso 3 -> desliga
+    advanceOneTick();
+    advanceOneTick();
+    advanceOneTick();
     expect(submitMock).not.toHaveBeenCalled();
 
     const project = projects.get('proj_a')!;
     project.config.drive = fakeSetDriveState('proj_a', { status: 'awaiting-human' });
-    coord.resumeDrive('proj_a', { fromHuman: true });
+    coord.resumeDrive('proj_a', undefined, { fromHuman: true });
     vi.advanceTimersByTime(1);
     drainInFlight('proj_a');
     submitMock.mockClear();

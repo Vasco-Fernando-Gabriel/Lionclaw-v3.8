@@ -1,4 +1,3 @@
-
 import type { DynamicWorkflowEventsQuery } from './types';
 
 export const DEFAULT_EVENTS_QUERY_LIMIT = 1000;
@@ -9,10 +8,7 @@ export interface BuiltEventsQuery {
   backwards: boolean;
 }
 
-export function buildDynamicWorkflowEventsQuery(
-  runId: string,
-  opts?: DynamicWorkflowEventsQuery,
-): BuiltEventsQuery {
+export function buildDynamicWorkflowEventsQuery(runId: string, opts?: DynamicWorkflowEventsQuery): BuiltEventsQuery {
   const rawLimit = opts?.limit;
   const limit =
     typeof rawLimit === 'number' && Number.isFinite(rawLimit)

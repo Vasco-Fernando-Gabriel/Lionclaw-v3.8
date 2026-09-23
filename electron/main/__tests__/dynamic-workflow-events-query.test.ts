@@ -1,9 +1,5 @@
-
 import { describe, it, expect } from 'vitest';
-import {
-  buildDynamicWorkflowEventsQuery,
-  DEFAULT_EVENTS_QUERY_LIMIT,
-} from '../dynamic-workflows/events-query';
+import { buildDynamicWorkflowEventsQuery, DEFAULT_EVENTS_QUERY_LIMIT } from '../dynamic-workflows/events-query';
 import { COCKPIT_STRUCTURAL_EVENT_TYPES } from '../../../src/types/dynamic-workflow';
 
 const norm = (sql: string): string => sql.replace(/\s+/g, ' ').trim();
@@ -18,7 +14,9 @@ describe('buildDynamicWorkflowEventsQuery (D23)', () => {
 
   it('afterSeq: tail incremental (seq > ?) em ordem ASC', () => {
     const q = buildDynamicWorkflowEventsQuery('run-1', { afterSeq: 42, limit: 10 });
-    expect(norm(q.sql)).toBe('SELECT * FROM dynamic_workflow_events WHERE run_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?');
+    expect(norm(q.sql)).toBe(
+      'SELECT * FROM dynamic_workflow_events WHERE run_id = ? AND seq > ? ORDER BY seq ASC LIMIT ?',
+    );
     expect(q.params).toEqual(['run-1', 42, 10]);
   });
 

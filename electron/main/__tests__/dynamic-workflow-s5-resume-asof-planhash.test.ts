@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import {
   createWorkflowHostApi,
@@ -29,7 +28,6 @@ import type { NodeRunResult, RunNodeAgentInput } from '../dynamic-workflows/work
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
 
 interface Harness {
   deps: HostApiDeps;
@@ -219,7 +217,6 @@ function makeHarness(adapter: (input: RunNodeAgentInput) => Promise<NodeRunResul
   return { deps, state };
 }
 
-
 const DEV_NODE: DynamicWorkflowManifestNode = {
   id: 's0-coder-r0',
   type: 'agent',
@@ -242,7 +239,16 @@ function baseManifest(): DynamicWorkflowManifest {
       { id: 'Desenvolvimento', name: 'Desenvolvimento', order: 1 },
     ],
     nodes: [
-      { id: 'planner', type: 'agent', phaseId: 'Plan', agentId: 'a-scout', access: 'read-only', canResume: true, produces: ['plan'], consumes: [] },
+      {
+        id: 'planner',
+        type: 'agent',
+        phaseId: 'Plan',
+        agentId: 'a-scout',
+        access: 'read-only',
+        canResume: true,
+        produces: ['plan'],
+        consumes: [],
+      },
     ],
     parallelism: { maxConcurrentAgents: 3, parallelWritersAllowed: false },
     gates: [],
@@ -308,9 +314,7 @@ function makeCtx(runDir: string, over?: Partial<HostApiRunContext>): HostApiRunC
   };
 }
 
-async function runFullSequence(
-  api: ReturnType<typeof createWorkflowHostApi>,
-): Promise<DynamicWorkflowSprintPlan> {
+async function runFullSequence(api: ReturnType<typeof createWorkflowHostApi>): Promise<DynamicWorkflowSprintPlan> {
   await api.agent({ id: 'planner', agentId: 'a-scout', prompt: 'planeje as sprints' });
   const v = (await api.validateSprintPlan(rawPlan())) as { ok: boolean; plan: DynamicWorkflowSprintPlan };
   expect(v.ok).toBe(true);
@@ -318,7 +322,6 @@ async function runFullSequence(
   await api.agent({ id: 's0-coder-r0', agentId: 'a-coder', prompt: 'implemente a sprint 0' });
   return v.plan;
 }
-
 
 describe('S5 resume as-of planHash: fix do "resume volta pro planner"', () => {
   it('grava o journal AS-OF no primeiro run: NULL antes do validate, hash depois', async () => {
@@ -348,7 +351,7 @@ describe('S5 resume as-of planHash: fix do "resume volta pro planner"', () => {
 
     const api1 = createWorkflowHostApi(makeCtx(runDir), h.deps);
     const plan = await runFullSequence(api1);
-    expect(adapter).toHaveBeenCalledTimes(2); // planner + coder
+    expect(adapter).toHaveBeenCalledTimes(2);
     expect(h.state.materializeCrudCalls).toBe(1);
 
     const api2 = createWorkflowHostApi(
@@ -389,7 +392,7 @@ describe('S5 resume as-of planHash: fix do "resume volta pro planner"', () => {
     const api2 = createWorkflowHostApi(makeCtx(runDir), h.deps);
     const plan2 = await runFullSequence(api2);
 
-    expect(adapter).toHaveBeenCalledTimes(2); // +1 SO do coder (planner reusado)
+    expect(adapter).toHaveBeenCalledTimes(2);
     expect(adapter.mock.calls.map((c) => c[0].grants.nodeId)).toEqual(['planner', 's0-coder-r0']);
     expect(h.state.truncateCalls).toEqual([]);
     expect(h.state.materializeCrudCalls).toBe(1);

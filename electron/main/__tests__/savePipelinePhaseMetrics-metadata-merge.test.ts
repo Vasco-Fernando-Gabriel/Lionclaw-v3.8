@@ -1,9 +1,6 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-
-
 
 describe('savePipelinePhaseMetrics metadata merge logic', () => {
   function mergeMetadata(
@@ -40,7 +37,12 @@ describe('savePipelinePhaseMetrics metadata merge logic', () => {
 
   it('merge with empty existing produces only incoming fields', () => {
     const existing = {};
-    const incoming = { provider: 'kimi', tokenStatus: 'not_reported', costStatus: 'unknown', costUnknownReason: 'no-usage-reported' };
+    const incoming = {
+      provider: 'kimi',
+      tokenStatus: 'not_reported',
+      costStatus: 'unknown',
+      costUnknownReason: 'no-usage-reported',
+    };
     const merged = mergeMetadata(existing, incoming);
 
     expect(merged).toEqual(incoming);
@@ -73,7 +75,6 @@ describe('savePipelinePhaseMetrics metadata merge logic', () => {
   });
 });
 
-
 describe('savePipelinePhaseMetrics unknownCostCount accumulation contract', () => {
   function accumulateUnknownCostCount(existing: number, increment: number): number {
     return existing + increment;
@@ -97,7 +98,6 @@ describe('savePipelinePhaseMetrics unknownCostCount accumulation contract', () =
   });
 });
 
-
 describe('savePipelinePhaseMetrics SQL shape verification', () => {
   it('The ON CONFLICT DO UPDATE SQL uses addition for unknown_cost_count', () => {
     const sqlAccumulationPattern =
@@ -118,12 +118,14 @@ describe('savePipelinePhaseMetrics SQL shape verification', () => {
       'model, runtime, started_at, completed_at, metadata, unknown_cost_count)';
 
     expect(insertColumns).toContain('unknown_cost_count');
-    const columns = insertColumns.replace(/[()]/g, '').split(',').map(c => c.trim());
+    const columns = insertColumns
+      .replace(/[()]/g, '')
+      .split(',')
+      .map((c) => c.trim());
     expect(columns[columns.length - 1]).toBe('unknown_cost_count');
     expect(columns[columns.length - 2]).toBe('metadata');
   });
 });
-
 
 describe('savePipelinePhaseMetrics mock-DB integration', () => {
   it('calls SELECT for existing metadata then runs upsert with merged metadata', () => {
@@ -134,9 +136,10 @@ describe('savePipelinePhaseMetrics mock-DB integration', () => {
     });
     const mockRunForUpsert = vi.fn().mockReturnValue({ lastInsertRowid: 42 });
 
-    const mockPrepare = vi.fn()
-      .mockReturnValueOnce({ get: mockGetForSelect })   // first prepare = SELECT
-      .mockReturnValueOnce({ run: mockRunForUpsert });  // second prepare = INSERT
+    const mockPrepare = vi
+      .fn()
+      .mockReturnValueOnce({ get: mockGetForSelect })
+      .mockReturnValueOnce({ run: mockRunForUpsert });
 
     const incomingMetadata = { provider: 'deepseek', costStatus: 'unknown' };
 
@@ -153,9 +156,25 @@ describe('savePipelinePhaseMetrics mock-DB integration', () => {
     });
 
     mockPrepare('INSERT INTO ...').run(
-      'project-1', 1, -1, 'Phase 1', 'agent-id', 'completed',
-      100, 50, 0, 0, 0.005, 1200, 2, 1, 0,
-      'deepseek-chat', 'external', null, '2026-05-20T00:00:00.000Z',
+      'project-1',
+      1,
+      -1,
+      'Phase 1',
+      'agent-id',
+      'completed',
+      100,
+      50,
+      0,
+      0,
+      0.005,
+      1200,
+      2,
+      1,
+      0,
+      'deepseek-chat',
+      'external',
+      null,
+      '2026-05-20T00:00:00.000Z',
       JSON.stringify(merged),
       1, // unknownCostCount
     );
@@ -174,7 +193,8 @@ describe('savePipelinePhaseMetrics mock-DB integration', () => {
     const mockGetForSelect = vi.fn().mockReturnValue(undefined);
     const mockRunForUpsert = vi.fn().mockReturnValue({ lastInsertRowid: 43 });
 
-    const mockPrepare = vi.fn()
+    const mockPrepare = vi
+      .fn()
       .mockReturnValueOnce({ get: mockGetForSelect })
       .mockReturnValueOnce({ run: mockRunForUpsert });
 
@@ -186,7 +206,6 @@ describe('savePipelinePhaseMetrics mock-DB integration', () => {
     expect(merged).toEqual(incoming);
   });
 });
-
 
 describe('savePipelinePhaseMetrics sessionIds array-union merge (BUG 3 F1)', () => {
   function mergeWithSessionIdsUnion(

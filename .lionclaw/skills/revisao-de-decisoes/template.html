@@ -1,0 +1,488 @@
+<title>Nome Curto Da Pagina</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --ink-0: #070707;
+    --ink-1: #0e0c0a;
+    --ink-2: #16120e;
+    --line: #2b1c10;
+    --line-soft: #1c140d;
+    --neon: #ff6a00;
+    --neon-hi: #ff9640;
+    --neon-dim: #8a3a05;
+    --white: #f6f1ea;
+    --mute: #9a8f84;
+    --mute-2: #6a6058;
+    --font-display: 'Chakra Petch', 'Segoe UI', system-ui, sans-serif;
+    --font-body: 'Instrument Sans', 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+    --rail: 248px;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--ink-0); }
+  body { margin: 0; background: var(--ink-0); color: var(--white); font-family: var(--font-body); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  a { color: var(--neon-hi); }
+  ::selection { background: var(--neon); color: var(--ink-0); }
+
+  .shell { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); min-height: 100vh; }
+  @media (max-width: 900px) { .shell { grid-template-columns: 1fr; } .rail { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); } }
+
+  .rail { position: sticky; top: 0; height: 100vh; overflow: auto; border-right: 1px solid var(--line); background: var(--ink-1); padding: 28px 20px 24px; display: flex; flex-direction: column; gap: 22px; }
+  .brand { font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: .18em; text-transform: uppercase; color: var(--neon); }
+  .brand small { display: block; color: var(--mute); font-family: var(--font-mono); font-weight: 400; letter-spacing: .04em; text-transform: none; font-size: 11px; margin-top: 4px; }
+
+  .progress { display: grid; gap: 8px; }
+  .progress .bar { height: 6px; background: var(--ink-2); border: 1px solid var(--line); overflow: hidden; display: flex; }
+  .progress .bar i { display: block; height: 100%; }
+  .progress .bar .ok { background: var(--neon); box-shadow: 0 0 10px var(--neon); }
+  .progress .bar .adj { background: var(--neon-dim); }
+  .progress .bar .rej { background: var(--white); }
+  .progress .nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--mute); }
+  .progress .nums b { display: block; color: var(--white); font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .progress .nums .k-ok b { color: var(--neon); }
+
+  .nav { display: grid; gap: 2px; }
+  .nav a { display: flex; justify-content: space-between; gap: 8px; text-decoration: none; color: var(--mute); padding: 6px 8px; border-left: 2px solid transparent; font-size: 13px; }
+  .nav a:hover, .nav a:focus-visible { color: var(--white); border-left-color: var(--neon-dim); outline: none; }
+  .nav a.active { color: var(--white); border-left-color: var(--neon); }
+  .nav a span { font-family: var(--font-mono); font-size: 11px; color: var(--mute-2); font-variant-numeric: tabular-nums; }
+
+  .rail .hint { margin-top: auto; color: var(--mute-2); font-size: 12px; line-height: 1.5; }
+  .rail .hint kbd { font-family: var(--font-mono); color: var(--mute); border: 1px solid var(--line); padding: 0 4px; font-size: 11px; }
+
+  main { padding: 40px 48px 140px; max-width: 980px; }
+  @media (max-width: 900px) { main { padding: 28px 18px 140px; } }
+
+  header.hero { display: grid; gap: 14px; margin-bottom: 44px; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+  .eyebrow { font-family: var(--font-mono); font-size: 12px; color: var(--neon); letter-spacing: .08em; text-transform: uppercase; }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(34px, 5vw, 56px); line-height: 1; margin: 0; letter-spacing: -.01em; text-wrap: balance; text-shadow: 0 0 22px rgba(255,106,0,.25); }
+  .lede { max-width: 66ch; color: var(--mute); font-size: 16px; margin: 0; }
+  .lede b { color: var(--white); font-weight: 500; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 18px; font-family: var(--font-mono); font-size: 11.5px; color: var(--mute); }
+  .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+
+  section { margin-bottom: 52px; scroll-margin-top: 24px; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 8px; }
+  .sec-head h2 { font-family: var(--font-display); font-weight: 600; font-size: 22px; margin: 0; letter-spacing: .01em; }
+  .sec-head .num { font-family: var(--font-mono); color: var(--neon); font-size: 13px; }
+  .sec-intro { color: var(--mute); max-width: 68ch; margin: 0 0 18px; font-size: 14.5px; }
+  .sec-intro code, .rule .t code, .fact code, .q .t code, .q .rec code, .phase p code, details.log li code { font-family: var(--font-mono); font-size: .88em; color: var(--neon-hi); }
+
+  .facts { display: grid; gap: 0; border-top: 1px solid var(--line-soft); }
+  .fact { display: grid; grid-template-columns: 52px minmax(0,1fr); gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
+  .fact .id { font-family: var(--font-mono); color: var(--neon); font-size: 12px; padding-top: 3px; }
+  .fact .t { color: var(--white); }
+  .fact .t.fixed::before { content: 'corrigido pelos validadores'; display: block; font-family: var(--font-mono); font-size: 10.5px; color: var(--mute-2); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 2px; }
+
+  .rules { display: grid; gap: 10px; }
+  .rule { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px 20px; padding: 14px 16px; background: var(--ink-1); border: 1px solid var(--line-soft); border-left: 2px solid var(--line); transition: border-color .15s; }
+  .rule[data-state="ok"] { border-left-color: var(--neon); box-shadow: inset 4px 0 14px -8px var(--neon); }
+  .rule[data-state="adj"] { border-left-color: var(--neon-dim); }
+  .rule[data-state="rej"] { border-left-color: var(--white); }
+  .rule[data-state="rej"] .t { color: var(--mute); text-decoration: line-through; text-decoration-color: var(--mute-2); }
+  .rule .head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .rule .id { font-family: var(--font-mono); color: var(--neon); font-size: 12px; font-weight: 500; }
+  .rule .tag { font-family: var(--font-mono); font-size: 10.5px; color: var(--mute-2); letter-spacing: .05em; text-transform: uppercase; }
+  .rule .tag.val { color: var(--neon-hi); }
+  .rule .t { margin: 4px 0 0; color: var(--white); max-width: 70ch; font-size: 14.5px; }
+  .rule .t b { font-weight: 600; }
+  .ctl { display: flex; gap: 4px; align-self: start; }
+  .ctl button { font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; padding: 6px 10px; background: transparent; color: var(--mute); border: 1px solid var(--line); cursor: pointer; }
+  .ctl button:hover { color: var(--white); border-color: var(--neon-dim); }
+  .ctl button:focus-visible { outline: 2px solid var(--neon); outline-offset: 1px; }
+  .ctl button.on-ok { background: var(--neon); color: var(--ink-0); border-color: var(--neon); font-weight: 600; box-shadow: 0 0 12px rgba(255,106,0,.45); }
+  .ctl button.on-adj { color: var(--neon-hi); border-color: var(--neon); }
+  .ctl button.on-rej { color: var(--ink-0); background: var(--white); border-color: var(--white); }
+  .note { grid-column: 1 / -1; }
+  .note textarea { width: 100%; min-height: 34px; resize: vertical; background: var(--ink-0); color: var(--white); border: 1px solid var(--line); padding: 8px 10px; font-family: var(--font-body); font-size: 13.5px; line-height: 1.45; }
+  .note textarea::placeholder { color: var(--mute-2); }
+  .note textarea:focus { outline: none; border-color: var(--neon-dim); }
+
+  .phases { display: grid; gap: 0; border-left: 1px solid var(--line); margin-left: 8px; }
+  .phase { position: relative; padding: 4px 0 26px 26px; }
+  .phase::before { content: ''; position: absolute; left: -5px; top: 10px; width: 9px; height: 9px; background: var(--ink-0); border: 1px solid var(--neon); }
+  .phase:first-child::before { background: var(--neon); box-shadow: 0 0 10px var(--neon); }
+  .phase h3 { font-family: var(--font-display); font-size: 17px; font-weight: 600; margin: 0 0 6px; }
+  .phase h3 span { font-family: var(--font-mono); color: var(--neon); font-weight: 500; font-size: 12px; margin-right: 8px; }
+  .phase p { margin: 0; color: var(--mute); max-width: 66ch; font-size: 14px; }
+  .phase p b { color: var(--white); font-weight: 500; }
+
+  .qs { display: grid; gap: 12px; }
+  .q { padding: 16px; background: var(--ink-1); border: 1px solid var(--line-soft); display: grid; gap: 10px; }
+  .q .head { display: flex; gap: 12px; align-items: baseline; }
+  .q .id { font-family: var(--font-mono); color: var(--neon); font-size: 12px; }
+  .q .t { margin: 0; max-width: 68ch; }
+  .q .rec { font-size: 13px; color: var(--mute); max-width: 68ch; margin: 0; }
+  .q .rec b { color: var(--neon-hi); font-weight: 500; font-family: var(--font-mono); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; margin-right: 6px; }
+  .q .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .q .opts button { font-family: var(--font-body); font-size: 13px; padding: 6px 12px; background: transparent; color: var(--mute); border: 1px solid var(--line); cursor: pointer; }
+  .q .opts button:hover { color: var(--white); border-color: var(--neon-dim); }
+  .q .opts button.on { background: var(--neon); color: var(--ink-0); border-color: var(--neon); font-weight: 600; }
+  .q .opts button:focus-visible { outline: 2px solid var(--neon); outline-offset: 1px; }
+
+  details.log { border: 1px solid var(--line-soft); background: var(--ink-1); padding: 0 16px; margin-bottom: 10px; }
+  details.log summary { cursor: pointer; padding: 14px 0; font-family: var(--font-display); font-weight: 600; font-size: 15px; list-style: none; display: flex; justify-content: space-between; }
+  details.log summary::after { content: '+'; font-family: var(--font-mono); color: var(--neon); }
+  details.log[open] summary::after { content: '\2212'; }
+  details.log ul { margin: 0 0 16px; padding-left: 18px; color: var(--mute); font-size: 13.5px; display: grid; gap: 6px; }
+  details.log li b { color: var(--white); font-weight: 500; }
+  details.log li .p { font-family: var(--font-mono); font-size: 10.5px; color: var(--neon); margin-right: 6px; }
+
+  .dock { position: fixed; left: var(--rail); right: 0; bottom: 0; background: rgba(7,7,7,.92); backdrop-filter: blur(8px); border-top: 1px solid var(--line); padding: 12px 48px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  @media (max-width: 900px) { .dock { left: 0; padding: 12px 18px; } }
+  .dock .sum { font-family: var(--font-mono); font-size: 12px; color: var(--mute); font-variant-numeric: tabular-nums; }
+  .dock .sum b { color: var(--neon); font-weight: 500; }
+  .dock .grow { flex: 1; }
+  .btn { font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; padding: 9px 16px; border: 1px solid var(--neon); background: transparent; color: var(--neon); cursor: pointer; }
+  .btn:hover { background: var(--neon); color: var(--ink-0); box-shadow: 0 0 16px rgba(255,106,0,.5); }
+  .btn:focus-visible { outline: 2px solid var(--white); outline-offset: 2px; }
+  .btn.ghost { border-color: var(--line); color: var(--mute); }
+  .btn.ghost:hover { background: var(--ink-2); color: var(--white); box-shadow: none; }
+
+  .export { margin-top: 10px; }
+  .export textarea { width: 100%; min-height: 220px; background: var(--ink-1); color: var(--white); border: 1px solid var(--line); padding: 12px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; resize: vertical; }
+  .export .toast { font-family: var(--font-mono); font-size: 12px; color: var(--neon); min-height: 18px; margin-top: 6px; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="shell">
+  <aside class="rail">
+    <div class="brand" id="brand"></div>
+    <div class="progress">
+      <div class="bar" id="bar"><i class="ok" style="width:0%"></i><i class="adj" style="width:0%"></i><i class="rej" style="width:0%"></i></div>
+      <div class="nums">
+        <div class="k-ok"><b id="n-ok">0</b>ok</div>
+        <div><b id="n-adj">0</b>ajustar</div>
+        <div><b id="n-rej">0</b>rejeitar</div>
+        <div><b id="n-todo">0</b>pendente</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="hint">Marque cada regra. Notas e decisões ficam salvas neste navegador. Ao terminar, use <kbd>Gerar decisões</kbd> e cole o texto no chat.</div>
+  </aside>
+
+  <main id="main">
+    <header class="hero">
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="title"></h1>
+      <p class="lede" id="lede"></p>
+      <div class="legend">
+        <span><i style="background:var(--neon)"></i>ok = aprovada</span>
+        <span><i style="border:1px solid var(--neon)"></i>ajustar = aprovada com mudança (escreva a nota)</span>
+        <span><i style="background:var(--white)"></i>rejeitar = sai do documento</span>
+        <span><i style="border:1px solid var(--neon-hi);background:transparent"></i>VALIDADOR = regra que nasceu ou mudou por achado</span>
+      </div>
+    </header>
+    <div id="sections"></div>
+  </main>
+</div>
+
+<div class="dock">
+  <div class="sum"><b id="d-ok">0</b> ok · <b id="d-adj">0</b> ajustar · <b id="d-rej">0</b> rejeitar · <span id="d-todo">0</span> pendentes</div>
+  <div class="grow"></div>
+  <button class="btn ghost" id="reset" type="button">Limpar marcações</button>
+  <button class="btn" id="gen" type="button">Gerar decisões</button>
+</div>
+
+<script>
+(function () {
+  var inApp = window.parent !== window;
+  var key = null;
+  var fallback = {
+    get: function () { try { return JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch (e) { return {}; } },
+    set: function (s) { try { localStorage.setItem(key, JSON.stringify(s)); } catch (e) {} }
+  };
+  var store = {
+    inApp: inApp,
+    onState: null,
+    ready: function (storageKey) {
+      key = storageKey;
+      if (inApp) { try { window.parent.postMessage({ type: 'lionclaw:ready', storageKey: key }, '*'); } catch (e) {} }
+    },
+    get: function () { return inApp ? {} : fallback.get(); },
+    set: function (s) {
+      if (inApp) { try { window.parent.postMessage({ type: 'lionclaw:state:set', storageKey: key, state: s }, '*'); } catch (e) {} }
+      else fallback.set(s);
+    },
+    sendDecisions: function (text) {
+      if (!inApp) return false;
+      try { window.parent.postMessage({ type: 'lionclaw:decisions', text: text }, '*'); return true; } catch (e) { return false; }
+    }
+  };
+  if (inApp) {
+    window.addEventListener('message', function (ev) {
+      var d = ev.data;
+      if (!d || d.type !== 'lionclaw:state' || d.storageKey !== key) return;
+      if (typeof store.onState === 'function') store.onState(d.state && typeof d.state === 'object' ? d.state : {});
+    });
+  }
+  window.__lionclawStore = store;
+})();
+</script>
+<script>
+(function () {
+  // ============================================================
+  // DATA: o UNICO bloco que muda por documento. Estrutura:
+  //   brand        texto do canto superior (produto)
+  //   version      linha pequena abaixo do brand (ex.: 'SPEC v1.0 · revisão do dono')
+  //   eyebrow      linha laranja acima do titulo (tema · tema · tema)
+  //   title        nome curto da pagina (2 a 4 palavras, sem explicador)
+  //   lede         2 a 3 frases em HTML (<b> e <code> permitidos)
+  //   storageKey   '<projeto>-<documento>-v<MAJOR>' (so muda em versao MAJOR)
+  //   exportTitle  primeira linha do texto gerado
+  //   sections[]   na ordem da pagina. Cada uma: { id, title, intro, kind, ... }
+  //     kind 'facts'     items: [[id, html, fixed]]
+  //     kind 'rules'     items: [[id, html, tag]]   tag: '' | 'validador' | 'novo' | 'dono'
+  //     kind 'phases'    items: [[label, title, html]]   (so quando a ordem importa)
+  //     kind 'questions' items: [[id, pergunta, recomendacao+motivo, [opcoes...]]]
+  //     kind 'changelog' groups: [[titulo, open, [[p, negrito, resto]]]]
+  //     kind 'decisions' (bloco de exportacao; obrigatorio, uma vez, por ultimo)
+  // ============================================================
+  var DATA = {
+    brand: 'LionLabs',
+    version: 'SPEC v0.1 · revisão do dono',
+    eyebrow: 'tema um · tema dois · tema três',
+    title: 'Nome Curto Da Pagina',
+    lede: 'O que este documento decide, em duas frases. <b>O que o dono deve fazer</b> nesta página.',
+    storageKey: 'projeto-documento-v1',
+    exportTitle: 'SPEC Exemplo v0.1: decisoes do dono',
+    sections: [
+      { id: 'fatos', title: 'Fatos verificados', intro: 'Não são regras, são o chão. Se um fato estiver errado, a regra que depende dele cai junto.', kind: 'facts', items: [
+        ['F1', 'Fato verificado no código, com <code>arquivo:linha</code>.', false],
+        ['F2', 'Fato corrigido por validador.', true]
+      ]},
+      { id: 'rm', title: 'Regras máximas', intro: 'Invariantes. Violação é bug P1.', kind: 'rules', items: [
+        ['RM1', 'Texto da regra, até duas frases, na língua de quem decide.', ''],
+        ['RM2', 'Regra que nasceu ou mudou por achado de validador.', 'validador']
+      ]},
+      { id: 'fases', title: 'Fases de entrega', intro: 'Ordem obrigatória.', kind: 'phases', items: [
+        ['Fase 1', 'Nome da fase', 'O que entra e o ganho. <b>Pré-requisito:</b> se houver.'],
+        ['Fase 2', 'Nome da fase', 'O que entra e o ganho.']
+      ]},
+      { id: 'questoes', title: 'Questões para o dono', intro: 'Cada uma vem com a recomendação. Escolha uma opção ou escreva a sua.', kind: 'questions', items: [
+        ['Q1', 'Pergunta objetiva?', 'Sim, porque <motivo verificável>.', ['Sim', 'Não', 'Outro']]
+      ]},
+      { id: 'changelog', title: 'O que os validadores derrubaram', intro: 'Da versão anterior para esta.', kind: 'changelog', groups: [
+        ['Achados P1 incorporados', true, [['P1', 'Título do achado', 'o que quebrava e o que mudou.']]],
+        ['Decisões do dono', false, [['D1', 'Título da decisão', 'o que ficou decidido.']]]
+      ]},
+      { id: 'decisoes', title: 'Decisões', intro: 'Texto pronto para colar no chat. Só as regras marcadas entram; as pendentes ficam listadas no fim.', kind: 'decisions' }
+    ]
+  };
+  // ============================================================
+
+  var store = window.__lionclawStore;
+  store.ready(DATA.storageKey);
+  var state = store.get();
+  function save() { store.set(state); }
+  function el(tag, cls, html) { var n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; return n; }
+
+  document.title = DATA.title;
+  document.getElementById('brand').innerHTML = DATA.brand + '<small>' + DATA.version + '</small>';
+  document.getElementById('eyebrow').textContent = DATA.eyebrow;
+  document.getElementById('title').textContent = DATA.title;
+  document.getElementById('lede').innerHTML = DATA.lede;
+
+  var STATES = ['ok', 'adj', 'rej'];
+  var LABEL = { ok: 'ok', adj: 'ajustar', rej: 'rejeitar' };
+  var RULES = [];      // [sectionId, id]
+  var QS = [];         // [id]
+  var SECTION_TITLE = {};
+
+  var host = document.getElementById('sections');
+  DATA.sections.forEach(function (sec, si) {
+    SECTION_TITLE[sec.id] = sec.title;
+    var s = el('section'); s.id = sec.id;
+    var head = el('div', 'sec-head');
+    head.appendChild(el('span', 'num', String(si + 1).padStart(2, '0')));
+    head.appendChild(el('h2', '', sec.title));
+    s.appendChild(head);
+    if (sec.intro) s.appendChild(el('p', 'sec-intro', sec.intro));
+
+    if (sec.kind === 'facts') {
+      var box = el('div', 'facts');
+      sec.items.forEach(function (f) {
+        var row = el('div', 'fact');
+        row.appendChild(el('div', 'id', f[0]));
+        row.appendChild(el('div', 't' + (f[2] ? ' fixed' : ''), f[1]));
+        box.appendChild(row);
+      });
+      s.appendChild(box);
+    }
+
+    if (sec.kind === 'rules') {
+      var rules = el('div', 'rules');
+      sec.items.forEach(function (r) {
+        var id = r[0];
+        RULES.push([sec.id, id]);
+        var card = el('article', 'rule'); card.id = 'rule-' + id;
+        var h = el('div', 'head');
+        h.appendChild(el('span', 'id', id));
+        if (r[2]) h.appendChild(el('span', 'tag' + (r[2] === 'validador' ? ' val' : ''), r[2]));
+        var left = el('div'); left.appendChild(h); left.appendChild(el('p', 't', r[1]));
+        card.appendChild(left);
+        var ctl = el('div', 'ctl');
+        STATES.forEach(function (st) {
+          var b = el('button', '', LABEL[st]); b.type = 'button'; b.dataset.s = st; b.setAttribute('aria-pressed', 'false');
+          b.addEventListener('click', function () {
+            var cur = (state[id] && state[id].s) || null;
+            state[id] = state[id] || {}; state[id].s = (cur === st) ? null : st;
+            save(); paint(card, id); tally();
+          });
+          ctl.appendChild(b);
+        });
+        card.appendChild(ctl);
+        var note = el('div', 'note'); var ta = document.createElement('textarea');
+        ta.placeholder = 'Nota (obrigatória em "ajustar"): o que muda?';
+        ta.value = (state[id] && state[id].n) || '';
+        ta.addEventListener('input', function () { state[id] = state[id] || {}; state[id].n = ta.value; save(); });
+        note.appendChild(ta); card.appendChild(note);
+        rules.appendChild(card); paint(card, id);
+      });
+      s.appendChild(rules);
+    }
+
+    if (sec.kind === 'phases') {
+      var ph = el('div', 'phases');
+      sec.items.forEach(function (p) {
+        var d = el('div', 'phase');
+        d.appendChild(el('h3', '', '<span>' + p[0] + '</span>' + p[1]));
+        d.appendChild(el('p', '', p[2]));
+        ph.appendChild(d);
+      });
+      s.appendChild(ph);
+    }
+
+    if (sec.kind === 'questions') {
+      var qs = el('div', 'qs');
+      sec.items.forEach(function (q) {
+        var id = q[0]; QS.push(id);
+        var card = el('div', 'q'); card.id = 'q-' + id;
+        var h = el('div', 'head'); h.appendChild(el('span', 'id', id)); h.appendChild(el('p', 't', q[1]));
+        card.appendChild(h);
+        card.appendChild(el('p', 'rec', '<b>recomendação</b>' + q[2]));
+        var opts = el('div', 'opts');
+        q[3].forEach(function (o) {
+          var b = el('button', '', o); b.type = 'button'; b.dataset.o = o;
+          b.addEventListener('click', function () { state[id] = state[id] || {}; state[id].a = (state[id].a === o) ? null : o; save(); paintQ(card, id); });
+          opts.appendChild(b);
+        });
+        card.appendChild(opts);
+        var note = el('div', 'note'); var ta = document.createElement('textarea');
+        ta.placeholder = 'Detalhe ou alternativa'; ta.value = (state[id] && state[id].n) || '';
+        ta.addEventListener('input', function () { state[id] = state[id] || {}; state[id].n = ta.value; save(); });
+        note.appendChild(ta); card.appendChild(note);
+        qs.appendChild(card); paintQ(card, id);
+      });
+      s.appendChild(qs);
+    }
+
+    if (sec.kind === 'changelog') {
+      sec.groups.forEach(function (g) {
+        var d = el('details', 'log'); if (g[1]) d.open = true;
+        d.appendChild(el('summary', '', g[0] + '<span>' + g[2].length + '</span>'));
+        var ul = el('ul');
+        g[2].forEach(function (i) { ul.appendChild(el('li', '', '<span class="p">' + i[0] + '</span><b>' + i[1] + '</b>: ' + i[2])); });
+        d.appendChild(ul); s.appendChild(d);
+      });
+    }
+
+    if (sec.kind === 'decisions') {
+      var ex = el('div', 'export');
+      var out = document.createElement('textarea'); out.id = 'out'; out.readOnly = true; out.placeholder = 'Clique em Gerar decisões.';
+      ex.appendChild(out); ex.appendChild(el('div', 'toast'));
+      ex.lastChild.id = 'toast';
+      s.appendChild(ex);
+    }
+    host.appendChild(s);
+  });
+
+  function paint(card, id) {
+    var st = (state[id] && state[id].s) || null;
+    card.dataset.state = st || '';
+    card.querySelectorAll('.ctl button').forEach(function (b) { b.className = (b.dataset.s === st) ? 'on-' + st : ''; b.setAttribute('aria-pressed', b.dataset.s === st ? 'true' : 'false'); });
+  }
+  function paintQ(card, id) {
+    var a = (state[id] && state[id].a) || null;
+    card.querySelectorAll('.opts button').forEach(function (b) { b.className = (b.dataset.o === a) ? 'on' : ''; });
+  }
+
+  var nav = document.getElementById('nav');
+  DATA.sections.forEach(function (sec) {
+    var a = el('a', '', sec.title + '<span data-sec="' + sec.id + '"></span>'); a.href = '#' + sec.id; nav.appendChild(a);
+  });
+  var links = nav.querySelectorAll('a');
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) links.forEach(function (l) { l.classList.toggle('active', l.getAttribute('href') === '#' + e.target.id); }); });
+    }, { rootMargin: '-30% 0px -60% 0px' });
+    DATA.sections.forEach(function (sec) { var n = document.getElementById(sec.id); if (n) io.observe(n); });
+  }
+
+  function tally() {
+    var c = { ok: 0, adj: 0, rej: 0, todo: 0 }, per = {};
+    RULES.forEach(function (r) {
+      var st = (state[r[1]] && state[r[1]].s) || 'todo'; c[st]++;
+      per[r[0]] = per[r[0]] || { done: 0, total: 0 }; per[r[0]].total++; if (st !== 'todo') per[r[0]].done++;
+    });
+    var total = RULES.length || 1;
+    ['ok', 'adj', 'rej', 'todo'].forEach(function (k) { document.getElementById('n-' + k).textContent = c[k]; var d = document.getElementById('d-' + k); if (d) d.textContent = c[k]; });
+    var bar = document.getElementById('bar');
+    bar.querySelector('.ok').style.width = (c.ok / total * 100) + '%';
+    bar.querySelector('.adj').style.width = (c.adj / total * 100) + '%';
+    bar.querySelector('.rej').style.width = (c.rej / total * 100) + '%';
+    nav.querySelectorAll('span[data-sec]').forEach(function (sp) { var g = per[sp.dataset.sec]; sp.textContent = g ? (g.done + '/' + g.total) : ''; });
+  }
+  tally();
+
+  function repaintAll() {
+    document.querySelectorAll('.rule').forEach(function (c) { var id = c.id.replace('rule-', ''); paint(c, id); c.querySelector('textarea').value = (state[id] && state[id].n) || ''; });
+    document.querySelectorAll('.q').forEach(function (c) { var id = c.id.replace('q-', ''); paintQ(c, id); c.querySelector('textarea').value = (state[id] && state[id].n) || ''; });
+    tally();
+  }
+  store.onState = function (s) { state = s || {}; repaintAll(); };
+
+  document.getElementById('gen').addEventListener('click', function () {
+    var lines = [DATA.exportTitle, ''], pend = [], groups = {}, order = [];
+    RULES.forEach(function (r) { if (!groups[r[0]]) { groups[r[0]] = []; order.push(r[0]); } groups[r[0]].push(r[1]); });
+    order.forEach(function (g) {
+      var rows = [];
+      groups[g].forEach(function (id) {
+        var st = state[id] || {};
+        if (!st.s) { pend.push(id); return; }
+        var line = id + ': ' + LABEL[st.s]; if (st.n && st.n.trim()) line += ' -> ' + st.n.trim(); rows.push(line);
+      });
+      if (rows.length) { lines.push('[' + SECTION_TITLE[g] + ']'); lines = lines.concat(rows); lines.push(''); }
+    });
+    var qrows = [];
+    QS.forEach(function (id) {
+      var st = state[id] || {}; if (!st.a && !(st.n && st.n.trim())) return;
+      var line = id + ': ' + (st.a || '(sem opcao)'); if (st.n && st.n.trim()) line += ' -> ' + st.n.trim(); qrows.push(line);
+    });
+    if (qrows.length) { lines.push('[Questoes]'); lines = lines.concat(qrows); lines.push(''); }
+    if (pend.length) lines.push('Pendentes: ' + pend.join(', '));
+    var out = document.getElementById('out'); out.value = lines.join('\n');
+    var dec = document.querySelector('section:last-of-type'); if (dec) dec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    var toast = document.getElementById('toast');
+    var sent = store.sendDecisions(out.value);
+    var done = function (copiedMsg) { toast.textContent = sent ? 'Enviado ao composer do chat. Revise e envie.' : copiedMsg; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(out.value).then(function () { done('Copiado. Cole no chat.'); }, function () { done('Selecione o texto e copie.'); });
+    } else { done('Selecione o texto e copie.'); }
+  });
+  var resetArmed = false, resetTimer = null;
+  document.getElementById('reset').addEventListener('click', function () {
+    var btn = this, label = btn.dataset.label || (btn.dataset.label = btn.textContent);
+    if (store.inApp) {
+      if (!resetArmed) { resetArmed = true; btn.textContent = 'Clique de novo para limpar'; resetTimer = setTimeout(function () { resetArmed = false; btn.textContent = label; }, 4000); return; }
+      clearTimeout(resetTimer); resetArmed = false; btn.textContent = label;
+    } else if (!confirm('Limpar todas as marcações e notas desta página?')) return;
+    state = {}; save();
+    document.querySelectorAll('.rule').forEach(function (c) { paint(c, c.id.replace('rule-', '')); c.querySelector('textarea').value = ''; });
+    document.querySelectorAll('.q').forEach(function (c) { paintQ(c, c.id.replace('q-', '')); c.querySelector('textarea').value = ''; });
+    var out = document.getElementById('out'); if (out) out.value = '';
+    tally();
+  });
+})();
+</script>

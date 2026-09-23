@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -117,7 +116,7 @@ export function getPipelineCodexHomeFallbackExtras(): CodexSpawnExtras {
   try {
     currentConfig = fs.readFileSync(configPath, 'utf-8');
   } catch {
-    currentConfig = null; // ausente: sera gerado abaixo
+    currentConfig = null;
   }
   if (currentConfig !== FALLBACK_CONFIG_TOML) {
     fs.writeFileSync(configPath, FALLBACK_CONFIG_TOML, 'utf-8');
@@ -129,13 +128,12 @@ export function getPipelineCodexHomeFallbackExtras(): CodexSpawnExtras {
   try {
     const stat = fs.lstatSync(linkPath);
     if (stat.isSymbolicLink() && fs.readlinkSync(linkPath) === realAuthPath) {
-      needsLink = false; // symlink ja correto: nao recria
+      needsLink = false;
     } else {
       logger.warn({ linkPath }, 'auth.json do home dedicado nao e symlink para o auth real; recriando symlink');
       fs.unlinkSync(linkPath);
     }
-  } catch {
-  }
+  } catch {}
   if (needsLink) {
     fs.symlinkSync(realAuthPath, linkPath);
   }

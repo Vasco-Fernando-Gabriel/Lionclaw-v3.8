@@ -1,6 +1,4 @@
-
 import { describe, it, expect } from 'vitest';
-
 
 type RuntimeType = 'cloud' | 'zai' | 'minimax-tp' | 'local' | 'external' | 'codex';
 
@@ -20,22 +18,22 @@ function resolveModel(
 
 type ProviderStatusEntry = { connected: boolean; reason?: string } | null;
 
-function computeMinimaxTpKeyBlocking(
-  runtime: RuntimeType,
-  minimaxTpStatus: ProviderStatusEntry,
-): boolean {
+function computeMinimaxTpKeyBlocking(runtime: RuntimeType, minimaxTpStatus: ProviderStatusEntry): boolean {
   return runtime === 'minimax-tp' && (!minimaxTpStatus || !minimaxTpStatus.connected);
 }
-
 
 describe('AgentFormModal save logic - SPEC-006 Sprint 3 minimax-tp', () => {
   describe('resolveModel ternario expandido', () => {
     it('runtime minimax-tp: retorna minimaxTpModel', () => {
-      expect(resolveModel('minimax-tp', 'MiniMax-M2.7', 'glm-4.7', 'claude-sonnet-4-6', 'o4-mini')).toBe('MiniMax-M2.7');
+      expect(resolveModel('minimax-tp', 'MiniMax-M2.7', 'glm-4.7', 'claude-sonnet-4-6', 'o4-mini')).toBe(
+        'MiniMax-M2.7',
+      );
     });
 
     it('runtime minimax-tp com highspeed: retorna MiniMax-M2.7-highspeed', () => {
-      expect(resolveModel('minimax-tp', 'MiniMax-M2.7-highspeed', 'glm-4.7', 'claude-sonnet-4-6', 'o4-mini')).toBe('MiniMax-M2.7-highspeed');
+      expect(resolveModel('minimax-tp', 'MiniMax-M2.7-highspeed', 'glm-4.7', 'claude-sonnet-4-6', 'o4-mini')).toBe(
+        'MiniMax-M2.7-highspeed',
+      );
     });
 
     it('runtime zai: retorna zaiModel (nao afetado pelo minimax-tp)', () => {
@@ -43,7 +41,9 @@ describe('AgentFormModal save logic - SPEC-006 Sprint 3 minimax-tp', () => {
     });
 
     it('runtime cloud: retorna cloudModel', () => {
-      expect(resolveModel('cloud', 'MiniMax-M2.7', 'glm-4.7', 'claude-sonnet-4-6', 'o4-mini')).toBe('claude-sonnet-4-6');
+      expect(resolveModel('cloud', 'MiniMax-M2.7', 'glm-4.7', 'claude-sonnet-4-6', 'o4-mini')).toBe(
+        'claude-sonnet-4-6',
+      );
     });
 
     it('runtime local: retorna "haiku" independente dos outros campos', () => {

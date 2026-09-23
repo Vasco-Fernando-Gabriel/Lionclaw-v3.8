@@ -1,4 +1,3 @@
-
 import { getRepoGraphTurnContext, type RepoChatContext } from './repo-graph/turn-context';
 
 export function summarizeRepoGraphStats(statsJson: string | null): string | null {
@@ -17,10 +16,7 @@ export function summarizeRepoGraphStats(statsJson: string | null): string | null
 
 export type RepoGraphSectionVariant = 'mcp' | 'codex';
 
-export function buildRepoGraphSection(
-  ctx: RepoChatContext,
-  variant: RepoGraphSectionVariant = 'mcp',
-): string {
+export function buildRepoGraphSection(ctx: RepoChatContext, variant: RepoGraphSectionVariant = 'mcp'): string {
   const staleNote =
     ctx.status === 'stale'
       ? '\nO graph esta STALE (desatualizado em relacao ao worktree): continua consultavel, mas confirme detalhes recentes no arquivo quando precisar de precisao de linha.'
@@ -82,17 +78,18 @@ Voce tem as tools READ-ONLY do MCP repo-graph: repo_graph_status, repo_graph_sea
 Use repo_graph_search/repo_graph_minimal_context ANTES de Glob/Grep/Read em massa neste repositorio. Nao existe tool de build/update do graph.`;
 }
 
-export function getRepoGraphPromptSection(variant: RepoGraphSectionVariant = 'mcp'): string {
-  const ctx = getRepoGraphTurnContext();
+export function getRepoGraphPromptSection(sessionId: string, variant: RepoGraphSectionVariant = 'mcp'): string {
+  const ctx = getRepoGraphTurnContext(sessionId);
   if (!ctx) return '';
   return buildRepoGraphSection(ctx, variant);
 }
 
 export function appendRepoGraphSection(
   prompt: string,
+  sessionId: string,
   variant: RepoGraphSectionVariant = 'mcp',
 ): string {
-  const section = getRepoGraphPromptSection(variant);
+  const section = getRepoGraphPromptSection(sessionId, variant);
   if (!section) return prompt;
   return `${prompt}\n\n${section}`;
 }

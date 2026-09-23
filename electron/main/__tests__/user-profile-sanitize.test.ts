@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import os from 'os';
 import path from 'path';
@@ -35,8 +34,7 @@ import type { PlainPromptInvoker } from '../memory-pipeline/budgeted-input';
 
 const userPath = () => path.join(TEST_TMP_DIR, 'USER.md');
 const backupsDir = () => path.join(TEST_TMP_DIR, 'backups');
-const reportsDir = () =>
-  path.join(TEST_TMP_DIR, 'workspaces', 'lionclaw', 'dreaming-reports');
+const reportsDir = () => path.join(TEST_TMP_DIR, 'workspaces', 'lionclaw', 'dreaming-reports');
 
 const MESSY_USER_MD = [
   '# Sobre o Usuario',
@@ -153,7 +151,7 @@ describe('AC-54 — sucesso, backup e report', () => {
 
     expect(invoker).toHaveBeenCalledTimes(1);
 
-    const backups = fs.readdirSync(backupsDir()).filter(f => f.startsWith('USER-'));
+    const backups = fs.readdirSync(backupsDir()).filter((f) => f.startsWith('USER-'));
     expect(backups).toHaveLength(1);
     expect(fs.readFileSync(path.join(backupsDir(), backups[0]), 'utf-8')).toBe(MESSY_USER_MD);
 
@@ -169,7 +167,7 @@ describe('AC-54 — sucesso, backup e report', () => {
     expect(mockSettings['user_md_sanitized_v1']).toBe('true');
     expect(mockSettings['user_md_sanitize_attempts']).toBe('1');
 
-    const reports = fs.readdirSync(reportsDir()).filter(f => f.includes('user-sanitization-report'));
+    const reports = fs.readdirSync(reportsDir()).filter((f) => f.includes('user-sanitization-report'));
     expect(reports).toHaveLength(1);
     const report = fs.readFileSync(path.join(reportsDir(), reports[0]), 'utf-8');
     expect(report).toContain('## Antes');
@@ -181,13 +179,45 @@ describe('AC-54 — sucesso, backup e report', () => {
     mockSettings['compaction_input_budget_tokens'] = '1';
     const bigSection = (name: string, marker: string) =>
       `## ${name}\n` + Array.from({ length: 38 }, (_, i) => `- ${marker} fato ${i} ${'x'.repeat(80)}`).join('\n');
-    const bigFile = ['# Sobre o Usuario', bigSection('Bloco A', 'aa'), bigSection('Bloco B', 'bb'), bigSection('Bloco C', 'cc')].join('\n');
+    const bigFile = [
+      '# Sobre o Usuario',
+      bigSection('Bloco A', 'aa'),
+      bigSection('Bloco B', 'bb'),
+      bigSection('Bloco C', 'cc'),
+    ].join('\n');
     fs.writeFileSync(userPath(), bigFile, 'utf-8');
 
     const responses = [
-      JSON.stringify({ sections: { identidade: ['Nome: Breno'], perfil_profissional: [], negocios_projetos: [], stack_ferramentas: ['fato do lote A'], preferencias: [], fatos_duraveis: [] } }),
-      JSON.stringify({ sections: { identidade: [], perfil_profissional: [], negocios_projetos: ['fato do lote B'], stack_ferramentas: [], preferencias: [], fatos_duraveis: [] } }),
-      JSON.stringify({ sections: { identidade: [], perfil_profissional: [], negocios_projetos: [], stack_ferramentas: [], preferencias: [], fatos_duraveis: ['fato do lote C'] } }),
+      JSON.stringify({
+        sections: {
+          identidade: ['Nome: Breno'],
+          perfil_profissional: [],
+          negocios_projetos: [],
+          stack_ferramentas: ['fato do lote A'],
+          preferencias: [],
+          fatos_duraveis: [],
+        },
+      }),
+      JSON.stringify({
+        sections: {
+          identidade: [],
+          perfil_profissional: [],
+          negocios_projetos: ['fato do lote B'],
+          stack_ferramentas: [],
+          preferencias: [],
+          fatos_duraveis: [],
+        },
+      }),
+      JSON.stringify({
+        sections: {
+          identidade: [],
+          perfil_profissional: [],
+          negocios_projetos: [],
+          stack_ferramentas: [],
+          preferencias: [],
+          fatos_duraveis: ['fato do lote C'],
+        },
+      }),
     ];
     let call = 0;
     const invoker = makeInvoker(async () => responses[call++]);

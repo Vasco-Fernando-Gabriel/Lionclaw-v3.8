@@ -35,7 +35,9 @@ export function GraphCanvas({ nodes, edges, onNodeClick, activeNodeIds, zoomIn, 
   const prevZoomIn = useRef(zoomIn);
   const prevZoomOut = useRef(zoomOut);
 
-  useEffect(() => { onNodeClickRef.current = onNodeClick; }, [onNodeClick]);
+  useEffect(() => {
+    onNodeClickRef.current = onNodeClick;
+  }, [onNodeClick]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -177,12 +179,20 @@ export function GraphCanvas({ nodes, edges, onNodeClick, activeNodeIds, zoomIn, 
     layout.start();
     const settleMs = Math.min(20000, 3000 + graph.order * 8);
     const stopTimer = window.setTimeout(() => {
-      try { layout.stop(); } catch { /* worker ja morto */ }
+      try {
+        layout.stop();
+      } catch {
+        /* worker ja morto */
+      }
     }, settleMs);
 
     return () => {
       window.clearTimeout(stopTimer);
-      try { layout.kill(); } catch { /* */ }
+      try {
+        layout.kill();
+      } catch {
+        /* */
+      }
       mouseCaptor.removeListener('mousemovebody', onMoveBody);
       mouseCaptor.removeListener('mouseup', onUp);
       mouseCaptor.removeListener('mousedown', onDown);

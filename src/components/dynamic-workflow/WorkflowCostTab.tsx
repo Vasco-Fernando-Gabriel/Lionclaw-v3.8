@@ -11,7 +11,6 @@ import {
   shortNodeId,
 } from './DynamicWorkflowNodeTimeline';
 
-
 export interface CostBucket {
   key: string;
   label: string;
@@ -142,7 +141,6 @@ export function aggregateCostBreakdown(
   };
 }
 
-
 function formatCost(usd: number): string {
   if (!Number.isFinite(usd) || usd <= 0) return '$0.00';
   if (usd < 0.01) return `$${(usd * 100).toFixed(2)}c`;
@@ -171,7 +169,6 @@ function percentOf(value: number, max: number): number {
   return Math.max(2, Math.round((value / max) * 100));
 }
 
-
 export interface WorkflowCostTabProps {
   nodeRuns: CockpitNodeRun[];
   manifest: DynamicWorkflowManifest | null;
@@ -179,20 +176,12 @@ export interface WorkflowCostTabProps {
   totalDurationMs?: number;
 }
 
-export function WorkflowCostTab({
-  nodeRuns,
-  manifest,
-  totalCostUsd,
-  totalDurationMs = 0,
-}: WorkflowCostTabProps) {
+export function WorkflowCostTab({ nodeRuns, manifest, totalCostUsd, totalDurationMs = 0 }: WorkflowCostTabProps) {
   const breakdown = useMemo(() => aggregateCostBreakdown(nodeRuns, manifest), [nodeRuns, manifest]);
 
   if (nodeRuns.length === 0) {
     return (
-      <div
-        className="flex flex-1 items-center justify-center text-[12px] text-zinc-400"
-        data-testid="cost-empty"
-      >
+      <div className="flex flex-1 items-center justify-center text-[12px] text-zinc-400" data-testid="cost-empty">
         Sem metricas de custo por node ainda.
       </div>
     );
@@ -227,16 +216,11 @@ export function WorkflowCostTab({
         />
       </div>
       {totals.unknownCostCount > 0 && (
-        <div
-          className="flex items-center gap-2 text-[11px] text-zinc-400"
-          data-testid="cost-unknown-badge"
-        >
+        <div className="flex items-center gap-2 text-[11px] text-zinc-400" data-testid="cost-unknown-badge">
           <span className="inline-flex h-4 min-w-4 items-center justify-center rounded border border-amber-500/40 bg-amber-500/10 px-1 font-mono text-[10px] font-bold text-amber-300">
             ?
           </span>
-          <span>
-            {totals.unknownCostCount} node(s) com custo desconhecido; o total pode estar subavaliado.
-          </span>
+          <span>{totals.unknownCostCount} node(s) com custo desconhecido; o total pode estar subavaliado.</span>
         </div>
       )}
 
@@ -282,9 +266,7 @@ export function WorkflowCostTab({
               <span className="shrink-0 text-[10px] text-zinc-500">{n.phaseId}</span>
               <span
                 className={`shrink-0 font-mono ${n.costUnknown ? 'text-amber-300' : 'text-zinc-200'}`}
-                title={
-                  n.costUnknown ? 'custo nao confiavel' : n.costEstimated ? 'custo aproximado (piso)' : undefined
-                }
+                title={n.costUnknown ? 'custo nao confiavel' : n.costEstimated ? 'custo aproximado (piso)' : undefined}
               >
                 {formatCostWithConfidence(n.costUsd, n.costUnknown, n.costEstimated, formatCost)}
               </span>
@@ -297,22 +279,10 @@ export function WorkflowCostTab({
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mb-1.5 text-[11px] uppercase tracking-wider text-zinc-400 font-medium">
-      {children}
-    </p>
-  );
+  return <p className="mb-1.5 text-[11px] uppercase tracking-wider text-zinc-400 font-medium">{children}</p>;
 }
 
-function BucketCard({
-  bucket,
-  maxCost,
-  testId,
-}: {
-  bucket: CostBucket;
-  maxCost: number;
-  testId: string;
-}) {
+function BucketCard({ bucket, maxCost, testId }: { bucket: CostBucket; maxCost: number; testId: string }) {
   const pct = percentOf(bucket.costUsd, maxCost);
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2" data-testid={testId}>

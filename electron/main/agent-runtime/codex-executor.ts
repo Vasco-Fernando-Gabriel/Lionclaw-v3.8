@@ -1,21 +1,12 @@
-
 import { createLogger } from '../logger';
 import { calculateCost, MODEL_PRICING } from '../pricing';
-import {
-  getAgent,
-  getCodexWindowsPrepConsent,
-  CODEX_PREP_VERSION_CURRENT,
-} from '../db';
+import { getAgent, getCodexWindowsPrepConsent, CODEX_PREP_VERSION_CURRENT } from '../db';
 import { emitIPC } from '../pipeline-shared/ipc-emitter';
 import { CodexAuthError, CodexUnavailableError } from '../codex-runtime/errors';
 import type { CodexResponse } from '../codex-runtime/types';
 import { resolveCodexSessionForRun } from './codex-session-factory';
 
-import {
-  getCodexSessionSignature,
-  getCodexUsageSemantics,
-  settleCodexBilledUsage,
-} from './codex-session-signature';
+import { getCodexSessionSignature, getCodexUsageSemantics, settleCodexBilledUsage } from './codex-session-signature';
 import {
   countActionableIssues,
   detectCodexWindowsIssues,
@@ -50,10 +41,7 @@ function runPreFlight(req: AgentExecutionRequest): void {
   ) {
     if (actionableCount === 0) {
       sessionPreparedRepos.add(repoRoot);
-      logger.info(
-        { projectId: req.projectId, repoRoot },
-        'codex auto-prep skipped: no actionable issues remain',
-      );
+      logger.info({ projectId: req.projectId, repoRoot }, 'codex auto-prep skipped: no actionable issues remain');
     } else {
       const result = runPrep(repoRoot);
       if (result.applied) {
@@ -64,10 +52,7 @@ function runPreFlight(req: AgentExecutionRequest): void {
           'codex auto-prep applied silently',
         );
       } else {
-        logger.warn(
-          { projectId: req.projectId, repoRoot, reason: result.reason },
-          'codex auto-prep skipped',
-        );
+        logger.warn({ projectId: req.projectId, repoRoot, reason: result.reason }, 'codex auto-prep skipped');
         emitIPC('codex:windows-prep-skipped', {
           projectId: req.projectId,
           repoRoot,
@@ -158,11 +143,8 @@ function appendCodexTerminalGuardrails(systemPrompt: string): string {
   return result;
 }
 
-async function run(
-  req: AgentExecutionRequest,
-  config: AgentQueryConfig,
-): Promise<AgentExecutionResult> {
-  const agent = getAgent(req.agentId);
+async function run(req: AgentExecutionRequest, config: AgentQueryConfig): Promise<AgentExecutionResult> {
+  const agent = req.executionAgent ?? getAgent(req.agentId);
   if (!agent) {
     throw new Error(`Agent ${req.agentId} not found`);
   }
@@ -177,16 +159,13 @@ async function run(
   let isContinuation = session !== null;
 
   const requestedEffort =
-    req.inheritedEffort !== undefined
-      ? req.inheritedEffort.codex
-      : agent.codexConfig.reasoningEffort;
+    req.inheritedEffort !== undefined ? req.inheritedEffort.codex : agent.codexConfig.reasoningEffort;
 
   if (session) {
     const sig = getCodexSessionSignature(session);
     if (sig) {
       const stale =
-        sig.model !== agent.codexConfig.model ||
-        sig.requestedEffort !== (requestedEffort as string | undefined);
+        sig.model !== agent.codexConfig.model || sig.requestedEffort !== (requestedEffort as string | undefined);
       if (stale) {
         logger.warn(
           {
@@ -198,8 +177,7 @@ async function run(
         );
         try {
           session.close();
-        } catch {
-        }
+        } catch {}
         session = null;
         isContinuation = false;
       }
@@ -211,6 +189,13 @@ async function run(
 
     session = await resolveCodexSessionForRun({
       surface: req.onCodexSessionCreated ? 'pipeline' : 'agent-scoped',
+      ...(req.executionAgent
+        ? {
+            disableGlobalMcp: true,
+            swarmFindingsMcpArgs: req.swarmFindingsMcpArgs,
+            swarmFindingsMcpEnv: req.swarmFindingsMcpEnv,
+          }
+        : {}),
       mcpProfile: req.onCodexSessionCreated ? 'pipeline' : 'agent-scoped',
       reasoningEffortOverride: requestedEffort,
       sessionOptions: {
@@ -218,9 +203,11 @@ async function run(
         cwd: req.cwd,
         systemPrompt: appendCodexTerminalGuardrails(config.systemPrompt),
         approvalPolicy: 'never',
-        sandbox: agent.codexConfig.sandbox ?? 'workspace-write',
+        sandbox: req.executionAgent ? 'read-only' : (agent.codexConfig.sandbox ?? 'workspace-write'),
         reasoningEffort: requestedEffort,
-        timeoutMs: 7_200_000,
+        timeoutMs: req.swarmLifecycle?.hardTimeoutMs ?? 7_200_000,
+        externallyManagedWatchdog: Boolean(req.swarmLifecycle),
+        swarmOwnerDirectory: req.swarmOwnerDirectory,
         projectId: req.projectId,
       },
     });
@@ -241,7 +228,6 @@ async function run(
     const response: CodexResponse = isContinuation
       ? await activeSession.reply(req.prompt, callbacks, req.abortController.signal)
       : await activeSession.send(req.prompt, callbacks, req.abortController.signal);
-
 
     if (response.status === 'failed' || response.status === 'timeout') {
       logger.warn(
@@ -265,9 +251,7 @@ async function run(
 
     const usageSemantics = getCodexUsageSemantics(activeSession);
     const billedUsage =
-      usageSemantics === 'thread-cumulative'
-        ? settleCodexBilledUsage(activeSession, response.usage)
-        : response.usage;
+      usageSemantics === 'thread-cumulative' ? settleCodexBilledUsage(activeSession, response.usage) : response.usage;
 
     const costUsd = calculateCost(
       agent.codexConfig.model,
@@ -343,7 +327,10 @@ async function run(
     };
   } finally {
     if (shouldClose) {
-      activeSession.close();
+      if (req.executionAgent) {
+        if (!activeSession.closeConfirmed) throw new Error('Codex Swarm requires confirmed process termination');
+        await activeSession.closeConfirmed();
+      } else activeSession.close();
     }
   }
 }

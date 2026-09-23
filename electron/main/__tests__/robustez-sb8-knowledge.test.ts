@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 
@@ -28,7 +27,10 @@ const { settings, fakeDb, ipcHandlers, tmpHome, runStructuredMemoryLlmMock } = v
       },
       run: (..._args: unknown[]) => ({ changes: 1 }),
     }),
-    transaction: (fn: (...args: unknown[]) => unknown) => (...args: unknown[]) => fn(...args),
+    transaction:
+      (fn: (...args: unknown[]) => unknown) =>
+      (...args: unknown[]) =>
+        fn(...args),
   };
   const ipcHandlers = new Map<string, (...args: unknown[]) => unknown>();
   const tmpBase = process.env['TMPDIR'] || '/tmp';
@@ -113,7 +115,10 @@ afterEach(() => {
 
 describe('SB-8 — generateEmbedding retorna união discriminada (AC-B19)', () => {
   it('AC-B19: 401 do provider vira {ok:false, provider:openai, status:401} (nao null mudo)', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(401, { error: { message: 'invalid api key' } })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(401, { error: { message: 'invalid api key' } })),
+    );
 
     const result = await generateEmbedding('texto');
     expect(result.ok).toBe(false);
@@ -126,7 +131,10 @@ describe('SB-8 — generateEmbedding retorna união discriminada (AC-B19)', () =
   });
 
   it('AC-B19: quota (429) do provider vira falha discriminada com status', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(429, { error: { message: 'quota exceeded' } })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(429, { error: { message: 'quota exceeded' } })),
+    );
 
     const result = await generateEmbedding('texto');
     expect(result.ok).toBe(false);
@@ -138,7 +146,7 @@ describe('SB-8 — generateEmbedding retorna união discriminada (AC-B19)', () =
 
   it('AC-B19: nenhum provider configurado -> provider "none" (distinguivel de falha real)', async () => {
     const { getSecret } = await import('../secrets-vault');
-    vi.mocked(getSecret).mockResolvedValueOnce(null); // sem OPENAI_API_KEY
+    vi.mocked(getSecret).mockResolvedValueOnce(null);
 
     const result = await generateEmbedding('texto');
     expect(result.ok).toBe(false);
@@ -167,7 +175,10 @@ describe('SB-8 — generateEmbedding retorna união discriminada (AC-B19)', () =
 
 describe('SB-8 — busca degradada em hybridKnowledgeSearch (AC-B19)', () => {
   it('AC-B19: provider de embeddings 401 faz a busca reportar degraded:true (nao "nada encontrado")', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(401, { error: { message: 'invalid api key' } })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(401, { error: { message: 'invalid api key' } })),
+    );
 
     const result = await hybridKnowledgeSearch('agent-1', 'qual o status?');
     expect(result.found).toBe(false);
@@ -204,7 +215,7 @@ describe('SB-8 — mgraph:seed honesto (AC-B20)', () => {
   }
 
   it('AC-B20: LLM do seed vazio -> mgraph:seed retorna {error} (nao falso sucesso)', async () => {
-    runStructuredMemoryLlmMock.mockResolvedValue(''); // LLM vazio em todos os lotes
+    runStructuredMemoryLlmMock.mockResolvedValue('');
     const handler = registerAndGetSeedHandler();
 
     const result = (await handler({}, false)) as { error?: string };
@@ -214,7 +225,7 @@ describe('SB-8 — mgraph:seed honesto (AC-B20)', () => {
   });
 
   it('AC-B20: seed com LLM valido retorna {notes, connections} (nao void)', async () => {
-    runStructuredMemoryLlmMock.mockResolvedValue('[]'); // sem operacoes, mas VALIDO
+    runStructuredMemoryLlmMock.mockResolvedValue('[]');
     const handler = registerAndGetSeedHandler();
 
     const result = (await handler({}, false)) as {

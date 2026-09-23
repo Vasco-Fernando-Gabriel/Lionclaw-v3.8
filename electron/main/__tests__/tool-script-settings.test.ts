@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const settingsState = vi.hoisted(() => ({
@@ -16,10 +15,7 @@ vi.mock('../db', () => ({
   },
 }));
 
-import {
-  readToolScriptSettings,
-  isToolScriptSettingEnabled,
-} from '../tool-script/tool-script-settings';
+import { readToolScriptSettings, isToolScriptSettingEnabled } from '../tool-script/tool-script-settings';
 import {
   TOOL_SCRIPT_DEFAULT_TOOLS,
   TOOL_SCRIPT_DEFAULT_TIMEOUT_MS,
@@ -73,10 +69,7 @@ describe('readToolScriptSettings - valores validos honrados', () => {
   });
 
   it('ordem canonica das tools preservada, independente da ordem no setting', () => {
-    settingsState.values.set(
-      'tool_script_tools',
-      JSON.stringify(['mcp_invoke', 'read_file']),
-    );
+    settingsState.values.set('tool_script_tools', JSON.stringify(['mcp_invoke', 'read_file']));
     expect(readToolScriptSettings().enabledTools).toEqual(['read_file', 'mcp_invoke']);
   });
 });
@@ -85,17 +78,12 @@ describe('readToolScriptSettings - valores invalidos caem no default', () => {
   it('tools: JSON quebrado / nao-array / lista vazia / so nomes desconhecidos', () => {
     for (const bad of ['{nao-json', '"string"', '[]', '["tool_inventada"]', '[42]']) {
       settingsState.values.set('tool_script_tools', bad);
-      expect(readToolScriptSettings().enabledTools).toEqual([
-        ...TOOL_SCRIPT_DEFAULT_TOOLS,
-      ]);
+      expect(readToolScriptSettings().enabledTools).toEqual([...TOOL_SCRIPT_DEFAULT_TOOLS]);
     }
   });
 
   it('tools: nomes desconhecidos sao FILTRADOS quando ha conhecidos junto', () => {
-    settingsState.values.set(
-      'tool_script_tools',
-      JSON.stringify(['read_file', 'tool_inventada', 'run_command']),
-    );
+    settingsState.values.set('tool_script_tools', JSON.stringify(['read_file', 'tool_inventada', 'run_command']));
     expect(readToolScriptSettings().enabledTools).toEqual(['read_file', 'run_command']);
   });
 

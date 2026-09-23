@@ -12,18 +12,16 @@ function formatCost(usd: number): string {
 }
 
 export function formatHarnessRoundCost(
-  round: Pick<
-    HarnessRound,
-    'coderCostUsd' | 'evaluatorCostUsd' | 'costStatus' | 'subscriptionEquivalentCost'
-  >,
+  round: Pick<HarnessRound, 'coderCostUsd' | 'evaluatorCostUsd' | 'costStatus' | 'subscriptionEquivalentCost'>,
 ): string {
   const total = round.coderCostUsd + round.evaluatorCostUsd;
   const equivalent = Math.min(total, Math.max(0, round.subscriptionEquivalentCost ?? 0));
-  const known = equivalent <= 0
-    ? formatCost(total)
-    : total - equivalent <= 1e-9
-      ? `~${formatCost(total)}`
-      : `${formatCost(total)} (incl. ~${formatCost(equivalent)})`;
+  const known =
+    equivalent <= 0
+      ? formatCost(total)
+      : total - equivalent <= 1e-9
+        ? `~${formatCost(total)}`
+        : `${formatCost(total)} (incl. ~${formatCost(equivalent)})`;
   if (round.costStatus === 'unknown') {
     return total > 0 ? `${known} + nao estim.` : 'Nao estimado';
   }
@@ -103,8 +101,8 @@ export function RoundHistory({ projectId }: RoundHistoryProps) {
               isPass
                 ? 'bg-green-500/10 border-green-800 text-green-400'
                 : isFail
-                ? 'bg-red-500/10 border-red-900 text-red-400'
-                : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                  ? 'bg-red-500/10 border-red-900 text-red-400'
+                  : 'bg-zinc-800 border-zinc-700 text-zinc-400'
             }`}
           >
             <span className="font-semibold">R{round.roundNumber}</span>
@@ -115,9 +113,7 @@ export function RoundHistory({ projectId }: RoundHistoryProps) {
             {(totalCost > 0 || round.costStatus === 'unknown') && (
               <span className="text-[9px] opacity-70">{formatHarnessRoundCost(round)}</span>
             )}
-            {totalDuration > 0 && (
-              <span className="text-[9px] opacity-70">{formatDuration(totalDuration)}</span>
-            )}
+            {totalDuration > 0 && <span className="text-[9px] opacity-70">{formatDuration(totalDuration)}</span>}
           </div>
         );
       })}

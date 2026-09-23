@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { buildCodexMcpCatalogPrompt } from '../prompt';
 
@@ -9,9 +8,7 @@ describe('buildCodexMcpCatalogPrompt', () => {
   });
 
   it('returns single server entry with description', () => {
-    const result = buildCodexMcpCatalogPrompt([
-      { id: 'google-gmail', description: 'Gmail integration' },
-    ]);
+    const result = buildCodexMcpCatalogPrompt([{ id: 'google-gmail', description: 'Gmail integration' }]);
     expect(result).toMatchInlineSnapshot(`
       "## Available MCP Servers
 
@@ -20,9 +17,7 @@ describe('buildCodexMcpCatalogPrompt', () => {
   });
 
   it('returns single server entry without description', () => {
-    const result = buildCodexMcpCatalogPrompt([
-      { id: 'knowledge-base' },
-    ]);
+    const result = buildCodexMcpCatalogPrompt([{ id: 'knowledge-base' }]);
     expect(result).toMatchInlineSnapshot(`
       "## Available MCP Servers
 
@@ -50,9 +45,7 @@ describe('buildCodexMcpCatalogPrompt', () => {
   });
 
   it('snapshot: 1 server', () => {
-    expect(
-      buildCodexMcpCatalogPrompt([{ id: 'excalidraw', description: 'Diagram tool' }]),
-    ).toMatchSnapshot();
+    expect(buildCodexMcpCatalogPrompt([{ id: 'excalidraw', description: 'Diagram tool' }])).toMatchSnapshot();
   });
 
   it('snapshot: 3 servers', () => {

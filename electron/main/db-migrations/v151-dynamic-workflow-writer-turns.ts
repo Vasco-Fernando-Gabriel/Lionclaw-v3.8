@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const CODE_WRITER_IDS = [
   'dynamic-workflow-coder',
   'dynamic-workflow-coder-codex',
@@ -30,12 +29,8 @@ const NEW_CODE_WRITER_COMMANDS = [
 
 export function applyMigrationV151(db: Database.Database): void {
   const migrate = db.transaction(() => {
-    const updateTurns = db.prepare(
-      'UPDATE agents SET max_turns = ? WHERE id = ? AND max_turns = ?',
-    );
-    const updateCommands = db.prepare(
-      'UPDATE agents SET allowed_commands = ? WHERE id = ? AND allowed_commands = ?',
-    );
+    const updateTurns = db.prepare('UPDATE agents SET max_turns = ? WHERE id = ? AND max_turns = ?');
+    const updateCommands = db.prepare('UPDATE agents SET allowed_commands = ? WHERE id = ? AND allowed_commands = ?');
     const oldCommandsJson = JSON.stringify(OLD_CODE_WRITER_COMMANDS);
     const newCommandsJson = JSON.stringify(NEW_CODE_WRITER_COMMANDS);
     for (const id of CODE_WRITER_IDS) {

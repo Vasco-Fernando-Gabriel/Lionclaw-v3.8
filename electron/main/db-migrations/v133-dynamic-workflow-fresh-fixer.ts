@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const ANCHOR_LINE = '## Regras do manifest';
 
 const NEW_SECTION = `## Fresh fixer: cerebro novo apos nao-progresso persistente (obrigatorio no dev-loop)

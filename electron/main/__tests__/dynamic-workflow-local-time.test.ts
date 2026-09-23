@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { parseUtcTimestamp, formatLocalShort, toLocalShort } from '../dynamic-workflows/local-time';
 import { buildSnapshot, type SnapshotDeps } from '../dynamic-workflows/workflow-snapshot';
@@ -69,7 +68,17 @@ describe('snapshot e digest carregam atLocal (L1.10)', () => {
   const deps: SnapshotDeps = {
     getRun: () => run,
     recentEvents: () => [ev],
-    costAggregate: () => ({ runId: 'run-1', totalCostUsd: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0, totalDurationMs: 0, nodeRunCount: 0, unknownCostNodeRuns: 0 }),
+    costAggregate: () => ({
+      runId: 'run-1',
+      totalCostUsd: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      totalDurationMs: 0,
+      nodeRunCount: 0,
+      unknownCostNodeRuns: 0,
+    }),
     listEventsSince: () => [ev],
   };
 

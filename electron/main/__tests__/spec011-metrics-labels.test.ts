@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -6,23 +5,9 @@ import { join } from 'node:path';
 const MAIN = join(__dirname, '..');
 const CODEX_RUNTIME = join(MAIN, 'codex-runtime');
 
-const LOW_CARDINALITY_AXES = [
-  'surface',
-  'implementation',
-  'mcpProfile',
-  'os',
-  'model',
-  'pipelineType',
-] as const;
+const LOW_CARDINALITY_AXES = ['surface', 'implementation', 'mcpProfile', 'os', 'model', 'pipelineType'] as const;
 
-const HIGH_CARDINALITY_IDS = [
-  'projectId',
-  'phaseNumber',
-  'agentId',
-  'runId',
-  'threadId',
-  'turnId',
-] as const;
+const HIGH_CARDINALITY_IDS = ['projectId', 'phaseNumber', 'agentId', 'runId', 'threadId', 'turnId'] as const;
 
 const METRIC_EMIT_PATTERNS = [
   /recordMetric\s*\(/,
@@ -52,9 +37,7 @@ function codexRuntimeSources(): string[] {
 }
 
 function hasMetricEmission(): boolean {
-  return codexRuntimeSources().some((src) =>
-    METRIC_EMIT_PATTERNS.some((re) => re.test(src)),
-  );
+  return codexRuntimeSources().some((src) => METRIC_EMIT_PATTERNS.some((re) => re.test(src)));
 }
 
 describe('SPEC-011 §11 / SPEC-009 §12: metric-label cardinality guard', () => {

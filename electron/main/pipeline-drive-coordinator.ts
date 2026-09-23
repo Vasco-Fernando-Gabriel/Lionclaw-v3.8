@@ -1,14 +1,20 @@
-
 import path from 'path';
 import { BrowserWindow } from 'electron';
-import type { DriveState, HarnessProject, LiveActivityEvent, StreamChunk } from '../../src/types';
+import type { ChatLaneErrorCode, DriveState, HarnessProject, LiveActivityEvent, StreamChunk } from '../../src/types';
 import {
   getDriveState,
+  getDriveSessionId,
   setDriveState,
   getHarnessProject,
+  getOpenLaneSessionById,
+  findEngagedDriveBySession,
+  isDriveEngaged,
   listHarnessProjects,
   getLatestUserTurnIndex,
 } from './db';
+import { registerDriveRebindRuntimeSync } from './drive-rebind-sync';
+import { isSessionClearing } from './clearing-sessions';
+import { buildDriveStateChangedEvent } from './drive-state-event';
 import {
   pipelineEventBus,
   type PipelinePhaseChangedEvent,
@@ -16,13 +22,10 @@ import {
   type PipelineSprintCompleteEvent,
   type PipelineErrorEvent,
 } from './pipeline-event-bus';
-import {
-  acquireDriveLock,
-  releaseDriveLock,
-  activeDriveProjectId,
-} from './drive-lock';
+import { acquireDriveLock, releaseDriveLock, type AcquireDriveLockResult } from './drive-lock';
+import { laneMessagesWithDb } from './drive-lane-messages';
 import { pushAssistantMessage, pushDrivePaused } from './chat-push';
-import { onDriveTurnUsage, onDriveTurnComplete } from './drive-usage-sink';
+import { onDriveTurnUsage, onDriveTurnComplete, type DriveTurnUsage } from './drive-usage-sink';
 import {
   checkAntiRunaway,
   mintDriveTurnId as mintDriveTurnIdCore,
@@ -32,10 +35,7 @@ import {
 import { recordActivity } from './activity-log';
 import { emitIPC } from './pipeline-shared/ipc-emitter';
 import { submitMessage } from './orchestrator';
-import {
-  createInternalCapabilityLease,
-  type InternalCapabilityCoordinator,
-} from './chat-capability-lease';
+import { createInternalCapabilityLease, type InternalCapabilityCoordinator } from './chat-capability-lease';
 import type { ChatCapabilityName } from './chat-capability-context';
 import { resolvePendingQuestion, getCachedPhaseChanged } from './pipeline-control-core';
 import {
@@ -48,7 +48,6 @@ import { resolveBugPhaseDocument } from './bug-paths';
 import { createLogger } from './logger';
 
 const logger = createLogger('pipeline-drive-coordinator');
-
 
 export const MAX_ORCHESTRATOR_TURNS_PER_PHASE = 15;
 
@@ -68,17 +67,11 @@ export const DRIVE_TICK_INTERVAL_MS = 5 * 60_000;
 
 export const DRIVE_TICK_MAX_IDLE = 3;
 
-
 const CONTROL_GATE_AGENT_IDS: Record<string, string[]> = {
   development: ['prd-validator', 'spec-enricher', 'sprint-validator'],
   feature: ['feat-prd-validator', 'spec-enricher', 'sprint-validator'],
   'development-v2': ['prd-validator', 'pipe2-spec-enricher', 'sprint-validator'],
-  security: [
-    'security-skeptic-security',
-    'security-skeptic-quality',
-    'spec-enricher',
-    'sprint-validator',
-  ],
+  security: ['security-skeptic-security', 'security-skeptic-quality', 'spec-enricher', 'sprint-validator'],
   'architecture-review': [
     'architecture-decision-interviewer',
     'arch-spec-validator',
@@ -118,7 +111,6 @@ export function isHumanGate(pipelineType: string | undefined, phase: number): bo
   return def ? agentIds.includes(def.agentId) : false;
 }
 
-
 function phaseNumberByAgentId(pipelineType: string | undefined, agentId: string): number | null {
   const def = getPhasesForProject({ pipelineType }).find((p) => p.agentId === agentId);
   return def ? def.number : null;
@@ -135,10 +127,7 @@ function resolveBugPlanPath(project: HarnessProject): string | null {
   }
 }
 
-function gateContractLines(
-  pipelineType: string | undefined,
-  gateDocumentPath?: string | null,
-): string[] {
+function gateContractLines(pipelineType: string | undefined, gateDocumentPath?: string | null): string[] {
   const type = pipelineType ?? 'development';
   if (type === 'bug') {
     const consolidationPhase = phaseNumberByAgentId(type, 'bug-solution-consolidator');
@@ -182,11 +171,9 @@ function gateContractLines(
     ];
   }
   return [
-    `CONTRATO DE GATES deste pipeline (${type}): nao ha metadata especial de gate; ` +
-      'pipeline_approve(id) simples.',
+    `CONTRATO DE GATES deste pipeline (${type}): nao ha metadata especial de gate; ` + 'pipeline_approve(id) simples.',
   ];
 }
-
 
 function previewOpenLines(
   project: NonNullable<ReturnType<typeof getHarnessProject>>,
@@ -219,15 +206,10 @@ function previewOpenLines(
   return lines;
 }
 
-
-function operatingContractLines(
-  phaseDef: PhaseDefinition | undefined,
-  specReviewOpen = false,
-): string[] {
+function operatingContractLines(phaseDef: PhaseDefinition | undefined, specReviewOpen = false): string[] {
   const lines: string[] = ['COMO VOCE OPERA:'];
   lines.push(
-    '- Voce opera em turnos REATIVOS. Faca a acao deste turno, reporte no chat se relevante, ' +
-      'e ENCERRE o turno.',
+    '- Voce opera em turnos REATIVOS. Faca a acao deste turno, reporte no chat se relevante, ' + 'e ENCERRE o turno.',
   );
   lines.push(
     '- NUNCA monitore, aguarde, faca polling (ls/ps/tail/sleep, pipeline_inspect repetido) ' +
@@ -277,7 +259,6 @@ function operatingContractLines(
   return lines;
 }
 
-
 type PhaseChangedPayload = PipelinePhaseChangedEvent;
 type StreamPayload = PipelineStreamEvent;
 type SprintCompletePayload = PipelineSprintCompleteEvent;
@@ -301,8 +282,12 @@ interface DriveRuntimeState {
   tickLastSnapshot: string | null;
   pendingTickTurn: boolean;
   designBandAnnounced: boolean;
+  pendingRecoveryPush: string | null;
+  pendingEscalationRecap: string | null;
 }
 
+export type DriveCommandResult =
+  { ok: true; drive: DriveState } | { ok: false; error: string; code?: ChatLaneErrorCode };
 
 export class PipelineDriveCoordinator {
   private readonly states = new Map<string, DriveRuntimeState>();
@@ -365,7 +350,7 @@ export class PipelineDriveCoordinator {
   private onGreetingTimeout(projectId: string, phase: number): void {
     const key = this.greetingKey(projectId, phase);
     const entry = this.pendingGreetings.get(key);
-    if (!entry) return; // ja desarmado pelo done (corrida benigna).
+    if (!entry) return;
     entry.timedOut = true;
     entry.timer = null;
     const rt = this.liveStateOf(projectId);
@@ -406,45 +391,42 @@ export class PipelineDriveCoordinator {
     if (this.started) return;
     this.started = true;
 
+    this.cleanups.push(pipelineEventBus.on('pipeline:phase-changed', (p) => this.onPhaseChanged(p)));
+    this.cleanups.push(pipelineEventBus.on('pipeline:phase-changed', (p) => this.onPipelineCompleted(p)));
+    this.cleanups.push(pipelineEventBus.on('pipeline:stream', (p) => this.onStream(p)));
+    this.cleanups.push(pipelineEventBus.on('pipeline:sprint-complete', (p) => this.onSprintComplete(p)));
+    this.cleanups.push(pipelineEventBus.on('pipeline:error', (p) => this.onError(p)));
+    this.cleanups.push(pipelineEventBus.on('pipeline:human-message', (p) => this.onHumanMessage(p)));
 
-    this.cleanups.push(
-      pipelineEventBus.on('pipeline:phase-changed', (p) => this.onPhaseChanged(p)),
-    );
-    this.cleanups.push(
-      pipelineEventBus.on('pipeline:phase-changed', (p) =>
-        this.onPipelineCompleted(p),
-      ),
-    );
-    this.cleanups.push(
-      pipelineEventBus.on('pipeline:stream', (p) => this.onStream(p)),
-    );
-    this.cleanups.push(
-      pipelineEventBus.on('pipeline:sprint-complete', (p) => this.onSprintComplete(p)),
-    );
-    this.cleanups.push(
-      pipelineEventBus.on('pipeline:error', (p) => this.onError(p)),
-    );
-    this.cleanups.push(
-      pipelineEventBus.on('pipeline:human-message', (p) => this.onHumanMessage(p)),
-    );
+    this.cleanups.push(onDriveTurnUsage((usage) => this.onDriveTurnUsage(usage)));
 
-    this.cleanups.push(
-      onDriveTurnUsage((usage) => this.onDriveTurnUsage(usage)),
-    );
+    this.cleanups.push(onDriveTurnComplete((complete) => this.onDriveTurnComplete(complete)));
 
-    this.cleanups.push(
-      onDriveTurnComplete((complete) => this.onDriveTurnComplete(complete)),
-    );
+    registerDriveRebindRuntimeSync({
+      isTurnInFlight: (projectId) => {
+        const rt = this.states.get(projectId);
+        if (!rt || rt.drive.status !== 'driving') return false;
+        return rt.currentDriveTurnId != null;
+      },
+      onRebound: (projectId, _oldSessionId, newSessionId) => this.applyRuntimeRebind(projectId, newSessionId),
+      onRollback: (projectId, oldSessionId) => this.applyRuntimeRebind(projectId, oldSessionId),
+    });
+    this.cleanups.push(() => registerDriveRebindRuntimeSync(null));
 
     logger.info('PipelineDriveCoordinator started (bus subscribed)');
+  }
+
+  private applyRuntimeRebind(projectId: string, sessionId: string): void {
+    const rt = this.states.get(projectId);
+    if (!rt) return;
+    rt.drive = { ...rt.drive, sessionId };
   }
 
   stop(): void {
     for (const off of this.cleanups) {
       try {
         off();
-      } catch {
-      }
+      } catch {}
     }
     this.cleanups.length = 0;
     for (const rt of this.states.values()) {
@@ -461,33 +443,28 @@ export class PipelineDriveCoordinator {
     this.started = false;
   }
 
-
-  startDrive(
-    projectId: string,
-    sessionId: string,
-    mode: 'semi' | 'full',
-  ): { ok: true; drive: DriveState } | { ok: false; error: string } {
+  startDrive(projectId: string, sessionId: string, mode: 'semi' | 'full'): DriveCommandResult {
     const project = getHarnessProject(projectId);
     if (!project) {
       return { ok: false, error: `pipeline "${projectId}" nao encontrado` };
     }
 
-    const existingRt = this.states.get(projectId);
-    if (
-      existingRt &&
-      existingRt.drive.driver === 'orchestrator' &&
-      existingRt.drive.status === 'driving'
-    ) {
-      return { ok: true, drive: existingRt.drive };
+    if (isDriveEngaged(projectId)) {
+      const ownerSessionId = getDriveSessionId(projectId);
+      if (ownerSessionId === sessionId) {
+        const engaged = this.getDrive(projectId);
+        if (engaged) return { ok: true, drive: engaged };
+      } else {
+        return {
+          ok: false,
+          code: 'drive_owned_by_other_lane',
+          error: laneMessagesWithDb.driveOwnedByOtherLane(projectId, ownerSessionId ?? ''),
+        };
+      }
     }
 
-    const lock = acquireDriveLock(projectId);
-    if (!lock.ok) {
-      return {
-        ok: false,
-        error: `ja existe um drive ativo no projeto "${lock.activeProjectId}". Pare-o (ou Assumir) antes de iniciar outro.`,
-      };
-    }
+    const lock = acquireDriveLock(projectId, sessionId);
+    if (!lock.ok) return this.refuseByLock(projectId, sessionId, lock);
 
     const requiresHumanPhases = resolveRequiresHumanPhases(project.pipelineType);
     const drive = setDriveState(projectId, {
@@ -518,6 +495,8 @@ export class PipelineDriveCoordinator {
       tickLastSnapshot: null,
       pendingTickTurn: false,
       designBandAnnounced: false,
+      pendingRecoveryPush: null,
+      pendingEscalationRecap: null,
     });
 
     logger.info({ projectId, sessionId, mode }, 'startDrive: orchestrator now driving');
@@ -535,6 +514,34 @@ export class PipelineDriveCoordinator {
     return rt ? rt.drive : getDriveState(projectId);
   }
 
+  private refuseByLock(
+    projectId: string,
+    sessionId: string,
+    lock: Extract<AcquireDriveLockResult, { ok: false }>,
+  ): { ok: false; error: string; code: ChatLaneErrorCode } {
+    if (lock.reason === 'lane_busy') {
+      return {
+        ok: false,
+        code: 'lane_busy',
+        error: laneMessagesWithDb.laneBusy(lock.holderProjectId, sessionId),
+      };
+    }
+    if (lock.reason === 'drive_owned_by_other_lane') {
+      return {
+        ok: false,
+        code: 'drive_owned_by_other_lane',
+        error: laneMessagesWithDb.driveOwnedByOtherLane(projectId, lock.sessionId),
+      };
+    }
+    const owner = getDriveSessionId(projectId) ?? '';
+    return {
+      ok: false,
+      code: 'drive_turn_in_flight',
+      error:
+        laneMessagesWithDb.driveOwnedByOtherLane(projectId, owner) +
+        ' Ha um turno de drive em voo: aguarde ele terminar antes de mover o drive.',
+    };
+  }
 
   assumirDrive(projectId: string): { ok: true; drive: DriveState } | { ok: false; error: string } {
     const existing = this.getDrive(projectId);
@@ -549,9 +556,7 @@ export class PipelineDriveCoordinator {
     const rtAssume = this.states.get(projectId);
     if (rtAssume?.tickTimer) clearTimeout(rtAssume.tickTimer);
     this.states.delete(projectId);
-    if (activeDriveProjectId() === projectId) {
-      releaseDriveLock();
-    }
+    releaseDriveLock(projectId);
     logger.info({ projectId }, 'assumirDrive: human took over (drive ended)');
     this.notifyDriveChanged(projectId, drive);
     return { ok: true, drive };
@@ -565,17 +570,16 @@ export class PipelineDriveCoordinator {
     const drive = setDriveState(projectId, { status: 'stopped' });
     this.states.delete(projectId);
     this.clearGreetingGatesForProject(projectId);
-    if (activeDriveProjectId() === projectId) {
-      releaseDriveLock();
-    }
+    releaseDriveLock(projectId);
     logger.info({ projectId, reason }, 'stopDrive: drive stopped');
     this.notifyDriveChanged(projectId, drive);
   }
 
   resumeDrive(
     projectId: string,
+    sessionId?: string,
     opts?: { humanInterject?: string; fromHuman?: boolean },
-  ): { ok: true; drive: DriveState } | { ok: false; error: string } {
+  ): DriveCommandResult {
     const persisted = getDriveState(projectId);
     if (!persisted) {
       return { ok: false, error: `nenhum drive em "${projectId}"` };
@@ -588,15 +592,39 @@ export class PipelineDriveCoordinator {
       return { ok: false, error: `pipeline "${projectId}" nao encontrado` };
     }
 
-    const lock = acquireDriveLock(projectId);
-    if (!lock.ok) {
+    const laneSessionId = sessionId ?? getDriveSessionId(projectId);
+    if (!laneSessionId || !getOpenLaneSessionById(laneSessionId)) {
       return {
         ok: false,
-        error: `ja existe um drive ativo no projeto "${lock.activeProjectId}".`,
+        code: 'session_not_active',
+        error:
+          'session_not_active: a lane que dirigia este pipeline nao esta mais aberta. ' +
+          'Escolha a lane que vai retomar o drive pelo Pipeline.',
       };
     }
 
+    if (persisted.status === 'driving') {
+      const ownerSessionId = getDriveSessionId(projectId);
+      if (ownerSessionId !== laneSessionId) {
+        return {
+          ok: false,
+          code: 'drive_owned_by_other_lane',
+          error: laneMessagesWithDb.driveOwnedByOtherLane(projectId, ownerSessionId ?? ''),
+        };
+      }
+      const driving = this.getDrive(projectId);
+      if (driving) return { ok: true, drive: driving };
+    }
+
+    const inFlight = this.states.get(projectId);
+    const lock = acquireDriveLock(projectId, laneSessionId, {
+      allowRebind: true,
+      turnInFlight: inFlight?.currentDriveTurnId != null,
+    });
+    if (!lock.ok) return this.refuseByLock(projectId, laneSessionId, lock);
+
     const drive = setDriveState(projectId, {
+      sessionId: laneSessionId,
       status: 'driving',
       handoff: 'none',
       startedAt: new Date().toISOString(),
@@ -621,8 +649,13 @@ export class PipelineDriveCoordinator {
       tickLastSnapshot: null,
       pendingTickTurn: false,
       designBandAnnounced: prev?.designBandAnnounced ?? false,
+      pendingRecoveryPush: prev?.pendingRecoveryPush ?? null,
+      pendingEscalationRecap: persisted.lastEscalation ?? prev?.pendingEscalationRecap ?? null,
     });
-    logger.info({ projectId }, 'resumeDrive: orchestrator drive resumed');
+    logger.info(
+      { projectId, hasEscalationRecap: persisted.lastEscalation != null },
+      'resumeDrive: orchestrator drive resumed',
+    );
     this.notifyDriveChanged(projectId, drive);
     this.armTick(projectId);
     this.evaluateNow(projectId);
@@ -649,37 +682,36 @@ export class PipelineDriveCoordinator {
 
   tryInterceptChatForDrive(sessionId: string, content: string): boolean {
     if (!sessionId) return false;
-    for (const project of listHarnessProjects()) {
-      const persisted = getDriveState(project.id);
-      if (
-        persisted &&
-        persisted.driver === 'orchestrator' &&
-        persisted.status === 'awaiting-human' &&
-        persisted.sessionId === sessionId
-      ) {
-        const text = content.slice(0, 2000);
-        const resumed = this.resumeDrive(project.id, { humanInterject: text, fromHuman: true });
-        if (!resumed.ok) {
-          logger.warn(
-            { projectId: project.id, error: resumed.error },
-            'tryInterceptChatForDrive: resumeDrive falhou',
-          );
-          return false;
-        }
-        logger.info(
-          { projectId: project.id, sessionId },
-          'tryInterceptChatForDrive: drive retomado pela mensagem no chat principal',
-        );
-        return true;
-      }
+    let project: HarnessProject | null = null;
+    try {
+      project = findEngagedDriveBySession(sessionId);
+    } catch (err) {
+      logger.error(
+        { sessionId, error: (err as Error).message },
+        'tryInterceptChatForDrive: sessao com mais de um drive engajado; nenhum intercept',
+      );
+      return false;
     }
-    return false;
+    if (!project) return false;
+    if (getDriveState(project.id)?.status !== 'awaiting-human') return false;
+
+    const text = content.slice(0, 2000);
+    const resumed = this.resumeDrive(project.id, undefined, {
+      humanInterject: text,
+      fromHuman: true,
+    });
+    if (!resumed.ok) {
+      logger.warn({ projectId: project.id, error: resumed.error }, 'tryInterceptChatForDrive: resumeDrive falhou');
+      return false;
+    }
+    logger.info(
+      { projectId: project.id, sessionId },
+      'tryInterceptChatForDrive: drive retomado pela mensagem no chat principal',
+    );
+    return true;
   }
 
-  setMode(
-    projectId: string,
-    mode: 'semi' | 'full',
-  ): { ok: true; drive: DriveState } | { ok: false; error: string } {
+  setMode(projectId: string, mode: 'semi' | 'full'): { ok: true; drive: DriveState } | { ok: false; error: string } {
     const existing = this.getDrive(projectId);
     if (!existing) {
       return { ok: false, error: `nenhum drive em "${projectId}"` };
@@ -692,30 +724,19 @@ export class PipelineDriveCoordinator {
     return { ok: true, drive };
   }
 
-
   recoverInterruptedDrives(): void {
+    const engaged = listHarnessProjects()
+      .filter((project) => isDriveEngaged(project.id))
+      .sort((a, b) => {
+        const left = a.config?.drive?.startedAt ?? '';
+        const right = b.config?.drive?.startedAt ?? '';
+        return left < right ? -1 : left > right ? 1 : 0;
+      });
+
     let recovered = 0;
-    for (const project of listHarnessProjects()) {
-      const drive = project.config?.drive;
-      if (!drive || drive.driver !== 'orchestrator' || drive.status !== 'driving') {
-        continue;
-      }
+    for (const project of engaged) {
       try {
-        const recoveredDrive = setDriveState(project.id, { status: 'awaiting-human' });
-        recovered++;
-        this.notifyDriveChanged(project.id, recoveredDrive);
-        if (drive.sessionId) {
-          pushAssistantMessage(
-            drive.sessionId,
-            `O drive do projeto "${project.name}" foi interrompido pelo restart do app. ` +
-              `Quer que eu retome a conducao ou prefere parar? (responda "retomar" ou "parar")`,
-            { getWindow: this.getWindow },
-          );
-        }
-        logger.info(
-          { projectId: project.id, sessionId: drive.sessionId },
-          'recoverInterruptedDrives: drive marcado awaiting-human (nao retoma sozinho)',
-        );
+        if (this.recoverOneDrive(project)) recovered++;
       } catch (err) {
         logger.error(
           { projectId: project.id, error: (err as Error).message },
@@ -728,6 +749,123 @@ export class PipelineDriveCoordinator {
     }
   }
 
+  private recoverOneDrive(project: HarnessProject): boolean {
+    const projectId = project.id;
+    const persisted = getDriveState(projectId);
+    if (!persisted) return false;
+
+    if (project.status === 'done' || project.status === 'aborted') {
+      logger.info(
+        { projectId, status: project.status },
+        'recoverInterruptedDrives: pipeline terminal no banco; drive encerrado sem readquirir lock',
+      );
+      this.stopDrive(projectId, `terminal-on-boot:${project.status}`);
+      return false;
+    }
+
+    const sessionId = getDriveSessionId(projectId);
+    const lane = sessionId ? getOpenLaneSessionById(sessionId) : null;
+    if (!sessionId || !lane) {
+      const drive = setDriveState(projectId, {
+        status: 'stopped',
+        stoppedReason: 'lane_gone_on_boot',
+      });
+      this.notifyDriveChanged(projectId, drive);
+      logger.warn(
+        { projectId, sessionId },
+        'recoverInterruptedDrives: lane do drive nao esta mais aberta; drive parado (lane_gone_on_boot)',
+      );
+      return false;
+    }
+
+    const lock = acquireDriveLock(projectId, sessionId);
+    if (!lock.ok) {
+      const drive = setDriveState(projectId, {
+        status: 'stopped',
+        stoppedReason: 'lane_conflict_on_boot',
+      });
+      this.notifyDriveChanged(projectId, drive);
+      pushAssistantMessage(
+        sessionId,
+        `O drive do projeto "${project.name}" nao pode ser recuperado: esta lane ja esta ` +
+          'dirigindo outro pipeline. Parei este drive; escolha outra lane pela pagina Pipeline ' +
+          'para retoma-lo.',
+        { getWindow: this.getWindow },
+      );
+      logger.warn(
+        { projectId, sessionId, reason: lock.reason },
+        'recoverInterruptedDrives: conflito de lane no boot; drive parado (lane_conflict_on_boot)',
+      );
+      return false;
+    }
+
+    const wasDriving = persisted.status === 'driving';
+    const drive = wasDriving ? setDriveState(projectId, { status: 'awaiting-human' }) : persisted;
+
+    this.states.set(projectId, {
+      drive,
+      lastTurnPhase: null,
+      turnsThisPhase: 0,
+      turnsThisDrive: 0,
+      tokensSpent: 0,
+      reacting: false,
+      activityPhaseStart: new Map(),
+      handoffTemporaryPhase: drive.handoff === 'temporary' ? (project.pipelineCurrentPhase ?? null) : null,
+      pendingHumanInterject: null,
+      turnInFlightSince: null,
+      currentDriveTurnId: null,
+      pendingFollowup: null,
+      tickTimer: null,
+      tickIdleCount: 0,
+      tickLastSnapshot: null,
+      pendingTickTurn: false,
+      designBandAnnounced: false,
+      pendingRecoveryPush: null,
+      pendingEscalationRecap: null,
+    });
+
+    if (wasDriving) {
+      this.notifyDriveChanged(projectId, drive);
+      const message =
+        `O drive do projeto "${project.name}" foi interrompido pelo restart do app. ` +
+        'Responda por aqui para eu retomar a conducao, ou pare/assuma pelo botao na pagina Pipeline.';
+      if (isSessionClearing(sessionId)) {
+        this.states.get(projectId)!.pendingRecoveryPush = message;
+        logger.info(
+          { projectId, sessionId },
+          'recoverInterruptedDrives: lane em Clear; push de recuperacao ADIADO ate o fim do Clear',
+        );
+      } else {
+        pushAssistantMessage(sessionId, message, { getWindow: this.getWindow });
+      }
+    }
+
+    logger.info(
+      { projectId, sessionId, wasDriving, handoff: drive.handoff },
+      'recoverInterruptedDrives: lock e runtime readquiridos em awaiting-human (nao retoma sozinho)',
+    );
+    return true;
+  }
+
+  onLaneClearFinished(sessionId: string): void {
+    if (!sessionId) return;
+    for (const [projectId, rt] of this.states) {
+      if (getDriveSessionId(projectId) !== sessionId) continue;
+
+      if (rt.pendingRecoveryPush) {
+        const message = rt.pendingRecoveryPush;
+        rt.pendingRecoveryPush = null;
+        pushAssistantMessage(sessionId, message, { getWindow: this.getWindow });
+        logger.info(
+          { projectId, sessionId },
+          'onLaneClearFinished: push de recuperacao adiado entregue na lane resultante',
+        );
+      }
+
+      this.armTick(projectId);
+      this.evaluateNow(projectId);
+    }
+  }
 
   private liveStateOf(projectId: string): DriveRuntimeState | null {
     const rt = this.states.get(projectId);
@@ -773,12 +911,9 @@ export class PipelineDriveCoordinator {
       );
     }
 
-    const result = this.resumeDrive(projectId);
+    const result = this.resumeDrive(projectId, undefined);
     if (!result.ok) {
-      logger.warn(
-        { projectId, error: result.error },
-        'maybeAutoResumeFromTemporaryHandoff: resumeDrive falhou',
-      );
+      logger.warn({ projectId, error: result.error }, 'maybeAutoResumeFromTemporaryHandoff: resumeDrive falhou');
       return false;
     }
     return true;
@@ -804,7 +939,7 @@ export class PipelineDriveCoordinator {
     }
 
     if (this.maybeAutoResumeFromTemporaryHandoff(payload)) {
-      return; // resumeDrive ja re-avaliou o estado atual.
+      return;
     }
 
     const rt = this.liveStateOf(projectId);
@@ -923,27 +1058,31 @@ export class PipelineDriveCoordinator {
     this.enforceBudget(projectId, rt);
   }
 
-  private onDriveTurnUsage(usage: { sessionId: string; tokens: number }): void {
+  private onDriveTurnUsage(usage: DriveTurnUsage): void {
     if (usage.tokens <= 0) return;
-    for (const [projectId, rt] of this.states) {
-      if (rt.drive.sessionId !== usage.sessionId) continue;
-      rt.tokensSpent += usage.tokens;
-      const inFlightTurnId = rt.currentDriveTurnId;
-      const isTickUsage = inFlightTurnId !== null && this.tickTurnIds.has(inFlightTurnId);
-      if (!isTickUsage) {
-        this.resetTickIdle(projectId);
-      }
-      this.releaseTurnGate(projectId, rt, 'usage');
-      if (rt.drive.driver === 'orchestrator' && rt.drive.status === 'driving') {
-        this.enforceBudget(projectId, rt);
-      }
-      return; // 1 drive ativo por vez; sessionId e unico.
+    const projectId = usage.projectId;
+    const rt = this.states.get(projectId);
+    if (!rt) {
+      logger.debug(
+        { projectId, sessionId: usage.sessionId },
+        'onDriveTurnUsage: projeto fora do runtime do coordenador; usage descartado',
+      );
+      return;
+    }
+    rt.tokensSpent += usage.tokens;
+    const inFlightTurnId = rt.currentDriveTurnId;
+    const isTickUsage = inFlightTurnId !== null && this.tickTurnIds.has(inFlightTurnId);
+    if (!isTickUsage) {
+      this.resetTickIdle(projectId);
+    }
+    this.releaseTurnGate(projectId, rt, 'usage');
+    if (rt.drive.driver === 'orchestrator' && rt.drive.status === 'driving') {
+      this.enforceBudget(projectId, rt);
     }
   }
 
   private onDriveTurnComplete(complete: { projectId: string; driveTurnId?: string }): void {
-    const isTickTurn =
-      complete.driveTurnId !== undefined && this.tickTurnIds.has(complete.driveTurnId);
+    const isTickTurn = complete.driveTurnId !== undefined && this.tickTurnIds.has(complete.driveTurnId);
     if (isTickTurn) {
       this.tickTurnIds.delete(complete.driveTurnId!);
     }
@@ -1001,7 +1140,6 @@ export class PipelineDriveCoordinator {
     );
   }
 
-
   private onHumanMessage(payload: { projectId: string; content: string }): void {
     const { projectId, content } = payload;
     const persisted = getDriveState(projectId);
@@ -1009,12 +1147,12 @@ export class PipelineDriveCoordinator {
     if (persisted.status === 'stopped') return;
     const text = content.slice(0, 2000);
     if (persisted.status === 'awaiting-human') {
-      const resumed = this.resumeDrive(projectId, { humanInterject: text, fromHuman: true });
+      const resumed = this.resumeDrive(projectId, undefined, {
+        humanInterject: text,
+        fromHuman: true,
+      });
       if (!resumed.ok) {
-        logger.warn(
-          { projectId, error: resumed.error },
-          'onHumanMessage: resume pos-interject falhou',
-        );
+        logger.warn({ projectId, error: resumed.error }, 'onHumanMessage: resume pos-interject falhou');
       } else {
         logger.info({ projectId }, 'onHumanMessage: drive retomado pela resposta direta na fase');
       }
@@ -1028,13 +1166,11 @@ export class PipelineDriveCoordinator {
     }
   }
 
-
   private evaluateNow(projectId: string): void {
     const rt = this.liveStateOf(projectId);
     if (!rt) return;
     const project = getHarnessProject(projectId);
-    const phase =
-      project?.pipelineCurrentPhase ?? project?.pipelineStartPhase ?? rt.lastTurnPhase ?? 1;
+    const phase = project?.pipelineCurrentPhase ?? project?.pipelineStartPhase ?? rt.lastTurnPhase ?? 1;
     if (phase !== rt.lastTurnPhase) {
       rt.turnsThisPhase = 0;
       rt.lastTurnPhase = phase;
@@ -1049,8 +1185,7 @@ export class PipelineDriveCoordinator {
     const project = getHarnessProject(projectId);
     if (!project) return;
 
-    const dbPhase =
-      project.pipelineCurrentPhase ?? project.pipelineStartPhase ?? rt.lastTurnPhase ?? null;
+    const dbPhase = project.pipelineCurrentPhase ?? project.pipelineStartPhase ?? rt.lastTurnPhase ?? null;
     if (dbPhase === null) return;
 
     if (this.isTerminalStatus(project.status)) return;
@@ -1089,11 +1224,7 @@ export class PipelineDriveCoordinator {
     this.evaluate(projectId, rt, { phase: dbPhase, status: 'reconcile-db' });
   }
 
-  private evaluate(
-    projectId: string,
-    rt: DriveRuntimeState,
-    ctx: { phase: number | null; status: string },
-  ): void {
+  private evaluate(projectId: string, rt: DriveRuntimeState, ctx: { phase: number | null; status: string }): void {
     if (rt.reacting) return;
 
     const breach = checkAntiRunaway(
@@ -1190,6 +1321,17 @@ export class PipelineDriveCoordinator {
       return;
     }
 
+    if (isSessionClearing(sessionId)) {
+      if (rt.tickTimer) clearTimeout(rt.tickTimer);
+      rt.tickTimer = null;
+      rt.pendingTickTurn = true;
+      logger.info(
+        { projectId, phase, sessionId },
+        'fireOrchestratorTurn: lane em Clear - turno de drive NAO enfileirado nem contado; tick desarmado',
+      );
+      return;
+    }
+
     const inFlightAction = decideOneInFlight({
       turnInFlightSince: rt.turnInFlightSince,
       now: Date.now(),
@@ -1199,10 +1341,7 @@ export class PipelineDriveCoordinator {
     if (inFlightAction === 'coalesce') {
       if (rt.pendingTickTurn) {
         rt.pendingTickTurn = false;
-        logger.info(
-          { projectId, phase },
-          'fireOrchestratorTurn: tick com turno em voo - PULA (sem pendingFollowup)',
-        );
+        logger.info({ projectId, phase }, 'fireOrchestratorTurn: tick com turno em voo - PULA (sem pendingFollowup)');
         return;
       }
       const reason = `phase=${phase}`;
@@ -1228,6 +1367,7 @@ export class PipelineDriveCoordinator {
     rt.lastTurnPhase = phase;
 
     let prompt: string;
+    let consumedEscalationRecap: string | null = null;
     if (isTickTurn) {
       prompt = this.buildTickPrompt(project, phase, rt.drive.mode);
     } else {
@@ -1241,6 +1381,8 @@ export class PipelineDriveCoordinator {
         cachedForPrompt?.status === 'awaiting-spec-review';
       const humanInterject = rt.pendingHumanInterject;
       rt.pendingHumanInterject = null;
+      consumedEscalationRecap = rt.pendingEscalationRecap;
+      rt.pendingEscalationRecap = null;
       prompt = this.buildSeededPrompt({
         project,
         phase,
@@ -1250,6 +1392,7 @@ export class PipelineDriveCoordinator {
         humanGate,
         specReviewOpen,
         humanInterject,
+        escalationRecap: consumedEscalationRecap,
       });
     }
 
@@ -1282,11 +1425,19 @@ export class PipelineDriveCoordinator {
       rt.drive.startedAt,
     );
 
+    if (consumedEscalationRecap) {
+      const cleared = setDriveState(projectId, { lastEscalation: undefined });
+      rt.drive = cleared;
+      logger.info(
+        { projectId },
+        'fireOrchestratorTurn: pergunta escalada pendente re-injetada no prompt e limpa do banco',
+      );
+    }
+
     setTimeout(() => {
       rt.reacting = false;
     }, 0);
   }
-
 
   runOrchestratorTurn(
     sessionId: string,
@@ -1316,7 +1467,6 @@ export class PipelineDriveCoordinator {
     );
   }
 
-
   buildSeededPrompt(args: {
     project: NonNullable<ReturnType<typeof getHarnessProject>>;
     phase: number;
@@ -1326,6 +1476,7 @@ export class PipelineDriveCoordinator {
     humanGate: boolean;
     specReviewOpen?: boolean;
     humanInterject?: string | null;
+    escalationRecap?: string | null;
   }): string {
     const {
       project,
@@ -1336,10 +1487,9 @@ export class PipelineDriveCoordinator {
       humanGate,
       specReviewOpen,
       humanInterject,
+      escalationRecap,
     } = args;
-    const phaseDef = getPhasesForProject({ pipelineType: project.pipelineType }).find(
-      (p) => p.number === phase,
-    );
+    const phaseDef = getPhasesForProject({ pipelineType: project.pipelineType }).find((p) => p.number === phase);
     const phaseName = phaseDef?.name ?? `Fase ${phase}`;
 
     const lines: string[] = [];
@@ -1366,6 +1516,14 @@ export class PipelineDriveCoordinator {
       }
       lines.push(pendingText);
       lines.push('"""');
+    }
+    if (escalationRecap) {
+      lines.push('');
+      lines.push(`Pergunta escalada pendente (antes da pausa): ${escalationRecap}`);
+      lines.push(
+        'Este e o gate em que voce parou quando cedeu ao humano. Retome dali: nao recomece ' +
+          'a fase do zero e nao repita a escalacao.',
+      );
     }
     if (humanInterject) {
       lines.push('');
@@ -1470,7 +1628,6 @@ export class PipelineDriveCoordinator {
     return lines.join('\n');
   }
 
-
   private escalate(
     projectId: string,
     rt: DriveRuntimeState,
@@ -1482,7 +1639,7 @@ export class PipelineDriveCoordinator {
       pushAssistantMessage(sessionId, message, { getWindow: this.getWindow });
       pushDrivePaused(sessionId, { getWindow: this.getWindow });
     }
-    this.notifyTelegramHandoff(message);
+    this.notifyTelegramHandoff(message, sessionId);
     const reason = opts?.reason ?? 'unspecified';
     if (opts?.stop) {
       logger.info({ projectId, reason }, 'escalate: drive stopped (anti-runaway)');
@@ -1491,7 +1648,10 @@ export class PipelineDriveCoordinator {
     }
     if (rt.tickTimer) clearTimeout(rt.tickTimer);
     rt.tickTimer = null;
-    const drive = setDriveState(projectId, { status: 'awaiting-human' });
+    const drive = setDriveState(projectId, {
+      status: 'awaiting-human',
+      lastEscalation: message,
+    });
     rt.drive = drive;
     rt.reacting = false;
     logger.info({ projectId, reason }, 'escalate: drive awaiting-human');
@@ -1509,15 +1669,15 @@ export class PipelineDriveCoordinator {
     if (sessionId) {
       pushAssistantMessage(sessionId, message, { getWindow: this.getWindow });
     }
-    this.notifyTelegramHandoff(message);
+    this.notifyTelegramHandoff(message, sessionId);
     logger.info({ projectId }, 'announceDesignBand: design band announced (once)');
   }
 
   private handoffTemporary(projectId: string, rt: DriveRuntimeState, phase: number): void {
     const project = getHarnessProject(projectId);
     const phaseName =
-      getPhasesForProject({ pipelineType: project?.pipelineType }).find((p) => p.number === phase)
-        ?.name ?? `Fase ${phase}`;
+      getPhasesForProject({ pipelineType: project?.pipelineType }).find((p) => p.number === phase)?.name ??
+      `Fase ${phase}`;
     const sessionId = rt.drive.sessionId;
     if (sessionId) {
       pushAssistantMessage(
@@ -1541,19 +1701,16 @@ export class PipelineDriveCoordinator {
     this.notifyDriveChanged(projectId, drive);
   }
 
-  private handleTerminal(
-    projectId: string,
-    rt: DriveRuntimeState,
-    status: string,
-    payload: PhaseChangedPayload,
-  ): void {
+  private handleTerminal(projectId: string, rt: DriveRuntimeState, status: string, payload: PhaseChangedPayload): void {
     const sessionId = rt.drive.sessionId;
+    let failedQuestion: string | null = null;
     if (sessionId) {
       const project = getHarnessProject(projectId);
       const name = project?.name ?? projectId;
       let msg: string;
       if (status === 'failed') {
         msg = `O pipeline "${name}" falhou${payload.phase != null ? ` na fase ${payload.phase}` : ''}. Quer que eu investigue ou prefere assumir?`;
+        failedQuestion = msg;
       } else if (status === 'aborted') {
         msg = `O pipeline "${name}" foi abortado. O drive encerrou.`;
       } else {
@@ -1574,7 +1731,10 @@ export class PipelineDriveCoordinator {
       if (rt.tickTimer) clearTimeout(rt.tickTimer);
       rt.tickTimer = null;
       if (sessionId) pushDrivePaused(sessionId, { getWindow: this.getWindow });
-      const drive = setDriveState(projectId, { status: 'awaiting-human' });
+      const drive = setDriveState(projectId, {
+        status: 'awaiting-human',
+        ...(failedQuestion ? { lastEscalation: failedQuestion } : {}),
+      });
       rt.drive = drive;
       rt.reacting = false;
       this.notifyDriveChanged(projectId, drive);
@@ -1592,10 +1752,10 @@ export class PipelineDriveCoordinator {
     if (this.completionAnnounced.has(projectId)) return;
 
     const persisted = getDriveState(projectId);
-    if (!persisted || persisted.driver !== 'orchestrator' || !persisted.sessionId) {
+    const sessionId = getDriveSessionId(projectId);
+    if (!persisted || persisted.driver !== 'orchestrator' || !sessionId) {
       return;
     }
-    const sessionId = persisted.sessionId;
 
     this.completionAnnounced.add(projectId);
 
@@ -1621,6 +1781,7 @@ export class PipelineDriveCoordinator {
       isNoBug
         ? `O pipeline "${name}" foi encerrado sem correcao (nao ha bug).`
         : `O pipeline "${name}" concluiu. A entrega esta pronta.`,
+      sessionId,
     );
 
     const driveTurnId = mintDriveTurnIdCore(projectId, this.globalTurnSeq);
@@ -1628,14 +1789,8 @@ export class PipelineDriveCoordinator {
     this.runOrchestratorTurn(sessionId, prompt, projectId, 0, driveTurnId);
   }
 
-
   private isTerminalStatus(status: string): boolean {
-    return (
-      status === 'done' ||
-      status === 'aborted' ||
-      status === 'pipeline-completed' ||
-      status === 'failed'
-    );
+    return status === 'done' || status === 'aborted' || status === 'pipeline-completed' || status === 'failed';
   }
 
   private isConversationPhase(projectId: string, phase: number): boolean {
@@ -1644,16 +1799,13 @@ export class PipelineDriveCoordinator {
     return conversationPhasesOf(type).has(phase);
   }
 
-
   private pipelineActivityId(projectId: string, phase: number): string {
     return `pipeline:${projectId}:phase:${phase}`;
   }
 
   private pipelinePhaseLabel(pipelineType: string | undefined, phase: number, phaseName?: string): string {
     const name =
-      phaseName ??
-      getPhasesForProject({ pipelineType }).find((p) => p.number === phase)?.name ??
-      `Fase ${phase}`;
+      phaseName ?? getPhasesForProject({ pipelineType }).find((p) => p.number === phase)?.name ?? `Fase ${phase}`;
     return `Fase ${phase} - ${name}`;
   }
 
@@ -1677,11 +1829,7 @@ export class PipelineDriveCoordinator {
     }
   }
 
-  private recordPipelineBlockStart(
-    rt: DriveRuntimeState,
-    payload: PhaseChangedPayload,
-    status: string,
-  ): void {
+  private recordPipelineBlockStart(rt: DriveRuntimeState, payload: PhaseChangedPayload, status: string): void {
     if (status !== 'started' && status !== 'loop-ready') return;
     const phase = typeof payload.phase === 'number' ? payload.phase : null;
     if (phase === null) return;
@@ -1709,18 +1857,13 @@ export class PipelineDriveCoordinator {
     status: NonNullable<LiveActivityEvent['status']>,
   ): void {
     const startedAt = rt.activityPhaseStart.get(phase);
-    if (!startedAt) return; // sem start correspondente -> nada a fechar
+    if (!startedAt) return;
     rt.activityPhaseStart.delete(phase);
 
     const project = getHarnessProject(projectId);
     const endedAt = new Date().toISOString();
     const durationMs = Math.max(0, Date.parse(endedAt) - Date.parse(startedAt));
-    const summary =
-      status === 'done'
-        ? 'fase concluida'
-        : status === 'error'
-          ? 'fase falhou'
-          : 'fase interrompida';
+    const summary = status === 'done' ? 'fase concluida' : status === 'error' ? 'fase falhou' : 'fase interrompida';
 
     this.emitPipelineActivity(rt, {
       id: this.pipelineActivityId(projectId, phase),
@@ -1738,26 +1881,16 @@ export class PipelineDriveCoordinator {
   private isOpenDesignStudioPhase(projectId: string, phase: number): boolean {
     const project = getHarnessProject(projectId);
     if (project?.pipelineType !== 'development-v2') return false;
-    const def = getPhasesForProject({ pipelineType: project.pipelineType }).find(
-      (p) => p.number === phase,
-    );
+    const def = getPhasesForProject({ pipelineType: project.pipelineType }).find((p) => p.number === phase);
     return def?.agentId === 'open-design-studio';
   }
 
-  private static readonly SPEC_LOOP_BUILDER_AGENT_IDS = new Set<string>([
-    'spec-builder',
-    'pipe2-spec-builder',
-  ]);
+  private static readonly SPEC_LOOP_BUILDER_AGENT_IDS = new Set<string>(['spec-builder', 'pipe2-spec-builder']);
 
   private isSpecLoopPhase(projectId: string, phase: number): boolean {
     const project = getHarnessProject(projectId);
-    const def = getPhasesForProject({ pipelineType: project?.pipelineType }).find(
-      (p) => p.number === phase,
-    );
-    return (
-      def !== undefined &&
-      PipelineDriveCoordinator.SPEC_LOOP_BUILDER_AGENT_IDS.has(def.agentId)
-    );
+    const def = getPhasesForProject({ pipelineType: project?.pipelineType }).find((p) => p.number === phase);
+    return def !== undefined && PipelineDriveCoordinator.SPEC_LOOP_BUILDER_AGENT_IDS.has(def.agentId);
   }
 
   private isSpecLoopActive(projectId: string, phase: number, status: string): boolean {
@@ -1766,12 +1899,9 @@ export class PipelineDriveCoordinator {
 
   private isLoopPhase(projectId: string, phase: number): boolean {
     const project = getHarnessProject(projectId);
-    const def = getPhasesForProject({ pipelineType: project?.pipelineType }).find(
-      (p) => p.number === phase,
-    );
+    const def = getPhasesForProject({ pipelineType: project?.pipelineType }).find((p) => p.number === phase);
     return def?.type === 'loop';
   }
-
 
   private armTick(projectId: string): void {
     const rt = this.states.get(projectId);
@@ -1806,8 +1936,7 @@ export class PipelineDriveCoordinator {
   private computeIdleSnapshot(projectId: string): string {
     const project = getHarnessProject(projectId);
     if (!project) return 'no-project';
-    const dbPhase =
-      project.pipelineCurrentPhase ?? project.pipelineStartPhase ?? null;
+    const dbPhase = project.pipelineCurrentPhase ?? project.pipelineStartPhase ?? null;
     const cached = getCachedPhaseChanged(projectId);
     const gateOpen =
       cached !== null &&
@@ -1832,8 +1961,7 @@ export class PipelineDriveCoordinator {
       return;
     }
 
-    const phase =
-      project.pipelineCurrentPhase ?? project.pipelineStartPhase ?? rt.lastTurnPhase ?? null;
+    const phase = project.pipelineCurrentPhase ?? project.pipelineStartPhase ?? rt.lastTurnPhase ?? null;
 
     if (phase !== null && this.isOpenDesignStudioPhase(projectId, phase)) {
       logger.info({ projectId, phase }, 'onTick: fase OD (faixa silenciosa), no-op total; re-armando');
@@ -1841,10 +1969,7 @@ export class PipelineDriveCoordinator {
       return;
     }
 
-    if (
-      rt.turnInFlightSince !== null &&
-      Date.now() - rt.turnInFlightSince < TURN_INFLIGHT_TIMEOUT_MS
-    ) {
+    if (rt.turnInFlightSince !== null && Date.now() - rt.turnInFlightSince < TURN_INFLIGHT_TIMEOUT_MS) {
       logger.info({ projectId, phase }, 'onTick: turno em voo, tick pula (one-in-flight); re-armando');
       this.rearmTick(projectId);
       return;
@@ -1897,9 +2022,7 @@ export class PipelineDriveCoordinator {
     phase: number,
     mode: 'semi' | 'full',
   ): string {
-    const phaseDef = getPhasesForProject({ pipelineType: project.pipelineType }).find(
-      (p) => p.number === phase,
-    );
+    const phaseDef = getPhasesForProject({ pipelineType: project.pipelineType }).find((p) => p.number === phase);
     const phaseName = phaseDef?.name ?? `Fase ${phase}`;
     const lines: string[] = [];
     lines.push(
@@ -1937,23 +2060,19 @@ export class PipelineDriveCoordinator {
 
   private notifyDriveChanged(projectId: string, drive: DriveState | null): void {
     try {
-      emitIPC('drive:state-changed', { projectId, drive });
+      emitIPC('drive:state-changed', buildDriveStateChangedEvent(projectId, drive));
     } catch (err) {
-      logger.warn(
-        { projectId, error: (err as Error).message },
-        'notifyDriveChanged falhou (drive nao afetado)',
-      );
+      logger.warn({ projectId, error: (err as Error).message }, 'notifyDriveChanged falhou (drive nao afetado)');
     }
   }
 
-  private notifyTelegramHandoff(text: string): void {
+  private notifyTelegramHandoff(text: string, sessionId?: string): void {
+    const badge = sessionId ? (getOpenLaneSessionById(sessionId)?.laneBadge ?? null) : null;
+    const message = badge !== null ? `[Lane ${badge}] ${text}` : text;
     void import('./telegram-bridge')
-      .then((mod) => mod.notifyDriveHandoff(text))
+      .then((mod) => mod.notifyDriveHandoff(message))
       .catch((err) => {
-        logger.warn(
-          { error: (err as Error).message },
-          'notifyTelegramHandoff falhou (drive nao afetado)',
-        );
+        logger.warn({ error: (err as Error).message }, 'notifyTelegramHandoff falhou (drive nao afetado)');
       });
   }
 
@@ -1961,8 +2080,7 @@ export class PipelineDriveCoordinator {
     try {
       const win = this.getWindow();
       if (win) return win;
-    } catch {
-    }
+    } catch {}
     const wins = BrowserWindow.getAllWindows();
     return wins.length > 0 ? wins[0] : null;
   }
@@ -1990,12 +2108,9 @@ export class PipelineDriveCoordinator {
   }
 }
 
-
 let _coordinator: PipelineDriveCoordinator | null = null;
 
-export function initPipelineDriveCoordinator(
-  getWindow: () => BrowserWindow | null,
-): PipelineDriveCoordinator {
+export function initPipelineDriveCoordinator(getWindow: () => BrowserWindow | null): PipelineDriveCoordinator {
   if (_coordinator) return _coordinator;
   _coordinator = new PipelineDriveCoordinator(getWindow);
   _coordinator.start();
@@ -2009,9 +2124,7 @@ export function getPipelineDriveCoordinator(): PipelineDriveCoordinator | null {
 
 export function _resetPipelineDriveCoordinatorForTesting(): void {
   if (process.env['NODE_ENV'] !== 'test' && !process.env['VITEST']) {
-    throw new Error(
-      '_resetPipelineDriveCoordinatorForTesting can only be called in test environment',
-    );
+    throw new Error('_resetPipelineDriveCoordinatorForTesting can only be called in test environment');
   }
   if (_coordinator) _coordinator.stop();
   _coordinator = null;

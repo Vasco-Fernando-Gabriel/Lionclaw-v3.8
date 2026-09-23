@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -80,8 +79,6 @@ describe('cadeia extraArgs no factory (buildRunOptions -> CodexRunOptions)', () 
 describe('falha fechada do driver oficial', () => {
   it('falha do driver com extras propaga sem fallback', async () => {
     official.failNextCreate.value = true;
-    await expect(resolveCodexSessionForRun(args({ extraArgs: EXTRAS }))).rejects.toThrow(
-      'spawn falhou (teste)',
-    );
+    await expect(resolveCodexSessionForRun(args({ extraArgs: EXTRAS }))).rejects.toThrow('spawn falhou (teste)');
   });
 });

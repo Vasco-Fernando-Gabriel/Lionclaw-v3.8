@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
@@ -108,7 +107,6 @@ vi.mock('../secrets-vault', () => ({
 
 import { runCompaction } from '../memory-pipeline';
 
-
 const VALID_SUMMARY = {
   executive_summary: 'resumo executivo do ciclo',
   decisions: [],
@@ -166,11 +164,10 @@ beforeEach(() => {
   h.saveDreamingReportMock.mockResolvedValue(undefined);
 });
 
-
 describe('runCompaction estendido (SPEC 5.4 item 3)', () => {
   it('retorna { executiveSummary } (aditivo; callers antigos ignoram)', async () => {
     const result = await runCompaction(new Date(), new Date(), 'sess-1');
-    expect(result).toEqual({ executiveSummary: 'resumo executivo do ciclo' });
+    expect(result).toEqual({ executiveSummary: 'resumo executivo do ciclo', warnings: [] });
   });
 
   it('sem mensagens retorna undefined (comportamento atual preservado)', async () => {
@@ -209,29 +206,25 @@ describe('runCompaction estendido (SPEC 5.4 item 3)', () => {
   });
 });
 
-
 describe('skipDailySummary (SPEC 5.4 item 3 / AC-72)', () => {
   it('true: daily_summaries NAO e escrito; compaction_log continua', async () => {
     await runCompaction(new Date(), new Date(), 'sess-1', { skipDailySummary: true });
-    expect(h.dbRuns.some(r => r.sql.includes('daily_summaries'))).toBe(false);
-    expect(h.dbRuns.some(r => r.sql.includes('compaction_log'))).toBe(true);
+    expect(h.dbRuns.some((r) => r.sql.includes('daily_summaries'))).toBe(false);
+    expect(h.dbRuns.some((r) => r.sql.includes('compaction_log'))).toBe(true);
   });
 
   it('ausente/false: daily_summaries e escrito (fluxo do desktop intacto)', async () => {
     await runCompaction(new Date(), new Date(), 'sess-1');
-    const daily = h.dbRuns.filter(r => r.sql.includes('daily_summaries'));
+    const daily = h.dbRuns.filter((r) => r.sql.includes('daily_summaries'));
     expect(daily).toHaveLength(1);
     expect(daily[0].args[1]).toBe('resumo executivo do ciclo');
   });
 });
 
-
 describe('guarda de resposta vazia do summarizer (SPEC 5.6 / AC-18)', () => {
   it('resposta whitespace lanca o erro TIPADO e aborta o ciclo (nada pos-summarize)', async () => {
     h.runSubscriptionMock.mockResolvedValue({ text: '   ', actualModelLabel: 'x' });
-    await expect(
-      runCompaction(new Date(), new Date(), 'sess-1'),
-    ).rejects.toThrow('Resposta vazia do provider');
+    await expect(runCompaction(new Date(), new Date(), 'sess-1')).rejects.toThrow('Resposta vazia do provider');
     expect(h.runDreamingGateMock).not.toHaveBeenCalled();
     expect(h.setLastGateRunAtMock).not.toHaveBeenCalled();
     expect(h.dbRuns).toHaveLength(0);
@@ -240,34 +233,36 @@ describe('guarda de resposta vazia do summarizer (SPEC 5.6 / AC-18)', () => {
   it('summarizeWithSubscription: resposta vazia lanca o MESMO erro tipado', async () => {
     h.runSubscriptionMock.mockResolvedValue({ text: '', actualModelLabel: 'x' });
 
-    await expect(
-      runCompaction(new Date(), new Date(), 'sess-1'),
-    ).rejects.toThrow('Resposta vazia do provider');
+    await expect(runCompaction(new Date(), new Date(), 'sess-1')).rejects.toThrow('Resposta vazia do provider');
     expect(h.runDreamingGateMock).not.toHaveBeenCalled();
   });
 });
 
-
 describe('taxonomia de falha: so load + summarize abortam (SPEC 5.4 item 4)', () => {
-  it('dreaming gate lancando NAO aborta: o ciclo conclui com executiveSummary', async () => {
+  it('dreaming gate lancando ABORTA com COMPACT-MEMORY-FAILED (D3 passo 2): nada posterior roda', async () => {
     h.runDreamingGateMock.mockRejectedValue(new Error('gate quebrou'));
-    const result = await runCompaction(new Date(), new Date(), 'sess-1');
-    expect(result).toEqual({ executiveSummary: 'resumo executivo do ciclo' });
-    expect(h.dbRuns.some(r => r.sql.includes('daily_summaries'))).toBe(true);
-    expect(h.dbRuns.some(r => r.sql.includes('compaction_log'))).toBe(true);
+    await expect(runCompaction(new Date(), new Date(), 'sess-1')).rejects.toMatchObject({
+      code: 'COMPACT-MEMORY-FAILED',
+      message: expect.stringContaining('gate quebrou'),
+    });
+    expect(h.dbRuns.some((r) => r.sql.includes('daily_summaries'))).toBe(false);
+    expect(h.dbRuns.some((r) => r.sql.includes('compaction_log'))).toBe(false);
   });
 
-  it('saveDreamingReport lancando NAO aborta', async () => {
+  it('saveDreamingReport lancando NAO aborta (vira warning step report)', async () => {
     h.saveDreamingReportMock.mockRejectedValue(new Error('report quebrou'));
     const result = await runCompaction(new Date(), new Date(), 'sess-1');
-    expect(result).toEqual({ executiveSummary: 'resumo executivo do ciclo' });
+    expect(result).toEqual({
+      executiveSummary: 'resumo executivo do ciclo',
+      warnings: [{ step: 'report', detail: 'report quebrou' }],
+    });
   });
 
   it('escrita do daily_summaries lancando NAO aborta (compaction_log e archive seguem)', async () => {
     h.failDailyInsert.value = true;
     const result = await runCompaction(new Date(), new Date(), 'sess-1');
-    expect(result).toEqual({ executiveSummary: 'resumo executivo do ciclo' });
-    expect(h.dbRuns.some(r => r.sql.includes('compaction_log'))).toBe(true);
+    expect(result).toEqual({ executiveSummary: 'resumo executivo do ciclo', warnings: [] });
+    expect(h.dbRuns.some((r) => r.sql.includes('compaction_log'))).toBe(true);
   });
 
   it('falha do summarizer (nao-vazia: erro de rede) ABORTA o ciclo inteiro', async () => {

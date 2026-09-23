@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 
 import { CLAUDE_MODELS, CLAUDE_DEFAULT_MODEL } from '../../../src/constants/claude-models';
@@ -11,7 +10,6 @@ import type { AgentExecutionRequest, AgentPermissionProfile } from '../agent-run
 import type { AgentQueryConfig } from '../agent-config-resolver';
 
 const OPUS_5 = 'claude-opus-5';
-
 
 function makeReq(
   permission: AgentPermissionProfile = PERM_BYPASS_NO_GUARD,
@@ -54,7 +52,6 @@ function buildOpts(
   );
 }
 
-
 describe('Opus 5 — catalogo', () => {
   it('esta em CLAUDE_MODELS com displayName "Claude Opus 5"', () => {
     const opus5 = CLAUDE_MODELS.find((m) => m.id === OPUS_5);
@@ -62,17 +59,17 @@ describe('Opus 5 — catalogo', () => {
     expect(opus5?.displayName).toBe('Claude Opus 5');
   });
 
-  it('e o CLAUDE_DEFAULT_MODEL (orquestrador/agente principal)', () => {
-    expect(CLAUDE_DEFAULT_MODEL).toBe(OPUS_5);
+  it('deixou de ser o CLAUDE_DEFAULT_MODEL (o default e o Opus 5.5; migration V157 promove quem estava nele)', () => {
+    expect(CLAUDE_DEFAULT_MODEL).toBe('claude-opus-5-5');
+    expect(CLAUDE_DEFAULT_MODEL).not.toBe(OPUS_5);
   });
 
-  it('vem logo depois do Fable 5.1, antes do Opus 4.8', () => {
+  it('vem logo depois do Opus 5.5, antes do Opus 4.8', () => {
     const ids = CLAUDE_MODELS.map((m) => m.id);
     expect(ids.indexOf(OPUS_5)).toBeGreaterThan(ids.indexOf('claude-fable-5-1'));
     expect(ids.indexOf(OPUS_5)).toBeLessThan(ids.indexOf('claude-opus-4-8'));
   });
 });
-
 
 describe('Opus 5 — pricing', () => {
   it('tem entrada EXPLICITA em MODEL_PRICING (nao depende do fallback keyword)', () => {
@@ -100,13 +97,11 @@ describe('Opus 5 — pricing', () => {
   });
 });
 
-
 describe('Opus 5 — janela de contexto', () => {
   it('resolve 1M (sem a entrada explicita cairia em 200k pelo fallback keyword)', () => {
     expect(getContextWindow(OPUS_5)).toBe(1_000_000);
   });
 });
-
 
 describe('Opus 5 — display', () => {
   it('formatModelLabel -> "Opus 5"', () => {
@@ -122,12 +117,9 @@ describe('Opus 5 — display', () => {
   });
 });
 
-
 describe('Opus 5 — guard de thinking (evita 400 da API)', () => {
   it('thinking ENABLED + thinkingBudget -> envia { type: enabled } SEM budgetTokens', () => {
-    const opts = buildOpts(
-      makeConfig({ thinking: 'enabled', thinkingBudget: 16000 } as Partial<AgentQueryConfig>),
-    );
+    const opts = buildOpts(makeConfig({ thinking: 'enabled', thinkingBudget: 16000 } as Partial<AgentQueryConfig>));
     expect(opts.thinking).toEqual({ type: 'enabled' });
   });
 
@@ -137,32 +129,25 @@ describe('Opus 5 — guard de thinking (evita 400 da API)', () => {
   });
 
   it('thinking DISABLED + effort max -> OMITE a chave thinking (adaptive default)', () => {
-    const opts = buildOpts(
-      makeConfig({ thinking: 'disabled', effort: 'max' } as Partial<AgentQueryConfig>),
-    );
+    const opts = buildOpts(makeConfig({ thinking: 'disabled', effort: 'max' } as Partial<AgentQueryConfig>));
     expect('thinking' in opts).toBe(false);
     expect(opts.effort).toBe('max');
   });
 
   it('thinking DISABLED + effort high -> { type: disabled } (permitido ate high)', () => {
-    const opts = buildOpts(
-      makeConfig({ thinking: 'disabled', effort: 'high' } as Partial<AgentQueryConfig>),
-    );
+    const opts = buildOpts(makeConfig({ thinking: 'disabled', effort: 'high' } as Partial<AgentQueryConfig>));
     expect(opts.thinking).toEqual({ type: 'disabled' });
   });
 
   it('thinking DISABLED + effort low -> { type: disabled }', () => {
-    const opts = buildOpts(
-      makeConfig({ thinking: 'disabled', effort: 'low' } as Partial<AgentQueryConfig>),
-    );
+    const opts = buildOpts(makeConfig({ thinking: 'disabled', effort: 'low' } as Partial<AgentQueryConfig>));
     expect(opts.thinking).toEqual({ type: 'disabled' });
   });
 
   it('effort HERDADO do chat como max tambem suprime o disabled', () => {
-    const opts = buildOpts(
-      makeConfig({ thinking: 'disabled', effort: 'low' } as Partial<AgentQueryConfig>),
-      { inheritedEffort: { claude: 'max', codex: 'max' } } as Partial<AgentExecutionRequest>,
-    );
+    const opts = buildOpts(makeConfig({ thinking: 'disabled', effort: 'low' } as Partial<AgentQueryConfig>), {
+      inheritedEffort: { claude: 'max', codex: 'max' },
+    } as Partial<AgentExecutionRequest>);
     expect('thinking' in opts).toBe(false);
     expect(opts.effort).toBe('max');
   });

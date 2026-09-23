@@ -1,7 +1,5 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ChatFeatureToggles } from '../../../../src/types';
-
 
 vi.mock('../../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
@@ -18,19 +16,16 @@ const MOCK_SERVERS = [
 vi.mock('../../db', () => ({
   getAllMCPServers: () => MOCK_SERVERS,
   getPermissionBypass: () => false,
-  getSetting: vi.fn((key: string) => key === 'mcp_prompt_mode' ? 'full' : undefined),
+  getSetting: vi.fn((key: string) => (key === 'mcp_prompt_mode' ? 'full' : undefined)),
 }));
 
 vi.mock('../../paths', () => ({
   getAgentCwd: () => '/tmp/codex-wiring',
 }));
 
-const buildSystemPromptMock = vi.fn(
-  (_agentId?: string, _opts?: Record<string, unknown>) => 'LION-PROMPT',
-);
+const buildSystemPromptMock = vi.fn((_agentId?: string, _opts?: Record<string, unknown>) => 'LION-PROMPT');
 vi.mock('../../prompt-builder', () => ({
-  buildSystemPrompt: (...a: unknown[]) =>
-    buildSystemPromptMock(...(a as [string?, Record<string, unknown>?])),
+  buildSystemPrompt: (...a: unknown[]) => buildSystemPromptMock(...(a as [string?, Record<string, unknown>?])),
   loadGeneratedAgentContext: () => 'PERSONA',
 }));
 
@@ -40,14 +35,11 @@ vi.mock('../../prompt-builder-repo-graph', () => ({
 
 const capturedRuns: Array<{ sessionOptions: { systemPrompt: string } }> = [];
 vi.mock('../../agent-runtime/codex-session-factory', () => ({
-  resolveCodexSessionForRun: vi.fn(
-    async (args: { sessionOptions: { systemPrompt: string } }) => {
-      capturedRuns.push(args);
-      return {};
-    },
-  ),
+  resolveCodexSessionForRun: vi.fn(async (args: { sessionOptions: { systemPrompt: string } }) => {
+    capturedRuns.push(args);
+    return {};
+  }),
 }));
-
 
 import {
   CODEX_SDK_SYSTEM_PROMPT_V2,
@@ -83,7 +75,6 @@ beforeEach(() => {
   capturedRuns.length = 0;
 });
 
-
 describe('S5c codex: buildCodexSdkSystemPromptV2 (bloco Driving Pipelines condicional)', () => {
   it('sem capabilities -> retorna a PROPRIA constante V2 (mesma referencia = byte-identico)', () => {
     expect(buildCodexSdkSystemPromptV2(undefined)).toBe(CODEX_SDK_SYSTEM_PROMPT_V2);
@@ -112,7 +103,6 @@ describe('S5c codex: buildCodexSdkSystemPromptV2 (bloco Driving Pipelines condic
     expect(prompt.includes('—')).toBe(false);
   });
 });
-
 
 describe('buildCodexSdkSystemPromptV3 (bloco Driving Pipelines condicional)', () => {
   it('sem capabilities -> retorna a PROPRIA constante V3 (mesma referencia = byte-identico)', () => {
@@ -165,7 +155,6 @@ describe('buildCodexSdkSystemPromptV4 (regra auto qualificada; versao de produca
   });
 });
 
-
 describe('S5c codex: createChatCodexSession threada capabilities (prompt + catalogo)', () => {
   it('sem capabilities -> systemPrompt BYTE-IDENTICO a formula legada (V6 + persona + lion + catalogo integral)', async () => {
     const systemPrompt = await createSession(undefined);
@@ -173,14 +162,9 @@ describe('S5c codex: createChatCodexSession threada capabilities (prompt + catal
     const legacyCatalog = buildCodexMcpCatalogPrompt(
       MOCK_SERVERS.filter((s) => s.isActive).map((s) => ({ id: s.id, description: s.description })),
     );
-    expect(systemPrompt).toEqual(
-      [CODEX_SDK_SYSTEM_PROMPT_V6, 'PERSONA', 'LION-PROMPT', legacyCatalog].join('\n\n'),
-    );
+    expect(systemPrompt).toEqual([CODEX_SDK_SYSTEM_PROMPT_V6, 'PERSONA', 'LION-PROMPT', legacyCatalog].join('\n\n'));
     const withoutBugBlock = CODEX_SDK_SYSTEM_PROMPT_V6.split('\n')
-      .filter(
-        (line) =>
-          !line.startsWith('- Bug Pipe (') && !line.startsWith('- Phase 3 of the bug pipeline'),
-      )
+      .filter((line) => !line.startsWith('- Bug Pipe (') && !line.startsWith('- Phase 3 of the bug pipeline'))
       .join('\n');
     expect(withoutBugBlock).toEqual(CODEX_SDK_SYSTEM_PROMPT_V4);
     const promptOpts = buildSystemPromptMock.mock.calls[0][1] as Record<string, unknown>;

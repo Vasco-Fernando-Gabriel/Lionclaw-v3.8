@@ -1,11 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Loader2,
-  RefreshCw,
-  X,
-} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, X } from 'lucide-react';
 import { isAgentSyncIpcError } from '@/types';
 import type {
   AgentSyncBlockedResponse,
@@ -13,7 +7,19 @@ import type {
   AgentSyncSuccessResponse,
   HarnessProjectStatus,
   OrchestratorSelectionSnapshot,
+  SessionOrchestrator,
 } from '@/types';
+import { useOrchestratorPickerStore } from '@/stores/orchestrator-picker-store';
+import { ProviderModelPicker } from '@/components/chat/composer/ProviderModelPicker';
+import { EffortPill } from '@/components/chat/composer/EffortPill';
+import {
+  buildRuntimePickerCatalog,
+  defaultOrchestratorFromSettings,
+  findPickerModel,
+  selectionForEffort,
+  selectionForModel,
+  type PickerModel,
+} from '@/components/chat/composer/model-picker.logic';
 
 interface SyncAgentsModalProps {
   open: boolean;
@@ -35,16 +41,11 @@ type ConfirmState =
   | { kind: 'blocked'; data: AgentSyncBlockedResponse }
   | { kind: 'error'; message: string };
 
-type SnackbarState =
-  | { kind: 'hidden' }
-  | { kind: 'success'; updated: number; skipped: number; failed: number };
+type SnackbarState = { kind: 'hidden' } | { kind: 'success'; updated: number; skipped: number; failed: number };
 
 type Scope = 'all' | 'filtered';
 
-
-function translateBlockedReason(
-  reason: AgentSyncBlockedResponse['reason'],
-): string {
+function translateBlockedReason(reason: AgentSyncBlockedResponse['reason']): string {
   switch (reason) {
     case 'pipeline-running':
       return 'Ha projetos com pipelines em execucao, pausados ou aguardando revisao.';
@@ -75,7 +76,7 @@ function translateHarnessStatus(status: HarnessProjectStatus): string {
 }
 
 function formatOrchestrator(snap: OrchestratorSelectionSnapshot): string {
-  return `${snap.runtime} / ${snap.provider} / ${snap.model}`;
+  return `${snap.runtime} / ${snap.provider} / ${snap.model}${snap.effort ? ` / effort ${snap.effort}` : ''}`;
 }
 
 function formatRuntimeLabel(runtime: string | undefined): string {
@@ -90,19 +91,19 @@ function formatModelLabel(model: string | undefined): string {
 const SAMPLE_LIMIT = 5;
 const WARNING_SAMPLE_LIMIT = 3;
 
-export function SyncAgentsModal({
-  open,
-  onClose,
-  filteredAgentIds,
-  totalAgents,
-  onComplete,
-}: SyncAgentsModalProps) {
+export function SyncAgentsModal({ open, onClose, filteredAgentIds, totalAgents, onComplete }: SyncAgentsModalProps) {
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'loading' });
   const [confirmState, setConfirmState] = useState<ConfirmState>({
     kind: 'idle',
   });
   const [snackbar, setSnackbar] = useState<SnackbarState>({ kind: 'hidden' });
   const [scope, setScope] = useState<Scope>('all');
+  const [selection, setSelection] = useState<SessionOrchestrator | null>(null);
+  const pickerEntries = useOrchestratorPickerStore((s) => s.entries);
+  const pickerPhase = useOrchestratorPickerStore((s) => s.phase);
+  const pickerError = useOrchestratorPickerStore((s) => s.error);
+  const loadPickerStatuses = useOrchestratorPickerStore((s) => s.load);
+  const refreshPickerStatuses = useOrchestratorPickerStore((s) => s.refresh);
 
   useEffect(() => {
     if (!open) return;
@@ -110,13 +111,28 @@ export function SyncAgentsModal({
     setConfirmState({ kind: 'idle' });
     setSnackbar({ kind: 'hidden' });
     setScope('all');
-  }, [open]);
+    setSelection(null);
+    let cancelled = false;
+    void loadPickerStatuses();
+    window.lionclaw.settings
+      .get()
+      .then((settings) => {
+        if (cancelled) return;
+        setSelection(defaultOrchestratorFromSettings(settings));
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setLoadState({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, loadPickerStatuses]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !selection) return;
 
-    const agentIdsForPreview =
-      scope === 'filtered' ? filteredAgentIds : undefined;
+    const agentIdsForPreview = scope === 'filtered' ? filteredAgentIds : undefined;
     if (scope === 'filtered' && (!agentIdsForPreview || agentIdsForPreview.length === 0)) {
       return;
     }
@@ -129,6 +145,7 @@ export function SyncAgentsModal({
         const response = await window.lionclaw.agents.syncToOrchestrator({
           dryRun: true,
           agentIds: agentIdsForPreview,
+          selection,
         });
 
         if (cancelled) return;
@@ -154,10 +171,21 @@ export function SyncAgentsModal({
     return () => {
       cancelled = true;
     };
-  }, [open, scope, filteredAgentIds]);
+  }, [open, scope, filteredAgentIds, selection]);
+
+  const selectedModel = useMemo(
+    () => findPickerModel(buildRuntimePickerCatalog(pickerEntries).models, selection),
+    [pickerEntries, selection],
+  );
+  const handleModelSelect = useCallback((model: PickerModel) => {
+    setSelection((current) => selectionForModel(current, model));
+  }, []);
+  const handleEffortChange = useCallback((effort: string) => {
+    setSelection((current) => (current ? selectionForEffort(current, effort) : current));
+  }, []);
 
   const handleConfirm = useCallback(async () => {
-    if (loadState.kind !== 'ready') return;
+    if (loadState.kind !== 'ready' || !selection) return;
 
     const agentIdsToSync = scope === 'filtered' ? filteredAgentIds : undefined;
     setConfirmState({ kind: 'in-flight' });
@@ -167,6 +195,7 @@ export function SyncAgentsModal({
         agentIds: agentIdsToSync,
         dryRun: false,
         mode: 'manual-button',
+        selection,
       });
 
       if (isAgentSyncIpcError(response)) {
@@ -194,9 +223,41 @@ export function SyncAgentsModal({
       const message = err instanceof Error ? err.message : String(err);
       setConfirmState({ kind: 'error', message });
     }
-  }, [loadState, scope, filteredAgentIds, onComplete, onClose]);
+  }, [loadState, scope, filteredAgentIds, selection, onComplete, onClose]);
 
   if (!open) return null;
+
+  const selectionPanel = (
+    <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4" data-testid="sync-selection-panel">
+      <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">
+        Orquestrador da sincronizacao
+      </h3>
+      <div className="flex flex-wrap items-center gap-2">
+        <ProviderModelPicker
+          selection={selection}
+          entries={pickerEntries}
+          phase={pickerPhase}
+          error={pickerError}
+          align="left"
+          disabled={confirmState.kind === 'in-flight'}
+          onOpen={loadPickerStatuses}
+          onRefresh={refreshPickerStatuses}
+          onSelect={handleModelSelect}
+        />
+        <EffortPill
+          effort={selection?.effort}
+          options={selectedModel?.reasoningOptions ?? []}
+          defaultReasoning={selectedModel?.defaultReasoning ?? null}
+          contextWindow={selectedModel?.contextWindow}
+          disabled={confirmState.kind === 'in-flight'}
+          onChange={handleEffortChange}
+        />
+      </div>
+      <p className="text-[10px] text-zinc-600 mt-2">
+        Pre-selecionado com o Orquestrador padrao. Nenhuma lane e consultada.
+      </p>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 bg-zinc-950/80 backdrop-blur-sm flex items-center justify-center z-50">
@@ -208,12 +269,8 @@ export function SyncAgentsModal({
               <RefreshCw size={18} className="text-amber-500" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-amber-500">
-                {renderHeaderTitle(loadState, confirmState)}
-              </h2>
-              <p className="text-xs text-zinc-500 mt-0.5">
-                {renderHeaderSubtitle(loadState, confirmState)}
-              </p>
+              <h2 className="text-base font-semibold text-amber-500">{renderHeaderTitle(loadState, confirmState)}</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">{renderHeaderSubtitle(loadState, confirmState)}</p>
             </div>
           </div>
           <button
@@ -226,7 +283,8 @@ export function SyncAgentsModal({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {selectionPanel}
           {/* Loading */}
           {loadState.kind === 'loading' && (
             <div className="flex items-center justify-center py-12 gap-2 text-sm text-zinc-400">
@@ -236,14 +294,10 @@ export function SyncAgentsModal({
           )}
 
           {/* Error (IPC error) */}
-          {loadState.kind === 'error' && (
-            <ErrorPanel message={loadState.message} />
-          )}
+          {loadState.kind === 'error' && <ErrorPanel message={loadState.message} />}
 
           {/* Blocked from dryRun */}
-          {loadState.kind === 'blocked' && (
-            <BlockedPanel response={loadState.data} />
-          )}
+          {loadState.kind === 'blocked' && <BlockedPanel response={loadState.data} />}
 
           {/* Race condition: blocked at confirm time */}
           {loadState.kind === 'ready' && confirmState.kind === 'blocked' && (
@@ -251,23 +305,19 @@ export function SyncAgentsModal({
           )}
 
           {/* Confirm error */}
-          {loadState.kind === 'ready' && confirmState.kind === 'error' && (
-            <ErrorPanel message={confirmState.message} />
-          )}
+          {loadState.kind === 'ready' && confirmState.kind === 'error' && <ErrorPanel message={confirmState.message} />}
 
           {/* Ready: preview + controls */}
-          {loadState.kind === 'ready' &&
-            (confirmState.kind === 'idle' ||
-              confirmState.kind === 'in-flight') && (
-              <ReadyPanel
-                data={loadState.data}
-                scope={scope}
-                onScopeChange={setScope}
-                filteredCount={filteredAgentIds.length}
-                totalAgents={totalAgents}
-                inFlight={confirmState.kind === 'in-flight'}
-              />
-            )}
+          {loadState.kind === 'ready' && (confirmState.kind === 'idle' || confirmState.kind === 'in-flight') && (
+            <ReadyPanel
+              data={loadState.data}
+              scope={scope}
+              onScopeChange={setScope}
+              filteredCount={filteredAgentIds.length}
+              totalAgents={totalAgents}
+              inFlight={confirmState.kind === 'in-flight'}
+            />
+          )}
         </div>
 
         {/* Footer */}
@@ -276,8 +326,7 @@ export function SyncAgentsModal({
             {snackbar.kind === 'success' && (
               <span className="inline-flex items-center gap-1.5 text-emerald-400">
                 <CheckCircle2 size={14} />
-                {snackbar.updated} agentes atualizados, {snackbar.skipped} ignorados,{' '}
-                {snackbar.failed} erros
+                {snackbar.updated} agentes atualizados, {snackbar.skipped} ignorados, {snackbar.failed} erros
               </span>
             )}
           </div>
@@ -286,9 +335,7 @@ export function SyncAgentsModal({
               onClick={onClose}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm transition-colors"
             >
-              {shouldShowOnlyCloseButton(loadState, confirmState)
-                ? 'Fechar'
-                : 'Cancelar'}
+              {shouldShowOnlyCloseButton(loadState, confirmState) ? 'Fechar' : 'Cancelar'}
             </button>
             {!shouldShowOnlyCloseButton(loadState, confirmState) && (
               <button
@@ -316,11 +363,7 @@ export function SyncAgentsModal({
   );
 }
 
-
-function renderHeaderTitle(
-  loadState: LoadState,
-  confirmState: ConfirmState,
-): string {
+function renderHeaderTitle(loadState: LoadState, confirmState: ConfirmState): string {
   if (loadState.kind === 'error') return 'Erro na sincronizacao';
   if (loadState.kind === 'blocked') return 'Sincronizacao bloqueada';
   if (confirmState.kind === 'blocked') return 'Sincronizacao bloqueada';
@@ -328,10 +371,7 @@ function renderHeaderTitle(
   return 'Sincronizar agentes com o orquestrador';
 }
 
-function renderHeaderSubtitle(
-  loadState: LoadState,
-  confirmState: ConfirmState,
-): string {
+function renderHeaderSubtitle(loadState: LoadState, confirmState: ConfirmState): string {
   if (loadState.kind === 'loading') return 'Calculando preview de mudancas...';
   if (loadState.kind === 'error' || confirmState.kind === 'error') {
     return 'A operacao nao pode prosseguir.';
@@ -342,10 +382,7 @@ function renderHeaderSubtitle(
   return 'Revise as mudancas propostas antes de confirmar.';
 }
 
-function shouldShowOnlyCloseButton(
-  loadState: LoadState,
-  confirmState: ConfirmState,
-): boolean {
+function shouldShowOnlyCloseButton(loadState: LoadState, confirmState: ConfirmState): boolean {
   return (
     loadState.kind === 'error' ||
     loadState.kind === 'blocked' ||
@@ -360,9 +397,7 @@ function ErrorPanel({ message }: { message: string }) {
       <div className="flex items-start gap-3">
         <AlertTriangle size={18} className="text-red-400 mt-0.5" />
         <div>
-          <h3 className="text-sm font-semibold text-red-300 mb-1">
-            Nao foi possivel sincronizar
-          </h3>
+          <h3 className="text-sm font-semibold text-red-300 mb-1">Nao foi possivel sincronizar</h3>
           <p className="text-xs text-zinc-300 break-words">{message}</p>
         </div>
       </div>
@@ -377,53 +412,34 @@ function BlockedPanel({ response }: { response: AgentSyncBlockedResponse }) {
         <div className="flex items-start gap-3">
           <AlertTriangle size={18} className="text-amber-400 mt-0.5" />
           <div>
-            <h3 className="text-sm font-semibold text-amber-300 mb-1">
-              Sincronizacao bloqueada
-            </h3>
-            <p className="text-xs text-zinc-300">
-              {translateBlockedReason(response.reason)}
-            </p>
+            <h3 className="text-sm font-semibold text-amber-300 mb-1">Sincronizacao bloqueada</h3>
+            <p className="text-xs text-zinc-300">{translateBlockedReason(response.reason)}</p>
           </div>
         </div>
       </div>
 
       <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
-        <h4 className="text-xs font-semibold text-zinc-300 mb-2">
-          Sessao de Enrich ativa
-        </h4>
-        <p className="text-xs text-zinc-400">
-          {response.active.enrich ? 'Sim' : 'Nao'}
-        </p>
+        <h4 className="text-xs font-semibold text-zinc-300 mb-2">Sessao de Enrich ativa</h4>
+        <p className="text-xs text-zinc-400">{response.active.enrich ? 'Sim' : 'Nao'}</p>
       </div>
 
       <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
-        <h4 className="text-xs font-semibold text-zinc-300 mb-2">
-          Projetos bloqueando a sincronizacao
-        </h4>
+        <h4 className="text-xs font-semibold text-zinc-300 mb-2">Projetos bloqueando a sincronizacao</h4>
         {response.active.projects.length === 0 ? (
-          <p className="text-xs text-zinc-500">
-            Nenhum projeto listado. O bloqueio pode ser por lock interno.
-          </p>
+          <p className="text-xs text-zinc-500">Nenhum projeto listado. O bloqueio pode ser por lock interno.</p>
         ) : (
           <ul className="space-y-1.5">
             {response.active.projects.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-center justify-between text-xs text-zinc-300"
-              >
+              <li key={p.id} className="flex items-center justify-between text-xs text-zinc-300">
                 <span className="truncate pr-2">{p.name}</span>
-                <span className="text-zinc-500 shrink-0">
-                  {translateHarnessStatus(p.status)}
-                </span>
+                <span className="text-zinc-500 shrink-0">{translateHarnessStatus(p.status)}</span>
               </li>
             ))}
           </ul>
         )}
       </div>
 
-      <p className="text-xs text-zinc-500">
-        Termine ou pause as execucoes ativas e abra este modal novamente.
-      </p>
+      <p className="text-xs text-zinc-500">Termine ou pause as execucoes ativas e abra este modal novamente.</p>
     </div>
   );
 }
@@ -437,51 +453,36 @@ interface ReadyPanelProps {
   inFlight: boolean;
 }
 
-function ReadyPanel({
-  data,
-  scope,
-  onScopeChange,
-  filteredCount,
-  totalAgents,
-  inFlight,
-}: ReadyPanelProps) {
+function ReadyPanel({ data, scope, onScopeChange, filteredCount, totalAgents, inFlight }: ReadyPanelProps) {
   const changedResults = data.results.filter((r) => r.changed);
   const unchangedCount = data.results.filter((r) => !r.changed).length;
   const sampleResults = changedResults.slice(0, SAMPLE_LIMIT);
   const remainingChanged = Math.max(0, changedResults.length - SAMPLE_LIMIT);
 
-  const warnings = data.results.filter((r): r is AgentSyncResult & { warning: string } =>
-    Boolean(r.warning),
-  );
+  const warnings = data.results.filter((r): r is AgentSyncResult & { warning: string } => Boolean(r.warning));
   const warningSamples = warnings.slice(0, WARNING_SAMPLE_LIMIT);
   const remainingWarnings = Math.max(0, warnings.length - WARNING_SAMPLE_LIMIT);
 
-  const restored = data.results.filter(
-    (r) => (r.restoredFromSeed?.length ?? 0) > 0,
-  );
+  const restored = data.results.filter((r) => (r.restoredFromSeed?.length ?? 0) > 0);
 
   return (
     <div className="space-y-4">
       {/* Orchestrator summary */}
       <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
         <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1">
-          Orquestrador atual
+          Orquestrador aplicado no preview
         </h3>
-        <p className="text-sm text-zinc-100 font-mono break-all">
+        <p className="text-sm text-zinc-100 font-mono break-all" data-testid="sync-response-orchestrator">
           {formatOrchestrator(data.orchestrator)}
         </p>
         {data.orchestrator.baseUrl && (
-          <p className="text-xs text-zinc-500 mt-1 font-mono break-all">
-            {data.orchestrator.baseUrl}
-          </p>
+          <p className="text-xs text-zinc-500 mt-1 font-mono break-all">{data.orchestrator.baseUrl}</p>
         )}
       </div>
 
       {/* Scope toggle (Decisao-2.B) */}
       <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4">
-        <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">
-          Escopo da sincronizacao
-        </h3>
+        <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">Escopo da sincronizacao</h3>
         <div className="space-y-2">
           <label
             className={`flex items-center gap-3 p-2 rounded-md cursor-pointer transition-colors ${
@@ -499,9 +500,7 @@ function ReadyPanel({
               disabled={inFlight}
               className="accent-amber-500"
             />
-            <span className="text-sm text-zinc-200">
-              Aplicar a todos ({totalAgents})
-            </span>
+            <span className="text-sm text-zinc-200">Aplicar a todos ({totalAgents})</span>
           </label>
           <label
             className={`flex items-center gap-3 p-2 rounded-md cursor-pointer transition-colors ${
@@ -519,9 +518,7 @@ function ReadyPanel({
               disabled={inFlight || filteredCount === 0}
               className="accent-amber-500"
             />
-            <span className="text-sm text-zinc-200">
-              Aplicar apenas aos {filteredCount} agentes filtrados
-            </span>
+            <span className="text-sm text-zinc-200">Aplicar apenas aos {filteredCount} agentes filtrados</span>
           </label>
         </div>
       </div>
@@ -530,9 +527,7 @@ function ReadyPanel({
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
           <p className="text-xs text-zinc-400">Serao atualizados</p>
-          <p className="text-lg font-semibold text-amber-300">
-            {changedResults.length}
-          </p>
+          <p className="text-lg font-semibold text-amber-300">{changedResults.length}</p>
         </div>
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-3">
           <p className="text-xs text-zinc-400">Permanecem inalterados</p>
@@ -546,13 +541,10 @@ function ReadyPanel({
           <div className="flex items-start gap-3">
             <CheckCircle2 size={16} className="text-emerald-400 mt-0.5" />
             <div>
-              <h4 className="text-xs font-semibold text-emerald-300 mb-1">
-                Restauracao do seed registry
-              </h4>
+              <h4 className="text-xs font-semibold text-emerald-300 mb-1">Restauracao do seed registry</h4>
               <p className="text-xs text-zinc-300">
-                {restored.length} agente(s) terao tools restauradas do seed
-                registry porque estavam vazias e o agente vinha de um runtime
-                que zera tools.
+                {restored.length} agente(s) terao tools restauradas do seed registry porque estavam vazias e o agente
+                vinha de um runtime que zera tools.
               </p>
             </div>
           </div>
@@ -565,21 +557,16 @@ function ReadyPanel({
           <div className="flex items-start gap-3">
             <AlertTriangle size={16} className="text-amber-400 mt-0.5" />
             <div className="min-w-0">
-              <h4 className="text-xs font-semibold text-amber-300 mb-2">
-                Avisos ({warnings.length})
-              </h4>
+              <h4 className="text-xs font-semibold text-amber-300 mb-2">Avisos ({warnings.length})</h4>
               <ul className="space-y-1">
                 {warningSamples.map((w) => (
                   <li key={w.agentId} className="text-xs text-zinc-300">
-                    <span className="font-mono text-zinc-400">{w.agentId}</span>
-                    : {w.warning}
+                    <span className="font-mono text-zinc-400">{w.agentId}</span>: {w.warning}
                   </li>
                 ))}
               </ul>
               {remainingWarnings > 0 && (
-                <p className="text-xs text-zinc-500 mt-1">
-                  +{remainingWarnings} outros avisos
-                </p>
+                <p className="text-xs text-zinc-500 mt-1">+{remainingWarnings} outros avisos</p>
               )}
             </div>
           </div>
@@ -590,9 +577,7 @@ function ReadyPanel({
       {sampleResults.length > 0 && (
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 overflow-hidden">
           <div className="px-4 py-2 border-b border-zinc-800 bg-zinc-900/50">
-            <h4 className="text-xs font-semibold text-zinc-300">
-              Antes &rarr; Depois (amostra)
-            </h4>
+            <h4 className="text-xs font-semibold text-zinc-300">Antes &rarr; Depois (amostra)</h4>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -605,30 +590,17 @@ function ReadyPanel({
               </thead>
               <tbody>
                 {sampleResults.map((r) => (
-                  <tr
-                    key={r.agentId}
-                    className="border-t border-zinc-800/60 align-top"
-                  >
-                    <td className="px-4 py-2 text-zinc-300 font-mono break-all">
-                      {r.agentId}
+                  <tr key={r.agentId} className="border-t border-zinc-800/60 align-top">
+                    <td className="px-4 py-2 text-zinc-300 font-mono break-all">{r.agentId}</td>
+                    <td className="px-4 py-2 text-zinc-300">
+                      <span className="text-zinc-500">{formatRuntimeLabel(r.before.runtime)}</span>
+                      <span className="text-zinc-600 mx-1">&rarr;</span>
+                      <span className="text-amber-300">{formatRuntimeLabel(r.after.runtime)}</span>
                     </td>
                     <td className="px-4 py-2 text-zinc-300">
-                      <span className="text-zinc-500">
-                        {formatRuntimeLabel(r.before.runtime)}
-                      </span>
+                      <span className="text-zinc-500 break-all">{formatModelLabel(r.before.model)}</span>
                       <span className="text-zinc-600 mx-1">&rarr;</span>
-                      <span className="text-amber-300">
-                        {formatRuntimeLabel(r.after.runtime)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-zinc-300">
-                      <span className="text-zinc-500 break-all">
-                        {formatModelLabel(r.before.model)}
-                      </span>
-                      <span className="text-zinc-600 mx-1">&rarr;</span>
-                      <span className="text-amber-300 break-all">
-                        {formatModelLabel(r.after.model)}
-                      </span>
+                      <span className="text-amber-300 break-all">{formatModelLabel(r.after.model)}</span>
                     </td>
                   </tr>
                 ))}
@@ -646,8 +618,7 @@ function ReadyPanel({
       {changedResults.length === 0 && (
         <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-4 text-center">
           <p className="text-sm text-zinc-400">
-            Nenhuma alteracao necessaria. Todos os agentes ja estao alinhados
-            com o orquestrador atual.
+            Nenhuma alteracao necessaria. Todos os agentes ja estao alinhados com o orquestrador selecionado.
           </p>
         </div>
       )}

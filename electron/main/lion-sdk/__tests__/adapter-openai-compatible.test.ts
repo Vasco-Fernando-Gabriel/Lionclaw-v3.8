@@ -1,4 +1,3 @@
-
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
 vi.mock('../../logger', () => ({
@@ -72,18 +71,22 @@ describe('OpenAI-compatible adapter', () => {
     globalThis.fetch = vi.fn(async () =>
       makeSseResponse([
         sseLine({
-          choices: [{
-            index: 0,
-            delta: {
-              tool_calls: [{ index: 0, id: 'call_1', function: { name: 'Read', arguments: '{"file_p' } }],
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [{ index: 0, id: 'call_1', function: { name: 'Read', arguments: '{"file_p' } }],
+              },
             },
-          }],
+          ],
         }),
         sseLine({
-          choices: [{
-            index: 0,
-            delta: { tool_calls: [{ index: 0, function: { arguments: 'ath":"/abs"}' } }] },
-          }],
+          choices: [
+            {
+              index: 0,
+              delta: { tool_calls: [{ index: 0, function: { arguments: 'ath":"/abs"}' } }] },
+            },
+          ],
         }),
         'data: [DONE]\n',
       ]),
@@ -103,11 +106,7 @@ describe('OpenAI-compatible adapter', () => {
 
   it('parses Kimi-style multi-line SSE payloads', async () => {
     globalThis.fetch = vi.fn(async () =>
-      makeSseResponse([
-        'data: {"choices":[{"index":0,"delta":{"content":"he',
-        'llo"}}]}\n',
-        'data: [DONE]\n',
-      ]),
+      makeSseResponse(['data: {"choices":[{"index":0,"delta":{"content":"he', 'llo"}}]}\n', 'data: [DONE]\n']),
     ) as unknown as typeof globalThis.fetch;
     const adapter = createOpenAiCompatibleAdapter({
       baseUrl: 'https://api.moonshot.ai',
@@ -153,15 +152,17 @@ describe('OpenAI-compatible adapter', () => {
     for await (const _ of adapter.streamCompletion({
       model: 'kimi-k2.6',
       messages: [{ role: 'user', content: 'use tool' }],
-      tools: [{
-        name: 'memory_search',
-        description: 'Search memory',
-        input_schema: {
-          type: 'object',
-          required: ['query'],
-          properties: { query: { type: 'string' } },
+      tools: [
+        {
+          name: 'memory_search',
+          description: 'Search memory',
+          input_schema: {
+            type: 'object',
+            required: ['query'],
+            properties: { query: { type: 'string' } },
+          },
         },
-      }],
+      ],
     })) {
     }
 
@@ -223,15 +224,17 @@ describe('OpenAI-compatible adapter', () => {
         role: 'assistant',
         content: '',
         reasoning_content: 'preciso chamar memory_search',
-        tool_calls: [{
-          index: 0,
-          id: 'call_1',
-          type: 'function',
-          function: {
-            name: 'mcp_call',
-            arguments: { server_id: 'memory-search', tool: 'memory_search', args: { query: 'projeto' } },
+        tool_calls: [
+          {
+            index: 0,
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'mcp_call',
+              arguments: { server_id: 'memory-search', tool: 'memory_search', args: { query: 'projeto' } },
+            },
           },
-        }],
+        ],
       },
       {
         role: 'tool',
@@ -248,19 +251,21 @@ describe('OpenAI-compatible adapter', () => {
       role: 'assistant',
       content: null,
       reasoning_content: 'preciso chamar memory_search',
-      tool_calls: [{
-        index: 0,
-        id: 'call_1',
-        type: 'function',
-        function: {
-          name: 'mcp_call',
-          arguments: JSON.stringify({
-            server_id: 'memory-search',
-            tool: 'memory_search',
-            args: { query: 'projeto' },
-          }),
+      tool_calls: [
+        {
+          index: 0,
+          id: 'call_1',
+          type: 'function',
+          function: {
+            name: 'mcp_call',
+            arguments: JSON.stringify({
+              server_id: 'memory-search',
+              tool: 'memory_search',
+              args: { query: 'projeto' },
+            }),
+          },
         },
-      }],
+      ],
     });
     expect(requestBody.messages?.[2]).toEqual({
       role: 'tool',
@@ -290,12 +295,14 @@ describe('OpenAI-compatible adapter', () => {
         {
           role: 'assistant',
           content: '',
-          tool_calls: [{
-            index: 0,
-            id: 'call_1',
-            type: 'function',
-            function: { name: 'mcp_call', arguments: '{}' },
-          }],
+          tool_calls: [
+            {
+              index: 0,
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'mcp_call', arguments: '{}' },
+            },
+          ],
         },
         { role: 'tool', content: '', tool_call_id: 'call_1', name: 'mcp_call' },
       ],

@@ -21,7 +21,7 @@ vi.mock('../db', () => ({
   getSessionMessages: vi.fn(() => []),
   getSessionActiveRepository: vi.fn(() => null),
   getLocalRepository: vi.fn(() => null),
-  getSetting: vi.fn((key: string) => key === 'onboarding_completed' ? 'true' : undefined),
+  getSetting: vi.fn((key: string) => (key === 'onboarding_completed' ? 'true' : undefined)),
   insertAuditEntry: vi.fn(),
   insertMessage: vi.fn(),
   setSessionActiveContextTokens: vi.fn(),
@@ -36,7 +36,10 @@ vi.mock('../agent-runtime/context-measure', () => ({
   reconcileActiveContext: vi.fn(() => 0),
 }));
 vi.mock('../chat-context-usage', () => ({ buildChatContextUsage: vi.fn(() => null) }));
-vi.mock('../chat-compaction-trigger', () => ({ maybeCompactChatSession: vi.fn() }));
+vi.mock('../chat-compaction-trigger', () => ({
+  maybeCompactChatSession: vi.fn(),
+  isChatTimelineReinjectEnabled: () => false,
+}));
 vi.mock('../title-generator', () => ({ ensureInitialSessionTitle: vi.fn(), generateSessionTitle: vi.fn() }));
 vi.mock('../dreaming-turn-engine', () => ({ recordCompletedMainChatTurn: vi.fn() }));
 vi.mock('../onboarding', () => ({
@@ -46,7 +49,7 @@ vi.mock('../onboarding', () => ({
 }));
 vi.mock('../chat-capability-context', () => ({
   computeEffectiveCapabilitiesForTurn: vi.fn(),
-  getActiveChatTurnByLane: vi.fn(() => null),
+  getActiveChatTurnBinding: vi.fn(() => undefined),
   getChatCapabilityTurn: vi.fn(),
 }));
 vi.mock('../grok-sdk/workspace', () => ({
@@ -78,6 +81,7 @@ vi.mock('../grok-sdk/stream-translator', () => ({
     callbacks: {},
     finalize: state.finalize,
     fail: state.fail,
+    timelineEvents: () => [],
   })),
 }));
 
@@ -107,7 +111,10 @@ describe('Grok chat empty response contract', () => {
   it('emite LLM-EMPTY antes de done e nao finaliza turno realmente vazio', async () => {
     const db = await import('../db');
     vi.mocked(db.getSession).mockReturnValue({
-      id: 'session-1', pendingSeed: 'SEED', compactedUpToMessageId: null, type: 'chat',
+      id: 'session-1',
+      pendingSeed: 'SEED',
+      compactedUpToMessageId: null,
+      type: 'chat',
     } as never);
     await executeGrokSdkQuery(
       'ola',
@@ -131,7 +138,10 @@ describe('Grok chat empty response contract', () => {
   it('mantem tool-only como empty-ok e consome pending_seed', async () => {
     const db = await import('../db');
     vi.mocked(db.getSession).mockReturnValue({
-      id: 'session-1', pendingSeed: 'SEED', compactedUpToMessageId: null, type: 'chat',
+      id: 'session-1',
+      pendingSeed: 'SEED',
+      compactedUpToMessageId: null,
+      type: 'chat',
     } as never);
     state.send.mockImplementation(async (_prompt, callbacks) => {
       callbacks.onToolUse?.('Read', { file_path: '/tmp/a' });
@@ -140,7 +150,10 @@ describe('Grok chat empty response contract', () => {
 
     await executeGrokSdkQuery(
       'leia',
-      { sessionId: 'session-1', onStreamChunk: (chunk) => state.chunks.push(chunk as unknown as Record<string, unknown>) },
+      {
+        sessionId: 'session-1',
+        onStreamChunk: (chunk) => state.chunks.push(chunk as unknown as Record<string, unknown>),
+      },
       () => null,
       undefined,
       { runtime: 'grok-sdk', provider: 'grok', model: 'grok-4.5', source: 'settings', effort: 'high' },
@@ -175,7 +188,10 @@ describe('Grok chat empty response contract', () => {
 
     await executeGrokSdkQuery(
       'ola',
-      { sessionId: 'session-1', onStreamChunk: (chunk) => state.chunks.push(chunk as unknown as Record<string, unknown>) },
+      {
+        sessionId: 'session-1',
+        onStreamChunk: (chunk) => state.chunks.push(chunk as unknown as Record<string, unknown>),
+      },
       () => null,
       undefined,
       { runtime: 'grok-sdk', provider: 'grok', model: 'grok-4.5', source: 'settings', effort: 'high' },
@@ -193,13 +209,19 @@ describe('Grok chat empty response contract', () => {
   it('cancelamento do CLI sem abort local vira erro visivel, sem done nem persistencia', async () => {
     const db = await import('../db');
     vi.mocked(db.getSession).mockReturnValue({
-      id: 'session-1', pendingSeed: 'SEED', compactedUpToMessageId: null, type: 'chat',
+      id: 'session-1',
+      pendingSeed: 'SEED',
+      compactedUpToMessageId: null,
+      type: 'chat',
     } as never);
     state.send.mockResolvedValue({ ...response, content: 'parcial', status: 'cancelled' });
 
     await executeGrokSdkQuery(
       'pare',
-      { sessionId: 'session-1', onStreamChunk: (chunk) => state.chunks.push(chunk as unknown as Record<string, unknown>) },
+      {
+        sessionId: 'session-1',
+        onStreamChunk: (chunk) => state.chunks.push(chunk as unknown as Record<string, unknown>),
+      },
       () => null,
       undefined,
       { runtime: 'grok-sdk', provider: 'grok', model: 'grok-4.5', source: 'settings', effort: 'high' },
@@ -219,7 +241,10 @@ describe('Grok chat empty response contract', () => {
 
     await executeGrokSdkQuery(
       'ola',
-      { sessionId: 'session-1', onStreamChunk: (chunk) => state.chunks.push(chunk as unknown as Record<string, unknown>) },
+      {
+        sessionId: 'session-1',
+        onStreamChunk: (chunk) => state.chunks.push(chunk as unknown as Record<string, unknown>),
+      },
       () => null,
       undefined,
       { runtime: 'grok-sdk', provider: 'grok', model: 'grok-4.5', source: 'settings', effort: 'high' },
@@ -235,13 +260,18 @@ describe('Grok chat empty response contract', () => {
     const authError = new Error('cached_token authentication failed');
     state.createSession.mockRejectedValue(authError);
 
-    await expect(executeGrokSdkQuery(
-      'ola',
-      { sessionId: 'telegram-session', onStreamChunk: (chunk) => state.chunks.push(chunk as unknown as Record<string, unknown>) },
-      () => null,
-      telegramLane,
-      { runtime: 'grok-sdk', provider: 'grok', model: 'grok-4.5', source: 'settings', effort: 'high' },
-    )).rejects.toBe(authError);
+    await expect(
+      executeGrokSdkQuery(
+        'ola',
+        {
+          sessionId: 'telegram-session',
+          onStreamChunk: (chunk) => state.chunks.push(chunk as unknown as Record<string, unknown>),
+        },
+        () => null,
+        telegramLane,
+        { runtime: 'grok-sdk', provider: 'grok', model: 'grok-4.5', source: 'settings', effort: 'high' },
+      ),
+    ).rejects.toBe(authError);
 
     expect(state.fail).toHaveBeenCalledWith(authError);
     expect(state.send).not.toHaveBeenCalled();
@@ -251,18 +281,26 @@ describe('Grok chat empty response contract', () => {
   it('rejeita falha do send na lane cron depois de emitir o erro e fechar a sessao', async () => {
     const db = await import('../db');
     vi.mocked(db.getSession).mockReturnValue({
-      id: 'cron-session', pendingSeed: 'SEED', compactedUpToMessageId: null, type: 'chat',
+      id: 'cron-session',
+      pendingSeed: 'SEED',
+      compactedUpToMessageId: null,
+      type: 'chat',
     } as never);
     const sendError = new Error('grok process exited');
     state.send.mockRejectedValue(sendError);
 
-    await expect(executeGrokSdkQuery(
-      'execute',
-      { sessionId: 'cron-session', onStreamChunk: (chunk) => state.chunks.push(chunk as unknown as Record<string, unknown>) },
-      () => null,
-      cronLane,
-      { runtime: 'grok-sdk', provider: 'grok', model: 'grok-4.5', source: 'settings', effort: 'high' },
-    )).rejects.toBe(sendError);
+    await expect(
+      executeGrokSdkQuery(
+        'execute',
+        {
+          sessionId: 'cron-session',
+          onStreamChunk: (chunk) => state.chunks.push(chunk as unknown as Record<string, unknown>),
+        },
+        () => null,
+        cronLane,
+        { runtime: 'grok-sdk', provider: 'grok', model: 'grok-4.5', source: 'settings', effort: 'high' },
+      ),
+    ).rejects.toBe(sendError);
 
     expect(state.fail).toHaveBeenCalledWith(sendError);
     expect(state.close).toHaveBeenCalledOnce();

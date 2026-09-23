@@ -21,9 +21,7 @@ export interface GrokAcpTransport {
   notify(method: string, params?: unknown): void;
   respond(id: unknown, result: unknown): void;
   onNotification(handler: (value: GrokAcpNotification) => void): () => void;
-  onServerRequest(
-    handler: (id: unknown, method: string, params: Record<string, unknown>) => void,
-  ): () => void;
+  onServerRequest(handler: (id: unknown, method: string, params: Record<string, unknown>) => void): () => void;
   onError(handler: (error: Error) => void): () => void;
   kill(reason: string): void;
   waitClosed(timeoutMs: number): Promise<boolean>;
@@ -36,9 +34,7 @@ export interface GrokAcpSpawnConfig {
   env: Record<string, string>;
 }
 
-export type GrokAcpTransportFactory = (
-  config: GrokAcpSpawnConfig,
-) => Promise<GrokAcpTransport>;
+export type GrokAcpTransportFactory = (config: GrokAcpSpawnConfig) => Promise<GrokAcpTransport>;
 
 export function buildLinuxSandboxPtyInvocation(
   config: GrokAcpSpawnConfig,
@@ -47,21 +43,12 @@ export function buildLinuxSandboxPtyInvocation(
   const command = `stty raw -echo && exec ${[config.binary, ...config.args].map(shellEscapePOSIX).join(' ')} 2>/dev/null`;
   return {
     executable: scriptBinary,
-    args: [
-      '--quiet',
-      '--return',
-      '--flush',
-      '--echo',
-      'never',
-      '--command',
-      command,
-      '/dev/null',
-    ],
+    args: ['--quiet', '--return', '--flush', '--echo', 'never', '--command', command, '/dev/null'],
   };
 }
 
 function record(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
 export class StdioGrokAcpTransport implements GrokAcpTransport {
@@ -71,18 +58,17 @@ export class StdioGrokAcpTransport implements GrokAcpTransport {
   private processExited = false;
   private terminalErrorSent = false;
   private foreignLines = 0;
-  private readonly pending = new Map<number, {
-    method: string;
-    resolve: (value: unknown) => void;
-    reject: (error: Error) => void;
-    cleanup: () => void;
-  }>();
+  private readonly pending = new Map<
+    number,
+    {
+      method: string;
+      resolve: (value: unknown) => void;
+      reject: (error: Error) => void;
+      cleanup: () => void;
+    }
+  >();
   private readonly notifications = new Set<(value: GrokAcpNotification) => void>();
-  private readonly requests = new Set<(
-    id: unknown,
-    method: string,
-    params: Record<string, unknown>,
-  ) => void>();
+  private readonly requests = new Set<(id: unknown, method: string, params: Record<string, unknown>) => void>();
   private readonly errors = new Set<(error: Error) => void>();
 
   constructor(
@@ -146,34 +132,35 @@ export class StdioGrokAcpTransport implements GrokAcpTransport {
   private terminateProtocolError(message: string): void {
     const error = new GrokProcessError(message);
     logger.warn({ message }, 'terminating invalid Grok ACP transport');
-    try { killProcessTree(this.child, 'SIGKILL'); } catch { /* best effort */ }
+    try {
+      killProcessTree(this.child, 'SIGKILL');
+    } catch {
+      /* best effort */
+    }
     this.fail(error);
   }
 
   private dispatch(message: Record<string, unknown>): void {
     const id = message['id'];
     if (
-      typeof id === 'number'
-      && this.pending.has(id)
-      && (Object.prototype.hasOwnProperty.call(message, 'result')
-        || Object.prototype.hasOwnProperty.call(message, 'error'))
+      typeof id === 'number' &&
+      this.pending.has(id) &&
+      (Object.prototype.hasOwnProperty.call(message, 'result') ||
+        Object.prototype.hasOwnProperty.call(message, 'error'))
     ) {
       const pending = this.pending.get(id)!;
       this.pending.delete(id);
       pending.cleanup();
       if (message['error'] !== undefined) {
         const error = record(message['error']);
-        const code = typeof error['code'] === 'number' || typeof error['code'] === 'string'
-          ? error['code']
-          : undefined;
-        pending.reject(new GrokJsonRpcError(
-          typeof error['message'] === 'string' ? error['message'] : 'Grok ACP JSON-RPC error',
-          {
+        const code = typeof error['code'] === 'number' || typeof error['code'] === 'string' ? error['code'] : undefined;
+        pending.reject(
+          new GrokJsonRpcError(typeof error['message'] === 'string' ? error['message'] : 'Grok ACP JSON-RPC error', {
             method: pending.method,
             ...(code !== undefined ? { code } : {}),
             ...(Object.prototype.hasOwnProperty.call(error, 'data') ? { data: error['data'] } : {}),
-          },
-        ));
+          }),
+        );
       } else {
         pending.resolve(message['result']);
       }
@@ -227,9 +214,7 @@ export class StdioGrokAcpTransport implements GrokAcpTransport {
         timer = setTimeout(() => {
           if (!this.pending.delete(id)) return;
           cleanup();
-          const error = new GrokProcessError(
-            `Grok ACP request ${method} timed out after ${options.timeoutMs}ms.`,
-          );
+          const error = new GrokProcessError(`Grok ACP request ${method} timed out after ${options.timeoutMs}ms.`);
           this.kill(`request-timeout:${method}`);
           this.fail(error);
           reject(error);
@@ -251,16 +236,14 @@ export class StdioGrokAcpTransport implements GrokAcpTransport {
     if (this.closed) return;
     try {
       this.child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method, params })}\n`);
-    } catch {
-    }
+    } catch {}
   }
 
   respond(id: unknown, result: unknown): void {
     if (this.closed) return;
     try {
       this.child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, result })}\n`);
-    } catch {
-    }
+    } catch {}
   }
 
   onNotification(handler: (value: GrokAcpNotification) => void): () => void {
@@ -268,9 +251,7 @@ export class StdioGrokAcpTransport implements GrokAcpTransport {
     return () => this.notifications.delete(handler);
   }
 
-  onServerRequest(
-    handler: (id: unknown, method: string, params: Record<string, unknown>) => void,
-  ): () => void {
+  onServerRequest(handler: (id: unknown, method: string, params: Record<string, unknown>) => void): () => void {
     this.requests.add(handler);
     return () => this.requests.delete(handler);
   }
@@ -285,8 +266,7 @@ export class StdioGrokAcpTransport implements GrokAcpTransport {
     logger.debug({ reason }, 'terminating Grok ACP child');
     try {
       killProcessTree(this.child, 'SIGKILL');
-    } catch {
-    }
+    } catch {}
   }
 
   waitClosed(timeoutMs: number): Promise<boolean> {

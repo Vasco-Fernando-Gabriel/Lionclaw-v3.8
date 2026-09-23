@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -44,11 +43,7 @@ import {
   updateHarnessProject,
   getPipelinePhaseMetricsRows,
 } from '../db';
-import {
-  acquireProjectLock,
-  releaseProjectLock,
-  isProjectLocked,
-} from '../pipeline-shared/lock';
+import { acquireProjectLock, releaseProjectLock, isProjectLocked } from '../pipeline-shared/lock';
 import { PipelineEngine } from '../pipeline-engine';
 import { HarnessEngine } from '../harness-engine';
 import { ensureBugContext, readBugManifest } from '../bug-paths';
@@ -56,7 +51,6 @@ import * as bugPaths from '../bug-paths';
 import { BUG_SOLUTION_CONSOLIDATOR_ID } from '../seed-agents';
 import type { HarnessProject } from '../../../src/types';
 import type { SpawnAgentResult } from '../pipeline-engine/handlers/context';
-
 
 interface EnginePrivate {
   approvePhase: (projectId: string, metadata?: Record<string, unknown>) => Promise<void>;
@@ -133,9 +127,7 @@ function createBugProjectWithRun(): HarnessProject {
 }
 
 function phaseChangedEvents(): Array<Record<string, unknown>> {
-  return capturedEvents
-    .filter((e) => e.channel === 'pipeline:phase-changed')
-    .map((e) => e.data);
+  return capturedEvents.filter((e) => e.channel === 'pipeline:phase-changed').map((e) => e.data);
 }
 
 function errorEvents(): Array<Record<string, unknown>> {
@@ -169,12 +161,10 @@ beforeAll(() => {
 afterAll(() => {
   try {
     getDb().close();
-  } catch {
-  }
+  } catch {}
   try {
     fs.rmSync(state.home, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
 });
 
 beforeEach(() => {
@@ -182,7 +172,6 @@ beforeEach(() => {
   capturedEvents.length = 0;
   projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'lc-bug-gate-proj-'));
 });
-
 
 describe('TB-12: gate da fase 3, desfecho approve-plan', () => {
   it('grava outcome "fix" no config E no manifest e avanca para a fase 4', async () => {
@@ -210,7 +199,6 @@ describe('TB-12: gate da fase 3, desfecho approve-plan', () => {
     expect(sharedFinalize).not.toHaveBeenCalled();
   });
 });
-
 
 describe('TB-13: gate da fase 3, desfecho close-pipeline', () => {
   it('encerra com status done, phase null, lock liberado e outcome no-bug', async () => {
@@ -295,16 +283,13 @@ describe('TB-13: gate da fase 3, desfecho close-pipeline', () => {
     st.currentPhase = 3;
     st.status = 'running';
 
-    await expect(engine.approvePhase(project.id, { action: 'close-pipeline' })).rejects.toThrow(
-      /disco cheio/,
-    );
+    await expect(engine.approvePhase(project.id, { action: 'close-pipeline' })).rejects.toThrow(/disco cheio/);
     await settle();
 
     const after = getHarnessProject(project.id)!;
     expect(after.config.bug?.outcome).toBe('no-bug');
   });
 });
-
 
 describe('TB-14: payload invalido no gate da fase 3', () => {
   it('sem metadata: emite pipeline:error e LANCA (nunca { ok: true } silencioso)', async () => {
@@ -333,16 +318,13 @@ describe('TB-14: payload invalido no gate da fase 3', () => {
     st.currentPhase = 3;
     st.status = 'running';
 
-    await expect(
-      engine.approvePhase(project.id, { action: 'lock-and-continue' }),
-    ).rejects.toThrow(/action invalida/);
+    await expect(engine.approvePhase(project.id, { action: 'lock-and-continue' })).rejects.toThrow(/action invalida/);
 
     expect(errorEvents().length).toBeGreaterThanOrEqual(1);
     expect(getHarnessProject(project.id)!.config.bug?.outcome).toBe('pending');
     expect(getHarnessProject(project.id)!.status).not.toBe('done');
   });
 });
-
 
 describe('TB-40 / B-AC22: approve das fases conversacionais do bug', () => {
   const cases: Array<{ phase: number; agentId: string; forbidden: string }> = [
@@ -386,10 +368,7 @@ describe('TB-40 / B-AC22: approve das fases conversacionais do bug', () => {
       st.currentPhase = phase;
       st.status = 'running';
 
-      await engine.approvePhase(
-        project.id,
-        phase === 3 ? { action: 'approve-plan' } : {},
-      );
+      await engine.approvePhase(project.id, phase === 3 ? { action: 'approve-plan' } : {});
       await settle();
 
       expect(sharedBackground, `fase ${phase}`).not.toHaveBeenCalled();
@@ -409,9 +388,7 @@ describe('TB-40 / B-AC22: approve das fases conversacionais do bug', () => {
       await engine.approvePhase(project.id, {});
       await settle();
 
-      const gate = phaseChangedEvents().find(
-        (e) => e['status'] === 'awaiting-dev-confirmation',
-      );
+      const gate = phaseChangedEvents().find((e) => e['status'] === 'awaiting-dev-confirmation');
       expect(gate).toBeDefined();
       expect(gate!['phase']).toBe(7);
       expect(gate!['awaitingUser']).toBe(true);
@@ -430,9 +407,7 @@ describe('TB-40 / B-AC22: approve das fases conversacionais do bug', () => {
       await engine.approvePhase(project.id, {});
       await settle();
 
-      const completed = phaseChangedEvents().find(
-        (e) => e['status'] === 'completed' && e['phase'] === phase,
-      );
+      const completed = phaseChangedEvents().find((e) => e['status'] === 'completed' && e['phase'] === phase);
       expect(completed, `fase ${phase}`).toBeDefined();
       expect(completed!['awaitingUser']).toBe(false);
       expect(advance, `fase ${phase}`).toHaveBeenCalledTimes(1);
@@ -443,7 +418,6 @@ describe('TB-40 / B-AC22: approve das fases conversacionais do bug', () => {
     }
   });
 });
-
 
 describe('TB-32 / B-AC19: dispatch de runAutoPhase para pipelineType bug', () => {
   it('fase 2 -> runner, fase 4 -> spec, fase 6 -> runPhase11 (Planner)', async () => {
@@ -508,7 +482,6 @@ describe('TB-32 / B-AC19: dispatch de runAutoPhase para pipelineType bug', () =>
     expect(errors.some((m) => m.includes('Unknown bug auto phase'))).toBe(false);
   });
 });
-
 
 describe('TB-21: lock por projeto no Bug Pipe', () => {
   it('a pausa conversacional NAO libera o lock; o close-pipeline libera', async () => {

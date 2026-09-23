@@ -5,10 +5,7 @@ import { estimateTokensRough } from '../agent-runtime/context-measure';
 import { createLogger } from '../logger';
 import { getGrokAcpDriver } from '../grok-acp/acp-driver';
 import { startGrokMcpBridge, type GrokMcpBridge } from '../grok-acp/mcp-http-bridge';
-import {
-  buildGrokNativeToolPolicy,
-  buildGrokSessionTools,
-} from '../agent-runtime/grok-session-config';
+import { buildGrokNativeToolPolicy, buildGrokSessionTools } from '../agent-runtime/grok-session-config';
 import {
   createSubagentDispatchContext,
   pendingSubagentProviderAuthError,
@@ -55,6 +52,7 @@ export interface CreateChatGrokSessionOptions {
   isOnboarding?: boolean;
   capabilities?: ChatFeatureToggles;
   workspaceGrant: GrokWorkspaceGrant;
+  turnBinding?: { sessionId: string; turnId: string };
 }
 
 export interface GrokSessionContextMeta {
@@ -68,9 +66,7 @@ export interface ChatGrokSession {
   contextMeta: GrokSessionContextMeta;
 }
 
-export async function createChatGrokSession(
-  opts: CreateChatGrokSessionOptions,
-): Promise<ChatGrokSession> {
+export async function createChatGrokSession(opts: CreateChatGrokSessionOptions): Promise<ChatGrokSession> {
   const availability = await isGrokAvailable();
   if (!availability.usable) {
     throw new GrokUnavailableError(
@@ -109,28 +105,27 @@ export async function createChatGrokSession(
     runtime: 'grok',
   };
   const permission = PERM_DEFAULT_WITH_GUARD(
-    createPermissionGuard(opts.getWindow, { isOnboarding }),
+    createPermissionGuard(opts.getWindow, { isOnboarding, sessionId: opts.sessionId }),
   );
   const baseGuard = permission.canUseTool;
   permission.canUseTool = async (toolName, input, context) => {
     assertGrokWorkspaceUnchanged(opts.workspaceGrant);
     if (
-      (toolName === 'Write' || toolName === 'Edit' || toolName === 'Bash')
-      && grokInputTouchesProtectedSource(opts.workspaceGrant, input)
+      (toolName === 'Write' || toolName === 'Edit' || toolName === 'Bash') &&
+      grokInputTouchesProtectedSource(opts.workspaceGrant, input)
     ) {
       return { behavior: 'deny', message: 'Fonte de instrucao/configuracao Grok protegida pelo snapshot do turno.' };
     }
-    return baseGuard
-      ? baseGuard(toolName, input, context)
-      : { behavior: 'deny', message: 'Tool sem guard efetivo.' };
+    return baseGuard ? baseGuard(toolName, input, context) : { behavior: 'deny', message: 'Tool sem guard efetivo.' };
   };
   const { getMCPConfigForAgent } = await import('../mcp-manager');
-  const parentMcpConfig = opts.lane === 'desktop'
-    ? await getMCPConfigForAgent(opts.agentId, {
-        surface: 'grok-sdk',
-        capabilities: opts.capabilities,
-      })
-    : undefined;
+  const parentMcpConfig =
+    opts.lane === 'desktop'
+      ? await getMCPConfigForAgent(opts.agentId, {
+          surface: 'grok-sdk',
+          capabilities: opts.capabilities,
+        })
+      : undefined;
   const parentMcpServerIds = Object.keys(parentMcpConfig ?? {});
   const dispatchContext = createSubagentDispatchContext({
     ownerKind: 'chat',
@@ -141,14 +136,11 @@ export async function createChatGrokSession(
     cwd: workDir,
     readRoots: opts.workspaceGrant.readRoots,
     writeRoots: opts.workspaceGrant.writeRoots,
-    allowedTools: await resolveSubagentHostAllowedTools(
-      config.allowedTools,
-      parentMcpServerIds,
-    ),
+    allowedTools: await resolveSubagentHostAllowedTools(config.allowedTools, parentMcpServerIds),
     allowedMcpServerIds: parentMcpServerIds,
     permission,
     parentAbortSignal: opts.abortSignal,
-    inheritedEffort: resolveChatInheritedEffort(),
+    inheritedEffort: resolveChatInheritedEffort('grok-sdk', opts.effort),
   });
   const toolProfile = opts.lane === 'desktop' ? 'chat' : 'remote-chat';
   const sessionTools = await buildGrokSessionTools({
@@ -160,6 +152,8 @@ export async function createChatGrokSession(
     dispatchContext,
     allowUserQuestion: opts.lane === 'desktop',
     getWindow: opts.getWindow,
+    sessionId: opts.sessionId,
+    ...(opts.turnBinding ? { turnBinding: { ...opts.turnBinding, lane: opts.lane } } : {}),
   });
   const externalTools = sessionTools.externalTools.map((tool) => ({
     ...tool,
@@ -173,10 +167,7 @@ export async function createChatGrokSession(
       return result;
     },
   }));
-  const nativePolicy = buildGrokNativeToolPolicy(
-    toolProfile,
-    opts.lane === 'desktop' ? config.allowedTools : [],
-  );
+  const nativePolicy = buildGrokNativeToolPolicy(toolProfile, opts.lane === 'desktop' ? config.allowedTools : []);
   const env = buildGrokChildEnv();
   const grokHome = resolveGrokHome();
   await prepareGrokWorkspace(opts.workspaceGrant, binary, env);
@@ -258,24 +249,30 @@ export async function createChatGrokSession(
   let firstSend = true;
   const contextMeta: GrokSessionContextMeta = {
     systemPromptTokens: estimateTokensRough(reconciledPrompt),
-    toolSchemasTokens: externalTools.length > 0
-      ? estimateTokensRough(JSON.stringify(externalTools.map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.parameters,
-        }))))
-      : 0,
+    toolSchemasTokens:
+      externalTools.length > 0
+        ? estimateTokensRough(
+            JSON.stringify(
+              externalTools.map((tool) => ({
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.parameters,
+              })),
+            ),
+          )
+        : 0,
   };
 
   return {
     contextMeta,
     async send(prompt, callbacks, abortSignal) {
-      const fullPrompt = firstSend && reconciledPrompt.trim()
-        ? `## Instrucoes do agente\n\n${reconciledPrompt}\n\n## Tarefa\n\n${prompt}`
-        : prompt;
+      const fullPrompt =
+        firstSend && reconciledPrompt.trim()
+          ? `## Instrucoes do agente\n\n${reconciledPrompt}\n\n## Tarefa\n\n${prompt}`
+          : prompt;
       firstSend = false;
       try {
-        const response = await handle.send(fullPrompt, callbacks, abortSignal) as GrokAcpResponse;
+        const response = (await handle.send(fullPrompt, callbacks, abortSignal)) as GrokAcpResponse;
         const authError = pendingSubagentProviderAuthError(dispatchContext);
         if (authError) throw authError;
         return response;

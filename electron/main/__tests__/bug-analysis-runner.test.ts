@@ -1,9 +1,7 @@
-
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
 
 vi.mock('../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
@@ -25,9 +23,15 @@ vi.mock('../db', () => ({
   insertSecurityAgentStatus: vi.fn(),
   updateSecurityAgentStatus: vi.fn(),
   getSecurityAgentStatuses: vi.fn(() => []),
-  insertBugAnalysisAgentStatus: (...args: unknown[]) => { dbCalls.insertBug.push(args); },
-  updateBugAnalysisAgentStatus: (...args: unknown[]) => { dbCalls.updateBug.push(args); },
-  savePipelinePhaseMetrics: (row: Record<string, unknown>) => { dbCalls.metrics.push(row); },
+  insertBugAnalysisAgentStatus: (...args: unknown[]) => {
+    dbCalls.insertBug.push(args);
+  },
+  updateBugAnalysisAgentStatus: (...args: unknown[]) => {
+    dbCalls.updateBug.push(args);
+  },
+  savePipelinePhaseMetrics: (row: Record<string, unknown>) => {
+    dbCalls.metrics.push(row);
+  },
 }));
 
 vi.mock('../agent-config-resolver', () => ({
@@ -62,7 +66,6 @@ import {
 import type { PipelineEngine } from '../pipeline-engine';
 import type { BugContext } from '../bug-paths';
 
-
 let tmpRoot = '';
 let runDir = '';
 let bugCtx: BugContext;
@@ -87,11 +90,15 @@ function makeBugContext(root: string): BugContext {
   };
 }
 
-interface SpawnCall { agentId: string; prompt: string }
+interface SpawnCall {
+  agentId: string;
+  prompt: string;
+}
 
-function makeEngine(
-  impl: (agentId: string, prompt: string, opts: Record<string, unknown>) => Promise<unknown>,
-): { engine: PipelineEngine; calls: SpawnCall[] } {
+function makeEngine(impl: (agentId: string, prompt: string, opts: Record<string, unknown>) => Promise<unknown>): {
+  engine: PipelineEngine;
+  calls: SpawnCall[];
+} {
   const calls: SpawnCall[] = [];
   const engine = {
     spawnAgent: vi.fn(async (agentId: string, prompt: string, opts: Record<string, unknown>) => {
@@ -138,9 +145,11 @@ afterEach(() => {
 });
 
 function analiseFilesInRunDir(): string[] {
-  return fs.readdirSync(runDir).filter((f) => f.startsWith('analise-0')).sort();
+  return fs
+    .readdirSync(runDir)
+    .filter((f) => f.startsWith('analise-0'))
+    .sort();
 }
-
 
 describe('BugAnalysisRunner — caminho feliz (TB-8, TB-9, TB-10, 4.7.2)', () => {
   async function runHappyPath() {
@@ -166,17 +175,12 @@ describe('BugAnalysisRunner — caminho feliz (TB-8, TB-9, TB-10, 4.7.2)', () =>
     expect(calls).toHaveLength(3);
     const ids = calls.map((c) => c.agentId).sort();
     expect(new Set(ids).size).toBe(3);
-    expect(ids).toEqual([
-      'bug-context-historian',
-      'bug-hypothesis-refuter',
-      'bug-root-cause-analyst',
-    ]);
+    expect(ids).toEqual(['bug-context-historian', 'bug-hypothesis-refuter', 'bug-root-cause-analyst']);
   });
 
   it('TB-9: pipeline:stream sai com 3 pares auditAgentId/auditAgentSlug distintos', async () => {
     await runHappyPath();
-    const streamChunks = emitted
-      .filter((e) => e.channel === 'pipeline:stream' && e.payload.auditAgentId !== undefined);
+    const streamChunks = emitted.filter((e) => e.channel === 'pipeline:stream' && e.payload.auditAgentId !== undefined);
     expect(streamChunks.length).toBeGreaterThanOrEqual(3);
 
     const pairs = new Set(
@@ -196,9 +200,7 @@ describe('BugAnalysisRunner — caminho feliz (TB-8, TB-9, TB-10, 4.7.2)', () =>
 
     const writtenPaths = writeSpy.mock.calls.map((c) => String(c[0]));
     expect(writtenPaths).toHaveLength(3);
-    expect(writtenPaths.sort()).toEqual(
-      [bugCtx.analise01Path, bugCtx.analise02Path, bugCtx.analise03Path].sort(),
-    );
+    expect(writtenPaths.sort()).toEqual([bugCtx.analise01Path, bugCtx.analise02Path, bugCtx.analise03Path].sort());
     for (const p of writtenPaths) {
       expect(path.dirname(p)).toBe(runDir);
       expect(path.basename(p)).toContain(RUN_ID);
@@ -213,10 +215,7 @@ describe('BugAnalysisRunner — caminho feliz (TB-8, TB-9, TB-10, 4.7.2)', () =>
     await runHappyPath();
     expect(persistMessageSpy).not.toHaveBeenCalled();
 
-    const source = fs.readFileSync(
-      path.join(__dirname, '..', 'bug-analysis-runner.ts'),
-      'utf-8',
-    );
+    const source = fs.readFileSync(path.join(__dirname, '..', 'bug-analysis-runner.ts'), 'utf-8');
     const mentions = source.split('\n').filter((l) => l.includes('persistMessage'));
     expect(mentions.every((l) => l.trim().startsWith('*') || l.trim().startsWith('//'))).toBe(true);
     expect(source.includes('persistMessage(')).toBe(false);
@@ -227,9 +226,7 @@ describe('BugAnalysisRunner — caminho feliz (TB-8, TB-9, TB-10, 4.7.2)', () =>
     const perAgent = dbCalls.metrics.filter((m) => m.phaseNumber === 2);
     expect(perAgent).toHaveLength(3);
     expect(perAgent.map((m) => m.sprintIndex).sort()).toEqual([1, 2, 3]);
-    expect(
-      perAgent.map((m) => `${String(m.agentId)}:${String(m.sprintIndex)}`).sort(),
-    ).toEqual([
+    expect(perAgent.map((m) => `${String(m.agentId)}:${String(m.sprintIndex)}`).sort()).toEqual([
       'bug-context-historian:2',
       'bug-hypothesis-refuter:3',
       'bug-root-cause-analyst:1',
@@ -253,9 +250,19 @@ describe('BugAnalysisRunner — caminho feliz (TB-8, TB-9, TB-10, 4.7.2)', () =>
     expect(new Set(completed.map((e) => String(e.payload.slug))).size).toBe(3);
 
     const SECURITY_PAYLOAD_KEYS = [
-      'projectId', 'agentId', 'slug', 'agentName', 'status', 'filesAnalyzed',
-      'additionalFilesAfterStart', 'toolCallsCount', 'costUsd', 'durationMs',
-      'findingsCount', 'model', 'runtime',
+      'projectId',
+      'agentId',
+      'slug',
+      'agentName',
+      'status',
+      'filesAnalyzed',
+      'additionalFilesAfterStart',
+      'toolCallsCount',
+      'costUsd',
+      'durationMs',
+      'findingsCount',
+      'model',
+      'runtime',
     ].sort();
     for (const e of completed) {
       expect(Object.keys(e.payload).sort()).toEqual(SECURITY_PAYLOAD_KEYS);
@@ -281,7 +288,6 @@ describe('BugAnalysisRunner — caminho feliz (TB-8, TB-9, TB-10, 4.7.2)', () =>
     }
   });
 });
-
 
 describe('BugAnalysisRunner — pool, abort e pausa (TB-11)', () => {
   it('roda os 3 em ONDA UNICA (pico de concorrencia = 3)', async () => {
@@ -355,13 +361,11 @@ describe('BugAnalysisRunner — pool, abort e pausa (TB-11)', () => {
     ).rejects.toBe(pause);
 
     const pendingBack = dbCalls.updateBug.filter(
-      (args) => args[2] === 'bug-root-cause-analyst'
-        && (args[3] as { status?: string }).status === 'pending',
+      (args) => args[2] === 'bug-root-cause-analyst' && (args[3] as { status?: string }).status === 'pending',
     );
     expect(pendingBack).toHaveLength(1);
   });
 });
-
 
 describe('BugAnalysisRunner — hard fail do diagnostico (TB-11b / B-AC23)', () => {
   for (const scenario of ['ausente', 'vazio apos trim'] as const) {
@@ -398,7 +402,6 @@ describe('BugAnalysisRunner — hard fail do diagnostico (TB-11b / B-AC23)', () 
     });
   }
 });
-
 
 describe('buildBugAnalysisPrompt / resolveBugAnalysisOutputPath', () => {
   it('injeta o conteudo integral do diagnostico, o path absoluto e o bloco do grafo', () => {

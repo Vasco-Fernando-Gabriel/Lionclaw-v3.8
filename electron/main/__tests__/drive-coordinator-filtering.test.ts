@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Mock } from 'vitest';
 import type { DriveState } from '../../../src/types';
@@ -60,10 +59,35 @@ function fakeSetDriveState(projectId: string, patch: Partial<DriveState>): Drive
   return merged;
 }
 
+function fakeGetDriveSessionId(projectId: string): string | null {
+  return projects.get(projectId)?.config.drive?.sessionId ?? null;
+}
+function fakeIsDriveEngaged(projectId: string): boolean {
+  const drive = fakeGetDriveState(projectId);
+  return !!drive && drive.driver === 'orchestrator' && drive.status !== 'stopped';
+}
+function fakeListHarnessProjectsBySession(sessionId: string): FakeProject[] {
+  return [...projects.values()].filter((p) => p.config.drive?.sessionId === sessionId);
+}
+function fakeFindEngagedDriveBySession(sessionId: string): FakeProject | null {
+  return fakeListHarnessProjectsBySession(sessionId).find((p) => fakeIsDriveEngaged(p.id)) ?? null;
+}
+function fakeGetOpenLaneSessionById(id: string): { id: string; laneBadge: number; title: string } | null {
+  if (!id || closedLanes.has(id)) return null;
+  return { id, laneBadge: Number(id.replace(/\D/g, '')) || 1, title: id };
+}
+const closedLanes = new Set<string>();
+
 vi.mock('../db', () => ({
   getHarnessProject: vi.fn((id: string) => fakeGetHarnessProject(id)),
   listHarnessProjects: vi.fn(() => fakeListHarnessProjects()),
+  listHarnessProjectsBySession: vi.fn((id: string) => fakeListHarnessProjectsBySession(id)),
+  findEngagedDriveBySession: vi.fn((id: string) => fakeFindEngagedDriveBySession(id)),
   getDriveState: vi.fn((id: string) => fakeGetDriveState(id)),
+  getDriveSessionId: vi.fn((id: string) => fakeGetDriveSessionId(id)),
+  isDriveEngaged: vi.fn((id: string) => fakeIsDriveEngaged(id)),
+  getOpenLaneSessionById: vi.fn((id: string) => fakeGetOpenLaneSessionById(id)),
+  getSession: vi.fn((id: string) => ({ id })),
   setDriveState: vi.fn((id: string, patch: Partial<DriveState>) => fakeSetDriveState(id, patch)),
   getLatestUserTurnIndex: vi.fn(() => 0),
 }));
@@ -86,9 +110,7 @@ vi.mock('../orchestrator', () => ({
 }));
 
 vi.mock('../pipeline-control-core', async () => {
-  const actual = await vi.importActual<typeof import('../pipeline-control-core')>(
-    '../pipeline-control-core',
-  );
+  const actual = await vi.importActual<typeof import('../pipeline-control-core')>('../pipeline-control-core');
   return {
     ...actual,
     resolvePendingQuestion: vi.fn(() => 'O agente da fase perguntou algo.'),
@@ -99,20 +121,9 @@ import { submitMessage } from '../orchestrator';
 import { notifyDriveHandoff } from '../telegram-bridge';
 import { pipelineEventBus } from '../pipeline-event-bus';
 import { _resetDriveLockForTesting } from '../drive-lock';
-import {
-  PipelineDriveCoordinator,
-  isControlGate,
-  isHumanGate,
-} from '../pipeline-drive-coordinator';
-import {
-  startPipelineControlPhaseCache,
-  _resetPipelineControlPhaseCacheForTesting,
-} from '../pipeline-control-core';
-import {
-  reportDriveTurnComplete,
-  _resetDriveUsageSinkForTesting,
-} from '../drive-usage-sink';
-
+import { PipelineDriveCoordinator, isControlGate, isHumanGate } from '../pipeline-drive-coordinator';
+import { startPipelineControlPhaseCache, _resetPipelineControlPhaseCacheForTesting } from '../pipeline-control-core';
+import { reportDriveTurnComplete, _resetDriveUsageSinkForTesting } from '../drive-usage-sink';
 
 function seedProject(over: Partial<FakeProject> = {}): FakeProject {
   const p: FakeProject = {
@@ -137,11 +148,7 @@ function makeCoordinator(): PipelineDriveCoordinator {
 
 const submitMock = submitMessage as Mock;
 
-function engageDriveOnAutoPhase(
-  coord: PipelineDriveCoordinator,
-  projectId: string,
-  autoPhase: number,
-): void {
+function engageDriveOnAutoPhase(coord: PipelineDriveCoordinator, projectId: string, autoPhase: number): void {
   const project = projects.get(projectId)!;
   project.pipelineCurrentPhase = autoPhase;
   coord.startDrive(projectId, 'sess_1', 'semi');
@@ -165,12 +172,7 @@ function drainInFlight(projectId: string): void {
   }
 }
 
-function emitPhaseChanged(
-  projectId: string,
-  phase: number | null,
-  status: string,
-  awaitingUser?: boolean,
-): void {
+function emitPhaseChanged(projectId: string, phase: number | null, status: string, awaitingUser?: boolean): void {
   pipelineEventBus.emit('pipeline:phase-changed', {
     projectId,
     phase,
@@ -203,13 +205,12 @@ describe('coordinator filtering (SPRINT-C / Parte C / BUG-3)', () => {
     vi.useRealTimers();
   });
 
-
   it('C-AC1 dev/conversation: started awaitingUser:true (greeting fresco) -> semeia', () => {
     seedProject({ pipelineType: 'development' });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 2); // PRD Generator (auto)
+    engageDriveOnAutoPhase(coord, 'proj_a', 2);
 
-    enterConversationPhaseAndCloseGreeting('proj_a', 3); // PRD Validator (conversation)
+    enterConversationPhaseAndCloseGreeting('proj_a', 3);
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
 
@@ -220,7 +221,7 @@ describe('coordinator filtering (SPRINT-C / Parte C / BUG-3)', () => {
 
     const project = projects.get('proj_a')!;
     project.pipelineCurrentPhase = 3;
-    emitPhaseChanged('proj_a', 3, 'started'); // sem awaitingUser
+    emitPhaseChanged('proj_a', 3, 'started');
     pipelineEventBus.emit('pipeline:stream', { projectId: 'proj_a', phase: 3, type: 'done' });
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
@@ -228,36 +229,36 @@ describe('coordinator filtering (SPRINT-C / Parte C / BUG-3)', () => {
   it('C-AC1 feature/conversation: started awaitingUser:true -> semeia', () => {
     seedProject({ pipelineType: 'feature' });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 2); // feat-prd-generator (auto)
+    engageDriveOnAutoPhase(coord, 'proj_a', 2);
 
-    enterConversationPhaseAndCloseGreeting('proj_a', 3); // feat-prd-validator (conversation)
+    enterConversationPhaseAndCloseGreeting('proj_a', 3);
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
 
   it('C-AC1 security/conversation: started awaitingUser:true (Skeptic Security fase 4) -> semeia', () => {
     seedProject({ pipelineType: 'security' });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 3); // Deduplicador (auto)
+    engageDriveOnAutoPhase(coord, 'proj_a', 3);
 
-    enterConversationPhaseAndCloseGreeting('proj_a', 4); // Skeptic Security (conversation)
+    enterConversationPhaseAndCloseGreeting('proj_a', 4);
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
 
   it('C-AC1 architecture-review/conversation: started awaitingUser:true (Triagem fase 2) -> semeia', () => {
     seedProject({ pipelineType: 'architecture-review' });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 1); // architecture-mapper (auto)
+    engageDriveOnAutoPhase(coord, 'proj_a', 1);
 
-    enterConversationPhaseAndCloseGreeting('proj_a', 2); // Triagem de Alvos (conversation)
+    enterConversationPhaseAndCloseGreeting('proj_a', 2);
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
 
   it('C-AC1 development-v2/conversation: started awaitingUser:true (Database fase 8) -> semeia', () => {
     seedProject({ pipelineType: 'development-v2' });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 7); // PRD Completo (auto)
+    engageDriveOnAutoPhase(coord, 'proj_a', 7);
 
-    enterConversationPhaseAndCloseGreeting('proj_a', 8); // Database (conversation)
+    enterConversationPhaseAndCloseGreeting('proj_a', 8);
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
 
@@ -292,7 +293,7 @@ describe('coordinator filtering (SPRINT-C / Parte C / BUG-3)', () => {
   it('C-AC1 dev/auto: started !awaitingUser (PRD Generator fase 2) -> nao semeia', () => {
     seedProject({ pipelineType: 'development' });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 1); // engata na fase 1 (drena)
+    engageDriveOnAutoPhase(coord, 'proj_a', 1);
     const project = projects.get('proj_a')!;
 
     project.pipelineCurrentPhase = 2;
@@ -314,7 +315,7 @@ describe('coordinator filtering (SPRINT-C / Parte C / BUG-3)', () => {
   it('C-AC1 dev/loop: loop-ready !awaitingUser (Coder fase 13) -> nao semeia', () => {
     seedProject({ pipelineType: 'development' });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 11); // Planner (auto)
+    engageDriveOnAutoPhase(coord, 'proj_a', 11);
     const project = projects.get('proj_a')!;
 
     project.pipelineCurrentPhase = 13;
@@ -325,10 +326,10 @@ describe('coordinator filtering (SPRINT-C / Parte C / BUG-3)', () => {
   it('C-AC1 dev/loop: transicao PARA fase tipo loop (Iniciar desenvolvimento) -> nao semeia', () => {
     seedProject({ pipelineType: 'development' });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 12); // Sprint Validator (conversation) - usamos como pre auto-ish
+    engageDriveOnAutoPhase(coord, 'proj_a', 12);
     const project = projects.get('proj_a')!;
 
-    project.pipelineCurrentPhase = 13; // Coder (loop)
+    project.pipelineCurrentPhase = 13;
     emitPhaseChanged('proj_a', 13, 'loop-ready', false);
     expect(submitMock).not.toHaveBeenCalled();
   });
@@ -359,11 +360,10 @@ describe('coordinator filtering (SPRINT-C / Parte C / BUG-3)', () => {
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
 
-
   it('C-05 development-v2/auto-loop: started (awaitingUser:false, como o lifecycle emite) na fase 12 -> NAO semeia (loop, nao review)', () => {
     seedProject({ pipelineType: 'development-v2', pipelineCurrentPhase: 7 });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 7); // PRD Completo (auto)
+    engageDriveOnAutoPhase(coord, 'proj_a', 7);
 
     const project = projects.get('proj_a')!;
     project.pipelineCurrentPhase = 12;
@@ -423,11 +423,10 @@ describe('coordinator filtering (SPRINT-C / Parte C / BUG-3)', () => {
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
 
-
   it('C-05 feature/auto-loop fase 9 (spec-builder): loop silencioso e SO o awaiting-spec-review dispara (exatamente 1 turno)', () => {
     seedProject({ pipelineType: 'feature', pipelineCurrentPhase: 2 });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 2); // feat-prd-generator (auto)
+    engageDriveOnAutoPhase(coord, 'proj_a', 2);
 
     const project = projects.get('proj_a')!;
     project.pipelineCurrentPhase = 9;
@@ -445,7 +444,7 @@ describe('coordinator filtering (SPRINT-C / Parte C / BUG-3)', () => {
   it('C-05 security/auto-loop fase 6 (spec-builder): loop silencioso e SO o awaiting-spec-review dispara (exatamente 1 turno)', () => {
     seedProject({ pipelineType: 'security', pipelineCurrentPhase: 3 });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 3); // Deduplicador (auto)
+    engageDriveOnAutoPhase(coord, 'proj_a', 3);
 
     const project = projects.get('proj_a')!;
     project.pipelineCurrentPhase = 6;
@@ -518,9 +517,8 @@ describe('coordinator filtering (SPRINT-C / Parte C / BUG-3)', () => {
     expect(submitMock).not.toHaveBeenCalled();
   });
 
-
   it('C-AC2: agente concluiu apos trabalho interno e fase aguarda approve -> reconciliacao DB-first semeia turno (evento processado com DB divergente do live)', () => {
-    seedProject({ pipelineType: 'development', pipelineCurrentPhase: 11 }); // Planner (auto)
+    seedProject({ pipelineType: 'development', pipelineCurrentPhase: 11 });
     const coord = makeCoordinator();
     coord.startDrive('proj_a', 'sess_1', 'semi');
     vi.advanceTimersByTime(1);
@@ -529,7 +527,7 @@ describe('coordinator filtering (SPRINT-C / Parte C / BUG-3)', () => {
 
     const project = projects.get('proj_a')!;
     project.pipelineCurrentPhase = 12;
-    emitPhaseChanged('proj_a', 12, 'started', true); // arma o greeting-gate da 12 + cacheia
+    emitPhaseChanged('proj_a', 12, 'started', true);
     pipelineEventBus.emit('pipeline:stream', { projectId: 'proj_a', phase: 12, type: 'done' });
     vi.advanceTimersByTime(1);
     drainInFlight('proj_a');
@@ -545,7 +543,7 @@ describe('coordinator filtering (SPRINT-C / Parte C / BUG-3)', () => {
   });
 
   it('C-AC2b: reconciliacao respeita o greeting-gate de B (divergencia durante greeting in-flight NAO fura o gate)', () => {
-    seedProject({ pipelineType: 'development', pipelineCurrentPhase: 2 }); // PRD Generator (auto)
+    seedProject({ pipelineType: 'development', pipelineCurrentPhase: 2 });
     const coord = makeCoordinator();
     coord.startDrive('proj_a', 'sess_1', 'semi');
     vi.advanceTimersByTime(1);
@@ -555,7 +553,7 @@ describe('coordinator filtering (SPRINT-C / Parte C / BUG-3)', () => {
     const project = projects.get('proj_a')!;
     project.pipelineCurrentPhase = 3;
     emitPhaseChanged('proj_a', 3, 'started', true);
-    submitMock.mockClear(); // o started ja foi represado pelo greeting-gate
+    submitMock.mockClear();
 
     pipelineEventBus.emit('pipeline:stream', { projectId: 'proj_a', phase: 2, type: 'done' });
     expect(submitMock).not.toHaveBeenCalled();
@@ -578,7 +576,6 @@ describe('coordinator filtering (SPRINT-C / Parte C / BUG-3)', () => {
     expect(submitMock).toHaveBeenCalledTimes(1);
   });
 
-
   it('C-AC3: fase OD e faixa silenciosa (reconciliacao DB-first NAO semeia turno na fase do design)', () => {
     seedProject({
       pipelineType: 'development-v2',
@@ -598,7 +595,6 @@ describe('coordinator filtering (SPRINT-C / Parte C / BUG-3)', () => {
     expect(submitMock).not.toHaveBeenCalled();
   });
 });
-
 
 describe('familia bug: tabela evento->semeia (TB-28) e politica de gate (TB-34)', () => {
   beforeEach(() => {
@@ -620,7 +616,7 @@ describe('familia bug: tabela evento->semeia (TB-28) e politica de gate (TB-34)'
   it('C-AC1 bug/conversation: fase 1 (Bug Discovery) started awaitingUser:true -> semeia', () => {
     seedProject({ pipelineType: 'bug', pipelineCurrentPhase: 2 });
     const coord = makeCoordinator();
-    engageDriveOnAutoPhase(coord, 'proj_a', 2); // Analise Paralela (auto)
+    engageDriveOnAutoPhase(coord, 'proj_a', 2);
 
     enterConversationPhaseAndCloseGreeting('proj_a', 1);
     expect(submitMock).toHaveBeenCalledTimes(1);
@@ -723,7 +719,6 @@ describe('familia bug: tabela evento->semeia (TB-28) e politica de gate (TB-34)'
     expect(submitMock).not.toHaveBeenCalled();
   });
 
-
   it('TB-34: isControlGate("bug", 3) === true e isHumanGate("bug", 3) === false', () => {
     expect(isControlGate('bug', 3)).toBe(true);
     expect(isHumanGate('bug', 3)).toBe(false);
@@ -740,7 +735,6 @@ describe('familia bug: tabela evento->semeia (TB-28) e politica de gate (TB-34)'
     }
   });
 });
-
 
 describe('TB-41 / O12: onPipelineCompleted por desfecho do Bug Pipe', () => {
   beforeEach(() => {
@@ -805,13 +799,7 @@ describe('TB-41 / O12: onPipelineCompleted por desfecho do Bug Pipe', () => {
   });
 
   it('NAO-REGRESSAO: os 5 tipos existentes (sem config.bug) mantem o texto atual', () => {
-    for (const pipelineType of [
-      'development',
-      'feature',
-      'security',
-      'architecture-review',
-      'development-v2',
-    ]) {
+    for (const pipelineType of ['development', 'feature', 'security', 'architecture-review', 'development-v2']) {
       projects.clear();
       pipelineEventBus._resetForTesting();
       _resetDriveLockForTesting();

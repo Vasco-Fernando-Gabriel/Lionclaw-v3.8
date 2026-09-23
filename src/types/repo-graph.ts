@@ -1,5 +1,3 @@
-
-
 export type LocalRepositoryStatus = 'absent' | 'building' | 'ready' | 'stale' | 'error';
 
 export interface LocalRepositoryRecord {
@@ -47,12 +45,7 @@ export interface SessionActiveRepositoryRecord {
   updatedAt: string;
 }
 
-export type RepoGraphUsageSource =
-  | 'orchestrator-mcp'
-  | 'subagent-mcp'
-  | 'prefetch'
-  | 'runtime-limited'
-  | 'build';
+export type RepoGraphUsageSource = 'orchestrator-mcp' | 'subagent-mcp' | 'prefetch' | 'runtime-limited' | 'build';
 
 export interface RepoGraphTurnUsageRecord {
   id: string;
@@ -69,7 +62,6 @@ export interface RepoGraphTurnUsageRecord {
   durationMs: number;
   createdAt: string;
 }
-
 
 export interface RepoStalenessResult {
   stale: boolean;
@@ -95,7 +87,6 @@ export interface RepoGraphStatusEvent {
   error?: string;
 }
 
-
 export interface RepoGraphTurnSample {
   toolCalls: number;
   tokens: number;
@@ -116,17 +107,8 @@ export interface RepoGraphSavingsMetrics {
   windowMet: boolean;
 }
 
-
 export type RepoGraphBadgeState =
-  | 'no-repo' // apagada — nenhum repositorio ativo nesta conversa
-  | 'graph-absent' // apagada com CTA — graph ausente, clique para criar
-  | 'building' // discreta animada — indexando repositorio
-  | 'ready' // discreta — CodeGraph pronto (nao usado no turno)
-  | 'used-in-turn' // acesa — CodeGraph usado neste turno
-  | 'stale' // amarela — graph desatualizado, clique para atualizar
-  | 'error' // vermelha discreta — erro no CodeGraph
-  | 'runtime-limited'; // discreta com aviso — runtime usando contexto precomputado
-
+  'no-repo' | 'graph-absent' | 'building' | 'ready' | 'used-in-turn' | 'stale' | 'error' | 'runtime-limited';
 
 export interface RepoGraphStatusResult {
   repository: LocalRepositoryRecord;
@@ -144,29 +126,14 @@ export interface RepoGraphAPI {
   addRepository: (rawPath: string) => Promise<LocalRepositoryRecord | { error: string }>;
   removeRepository: (repositoryId: string) => Promise<{ ok: true } | { error: string }>;
   getSessionState: (sessionId: string) => Promise<SessionRepoGraphState | { error: string }>;
-  attachSession: (
-    sessionId: string,
-    repositoryId: string,
-  ) => Promise<{ ok: true } | { error: string }>;
+  attachSession: (sessionId: string, repositoryId: string) => Promise<{ ok: true } | { error: string }>;
   detachSession: (sessionId: string) => Promise<{ ok: true } | { error: string }>;
-  setPromptSuppressed: (
-    sessionId: string,
-    suppressed: boolean,
-  ) => Promise<{ ok: true } | { error: string }>;
-  setGlobalPromptSuppressed: (
-    repositoryId: string,
-    suppressed: boolean,
-  ) => Promise<{ ok: true } | { error: string }>;
+  setPromptSuppressed: (sessionId: string, suppressed: boolean) => Promise<{ ok: true } | { error: string }>;
+  setGlobalPromptSuppressed: (repositoryId: string, suppressed: boolean) => Promise<{ ok: true } | { error: string }>;
   status: (repositoryId: string) => Promise<RepoGraphStatusResult | { error: string }>;
   metrics: () => Promise<RepoGraphSavingsMetrics | { error: string }>;
-  build: (
-    repositoryId: string,
-    sessionId?: string | null,
-  ) => Promise<{ runId: string } | { error: string }>;
-  update: (
-    repositoryId: string,
-    sessionId?: string | null,
-  ) => Promise<{ runId: string } | { error: string }>;
+  build: (repositoryId: string, sessionId?: string | null) => Promise<{ runId: string } | { error: string }>;
+  update: (repositoryId: string, sessionId?: string | null) => Promise<{ runId: string } | { error: string }>;
   onStatus: (cb: (event: RepoGraphStatusEvent) => void) => () => void;
 }
 

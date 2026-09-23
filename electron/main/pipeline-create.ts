@@ -1,26 +1,12 @@
-
 import { createLogger } from './logger';
 import type { HarnessConfig, HarnessProject } from '../../src/types';
-import {
-  insertHarnessProject,
-  updateHarnessProject,
-  updateHarnessProjectPipelineMeta,
-} from './db';
-import {
-  generatePipelineDocsId,
-  getPipelineDocsContext,
-  migrateHarnessSprintsToPipelineDocs,
-} from './pipeline-paths';
+import { insertHarnessProject, updateHarnessProject, updateHarnessProjectPipelineMeta } from './db';
+import { generatePipelineDocsId, getPipelineDocsContext, migrateHarnessSprintsToPipelineDocs } from './pipeline-paths';
 
 const logger = createLogger('pipeline-create');
 
 export type CreatablePipelineType =
-  | 'development'
-  | 'development-v2'
-  | 'security'
-  | 'feature'
-  | 'architecture-review'
-  | 'bug';
+  'development' | 'development-v2' | 'security' | 'feature' | 'architecture-review' | 'bug';
 
 export interface CreatePipelineProjectParams {
   name: string;
@@ -32,14 +18,9 @@ export interface CreatePipelineProjectParams {
   pipelineType?: CreatablePipelineType;
 }
 
-export function createPipelineProject(
-  params: CreatePipelineProjectParams,
-): HarnessProject {
+export function createPipelineProject(params: CreatePipelineProjectParams): HarnessProject {
   const resolvedType = params.pipelineType ?? 'development';
-  const needsDocsId =
-    resolvedType === 'feature' ||
-    resolvedType === 'security' ||
-    resolvedType === 'development-v2';
+  const needsDocsId = resolvedType === 'feature' || resolvedType === 'security' || resolvedType === 'development-v2';
   const pipelineDocsId = needsDocsId ? generatePipelineDocsId() : null;
 
   const baseConfig: HarnessConfig = {
@@ -69,10 +50,7 @@ export function createPipelineProject(
   });
 
   if (pipelineDocsId) {
-    const sprintsMigration = migrateHarnessSprintsToPipelineDocs(
-      project,
-      pipelineDocsId,
-    );
+    const sprintsMigration = migrateHarnessSprintsToPipelineDocs(project, pipelineDocsId);
     if (sprintsMigration.status !== 'source-missing') {
       updateHarnessProject(project.id, {
         sprintsJsonPath: sprintsMigration.pathToPersist,

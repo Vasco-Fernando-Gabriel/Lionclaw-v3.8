@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../db', () => ({
@@ -10,11 +9,7 @@ vi.mock('../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-import {
-  deriveMcpGatewayDisplayName,
-  GATEWAY_INVOKE_TOOL_NAME,
-  GATEWAY_SCHEMA_TOOL_NAME,
-} from '../mcp-display';
+import { deriveMcpGatewayDisplayName, GATEWAY_INVOKE_TOOL_NAME, GATEWAY_SCHEMA_TOOL_NAME } from '../mcp-display';
 import { processAgentStream } from '../stream-processor';
 import { deriveToolDetail, recordActivity } from '../activity-log';
 import { upsertActivityLog } from '../db';
@@ -25,7 +20,6 @@ const mockUpsert = upsertActivityLog as ReturnType<typeof vi.fn>;
 beforeEach(() => {
   vi.clearAllMocks();
 });
-
 
 describe('deriveMcpGatewayDisplayName', () => {
   it('mapeia invoke e schema do gateway para o alvo real', () => {
@@ -55,12 +49,9 @@ describe('deriveMcpGatewayDisplayName', () => {
     expect(deriveMcpGatewayDisplayName(GATEWAY_INVOKE_TOOL_NAME, {})).toBeNull();
     expect(deriveMcpGatewayDisplayName(GATEWAY_INVOKE_TOOL_NAME, { server: 'gmail' })).toBeNull();
     expect(deriveMcpGatewayDisplayName(GATEWAY_INVOKE_TOOL_NAME, { server: '', tool: 'x' })).toBeNull();
-    expect(
-      deriveMcpGatewayDisplayName(GATEWAY_INVOKE_TOOL_NAME, { server: 'a b', tool: 'x' }),
-    ).toBeNull();
+    expect(deriveMcpGatewayDisplayName(GATEWAY_INVOKE_TOOL_NAME, { server: 'a b', tool: 'x' })).toBeNull();
   });
 });
-
 
 async function* fakeStream(events: Array<Record<string, unknown>>) {
   for (const e of events) yield e;
@@ -115,10 +106,9 @@ describe('processAgentStream — AC-9 no complete da tool', () => {
 
   it('tool MCP normal -> display atual (nome inalterado)', async () => {
     const onToolUseComplete = vi.fn();
-    await processAgentStream(
-      fakeStream(toolUseEvents('mcp__google-gmail__send_email', { to: 'a@b.c' })),
-      { onToolUseComplete },
-    );
+    await processAgentStream(fakeStream(toolUseEvents('mcp__google-gmail__send_email', { to: 'a@b.c' })), {
+      onToolUseComplete,
+    });
     expect(onToolUseComplete).toHaveBeenCalledWith('mcp__google-gmail__send_email', {
       to: 'a@b.c',
     });
@@ -126,14 +116,12 @@ describe('processAgentStream — AC-9 no complete da tool', () => {
 
   it('gateway invoke com input imprestavel -> mantem o nome da meta-tool', async () => {
     const onToolUseComplete = vi.fn();
-    await processAgentStream(
-      fakeStream(toolUseEvents(GATEWAY_INVOKE_TOOL_NAME, { foo: 'bar' })),
-      { onToolUseComplete },
-    );
+    await processAgentStream(fakeStream(toolUseEvents(GATEWAY_INVOKE_TOOL_NAME, { foo: 'bar' })), {
+      onToolUseComplete,
+    });
     expect(onToolUseComplete).toHaveBeenCalledWith(GATEWAY_INVOKE_TOOL_NAME, { foo: 'bar' });
   });
 });
-
 
 describe('deriveToolDetail — meta-tool do gateway', () => {
   it('gateway invoke -> description carrega o alvo real', () => {
@@ -147,9 +135,7 @@ describe('deriveToolDetail — meta-tool do gateway', () => {
 
   it('tool normal segue o fluxo atual (fallback generico intacto)', () => {
     expect(deriveToolDetail('Bash', { command: 'ls -la' })).toEqual({ command: 'ls -la' });
-    expect(
-      deriveToolDetail('mcp__google-gmail__send_email', { query: 'oi' }),
-    ).toEqual({ description: 'oi' });
+    expect(deriveToolDetail('mcp__google-gmail__send_email', { query: 'oi' })).toEqual({ description: 'oi' });
   });
 });
 

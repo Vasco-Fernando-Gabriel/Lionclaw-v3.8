@@ -1,4 +1,3 @@
-
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -7,7 +6,6 @@ import path from 'path';
 const tempState = vi.hoisted(() => ({
   home: '',
 }));
-
 
 vi.mock('../../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
@@ -34,9 +32,7 @@ vi.mock('../../secrets-vault', () => ({
   getSecret: (key: string) => getSecretMock(key),
 }));
 
-const baseGuardMock = vi.hoisted(() =>
-  vi.fn(async () => ({ behavior: 'allow' as const, updatedInput: {} })),
-);
+const baseGuardMock = vi.hoisted(() => vi.fn(async () => ({ behavior: 'allow' as const, updatedInput: {} })));
 vi.mock('../../permission-guard', () => ({
   createPermissionGuard: vi.fn(() => baseGuardMock),
 }));
@@ -89,7 +85,6 @@ vi.mock('../../agent-runtime/cursor-sidecar/sidecar-manager', () => ({
   }),
 }));
 
-
 import { createChatCursorSession, buildCursorChatSessionKey } from '../session';
 import { CURSOR_GUARDED_NATIVE_ALLOWLIST } from '../../agent-runtime/cursor-sidecar/guarded-tools';
 import { cursorSessionStoreDir, loadCursorSession } from '../../agent-runtime/cursor-sidecar/session-registry';
@@ -118,17 +113,19 @@ beforeEach(() => {
 afterEach(() => {
   try {
     fs.rmSync(tempState.home, { recursive: true, force: true });
-  } catch { /* best effort */ }
+  } catch {
+    /* best effort */
+  }
 });
 
 describe('createChatCursorSession — driver da surface cursor-sdk', () => {
   it('modelo fora do catalogo -> LLM-MODEL-404 (pertencimento, nunca prefixo)', async () => {
-    await expect(
-      createChatCursorSession(baseOptions({ model: 'gpt-4o-mini' })),
-    ).rejects.toMatchObject({ code: 'LLM-MODEL-404' });
-    await expect(
-      createChatCursorSession(baseOptions({ model: 'gpt-4o-mini' })),
-    ).rejects.toBeInstanceOf(TypedProviderError);
+    await expect(createChatCursorSession(baseOptions({ model: 'gpt-4o-mini' }))).rejects.toMatchObject({
+      code: 'LLM-MODEL-404',
+    });
+    await expect(createChatCursorSession(baseOptions({ model: 'gpt-4o-mini' }))).rejects.toBeInstanceOf(
+      TypedProviderError,
+    );
   });
 
   it('sem CURSOR_API_KEY no Vault -> LLM-AUTH-401', async () => {
@@ -159,9 +156,7 @@ describe('createChatCursorSession — driver da surface cursor-sdk', () => {
     expect(toolNames).toContain('lion_write');
     expect(toolNames).toContain('lion_edit');
     expect(toolNames).not.toContain('lion_shell');
-    expect(String(config['cwd'])).toContain(
-      path.join(tempState.home, 'runtime', 'cursor-chat-workspaces', 'desktop'),
-    );
+    expect(String(config['cwd'])).toContain(path.join(tempState.home, 'runtime', 'cursor-chat-workspaces', 'desktop'));
   });
 
   it('rules materializadas no workspace proprio, com alwaysApply e o prompt da ponte', async () => {
@@ -177,8 +172,7 @@ describe('createChatCursorSession — driver da surface cursor-sdk', () => {
 
   it('guard composto NEGA escrita no subtree .cursor da sessao (fonte de instrucao protegida)', async () => {
     const session = await createChatCursorSession(baseOptions());
-    const permission = (dispatchContextState.captured as { permission: { canUseTool: Function } })
-      .permission;
+    const permission = (dispatchContextState.captured as { permission: { canUseTool: Function } }).permission;
     const denied = await permission.canUseTool(
       'Write',
       { file_path: path.join(session.workspace.workspaceDir, '.cursor', 'rules', 'x.mdc') },
@@ -187,11 +181,7 @@ describe('createChatCursorSession — driver da surface cursor-sdk', () => {
     expect(denied).toMatchObject({ behavior: 'deny' });
     expect(baseGuardMock).not.toHaveBeenCalled();
 
-    const allowed = await permission.canUseTool(
-      'Write',
-      { file_path: path.join(tempState.home, 'USER.md') },
-      {},
-    );
+    const allowed = await permission.canUseTool('Write', { file_path: path.join(tempState.home, 'USER.md') }, {});
     expect(allowed).toMatchObject({ behavior: 'allow' });
     expect(baseGuardMock).toHaveBeenCalledTimes(1);
   });
@@ -219,9 +209,7 @@ describe('createChatCursorSession — driver da surface cursor-sdk', () => {
     const { buildCursorSessionTools } = await import('../../agent-runtime/cursor-session-config');
     const { getMCPConfigForAgent } = await import('../../mcp-manager');
     const session = await createChatCursorSession(baseOptions({ lane: 'telegram' }));
-    expect(session.workspace.workspaceDir).toContain(
-      path.join('cursor-chat-workspaces', 'telegram'),
-    );
+    expect(session.workspace.workspaceDir).toContain(path.join('cursor-chat-workspaces', 'telegram'));
     expect(getMCPConfigForAgent).not.toHaveBeenCalled();
     const args = (buildCursorSessionTools as ReturnType<typeof vi.fn>).mock.calls[0][0] as {
       profile: string;

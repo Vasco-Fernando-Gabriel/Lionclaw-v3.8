@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -39,11 +38,7 @@ import {
   __resetOfficialCodexDriverCacheForTests,
   type ResolveCodexSessionArgs,
 } from '../agent-runtime/codex-session-factory';
-import {
-  listCodexManagedBlockServerNames,
-  getOfficialPhaseCodexSpawnExtraArgs,
-} from '../codex-pipeline-config';
-
+import { listCodexManagedBlockServerNames, getOfficialPhaseCodexSpawnExtraArgs } from '../codex-pipeline-config';
 
 const tmpHomes: string[] = [];
 const originalCodexHome = process.env.CODEX_HOME;
@@ -101,10 +96,7 @@ function lastRunOpts(): { extraArgs?: string[]; key: { ownerKind: string } } {
   return official.createRun.mock.calls[0][0] as { extraArgs?: string[]; key: { ownerKind: string } };
 }
 
-const CHAT_EXTRAS = [
-  '-c', 'mcp_servers.google-drive.enabled=false',
-  '-c', 'mcp_servers.lionclaw-gateway.enabled=true',
-];
+const CHAT_EXTRAS = ['-c', 'mcp_servers.google-drive.enabled=false', '-c', 'mcp_servers.lionclaw-gateway.enabled=true'];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -115,11 +107,7 @@ beforeEach(() => {
 describe('codex-pipeline-config: lista e extras do managed block', () => {
   it('listCodexManagedBlockServerNames: so entries DENTRO do managed, sub-tabela colapsa, ordenado', () => {
     useCodexHome(CONFIG_WITH_MANAGED);
-    expect(listCodexManagedBlockServerNames()).toEqual([
-      'google-drive',
-      'id com espaco',
-      'lionclaw-gateway',
-    ]);
+    expect(listCodexManagedBlockServerNames()).toEqual(['google-drive', 'id com espaco', 'lionclaw-gateway']);
   });
 
   it('sem markers no config => lista vazia (server pessoal do usuario fica de fora)', () => {
@@ -135,23 +123,26 @@ describe('codex-pipeline-config: lista e extras do managed block', () => {
   it('getOfficialPhaseCodexSpawnExtraArgs: -c enabled=false por server do managed, INCLUINDO o gateway, quoting do header', () => {
     useCodexHome(CONFIG_WITH_MANAGED);
     expect(getOfficialPhaseCodexSpawnExtraArgs()).toEqual([
-      '-c', 'mcp_servers.google-drive.enabled=false',
-      '-c', 'mcp_servers."id com espaco".enabled=false',
-      '-c', 'mcp_servers.lionclaw-gateway.enabled=false',
+      '-c',
+      'mcp_servers.google-drive.enabled=false',
+      '-c',
+      'mcp_servers."id com espaco".enabled=false',
+      '-c',
+      'mcp_servers.lionclaw-gateway.enabled=false',
     ]);
   });
 
   it('id patologico (com aspas) no managed e PULADO (mesma regra do sync: nao esta no TOML, nada a desligar)', () => {
-    useCodexHome([
-      '# >>> LIONCLAW_MANAGED (do not edit manually)',
-      '[mcp_servers.normal]',
-      'command = "node"',
-      '# <<< LIONCLAW_MANAGED',
-      '',
-    ].join('\n'));
-    expect(getOfficialPhaseCodexSpawnExtraArgs()).toEqual([
-      '-c', 'mcp_servers.normal.enabled=false',
-    ]);
+    useCodexHome(
+      [
+        '# >>> LIONCLAW_MANAGED (do not edit manually)',
+        '[mcp_servers.normal]',
+        'command = "node"',
+        '# <<< LIONCLAW_MANAGED',
+        '',
+      ].join('\n'),
+    );
+    expect(getOfficialPhaseCodexSpawnExtraArgs()).toEqual(['-c', 'mcp_servers.normal.enabled=false']);
   });
 });
 
@@ -162,9 +153,12 @@ describe('AC-C11: composicao por ownerKind no driver oficial', () => {
     const opts = lastRunOpts();
     expect(opts.key.ownerKind).toBe('pipeline');
     expect(opts.extraArgs).toEqual([
-      '-c', 'mcp_servers.google-drive.enabled=false',
-      '-c', 'mcp_servers."id com espaco".enabled=false',
-      '-c', 'mcp_servers.lionclaw-gateway.enabled=false',
+      '-c',
+      'mcp_servers.google-drive.enabled=false',
+      '-c',
+      'mcp_servers."id com espaco".enabled=false',
+      '-c',
+      'mcp_servers.lionclaw-gateway.enabled=false',
     ]);
     expect((opts.extraArgs ?? []).some((a) => a.includes('enabled=true'))).toBe(false);
   });
@@ -191,9 +185,7 @@ describe('AC-C11: composicao por ownerKind no driver oficial', () => {
 
   it('extras estruturais estampados num spawn de fase => falha RUIDOSA (composicao index e do chat, P6/P8)', async () => {
     useCodexHome(CONFIG_WITH_MANAGED);
-    await expect(resolveCodexSessionForRun(args({ extraArgs: CHAT_EXTRAS }))).rejects.toThrow(
-      /exclusiva do chat/,
-    );
+    await expect(resolveCodexSessionForRun(args({ extraArgs: CHAT_EXTRAS }))).rejects.toThrow(/exclusiva do chat/);
     expect(official.createRun).not.toHaveBeenCalled();
   });
 });

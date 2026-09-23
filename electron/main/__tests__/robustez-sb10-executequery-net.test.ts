@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { BrowserWindow } from 'electron';
 
@@ -98,7 +97,7 @@ vi.mock('../agent-runtime/codex-session-factory', () => ({
   })),
 }));
 vi.mock('../codex-sdk/stream-translator', () => ({
-  createCodexStreamTranslator: () => ({ callbacks: {}, finalize: vi.fn(), fail: vi.fn() }),
+  createCodexStreamTranslator: () => ({ callbacks: {}, finalize: vi.fn(), fail: vi.fn(), timelineEvents: () => [] }),
 }));
 
 import type { OrchestratorSelection } from '../orchestrator-selection';
@@ -149,7 +148,10 @@ vi.mock('../lion-sdk', () => ({
 }));
 
 import { executeQuery, type QueryOptions } from '../orchestrator';
-import { telegramLane, cronLane, desktopLane, type SdkLane } from '../sdk-lane';
+import { telegramLane, cronLane, type SdkLane } from '../sdk-lane';
+import { getDesktopLane } from '../desktop-lanes';
+
+const desktopLane = getDesktopLane('sess-net');
 
 const SELECTIONS: Record<string, OrchestratorSelection> = {
   'claude-sdk': { runtime: 'claude-sdk', provider: 'anthropic', model: 'model-a', source: 'settings' },
@@ -193,8 +195,7 @@ function options(overrides: Partial<QueryOptions> = {}): QueryOptions {
   return { sessionId: 'sess-net', silent: false, ...overrides };
 }
 
-const llmEmptyChunks = (chunks: SentChunk[]) =>
-  chunks.filter((c) => c.type === 'error' && c.code === 'LLM-EMPTY');
+const llmEmptyChunks = (chunks: SentChunk[]) => chunks.filter((c) => c.type === 'error' && c.code === 'LLM-EMPTY');
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -248,9 +249,7 @@ describe('SB-10 AC-B26 — rede de seguranca no completion de executeQuery cobre
     const { getWindow, chunks } = makeWindow();
     codexExec.mockRejectedValueOnce(new Error('executor exploded'));
 
-    await expect(executeQuery('turno', options(), getWindow, desktopLane)).rejects.toThrow(
-      'executor exploded',
-    );
+    await expect(executeQuery('turno', options(), getWindow, desktopLane)).rejects.toThrow('executor exploded');
 
     expect(llmEmptyChunks(chunks)).toHaveLength(1);
   });
@@ -289,17 +288,27 @@ describe('SB-10 AC-B26 — rede de seguranca no completion de executeQuery cobre
     expect(llmEmptyChunks(chunks)).toHaveLength(0);
   });
 
-  it('AC-B26: sessionId capturado do chunk `session` do executor viaja no fallback (sessao criada no executor)', async () => {
+  it('P2-2 (RM7): sem options.sessionId o turno e recusado com session_required e nenhum chunk sai sem lane', async () => {
     nextSelection = SELECTIONS['claude-compat-sdk'];
     const { getWindow, chunks } = makeWindow();
-    compatExec.mockImplementationOnce(async (_m, opts) => {
-      opts.onStreamChunk?.({ type: 'session', content: 'sess-criada-no-executor' });
-    });
 
-    await executeQuery('turno', options({ sessionId: undefined }), getWindow, desktopLane);
+    await expect(executeQuery('turno', options({ sessionId: undefined }), getWindow, desktopLane)).rejects.toThrow(
+      /session_required/,
+    );
+
+    expect(compatExec).not.toHaveBeenCalled();
+    expect(chunks).toHaveLength(0);
+  });
+
+  it('AC-B26: o fallback LLM-EMPTY sempre carrega o sessionId do turno', async () => {
+    nextSelection = SELECTIONS['claude-compat-sdk'];
+    const { getWindow, chunks } = makeWindow();
+    compatExec.mockImplementationOnce(async () => {});
+
+    await executeQuery('turno', options({ sessionId: 'sess-net' }), getWindow, desktopLane);
 
     const fallbacks = llmEmptyChunks(chunks);
     expect(fallbacks).toHaveLength(1);
-    expect(fallbacks[0].sessionId).toBe('sess-criada-no-executor');
+    expect(fallbacks[0].sessionId).toBe('sess-net');
   });
 });

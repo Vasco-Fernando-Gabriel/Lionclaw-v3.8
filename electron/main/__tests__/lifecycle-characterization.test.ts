@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 const capturedEvents: Array<{ channel: string; data: unknown }> = [];
 
@@ -28,10 +26,12 @@ vi.mock('../logger', () => ({
 }));
 vi.mock('electron', () => ({
   BrowserWindow: {
-    getAllWindows: vi.fn(() => [{
-      isDestroyed: () => false,
-      webContents: { send: (channel: string, data: unknown) => capturedEvents.push({ channel, data }) },
-    }]),
+    getAllWindows: vi.fn(() => [
+      {
+        isDestroyed: () => false,
+        webContents: { send: (channel: string, data: unknown) => capturedEvents.push({ channel, data }) },
+      },
+    ]),
   },
   app: { on: vi.fn() },
 }));
@@ -44,7 +44,12 @@ vi.mock('fs', () => {
   const readdirSync = (): string[] => [];
   return {
     default: { existsSync, rmSync, readFileSync, writeFileSync, mkdirSync, readdirSync },
-    existsSync, rmSync, readFileSync, writeFileSync, mkdirSync, readdirSync,
+    existsSync,
+    rmSync,
+    readFileSync,
+    writeFileSync,
+    mkdirSync,
+    readdirSync,
   };
 });
 vi.mock('path', () => ({
@@ -105,17 +110,41 @@ vi.mock('../db', () => ({
   ) => {
     const fields: string[] = [];
     const values: unknown[] = [];
-    if (columns.pipelineCurrentPhase !== undefined) { fields.push('pipeline_current_phase = ?'); values.push(columns.pipelineCurrentPhase); }
-    if (columns.pipelineStartPhase !== undefined) { fields.push('pipeline_start_phase = ?'); values.push(columns.pipelineStartPhase); }
-    if (columns.discoveryNotesPath !== undefined) { fields.push('discovery_notes_path = ?'); values.push(columns.discoveryNotesPath); }
-    if (columns.prdPath !== undefined) { fields.push('prd_path = ?'); values.push(columns.prdPath); }
-    if (columns.status !== undefined) { fields.push('status = ?'); values.push(columns.status); }
-    if (columns.pipelineSprintIndex !== undefined) { fields.push('pipeline_sprint_index = ?'); values.push(columns.pipelineSprintIndex); }
-    if (columns.pipelineDiscoveryBlock !== undefined) { fields.push('pipeline_discovery_block = ?'); values.push(columns.pipelineDiscoveryBlock); }
+    if (columns.pipelineCurrentPhase !== undefined) {
+      fields.push('pipeline_current_phase = ?');
+      values.push(columns.pipelineCurrentPhase);
+    }
+    if (columns.pipelineStartPhase !== undefined) {
+      fields.push('pipeline_start_phase = ?');
+      values.push(columns.pipelineStartPhase);
+    }
+    if (columns.discoveryNotesPath !== undefined) {
+      fields.push('discovery_notes_path = ?');
+      values.push(columns.discoveryNotesPath);
+    }
+    if (columns.prdPath !== undefined) {
+      fields.push('prd_path = ?');
+      values.push(columns.prdPath);
+    }
+    if (columns.status !== undefined) {
+      fields.push('status = ?');
+      values.push(columns.status);
+    }
+    if (columns.pipelineSprintIndex !== undefined) {
+      fields.push('pipeline_sprint_index = ?');
+      values.push(columns.pipelineSprintIndex);
+    }
+    if (columns.pipelineDiscoveryBlock !== undefined) {
+      fields.push('pipeline_discovery_block = ?');
+      values.push(columns.pipelineDiscoveryBlock);
+    }
     if (fields.length > 0) {
       fields.push(`updated_at = datetime('now')`);
       values.push(projectId);
-      capturedUpdates.push({ sql: norm(`UPDATE harness_projects SET ${fields.join(', ')} WHERE id = ?`), args: values });
+      capturedUpdates.push({
+        sql: norm(`UPDATE harness_projects SET ${fields.join(', ')} WHERE id = ?`),
+        args: values,
+      });
     }
   },
   getMostRecentInProgressRoundId: vi.fn(() => undefined),
@@ -125,7 +154,9 @@ vi.mock('../db', () => ({
   ),
   markPhaseMetricInterrupted: vi.fn((id: number) => {
     capturedUpdates.push({
-      sql: norm(`UPDATE pipeline_phase_metrics SET status = 'interrupted', completed_at = datetime('now') WHERE id = ?`),
+      sql: norm(
+        `UPDATE pipeline_phase_metrics SET status = 'interrupted', completed_at = datetime('now') WHERE id = ?`,
+      ),
       args: [id],
     });
   }),
@@ -254,14 +285,16 @@ function primeState(
   projectId: string,
   fields: { currentPhase: number; status?: string; currentSprintIndex?: number },
 ): { currentPhase: number; status: string; currentSprintIndex?: number; abortController: AbortController } {
-  const state = (engine as unknown as {
-    getState(id: string): {
-      currentPhase: number;
-      status: string;
-      currentSprintIndex?: number;
-      abortController: AbortController;
-    };
-  }).getState(projectId);
+  const state = (
+    engine as unknown as {
+      getState(id: string): {
+        currentPhase: number;
+        status: string;
+        currentSprintIndex?: number;
+        abortController: AbortController;
+      };
+    }
+  ).getState(projectId);
   state.currentPhase = fields.currentPhase;
   state.status = fields.status ?? 'running';
   if (fields.currentSprintIndex !== undefined) state.currentSprintIndex = fields.currentSprintIndex;
@@ -303,9 +336,7 @@ describe('DONE-site #1 — advancePhase (status string "completed")', () => {
     await engine.advancePhase('proj-1');
 
     const pc = phaseChangedEvents();
-    expect(pc).toEqual([
-      { projectId: 'proj-1', phase: null, status: 'completed', awaitingUser: false },
-    ]);
+    expect(pc).toEqual([{ projectId: 'proj-1', phase: null, status: 'completed', awaitingUser: false }]);
 
     expect(capturedUpdates).toHaveLength(1);
     expect(capturedUpdates[0].sql).toBe(
@@ -319,10 +350,7 @@ describe('DONE-site #1 — advancePhase (status string "completed")', () => {
 
     expect(capturedCodex).toEqual(['reset:proj-1']);
 
-    expect(channelsInOrder()).toEqual([
-      'pipeline:project-updated',
-      'pipeline:phase-changed',
-    ]);
+    expect(channelsInOrder()).toEqual(['pipeline:project-updated', 'pipeline:phase-changed']);
   });
 
   it('advancePhase done path emits "completed" — NOT "pipeline-completed" (the divergence vs the other 3 done-sites)', async () => {
@@ -349,14 +377,14 @@ describe('DONE-site #2 — advanceToNextPhase (status string "pipeline-completed
     capturedLock.length = 0;
     capturedCodex.length = 0;
 
-    await (engine as unknown as {
-      advanceToNextPhase(id: string, st: unknown): Promise<void>;
-    }).advanceToNextPhase('proj-1', state);
+    await (
+      engine as unknown as {
+        advanceToNextPhase(id: string, st: unknown): Promise<void>;
+      }
+    ).advanceToNextPhase('proj-1', state);
 
     const pc = phaseChangedEvents();
-    expect(pc).toEqual([
-      { projectId: 'proj-1', phase: null, status: 'pipeline-completed', awaitingUser: false },
-    ]);
+    expect(pc).toEqual([{ projectId: 'proj-1', phase: null, status: 'pipeline-completed', awaitingUser: false }]);
     expect(pc[0].status).toBe('pipeline-completed');
 
     expect(capturedUpdates).toHaveLength(1);
@@ -372,12 +400,15 @@ describe('DONE-site #2 — advanceToNextPhase (status string "pipeline-completed
     vi.mocked(db.getHarnessProject).mockReturnValue(makeProject('security', { pipelineCurrentPhase: 11 }) as never);
     const engine = makeEngine();
     const state = primeState(engine, 'proj-1', { currentPhase: 11 });
-    const rtSpy = vi.spyOn(engine as unknown as { runResolutionTracker(...a: unknown[]): Promise<void> }, 'runResolutionTracker')
+    const rtSpy = vi
+      .spyOn(engine as unknown as { runResolutionTracker(...a: unknown[]): Promise<void> }, 'runResolutionTracker')
       .mockResolvedValue(undefined);
     capturedEvents.length = 0;
 
-    await (engine as unknown as { advanceToNextPhase(id: string, st: unknown): Promise<void> })
-      .advanceToNextPhase('proj-1', state);
+    await (engine as unknown as { advanceToNextPhase(id: string, st: unknown): Promise<void> }).advanceToNextPhase(
+      'proj-1',
+      state,
+    );
 
     expect(rtSpy).not.toHaveBeenCalled();
   });
@@ -392,15 +423,33 @@ describe('DONE-site #3 — runSprint (idle-BEFORE + pipeline-completed + Resolut
     ] as never);
 
     const engine = makeEngine();
-    const harness = (engine as unknown as { harnessEngine: { runSingleSprint: ReturnType<typeof vi.fn> } }).harnessEngine;
+    const harness = (engine as unknown as { harnessEngine: { runSingleSprint: ReturnType<typeof vi.fn> } })
+      .harnessEngine;
     harness.runSingleSprint = vi.fn().mockResolvedValue({
       verdict: 'pass',
       rounds: 1,
       metrics: {},
-      coderMetrics: { inputTokens: 0, outputTokens: 0, cacheTokens: 0, costUsd: 0, durationMs: 0, toolUses: 0, apiRequests: 0 },
-      evaluatorMetrics: { inputTokens: 0, outputTokens: 0, cacheTokens: 0, costUsd: 0, durationMs: 0, toolUses: 0, apiRequests: 0 },
+      coderMetrics: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheTokens: 0,
+        costUsd: 0,
+        durationMs: 0,
+        toolUses: 0,
+        apiRequests: 0,
+      },
+      evaluatorMetrics: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheTokens: 0,
+        costUsd: 0,
+        durationMs: 0,
+        toolUses: 0,
+        apiRequests: 0,
+      },
     });
-    const rtSpy = vi.spyOn(engine as unknown as { runResolutionTracker(...a: unknown[]): Promise<void> }, 'runResolutionTracker')
+    const rtSpy = vi
+      .spyOn(engine as unknown as { runResolutionTracker(...a: unknown[]): Promise<void> }, 'runResolutionTracker')
       .mockResolvedValue(undefined);
 
     const state = primeState(engine, 'proj-1', { currentPhase: 10, status: 'running', currentSprintIndex: 0 });
@@ -424,7 +473,9 @@ describe('DONE-site #3 — runSprint (idle-BEFORE + pipeline-completed + Resolut
 
     expect(state.status).toBe('idle');
 
-    const doneUpdate = capturedUpdates.find((u) => Array.isArray(u.args) && u.args.includes('done') && (u.args as unknown[]).includes(null));
+    const doneUpdate = capturedUpdates.find(
+      (u) => Array.isArray(u.args) && u.args.includes('done') && (u.args as unknown[]).includes(null),
+    );
     expect(doneUpdate).toBeDefined();
     expect(doneUpdate!.args).toEqual([null, 'done', 'proj-1']);
 
@@ -434,7 +485,8 @@ describe('DONE-site #3 — runSprint (idle-BEFORE + pipeline-completed + Resolut
     expect(rtSpy).toHaveBeenCalledTimes(1);
     expect(rtSpy).toHaveBeenCalledWith('proj-1', project);
     const completedIdx = capturedEvents.findIndex(
-      (e) => e.channel === 'pipeline:phase-changed' && (e.data as Record<string, unknown>).status === 'pipeline-completed',
+      (e) =>
+        e.channel === 'pipeline:phase-changed' && (e.data as Record<string, unknown>).status === 'pipeline-completed',
     );
     expect(completedIdx).toBeGreaterThanOrEqual(0);
   });
@@ -447,13 +499,33 @@ describe('DONE-site #3 — runSprint (idle-BEFORE + pipeline-completed + Resolut
     ] as never);
 
     const engine = makeEngine();
-    const harness = (engine as unknown as { harnessEngine: { runSingleSprint: ReturnType<typeof vi.fn> } }).harnessEngine;
+    const harness = (engine as unknown as { harnessEngine: { runSingleSprint: ReturnType<typeof vi.fn> } })
+      .harnessEngine;
     harness.runSingleSprint = vi.fn().mockResolvedValue({
-      verdict: 'pass', rounds: 1, metrics: {},
-      coderMetrics: { inputTokens: 0, outputTokens: 0, cacheTokens: 0, costUsd: 0, durationMs: 0, toolUses: 0, apiRequests: 0 },
-      evaluatorMetrics: { inputTokens: 0, outputTokens: 0, cacheTokens: 0, costUsd: 0, durationMs: 0, toolUses: 0, apiRequests: 0 },
+      verdict: 'pass',
+      rounds: 1,
+      metrics: {},
+      coderMetrics: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheTokens: 0,
+        costUsd: 0,
+        durationMs: 0,
+        toolUses: 0,
+        apiRequests: 0,
+      },
+      evaluatorMetrics: {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheTokens: 0,
+        costUsd: 0,
+        durationMs: 0,
+        toolUses: 0,
+        apiRequests: 0,
+      },
     });
-    const rtSpy = vi.spyOn(engine as unknown as { runResolutionTracker(...a: unknown[]): Promise<void> }, 'runResolutionTracker')
+    const rtSpy = vi
+      .spyOn(engine as unknown as { runResolutionTracker(...a: unknown[]): Promise<void> }, 'runResolutionTracker')
       .mockResolvedValue(undefined);
 
     primeState(engine, 'proj-1', { currentPhase: 13, status: 'running', currentSprintIndex: 0 });
@@ -471,12 +543,11 @@ describe('DONE-site #4 — acceptSprint (idle-BEFORE + pipeline-completed + Reso
   it('security last sprint accepted: state.status="idle" BEFORE columns; pipeline-completed with totalSprints; runResolutionTracker fired', async () => {
     const project = makeProject('security', { pipelineCurrentPhase: 11 });
     vi.mocked(db.getHarnessProject).mockReturnValue(project as never);
-    vi.mocked(db.getHarnessSprints).mockReturnValue([
-      { id: 's0', name: 'Sprint 1', roundsUsed: 3 },
-    ] as never);
+    vi.mocked(db.getHarnessSprints).mockReturnValue([{ id: 's0', name: 'Sprint 1', roundsUsed: 3 }] as never);
 
     const engine = makeEngine();
-    const rtSpy = vi.spyOn(engine as unknown as { runResolutionTracker(...a: unknown[]): Promise<void> }, 'runResolutionTracker')
+    const rtSpy = vi
+      .spyOn(engine as unknown as { runResolutionTracker(...a: unknown[]): Promise<void> }, 'runResolutionTracker')
       .mockResolvedValue(undefined);
 
     const state = primeState(engine, 'proj-1', { currentPhase: 11, status: 'running', currentSprintIndex: 0 });
@@ -499,7 +570,9 @@ describe('DONE-site #4 — acceptSprint (idle-BEFORE + pipeline-completed + Reso
 
     expect(state.status).toBe('idle');
 
-    const doneUpdate = capturedUpdates.find((u) => (u.args as unknown[]).includes('done') && (u.args as unknown[]).includes(null));
+    const doneUpdate = capturedUpdates.find(
+      (u) => (u.args as unknown[]).includes('done') && (u.args as unknown[]).includes(null),
+    );
     expect(doneUpdate!.args).toEqual([null, 'done', 'proj-1']);
     expect(capturedLock.some((l) => l.op === 'release')).toBe(true);
     expect(capturedCodex).toContain('reset:proj-1');
@@ -508,7 +581,8 @@ describe('DONE-site #4 — acceptSprint (idle-BEFORE + pipeline-completed + Reso
     expect(rtSpy).toHaveBeenCalledWith('proj-1', project);
 
     const completedIdx = capturedEvents.findIndex(
-      (e) => e.channel === 'pipeline:phase-changed' && (e.data as Record<string, unknown>).status === 'pipeline-completed',
+      (e) =>
+        e.channel === 'pipeline:phase-changed' && (e.data as Record<string, unknown>).status === 'pipeline-completed',
     );
     expect(completedIdx).toBeGreaterThanOrEqual(0);
   });
@@ -519,7 +593,8 @@ describe('DONE-site #4 — acceptSprint (idle-BEFORE + pipeline-completed + Reso
     vi.mocked(db.getHarnessSprints).mockReturnValue([{ id: 's0', name: 'Sprint 1', roundsUsed: 1 }] as never);
 
     const engine = makeEngine();
-    const rtSpy = vi.spyOn(engine as unknown as { runResolutionTracker(...a: unknown[]): Promise<void> }, 'runResolutionTracker')
+    const rtSpy = vi
+      .spyOn(engine as unknown as { runResolutionTracker(...a: unknown[]): Promise<void> }, 'runResolutionTracker')
       .mockResolvedValue(undefined);
     primeState(engine, 'proj-1', { currentPhase: 14, status: 'running', currentSprintIndex: 0 });
     capturedEvents.length = 0;
@@ -538,7 +613,11 @@ describe('DONE-sites cross-invariant (the consolidation contract)', () => {
       advancePhase: { statusString: 'completed', setStateIdleBefore: false, resolutionTracker: false },
       advanceToNextPhase: { statusString: 'pipeline-completed', setStateIdleBefore: false, resolutionTracker: false },
       runSprint: { statusString: 'pipeline-completed', setStateIdleBefore: true, resolutionTracker: 'security-only' },
-      acceptSprint: { statusString: 'pipeline-completed', setStateIdleBefore: true, resolutionTracker: 'security-only' },
+      acceptSprint: {
+        statusString: 'pipeline-completed',
+        setStateIdleBefore: true,
+        resolutionTracker: 'security-only',
+      },
     };
     expect(matrix.advancePhase.statusString).toBe('completed');
     expect(matrix.advanceToNextPhase.statusString).toBe('pipeline-completed');
@@ -551,15 +630,15 @@ describe('DONE-sites cross-invariant (the consolidation contract)', () => {
   });
 });
 
-
 describe('FAIL-site #1 — runAutoPhase (pure-paused; error + phase-changed:failed; NO stream done)', () => {
   it('auto phase throws: setProjectStatus("paused") + state.status="paused"; emits pipeline:error THEN phase-changed status="failed" awaitingUser=true; NO stream done', async () => {
     const project = makeProject('development', { pipelineCurrentPhase: 2 });
     vi.mocked(db.getHarnessProject).mockReturnValue(project as never);
 
     const engine = makeEngine();
-    vi.spyOn(engine as unknown as { spawnAgent(...a: unknown[]): Promise<unknown> }, 'spawnAgent')
-      .mockRejectedValue(new Error('boom'));
+    vi.spyOn(engine as unknown as { spawnAgent(...a: unknown[]): Promise<unknown> }, 'spawnAgent').mockRejectedValue(
+      new Error('boom'),
+    );
 
     const state = primeState(engine, 'proj-1', { currentPhase: 2, status: 'running' });
     capturedEvents.length = 0;
@@ -581,7 +660,7 @@ describe('FAIL-site #1 — runAutoPhase (pure-paused; error + phase-changed:fail
     expect(errIdx).toBeGreaterThanOrEqual(0);
     expect(pcIdx).toBeGreaterThan(errIdx);
 
-    const failPc = (capturedEvents[pcIdx].data as Record<string, unknown>);
+    const failPc = capturedEvents[pcIdx].data as Record<string, unknown>;
     expect(failPc.status).toBe('failed');
     expect(failPc.awaitingUser).toBe(true);
     expect(failPc.phase).toBe(2);
@@ -601,8 +680,9 @@ describe('FAIL-site #2 — runPhase9 / Spec Generation (pure-paused; error + pha
     vi.mocked(db.getHarnessProject).mockReturnValue(project as never);
 
     const engine = makeEngine();
-    vi.spyOn(engine as unknown as { spawnAgent(...a: unknown[]): Promise<unknown> }, 'spawnAgent')
-      .mockRejectedValue(new Error('spec gen failed'));
+    vi.spyOn(engine as unknown as { spawnAgent(...a: unknown[]): Promise<unknown> }, 'spawnAgent').mockRejectedValue(
+      new Error('spec gen failed'),
+    );
 
     const state = primeState(engine, 'proj-1', { currentPhase: 9, status: 'running' });
     capturedEvents.length = 0;
@@ -610,9 +690,11 @@ describe('FAIL-site #2 — runPhase9 / Spec Generation (pure-paused; error + pha
     capturedUpdates.length = 0;
 
     void state;
-    await (engine as unknown as {
-      runPhase9(id: string): Promise<void>;
-    }).runPhase9('proj-1');
+    await (
+      engine as unknown as {
+        runPhase9(id: string): Promise<void>;
+      }
+    ).runPhase9('proj-1');
 
     expect(capturedSetStatus).toEqual([{ projectId: 'proj-1', status: 'paused' }]);
     expect(state.status).toBe('paused');
@@ -641,7 +723,8 @@ describe('FAIL-site #3 — runSprint (pure-paused; pipeline:error; NO phase-chan
     ] as never);
 
     const engine = makeEngine();
-    const harness = (engine as unknown as { harnessEngine: { runSingleSprint: ReturnType<typeof vi.fn> } }).harnessEngine;
+    const harness = (engine as unknown as { harnessEngine: { runSingleSprint: ReturnType<typeof vi.fn> } })
+      .harnessEngine;
     harness.runSingleSprint = vi.fn().mockRejectedValue(new Error('coder crashed'));
 
     const state = primeState(engine, 'proj-1', { currentPhase: 13, status: 'running', currentSprintIndex: 0 });
@@ -661,7 +744,11 @@ describe('FAIL-site #3 — runSprint (pure-paused; pipeline:error; NO phase-chan
 
     expect(phaseChangedEvents().some((p) => p.status === 'failed')).toBe(false);
 
-    expect(capturedEvents.filter((e) => e.channel === 'pipeline:stream' && (e.data as Record<string, unknown>).type === 'done')).toHaveLength(0);
+    expect(
+      capturedEvents.filter(
+        (e) => e.channel === 'pipeline:stream' && (e.data as Record<string, unknown>).type === 'done',
+      ),
+    ).toHaveLength(0);
 
     expect(capturedLock.some((l) => l.op === 'release')).toBe(false);
 
@@ -681,9 +768,11 @@ describe('FAIL-site #4 — dev-v2 Design Lock hard error (COMPOSITE statusUpdate
     capturedSetStatus.length = 0;
     capturedUpdates.length = 0;
 
-    await (engine as unknown as {
-      runDevV2Phase6DesignLock(id: string, st: unknown): Promise<void>;
-    }).runDevV2Phase6DesignLock('proj-1', state);
+    await (
+      engine as unknown as {
+        runDevV2Phase6DesignLock(id: string, st: unknown): Promise<void>;
+      }
+    ).runDevV2Phase6DesignLock('proj-1', state);
 
     const composite = capturedUpdates.find(
       (u) => (u.args as unknown[]).includes('paused') && (u.args as unknown[]).includes(6),
@@ -699,7 +788,9 @@ describe('FAIL-site #4 — dev-v2 Design Lock hard error (COMPOSITE statusUpdate
     expect(capturedEvents.some((e) => e.channel === 'pipeline:error')).toBe(false);
 
     expect(
-      capturedEvents.some((e) => e.channel === 'pipeline:stream' && (e.data as Record<string, unknown>).type === 'done'),
+      capturedEvents.some(
+        (e) => e.channel === 'pipeline:stream' && (e.data as Record<string, unknown>).type === 'done',
+      ),
     ).toBe(true);
 
     const failPc = phaseChangedEvents().find((p) => p.status === 'failed' && p.phase === 6);
@@ -718,19 +809,24 @@ describe('FAIL-site #5 — dev-v2 Phase 12 (pure-paused; error + phase-changed:f
     vi.mocked(db.getHarnessProject).mockReturnValue(project as never);
 
     const engine = makeEngine();
-    vi.spyOn(engine as unknown as { spawnAgent(...a: unknown[]): Promise<unknown> }, 'spawnAgent')
-      .mockRejectedValue(new Error('phase12 boom'));
-    vi.spyOn(engine as unknown as { flushAccumulatedMetrics(...a: unknown[]): void }, 'flushAccumulatedMetrics')
-      .mockImplementation(() => {});
+    vi.spyOn(engine as unknown as { spawnAgent(...a: unknown[]): Promise<unknown> }, 'spawnAgent').mockRejectedValue(
+      new Error('phase12 boom'),
+    );
+    vi.spyOn(
+      engine as unknown as { flushAccumulatedMetrics(...a: unknown[]): void },
+      'flushAccumulatedMetrics',
+    ).mockImplementation(() => {});
 
     const state = primeState(engine, 'proj-1', { currentPhase: 12, status: 'running' });
     capturedEvents.length = 0;
     capturedSetStatus.length = 0;
     capturedUpdates.length = 0;
 
-    await (engine as unknown as {
-      runDevV2Phase12SpecGeneration(id: string, projectPath: string, st: unknown): Promise<void>;
-    }).runDevV2Phase12SpecGeneration('proj-1', '/tmp/project', state);
+    await (
+      engine as unknown as {
+        runDevV2Phase12SpecGeneration(id: string, projectPath: string, st: unknown): Promise<void>;
+      }
+    ).runDevV2Phase12SpecGeneration('proj-1', '/tmp/project', state);
 
     expect(capturedSetStatus).toEqual([{ projectId: 'proj-1', status: 'paused' }]);
     expect(state.status).toBe('paused');
@@ -742,7 +838,9 @@ describe('FAIL-site #5 — dev-v2 Phase 12 (pure-paused; error + phase-changed:f
     expect(failPc!.awaitingUser).toBe(true);
 
     expect(
-      capturedEvents.filter((e) => e.channel === 'pipeline:stream' && (e.data as Record<string, unknown>).type === 'done'),
+      capturedEvents.filter(
+        (e) => e.channel === 'pipeline:stream' && (e.data as Record<string, unknown>).type === 'done',
+      ),
     ).toHaveLength(0);
 
     expect(capturedSetStatus.some((s) => s.status === 'failed')).toBe(false);
@@ -752,11 +850,41 @@ describe('FAIL-site #5 — dev-v2 Phase 12 (pure-paused; error + phase-changed:f
 describe('FAIL-sites cross-invariant matrix (failPhase parametrization contract — LC-1 / RK-8)', () => {
   it('all 5 persist paused; only Design Lock is composite + has streamDone + no pipeline:error', () => {
     const matrix = {
-      runAutoPhase: { statusUpdate: 'pure-paused', emitsError: true, emitsPhaseChangedFailed: true, emitsStreamDone: false, setsStateStatus: true },
-      runPhase9: { statusUpdate: 'pure-paused', emitsError: true, emitsPhaseChangedFailed: true, emitsStreamDone: false, setsStateStatus: true },
-      runSprint: { statusUpdate: 'pure-paused', emitsError: true, emitsPhaseChangedFailed: false, emitsStreamDone: false, setsStateStatus: true },
-      devV2DesignLock: { statusUpdate: 'composite:{status:paused,pipelineCurrentPhase:6}', emitsError: false, emitsPhaseChangedFailed: true, emitsStreamDone: true, setsStateStatus: false },
-      devV2Phase12: { statusUpdate: 'pure-paused', emitsError: true, emitsPhaseChangedFailed: true, emitsStreamDone: false, setsStateStatus: true },
+      runAutoPhase: {
+        statusUpdate: 'pure-paused',
+        emitsError: true,
+        emitsPhaseChangedFailed: true,
+        emitsStreamDone: false,
+        setsStateStatus: true,
+      },
+      runPhase9: {
+        statusUpdate: 'pure-paused',
+        emitsError: true,
+        emitsPhaseChangedFailed: true,
+        emitsStreamDone: false,
+        setsStateStatus: true,
+      },
+      runSprint: {
+        statusUpdate: 'pure-paused',
+        emitsError: true,
+        emitsPhaseChangedFailed: false,
+        emitsStreamDone: false,
+        setsStateStatus: true,
+      },
+      devV2DesignLock: {
+        statusUpdate: 'composite:{status:paused,pipelineCurrentPhase:6}',
+        emitsError: false,
+        emitsPhaseChangedFailed: true,
+        emitsStreamDone: true,
+        setsStateStatus: false,
+      },
+      devV2Phase12: {
+        statusUpdate: 'pure-paused',
+        emitsError: true,
+        emitsPhaseChangedFailed: true,
+        emitsStreamDone: false,
+        setsStateStatus: true,
+      },
     };
     for (const site of Object.values(matrix)) {
       expect(site.statusUpdate.startsWith('pure-paused') || site.statusUpdate.startsWith('composite')).toBe(true);
@@ -782,9 +910,7 @@ describe(': 14 getMaxPhase fallback — DEAD (only with null project)', () => {
     await engine.advancePhase('proj-1');
 
     const pc = phaseChangedEvents();
-    expect(pc).toEqual([
-      { projectId: 'proj-1', phase: null, status: 'completed', awaitingUser: false },
-    ]);
+    expect(pc).toEqual([{ projectId: 'proj-1', phase: null, status: 'completed', awaitingUser: false }]);
   });
 
   it('advancePhase: null project + currentPhase=14 hits the dead `: 14` branch and completes (the ONLY way the fallback fires)', async () => {
@@ -796,9 +922,7 @@ describe(': 14 getMaxPhase fallback — DEAD (only with null project)', () => {
     await engine.advancePhase('proj-1');
 
     const pc = phaseChangedEvents();
-    expect(pc).toEqual([
-      { projectId: 'proj-1', phase: null, status: 'completed', awaitingUser: false },
-    ]);
+    expect(pc).toEqual([{ projectId: 'proj-1', phase: null, status: 'completed', awaitingUser: false }]);
   });
 
   it('advancePhase: null project + currentPhase=13 does NOT complete (nextPhase 14 <= fallback 14) — confirms the literal is exactly 14', async () => {
@@ -820,13 +944,13 @@ describe(': 14 getMaxPhase fallback — DEAD (only with null project)', () => {
     const state = primeState(engine, 'proj-1', { currentPhase: 14 });
     capturedEvents.length = 0;
 
-    await (engine as unknown as { advanceToNextPhase(id: string, st: unknown): Promise<void> })
-      .advanceToNextPhase('proj-1', state);
+    await (engine as unknown as { advanceToNextPhase(id: string, st: unknown): Promise<void> }).advanceToNextPhase(
+      'proj-1',
+      state,
+    );
 
     const pc = phaseChangedEvents();
-    expect(pc).toEqual([
-      { projectId: 'proj-1', phase: null, status: 'pipeline-completed', awaitingUser: false },
-    ]);
+    expect(pc).toEqual([{ projectId: 'proj-1', phase: null, status: 'pipeline-completed', awaitingUser: false }]);
   });
 });
 
@@ -889,22 +1013,26 @@ describe('TB-17 (iii) — gate do Sprint Validator: baseline dos 5 tipos + bug',
   }
 
   function seedAccum(engine: PipelineEngine, projectId: string, phase: number): void {
-    (engine as unknown as {
-      accumulateMetrics: (s: unknown, p: number, r: unknown) => void;
-    }).accumulateMetrics(
-      (engine as unknown as { getState: (id: string) => AccumState }).getState(projectId),
-      phase,
-      {
-        output: 'ok',
-        metrics: {
-          inputTokens: 10, outputTokens: 5, cacheReadTokens: 0, cacheCreationTokens: 0,
-          toolUses: 0, apiRequests: 1, costUsd: 0.01, durationMs: 100,
-        },
-        model: 'claude-opus-5',
-        runtime: 'cloud',
-        provider: 'anthropic',
+    (
+      engine as unknown as {
+        accumulateMetrics: (s: unknown, p: number, r: unknown) => void;
+      }
+    ).accumulateMetrics((engine as unknown as { getState: (id: string) => AccumState }).getState(projectId), phase, {
+      output: 'ok',
+      metrics: {
+        inputTokens: 10,
+        outputTokens: 5,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        toolUses: 0,
+        apiRequests: 1,
+        costUsd: 0.01,
+        durationMs: 100,
       },
-    );
+      model: 'claude-opus-5',
+      runtime: 'cloud',
+      provider: 'anthropic',
+    });
   }
 
   const GATE_CASES: Array<{ type: string; gatePhase: number }> = [
@@ -919,9 +1047,7 @@ describe('TB-17 (iii) — gate do Sprint Validator: baseline dos 5 tipos + bug',
   it.each(GATE_CASES)(
     '$type: o gate awaiting-dev-confirmation abre na fase $gatePhase',
     async ({ type, gatePhase }) => {
-      vi.mocked(db.getHarnessProject).mockReturnValue(
-        makeProject(type, { pipelineCurrentPhase: gatePhase }) as never,
-      );
+      vi.mocked(db.getHarnessProject).mockReturnValue(makeProject(type, { pipelineCurrentPhase: gatePhase }) as never);
       const engine = makeEngine();
       const advance = vi.fn(async () => {});
       (engine as unknown as { advanceToNextPhase: unknown }).advanceToNextPhase = advance;
@@ -939,9 +1065,7 @@ describe('TB-17 (iii) — gate do Sprint Validator: baseline dos 5 tipos + bug',
   );
 
   it('feature fase 1: agent_id continua vindo do FALLBACK LEGADO (discovery-agent), nunca feat-discovery', async () => {
-    vi.mocked(db.getHarnessProject).mockReturnValue(
-      makeProject('feature', { pipelineCurrentPhase: 1 }) as never,
-    );
+    vi.mocked(db.getHarnessProject).mockReturnValue(makeProject('feature', { pipelineCurrentPhase: 1 }) as never);
     const engine = makeEngine();
     (engine as unknown as { advanceToNextPhase: unknown }).advanceToNextPhase = vi.fn(async () => {});
     primeState(engine, 'proj-1', { currentPhase: 1 });
@@ -949,9 +1073,9 @@ describe('TB-17 (iii) — gate do Sprint Validator: baseline dos 5 tipos + bug',
 
     await engine.approvePhase('proj-1');
 
-    const saved = vi.mocked(db.savePipelinePhaseMetrics).mock.calls.map(
-      (c) => c[0] as { phaseNumber: number; agentId?: string },
-    );
+    const saved = vi
+      .mocked(db.savePipelinePhaseMetrics)
+      .mock.calls.map((c) => c[0] as { phaseNumber: number; agentId?: string });
     const row = saved.find((s) => s.phaseNumber === 1);
     expect(row).toBeDefined();
     expect(row!.agentId).toBe('discovery-agent');
@@ -959,9 +1083,7 @@ describe('TB-17 (iii) — gate do Sprint Validator: baseline dos 5 tipos + bug',
   });
 
   it('development fase 1: agent_id continua discovery-agent (mesmo switch, mesmo fallback)', async () => {
-    vi.mocked(db.getHarnessProject).mockReturnValue(
-      makeProject('development', { pipelineCurrentPhase: 1 }) as never,
-    );
+    vi.mocked(db.getHarnessProject).mockReturnValue(makeProject('development', { pipelineCurrentPhase: 1 }) as never);
     const engine = makeEngine();
     (engine as unknown as { advanceToNextPhase: unknown }).advanceToNextPhase = vi.fn(async () => {});
     primeState(engine, 'proj-1', { currentPhase: 1 });
@@ -969,16 +1091,15 @@ describe('TB-17 (iii) — gate do Sprint Validator: baseline dos 5 tipos + bug',
 
     await engine.approvePhase('proj-1');
 
-    const row = vi.mocked(db.savePipelinePhaseMetrics).mock.calls
-      .map((c) => c[0] as { phaseNumber: number; agentId?: string })
+    const row = vi
+      .mocked(db.savePipelinePhaseMetrics)
+      .mock.calls.map((c) => c[0] as { phaseNumber: number; agentId?: string })
       .find((s) => s.phaseNumber === 1);
     expect(row!.agentId).toBe('discovery-agent');
   });
 
   it('bug fase 7: gate pelo finalizer LOCAL — finalizeConversationPhase NAO e chamado', async () => {
-    vi.mocked(db.getHarnessProject).mockReturnValue(
-      makeProject('bug', { pipelineCurrentPhase: 7 }) as never,
-    );
+    vi.mocked(db.getHarnessProject).mockReturnValue(makeProject('bug', { pipelineCurrentPhase: 7 }) as never);
     const engine = makeEngine();
     const sharedFinalize = vi.fn(async () => {});
     const sharedBackground = vi.fn();
@@ -994,8 +1115,9 @@ describe('TB-17 (iii) — gate do Sprint Validator: baseline dos 5 tipos + bug',
     expect(sharedBackground).not.toHaveBeenCalled();
     const gate = phaseChangedEvents().find((e) => e['status'] === 'awaiting-dev-confirmation');
     expect(gate!['phase']).toBe(7);
-    const row = vi.mocked(db.savePipelinePhaseMetrics).mock.calls
-      .map((c) => c[0] as { phaseNumber: number; agentId?: string })
+    const row = vi
+      .mocked(db.savePipelinePhaseMetrics)
+      .mock.calls.map((c) => c[0] as { phaseNumber: number; agentId?: string })
       .find((s) => s.phaseNumber === 7);
     expect(row!.agentId).toBe('sprint-validator');
   });
@@ -1003,9 +1125,7 @@ describe('TB-17 (iii) — gate do Sprint Validator: baseline dos 5 tipos + bug',
   it('os 5 tipos existentes NUNCA entram no finalizer do bug (delta ZERO)', async () => {
     for (const { type, gatePhase } of GATE_CASES.filter((c) => c.type !== 'bug')) {
       vi.clearAllMocks();
-      vi.mocked(db.getHarnessProject).mockReturnValue(
-        makeProject(type, { pipelineCurrentPhase: gatePhase }) as never,
-      );
+      vi.mocked(db.getHarnessProject).mockReturnValue(makeProject(type, { pipelineCurrentPhase: gatePhase }) as never);
       const engine = makeEngine();
       const bugFinalize = vi.fn(async () => {});
       const bugBackground = vi.fn();

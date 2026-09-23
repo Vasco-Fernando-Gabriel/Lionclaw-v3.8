@@ -11,10 +11,7 @@ interface AttachmentViewerProps {
   onClose: () => void;
 }
 
-type TextState =
-  | { status: 'loading' }
-  | { status: 'ready'; content: string }
-  | { status: 'fallback'; reason: string };
+type TextState = { status: 'loading' } | { status: 'ready'; content: string } | { status: 'fallback'; reason: string };
 
 export function AttachmentViewer({ attachment, onClose }: AttachmentViewerProps) {
   const pushToast = useKanbanStore((s) => s.pushToast);
@@ -98,7 +95,8 @@ export function AttachmentViewer({ attachment, onClose }: AttachmentViewerProps)
         if (text.status === 'fallback') return renderFallback(text.reason);
         if (family === 'markdown') {
           return (
-            <div className="prose prose-invert prose-sm max-w-none px-1
+            <div
+              className="prose prose-invert prose-sm max-w-none px-1
               prose-headings:text-zinc-200
               prose-p:text-zinc-300 prose-p:leading-relaxed
               prose-a:text-amber-500 prose-a:no-underline hover:prose-a:underline
@@ -121,10 +119,7 @@ export function AttachmentViewer({ attachment, onClose }: AttachmentViewerProps)
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[70] bg-black/70 flex items-center justify-center p-6"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-[70] bg-black/70 flex items-center justify-center p-6" onClick={onClose}>
       <div
         className="bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-3xl max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}

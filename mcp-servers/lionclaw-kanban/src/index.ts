@@ -1,16 +1,19 @@
-
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import {
   LocalIpcClient,
   assertEndpointPresentOrExit,
+  readEnvExternalClient,
+  withTurnBinding,
   type CallOptions,
 } from '../../_shared/local-ipc-client.js';
+import { KANBAN_PROTOCOL_VERSION } from '../../_shared/kanban-protocol.js';
 
 assertEndpointPresentOrExit();
 
-const client = new LocalIpcClient();
+const client = new LocalIpcClient({ expectedKanbanProtocol: KANBAN_PROTOCOL_VERSION });
+const externalClient = readEnvExternalClient() !== null;
 
 const server = new McpServer({ name: 'lionclaw-kanban', version: '1.0.0' });
 
@@ -23,9 +26,10 @@ async function proxy(
   method: string,
   params: Record<string, unknown>,
   options: CallOptions = {},
+  extra?: unknown,
 ): Promise<ToolResult> {
   try {
-    const result = await client.callMethod(method, params, options);
+    const result = await client.callMethod(method, withTurnBinding(params, extra), options);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -43,22 +47,16 @@ const cardContentFields = {
     .string()
     .nullable()
     .optional()
-    .describe('Card type: Bug | Feature | Debito tecnico | Chore (accents/case are normalized; unrecognized becomes empty + warning).'),
+    .describe(
+      'Card type: Bug | Feature | Debito tecnico | Chore (accents/case are normalized; unrecognized becomes empty + warning).',
+    ),
   priority: z
     .string()
     .nullable()
     .optional()
     .describe('Priority: Critica | Alta | Media | Baixa (normalized; unrecognized becomes empty + warning).'),
-  complexity: z
-    .string()
-    .nullable()
-    .optional()
-    .describe('Complexity: Baixa | Media | Alta (normalized).'),
-  severity: z
-    .string()
-    .nullable()
-    .optional()
-    .describe('Bug severity: S1 | S2 | S3 | S4.'),
+  complexity: z.string().nullable().optional().describe('Complexity: Baixa | Media | Alta (normalized).'),
+  severity: z.string().nullable().optional().describe('Bug severity: S1 | S2 | S3 | S4.'),
   problem: z.string().nullable().optional().describe('Problem statement.'),
   acceptance_criteria: z.string().nullable().optional().describe('Acceptance criteria.'),
   reproduction: z.string().nullable().optional().describe('Numbered reproduction steps (bugs).'),
@@ -70,25 +68,31 @@ const cardContentFields = {
   body: z.string().nullable().optional().describe('Free markdown body.'),
 };
 
-server.tool(
-  'board_create',
-  'Create a Kanban board for a REGISTERED local repository (one board per repository). Refuses only: prefix already used, repository already has a board, repository not found.',
-  {
-    name: z.string().optional().describe('Board name (defaults to the repository name, with a warning).'),
-    prefix: z
-      .string()
-      .describe('Immutable card id prefix, 2-4 uppercase letters (e.g. "LC" -> cards LC-1, LC-2...). Must be unique across boards.'),
-    repository_id: z.string().optional().describe('Id of the registered local repository.'),
-    repo_path: z.string().optional().describe('Alternative to repository_id: absolute path of the registered repository.'),
-  },
-  async (args) => proxy('kanban_board_create', args, WRITE),
-);
+if (!externalClient)
+  server.tool(
+    'board_create',
+    'Create a Kanban board for a REGISTERED local repository (one board per repository). Refuses only: prefix already used, repository already has a board, repository not found.',
+    {
+      name: z.string().optional().describe('Board name (defaults to the repository name, with a warning).'),
+      prefix: z
+        .string()
+        .describe(
+          'Immutable card id prefix, 2-4 uppercase letters (e.g. "LC" -> cards LC-1, LC-2...). Must be unique across boards.',
+        ),
+      repository_id: z.string().optional().describe('Id of the registered local repository.'),
+      repo_path: z
+        .string()
+        .optional()
+        .describe('Alternative to repository_id: absolute path of the registered repository.'),
+    },
+    async (args, extra) => proxy('kanban_board_create', args, WRITE, extra),
+  );
 
 server.tool(
   'board_list',
   'List all Kanban boards with per-column card counts (Backlog / Desenvolvimento / Testes / Done).',
   {},
-  async () => proxy('kanban_board_list', {}),
+  async (extra) => proxy('kanban_board_list', {}, {}, extra),
 );
 
 server.tool(
@@ -100,10 +104,12 @@ server.tool(
     column: z
       .string()
       .optional()
-      .describe('Birth column: Backlog | Desenvolvimento | Testes | Done (default Backlog; unrecognized -> Backlog + warning).'),
+      .describe(
+        'Birth column: Backlog | Desenvolvimento | Testes | Done (default Backlog; unrecognized -> Backlog + warning).',
+      ),
     ...cardContentFields,
   },
-  async (args) => proxy('kanban_card_create', args, WRITE),
+  async (args, extra) => proxy('kanban_card_create', args, WRITE, extra),
 );
 
 server.tool(
@@ -113,7 +119,7 @@ server.tool(
     board: z.string().describe('Board prefix or id.'),
     local_id: z.number().describe('Card number within the board (the N of "LC-N").'),
   },
-  async (args) => proxy('kanban_card_get', args),
+  async (args, extra) => proxy('kanban_card_get', args, {}, extra),
 );
 
 server.tool(
@@ -127,13 +133,10 @@ server.tool(
     severity: z.string().optional().describe('Filter by severity (S1-S4).'),
     text: z.string().optional().describe('Text search over id ("LC-26"), title, problem and body.'),
     due_before: z.string().optional().describe('Cards with due_date strictly before this ISO date.'),
-    stalled_days: z
-      .number()
-      .optional()
-      .describe('Cards sitting in their current column for at least N days.'),
+    stalled_days: z.number().optional().describe('Cards sitting in their current column for at least N days.'),
     archived: z.boolean().optional().describe('true = only archived cards; default only active.'),
   },
-  async (args) => proxy('kanban_card_query', args),
+  async (args, extra) => proxy('kanban_card_query', args, {}, extra),
 );
 
 server.tool(
@@ -146,7 +149,7 @@ server.tool(
     ...cardContentFields,
     archived: z.boolean().optional().describe('true archives, false unarchives (reversible; logs the event).'),
   },
-  async (args) => proxy('kanban_card_update', args, WRITE),
+  async (args, extra) => proxy('kanban_card_update', args, WRITE, extra),
 );
 
 server.tool(
@@ -157,10 +160,12 @@ server.tool(
     local_id: z.number().describe('Card number within the board.'),
     to_column: z
       .string()
-      .describe('Target column: Backlog | Desenvolvimento | Testes | Done (closed set; unrecognized is the one real refusal).'),
+      .describe(
+        'Target column: Backlog | Desenvolvimento | Testes | Done (closed set; unrecognized is the one real refusal).',
+      ),
     reason: z.string().optional().describe('Reason for the move (recommended when moving backwards).'),
   },
-  async (args) => proxy('kanban_card_move', args, WRITE),
+  async (args, extra) => proxy('kanban_card_move', args, WRITE, extra),
 );
 
 server.tool(
@@ -172,18 +177,22 @@ server.tool(
     commit: z.string().describe('Commit URL or hash (required; the central argument of this tool).'),
     to_column: z.string().optional().describe('Target column of the delivery: Testes (default) or Done.'),
   },
-  async (args) => proxy('kanban_card_deliver', args, WRITE),
+  async (args, extra) => proxy('kanban_card_deliver', args, WRITE, extra),
 );
 
 server.tool(
   'card_delete',
-  'Delete a card. Default ARCHIVES (reversible via card_update archived:false). hard:true really deletes (events + attachments + files gone) - only under explicit owner order.',
+  externalClient
+    ? 'Archive a card (reversible via card_update archived:false). Permanent deletion is an owner action in the LionClaw app.'
+    : 'Delete a card. Default ARCHIVES (reversible via card_update archived:false). hard:true really deletes (events + attachments + files gone) - only under explicit owner order.',
   {
     board: z.string().describe('Board prefix or id.'),
     local_id: z.number().describe('Card number within the board.'),
-    hard: z.boolean().optional().describe('true = irreversible hard delete; default archives.'),
+    ...(externalClient
+      ? {}
+      : { hard: z.boolean().optional().describe('true = irreversible hard delete; default archives.') }),
   },
-  async (args) => proxy('kanban_card_delete', args, WRITE),
+  async (args, extra) => proxy('kanban_card_delete', args, WRITE, extra),
 );
 
 server.tool(
@@ -194,7 +203,7 @@ server.tool(
     local_id: z.number().describe('Card number within the board.'),
     file_path: z.string().describe('Absolute path of the existing local file to copy.'),
   },
-  async (args) => proxy('kanban_card_attach', args, WRITE),
+  async (args, extra) => proxy('kanban_card_attach', args, WRITE, extra),
 );
 
 async function main(): Promise<void> {

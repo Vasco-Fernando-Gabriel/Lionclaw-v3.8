@@ -1,7 +1,5 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AgentConfig, ExternalConfig } from '../../../src/types';
-
 
 const mockOllamaResult = {
   content: 'ok',
@@ -13,7 +11,6 @@ const mockOllamaResult = {
   apiRequests: 1,
   usageReported: true as boolean,
 };
-
 
 vi.mock('../logger', () => ({
   createLogger: () => ({
@@ -76,7 +73,6 @@ vi.mock('../agent-config-resolver', () => ({
   }),
 }));
 
-
 import { externalExecutor } from '../agent-runtime/external-executor';
 import { __resetWarnedAgentsForTests } from '../agent-runtime/mcp-warning';
 import { getAgent } from '../db';
@@ -84,7 +80,6 @@ import { ollamaChatWithTools } from '../ollama-client';
 import { calculateCost } from '../pricing';
 import type { AgentExecutionRequest } from '../agent-runtime/types';
 import type { AgentQueryConfig } from '../agent-config-resolver';
-
 
 function makeReq(overrides?: Partial<AgentExecutionRequest>): AgentExecutionRequest {
   return {
@@ -130,7 +125,6 @@ function setOllamaResult(overrides: Partial<typeof mockOllamaResult>) {
   } as Awaited<ReturnType<typeof ollamaChatWithTools>>);
 }
 
-
 beforeEach(() => {
   __resetWarnedAgentsForTests();
   vi.mocked(ollamaChatWithTools).mockReset();
@@ -150,20 +144,17 @@ beforeEach(() => {
   });
 });
 
-
 describe('external-executor: protocol dispatch', () => {
   it('google-genai protocol: dispatches to google-genai-executor (Sprint 3 implemented)', async () => {
     setAgent({
       provider: 'gemini-agent-platform',
       model: 'gemini-2.5-pro-preview-05-06',
-      apiKeyRef: '',           // Empty ref -> throws before any SDK call
+      apiKeyRef: '', // Empty ref -> throws before any SDK call
       baseUrl: '',
       protocol: 'google-genai',
     });
 
-    const err: unknown = await externalExecutor
-      .run(makeReq(), makeConfig())
-      .catch((e: unknown) => e);
+    const err: unknown = await externalExecutor.run(makeReq(), makeConfig()).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(Error);
     if (!(err instanceof Error)) throw new Error('Expected external executor error');
     expect(err.message).not.toMatch(/google-genai protocol nao implementado/i);
@@ -185,7 +176,6 @@ describe('external-executor: protocol dispatch', () => {
   });
 });
 
-
 describe('external-executor: baseUrl guard', () => {
   it('throws when baseUrl is missing (undefined)', async () => {
     setAgent({
@@ -195,9 +185,7 @@ describe('external-executor: baseUrl guard', () => {
       baseUrl: undefined as unknown as string,
     });
 
-    await expect(
-      externalExecutor.run(makeReq(), makeConfig()),
-    ).rejects.toThrow(/sem baseUrl/);
+    await expect(externalExecutor.run(makeReq(), makeConfig())).rejects.toThrow(/sem baseUrl/);
   });
 
   it('throws when baseUrl is empty string', async () => {
@@ -208,9 +196,7 @@ describe('external-executor: baseUrl guard', () => {
       baseUrl: '',
     });
 
-    await expect(
-      externalExecutor.run(makeReq(), makeConfig()),
-    ).rejects.toThrow(/sem baseUrl/);
+    await expect(externalExecutor.run(makeReq(), makeConfig())).rejects.toThrow(/sem baseUrl/);
   });
 
   it('throws when baseUrl is whitespace-only', async () => {
@@ -221,12 +207,9 @@ describe('external-executor: baseUrl guard', () => {
       baseUrl: '   ',
     });
 
-    await expect(
-      externalExecutor.run(makeReq(), makeConfig()),
-    ).rejects.toThrow(/sem baseUrl/);
+    await expect(externalExecutor.run(makeReq(), makeConfig())).rejects.toThrow(/sem baseUrl/);
   });
 });
-
 
 describe('external-executor: pricing combo A (no usage reported)', () => {
   it('kimi + no usage -> tokenStatus=not_reported, costStatus=unknown, reason=no-usage-reported', async () => {
@@ -390,7 +373,6 @@ describe('external-executor: pricing combo C (usage reported, pricing known)', (
     expect(result.metrics.costUsd).toBe(0.004);
   });
 });
-
 
 describe('external-executor: legacy providers (openrouter/openai/openai-compatible) byte-identical', () => {
   it('openrouter: costStatus=known regardless of usageReported (pricing always known)', async () => {

@@ -1,13 +1,8 @@
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import {
-  deriveKimiSessionDir,
-  snapshotKimiWireOffsets,
-  readKimiWireUsageDelta,
-} from '../wire-usage';
+import { deriveKimiSessionDir, snapshotKimiWireOffsets, readKimiWireUsageDelta } from '../wire-usage';
 
 function usageRecordLine(u: {
   inputOther: number;
@@ -15,13 +10,15 @@ function usageRecordLine(u: {
   inputCacheRead: number;
   inputCacheCreation: number;
 }): string {
-  return JSON.stringify({
-    type: 'usage.record',
-    model: 'kimi-code/kimi-for-coding',
-    usage: u,
-    usageScope: 'turn',
-    time: Date.now(),
-  }) + '\n';
+  return (
+    JSON.stringify({
+      type: 'usage.record',
+      model: 'kimi-code/kimi-for-coding',
+      usage: u,
+      usageScope: 'turn',
+      time: Date.now(),
+    }) + '\n'
+  );
 }
 
 function wrappedStepEndLine(u: {
@@ -30,11 +27,13 @@ function wrappedStepEndLine(u: {
   inputCacheRead: number;
   inputCacheCreation: number;
 }): string {
-  return JSON.stringify({
-    type: 'context.append_loop_event',
-    event: { type: 'step.end', uuid: 'u-1', turnId: '0', step: 1, usage: u, finishReason: 'stop' },
-    time: Date.now(),
-  }) + '\n';
+  return (
+    JSON.stringify({
+      type: 'context.append_loop_event',
+      event: { type: 'step.end', uuid: 'u-1', turnId: '0', step: 1, usage: u, finishReason: 'stop' },
+      time: Date.now(),
+    }) + '\n'
+  );
 }
 
 describe('deriveKimiSessionDir', () => {
@@ -57,9 +56,7 @@ describe('deriveKimiSessionDir', () => {
   });
 
   it('normaliza trailing slash (mesmo hash com e sem barra final)', () => {
-    expect(deriveKimiSessionDir('/h', '/home/user/', 'x')).toBe(
-      deriveKimiSessionDir('/h', '/home/user', 'x'),
-    );
+    expect(deriveKimiSessionDir('/h', '/home/user/', 'x')).toBe(deriveKimiSessionDir('/h', '/home/user', 'x'));
   });
 });
 
@@ -122,10 +119,7 @@ describe('snapshot de offsets + delta do turno', () => {
 
     const subWire = path.join(sessionDir, 'agents', 'agent-0', 'wire.jsonl');
     fs.mkdirSync(path.dirname(subWire), { recursive: true });
-    fs.writeFileSync(
-      subWire,
-      usageRecordLine({ inputOther: 10, output: 5, inputCacheRead: 0, inputCacheCreation: 0 }),
-    );
+    fs.writeFileSync(subWire, usageRecordLine({ inputOther: 10, output: 5, inputCacheRead: 0, inputCacheCreation: 0 }));
 
     const usage = readKimiWireUsageDelta(snapshot!);
     expect(usage).toEqual({
@@ -143,16 +137,13 @@ describe('snapshot de offsets + delta do turno', () => {
     );
     const snapshot = snapshotKimiWireOffsets(sessionDir);
 
-    fs.writeFileSync(mainWire, ''); // rotacao/truncamento mid-turno
+    fs.writeFileSync(mainWire, '');
 
     expect(readKimiWireUsageDelta(snapshot!)).toBeNull();
   });
 
   it('arquivo do snapshot deletado (rotacao) -> null', () => {
-    fs.writeFileSync(
-      mainWire,
-      usageRecordLine({ inputOther: 1, output: 1, inputCacheRead: 0, inputCacheCreation: 0 }),
-    );
+    fs.writeFileSync(mainWire, usageRecordLine({ inputOther: 1, output: 1, inputCacheRead: 0, inputCacheCreation: 0 }));
     const snapshot = snapshotKimiWireOffsets(sessionDir);
 
     fs.rmSync(mainWire);
@@ -182,49 +173,55 @@ describe('snapshot de offsets + delta do turno', () => {
     { inputOther: 1, output: Number.POSITIVE_INFINITY, inputCacheRead: 0, inputCacheCreation: 0 },
   ])('invalida dimensao ausente, negativa, fracionaria ou nao finita: %j', (usage) => {
     const snapshot = snapshotKimiWireOffsets(sessionDir);
-    fs.appendFileSync(mainWire, JSON.stringify({
-      type: 'usage.record',
-      model: 'kimi-code/kimi-for-coding',
-      usage,
-      usageScope: 'turn',
-    }) + '\n');
+    fs.appendFileSync(
+      mainWire,
+      JSON.stringify({
+        type: 'usage.record',
+        model: 'kimi-code/kimi-for-coding',
+        usage,
+        usageScope: 'turn',
+      }) + '\n',
+    );
 
     expect(readKimiWireUsageDelta(snapshot!)).toBeNull();
   });
 
   it('invalida usage.record sem uma dimensao obrigatoria', () => {
     const snapshot = snapshotKimiWireOffsets(sessionDir);
-    fs.appendFileSync(mainWire, JSON.stringify({
-      type: 'usage.record',
-      usageScope: 'turn',
-      usage: { inputOther: 1, output: 1, inputCacheRead: 0 },
-    }) + '\n');
+    fs.appendFileSync(
+      mainWire,
+      JSON.stringify({
+        type: 'usage.record',
+        usageScope: 'turn',
+        usage: { inputOther: 1, output: 1, inputCacheRead: 0 },
+      }) + '\n',
+    );
 
     expect(readKimiWireUsageDelta(snapshot!)).toBeNull();
   });
 
   it('invalida total de input que diverge do breakdown inclusivo', () => {
     const snapshot = snapshotKimiWireOffsets(sessionDir);
-    fs.appendFileSync(mainWire, JSON.stringify({
-      type: 'usage.record',
-      usageScope: 'turn',
-      usage: {
-        inputOther: 7,
-        inputCacheRead: 2,
-        inputCacheCreation: 1,
-        inputTokens: 999,
-        output: 3,
-      },
-    }) + '\n');
+    fs.appendFileSync(
+      mainWire,
+      JSON.stringify({
+        type: 'usage.record',
+        usageScope: 'turn',
+        usage: {
+          inputOther: 7,
+          inputCacheRead: 2,
+          inputCacheCreation: 1,
+          inputTokens: 999,
+          output: 3,
+        },
+      }) + '\n',
+    );
 
     expect(readKimiWireUsageDelta(snapshot!)).toBeNull();
   });
 
   it('turno sem nada anexado -> zeros (usage reportado vazio, nao null)', () => {
-    fs.writeFileSync(
-      mainWire,
-      usageRecordLine({ inputOther: 5, output: 5, inputCacheRead: 0, inputCacheCreation: 0 }),
-    );
+    fs.writeFileSync(mainWire, usageRecordLine({ inputOther: 5, output: 5, inputCacheRead: 0, inputCacheCreation: 0 }));
     const snapshot = snapshotKimiWireOffsets(sessionDir);
 
     expect(readKimiWireUsageDelta(snapshot!)).toEqual({

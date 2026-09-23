@@ -15,7 +15,12 @@ interface VoiceConversationPanelProps {
     input: unknown;
     status: 'running' | 'done' | 'error' | 'stopped';
   }>;
-  currentUsage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheCreationTokens?: number } | null;
+  currentUsage: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens?: number;
+    cacheCreationTokens?: number;
+  } | null;
 }
 
 function mapOrbState(state: VoiceConversationState): VoiceOrbVisualState {
@@ -39,18 +44,8 @@ export function VoiceConversationPanel({
     onSendMessage,
     autoStart: true,
   });
-  const {
-    state,
-    amplitude,
-    transcript,
-    lastError,
-    turnElapsedMs,
-    maxTurnMs,
-    turnWarningMs,
-    start,
-    stop,
-    interrupt,
-  } = voice;
+  const { state, amplitude, transcript, lastError, turnElapsedMs, maxTurnMs, turnWarningMs, start, stop, interrupt } =
+    voice;
 
   useEffect(() => {
     if (disabled) {

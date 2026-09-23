@@ -1,4 +1,3 @@
-
 export interface LionToolSchema {
   name: string;
   aliases?: string[];
@@ -74,6 +73,7 @@ export const LION_TOOL_SCHEMAS: LionToolSchema[] = [
         glob: { type: 'string' },
         output_mode: { type: 'string', enum: ['content', 'files_with_matches', 'count'] },
         multiline: { type: 'boolean' },
+        head_limit: { type: 'number' },
       },
     },
   },
@@ -200,7 +200,6 @@ export const LION_TOOL_SCHEMAS: LionToolSchema[] = [
     },
   },
 ];
-
 
 export const MCP_SCHEMA_TOOL_SCHEMA: LionToolSchema = {
   name: 'mcp_schema',

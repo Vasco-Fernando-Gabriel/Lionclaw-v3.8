@@ -1,4 +1,3 @@
-
 import { createOpenAiCompatibleAdapter } from './openai-compatible';
 import type { AdapterConfig, LionAdapter } from './types';
 

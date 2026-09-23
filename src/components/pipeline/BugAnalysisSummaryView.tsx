@@ -2,7 +2,6 @@ import { useActiveProjectState } from '@/hooks/useActiveProjectState';
 import { shortenModel } from '@/utils/model-display';
 import type { AuditAgentState } from '@/types/pipeline';
 
-
 const TOTAL_BUG_ANALYSTS = 3;
 
 function formatCost(usd: number): string {
@@ -20,14 +19,11 @@ function formatDuration(ms: number): string {
 }
 
 export function BugAnalysisSummaryView() {
-  const bugAgents = useActiveProjectState(s => s.auditAgents) ?? new Map<string, AuditAgentState>();
-  const list = Array.from(bugAgents.values())
-    .sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
+  const bugAgents = useActiveProjectState((s) => s.auditAgents) ?? new Map<string, AuditAgentState>();
+  const list = Array.from(bugAgents.values()).sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
 
-  const totalFiles = list
-    .filter(a => a.runtime !== 'codex')
-    .reduce((acc, a) => acc + a.additionalFilesAfterStart, 0);
-  const allCodex = list.length > 0 && list.every(a => a.runtime === 'codex');
+  const totalFiles = list.filter((a) => a.runtime !== 'codex').reduce((acc, a) => acc + a.additionalFilesAfterStart, 0);
+  const allCodex = list.length > 0 && list.every((a) => a.runtime === 'codex');
   const totalToolCalls = list.reduce((acc, a) => acc + a.toolCallsCount, 0);
   const totalCost = list.reduce((acc, a) => acc + a.costUsd, 0);
   const totalDuration = list.reduce((acc, a) => acc + a.durationMs, 0);
@@ -54,20 +50,26 @@ export function BugAnalysisSummaryView() {
             </tr>
           </thead>
           <tbody>
-            {list.map(a => (
+            {list.map((a) => (
               <tr key={a.agentId} className="text-zinc-300 border-b border-zinc-800/40">
                 <td className="pr-4 py-2">
                   <span className="flex items-center gap-2">
                     {a.name}
                     {a.status === 'failed' && (
-                      <span className="text-[9px] uppercase tracking-wider bg-red-900/40 text-red-300 px-1 py-0.5 rounded">falhou</span>
+                      <span className="text-[9px] uppercase tracking-wider bg-red-900/40 text-red-300 px-1 py-0.5 rounded">
+                        falhou
+                      </span>
                     )}
                   </span>
                 </td>
                 <td className="pr-4 py-2 font-mono text-zinc-400">{shortenModel(a.model)}</td>
                 <td
                   className="pr-4 py-2 font-mono text-right"
-                  title={a.runtime === 'codex' ? 'Metrica de arquivos abertos nao disponivel para runtime Codex (sem tool Read tipado)' : undefined}
+                  title={
+                    a.runtime === 'codex'
+                      ? 'Metrica de arquivos abertos nao disponivel para runtime Codex (sem tool Read tipado)'
+                      : undefined
+                  }
                 >
                   {a.runtime === 'codex' ? '—' : a.additionalFilesAfterStart}
                 </td>
@@ -81,7 +83,11 @@ export function BugAnalysisSummaryView() {
               <td className="pr-4 py-2"></td>
               <td
                 className="pr-4 py-2 font-mono text-right"
-                title={allCodex ? 'Todos os analistas rodaram em Codex; metrica de arquivos abertos nao se aplica' : undefined}
+                title={
+                  allCodex
+                    ? 'Todos os analistas rodaram em Codex; metrica de arquivos abertos nao se aplica'
+                    : undefined
+                }
               >
                 {allCodex ? '—' : totalFiles}
               </td>

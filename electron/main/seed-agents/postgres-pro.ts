@@ -1,13 +1,13 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const POSTGRES_PRO_ID = 'postgres-pro';
 
 export const postgresPro: Omit<AgentConfig, 'sortOrder'> = {
   id: POSTGRES_PRO_ID,
-  name: "Especialista PostgreSQL",
-  description: "Use quando precisar de administração avançada de PostgreSQL, tuning de performance, replicação, backup, high availability e funcionalidades avançadas como JSONB, full-text search e extensões",
-  model: "claude-opus-4-8",
+  name: 'Especialista PostgreSQL',
+  description:
+    'Use quando precisar de administração avançada de PostgreSQL, tuning de performance, replicação, backup, high availability e funcionalidades avançadas como JSONB, full-text search e extensões',
+  model: 'claude-opus-5-5',
   effort: 'medium' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,

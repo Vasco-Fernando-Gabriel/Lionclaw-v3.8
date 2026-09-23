@@ -1,4 +1,3 @@
-
 export type CursorEffortTier = 'low' | 'medium' | 'high' | 'xhigh';
 
 export interface CursorModelOption {
@@ -40,17 +39,11 @@ export function cursorEffortTiersForModel(model: string): readonly CursorEffortT
 
 const CURSOR_EFFORT_RANK: readonly CursorEffortTier[] = ['low', 'medium', 'high', 'xhigh'];
 
-export function clampCursorEffortForModel(
-  effort: string,
-  model: string,
-): CursorEffortTier | null {
+export function clampCursorEffortForModel(effort: string, model: string): CursorEffortTier | null {
   return clampCursorEffort(effort, cursorEffortTiersForModel(model));
 }
 
-export function clampCursorEffort(
-  effort: string,
-  tiers: readonly CursorEffortTier[],
-): CursorEffortTier | null {
+export function clampCursorEffort(effort: string, tiers: readonly CursorEffortTier[]): CursorEffortTier | null {
   if (tiers.length === 0) return null;
   const requested: CursorEffortTier =
     effort === 'max' || effort === 'ultra'
@@ -59,9 +52,7 @@ export function clampCursorEffort(
         ? (effort as CursorEffortTier)
         : 'xhigh';
   const requestedRank = CURSOR_EFFORT_RANK.indexOf(requested);
-  const sorted = [...tiers].sort(
-    (a, b) => CURSOR_EFFORT_RANK.indexOf(a) - CURSOR_EFFORT_RANK.indexOf(b),
-  );
+  const sorted = [...tiers].sort((a, b) => CURSOR_EFFORT_RANK.indexOf(a) - CURSOR_EFFORT_RANK.indexOf(b));
   for (let i = sorted.length - 1; i >= 0; i -= 1) {
     if (CURSOR_EFFORT_RANK.indexOf(sorted[i]) <= requestedRank) return sorted[i];
   }

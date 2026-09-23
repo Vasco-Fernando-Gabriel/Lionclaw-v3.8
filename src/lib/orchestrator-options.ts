@@ -1,36 +1,15 @@
-
-import type {
-  OrchestratorProvider,
-  OrchestratorRuntime,
-} from '../types';
-import {
-  CLAUDE_DEFAULT_MODEL,
-  CLAUDE_MODELS,
-  type ClaudeModelOption,
-} from '../constants/claude-models';
-import {
-  CLAUDE_COMPAT_PRESETS,
-  type ClaudeCompatModelInfo,
-} from '../constants/claude-compat-presets';
-import {
-  OPENAI_COMPATIBLE_PRESETS,
-  type OpenAiCompatiblePresetEntry,
-} from '../constants/openai-compatible-presets';
-import {
-  CODEX_DEFAULT_MODEL,
-  CODEX_MODELS,
-  type CodexModelOption,
-} from '../constants/codex-models';
-import {
-  VERTEX_DEFAULT_MODEL,
-  VERTEX_MODEL_CATALOG,
-} from '../constants/vertex-gemini-models';
+import type { OrchestratorProvider, OrchestratorRuntime } from '../types';
+import { CLAUDE_DEFAULT_MODEL, CLAUDE_MODELS, type ClaudeModelOption } from '../constants/claude-models';
+import { CLAUDE_COMPAT_PRESETS, type ClaudeCompatModelInfo } from '../constants/claude-compat-presets';
+import { OPENAI_COMPATIBLE_PRESETS, type OpenAiCompatiblePresetEntry } from '../constants/openai-compatible-presets';
+import { CODEX_DEFAULT_MODEL, CODEX_MODELS, type CodexModelOption } from '../constants/codex-models';
+import { VERTEX_DEFAULT_MODEL, VERTEX_MODEL_CATALOG } from '../constants/vertex-gemini-models';
 import { KIMI_DEFAULT_MODEL, KIMI_MODELS } from '../constants/kimi-models';
 import { GROK_DEFAULT_MODEL, GROK_MODELS } from '../constants/grok-models';
 import { CURSOR_DEFAULT_MODEL, CURSOR_MODELS } from '../constants/cursor-models';
 
 export interface OrchestratorModelOption {
-  id: string;          // slug sent to the provider
+  id: string;
   displayName: string;
 }
 
@@ -151,7 +130,7 @@ export function buildOrchestratorOptions(): OrchestratorProviderGroup[] {
     runtime: 'lion-sdk',
     provider: 'vertex-ai',
     displayName: 'Gemini Agent Platform',
-    staticModels: VERTEX_MODEL_CATALOG.map(m => ({
+    staticModels: VERTEX_MODEL_CATALOG.map((m) => ({
       id: m.id,
       displayName: m.displayName,
     })),
@@ -167,9 +146,7 @@ export function findOrchestratorGroup(
   runtime: OrchestratorRuntime,
   provider: OrchestratorProvider,
 ): OrchestratorProviderGroup | undefined {
-  return buildOrchestratorOptions().find(
-    g => g.runtime === runtime && g.provider === provider,
-  );
+  return buildOrchestratorOptions().find((g) => g.runtime === runtime && g.provider === provider);
 }
 
 export function listOpenAiCompatiblePresets(): OpenAiCompatiblePresetEntry[] {

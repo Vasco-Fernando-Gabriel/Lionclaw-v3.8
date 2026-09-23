@@ -1,4 +1,3 @@
-
 import { getSetting } from './db';
 import { createLogger } from './logger';
 import {
@@ -9,14 +8,10 @@ import {
   type ChatCapabilityName,
   type ChatCapabilityTurnContext,
 } from './chat-capability-context';
-import {
-  verifyInternalCapabilityLease,
-  INTERNAL_CAPABILITY_COORDINATORS,
-} from './chat-capability-lease';
+import { verifyInternalCapabilityLease, INTERNAL_CAPABILITY_COORDINATORS } from './chat-capability-lease';
 import type { McpInvocationContext } from './mcp-invocation-context';
 
 const logger = createLogger('chat-capability-gate');
-
 
 export const CHAT_CAPABILITY_GATE_MODE_SETTING_KEY = 'chat_capability_gate_mode';
 
@@ -24,32 +19,26 @@ export type ChatCapabilityGateMode = 'shadow' | 'enforce';
 
 export function getChatCapabilityGateMode(): ChatCapabilityGateMode {
   try {
-    const raw = (getSetting(CHAT_CAPABILITY_GATE_MODE_SETTING_KEY) ?? '')
-      .trim()
-      .toLowerCase();
+    const raw = (getSetting(CHAT_CAPABILITY_GATE_MODE_SETTING_KEY) ?? '').trim().toLowerCase();
     return raw === 'enforce' ? 'enforce' : 'shadow';
   } catch (err) {
-    logger.warn(
-      { err },
-      'falha ao ler chat_capability_gate_mode; assumindo shadow (fail-safe)',
-    );
+    logger.warn({ err }, 'falha ao ler chat_capability_gate_mode; assumindo shadow (fail-safe)');
     return 'shadow';
   }
 }
 
-
 const GATED_SERVER_CAPABILITY: Readonly<Record<string, ChatCapabilityName>> = {
+  'lionclaw-swarm': 'swarm',
   'lionclaw-pipeline-control': 'pipelineControl',
   'lionclaw-dynamic-workflows': 'dynamicWorkflows',
 };
 
-export function getChatCapabilityForServer(
-  serverId: string,
-): ChatCapabilityName | undefined {
+export function getChatCapabilityForServer(serverId: string): ChatCapabilityName | undefined {
   return GATED_SERVER_CAPABILITY[normalizeChatCapabilityServerId(serverId)];
 }
 
 export type ChatCapabilityGateDenyCode =
+  | 'chat_capability_swarm_disabled'
   | 'chat_capability_pipeline_disabled'
   | 'chat_capability_workflows_disabled'
   | 'chat_capability_no_turn_context'
@@ -65,20 +54,19 @@ export type ChatCapabilityGateResult =
     };
 
 const CAPABILITY_DISABLED_DENIALS: Readonly<
-  Record<
-    ChatCapabilityName,
-    { code: ChatCapabilityGateDenyCode; message: string }
-  >
+  Record<ChatCapabilityName, { code: ChatCapabilityGateDenyCode; message: string }>
 > = {
+  swarm: {
+    code: 'chat_capability_swarm_disabled',
+    message: 'Swarm está desligado. Ligue o chip Swarm no chat e envie novamente.',
+  },
   pipelineControl: {
     code: 'chat_capability_pipeline_disabled',
-    message:
-      'Pipeline está desligado para esta sessão. Ligue o chip Pipeline no chat e envie novamente.',
+    message: 'Pipeline está desligado para esta sessão. Ligue o chip Pipeline no chat e envie novamente.',
   },
   dynamicWorkflows: {
     code: 'chat_capability_workflows_disabled',
-    message:
-      'Workflows está desligado para esta sessão. Ligue o chip Workflows no chat e envie novamente.',
+    message: 'Workflows está desligado para esta sessão. Ligue o chip Workflows no chat e envie novamente.',
   },
 };
 
@@ -87,7 +75,6 @@ const NO_TURN_CONTEXT_MESSAGE =
 
 const LEASE_INVALID_MESSAGE =
   'Chamada interna (system-event) sem lease de capability válida. Turnos internos só bypassam o gate com lease do coordenador.';
-
 
 interface DenialInput {
   serverId: string;
@@ -116,10 +103,7 @@ function decideDenial(input: DenialInput): ChatCapabilityGateResult {
     );
     return { ok: true };
   }
-  logger.warn(
-    fields,
-    `gate NEGOU ${input.capability} em ${input.serverId}.${input.toolName}`,
-  );
+  logger.warn(fields, `gate NEGOU ${input.capability} em ${input.serverId}.${input.toolName}`);
   return {
     ok: false,
     code: input.code,
@@ -147,19 +131,18 @@ export function failClosedChatCapability(input: {
   });
 }
 
-
-function resolveTurnContextForGate(
-  context: McpInvocationContext,
-): ChatCapabilityTurnContext | undefined {
+function resolveTurnContextForGate(context: McpInvocationContext): ChatCapabilityTurnContext | undefined {
   if (context.sessionId && context.turnId) {
     return getChatCapabilityTurn({
       sessionId: context.sessionId,
       turnId: context.turnId,
     });
   }
-  const active = getActiveChatTurnByLane('desktop');
-  if (!active) return undefined;
-  return getChatCapabilityTurn(active);
+  if (context.lane === 'telegram' || context.lane === 'cron') {
+    const active = getActiveChatTurnByLane(context.lane);
+    return active ? getChatCapabilityTurn(active) : undefined;
+  }
+  return undefined;
 }
 
 function verifyLeaseFields(input: {
@@ -211,16 +194,13 @@ function verifyLeaseFields(input: {
   return false;
 }
 
-
 export interface AssertChatCapabilityInput {
   serverId: string;
   toolName: string;
   context: McpInvocationContext;
 }
 
-export function assertChatCapability(
-  input: AssertChatCapabilityInput,
-): ChatCapabilityGateResult {
+export function assertChatCapability(input: AssertChatCapabilityInput): ChatCapabilityGateResult {
   const serverId = normalizeChatCapabilityServerId(input.serverId);
   const capability = GATED_SERVER_CAPABILITY[serverId];
   if (capability === undefined) return { ok: true };
@@ -239,8 +219,7 @@ export function assertChatCapability(
     const leaseValid = verifyLeaseFields({
       token: input.context.internalLeaseToken ?? turnContext?.internalLeaseToken,
       coordinator: turnContext?.leaseCoordinator,
-      driveProjectId:
-        input.context.driveProjectId ?? turnContext?.driveProjectId,
+      driveProjectId: input.context.driveProjectId ?? turnContext?.driveProjectId,
       driveTurnId: input.context.driveTurnId ?? turnContext?.driveTurnId,
       serverId,
       toolName: input.toolName,
@@ -274,12 +253,9 @@ export function assertChatCapability(
     turnContext.origin === 'system-event'
       ? {
           valid: verifyLeaseFields({
-            token:
-              input.context.internalLeaseToken ??
-              turnContext.internalLeaseToken,
+            token: input.context.internalLeaseToken ?? turnContext.internalLeaseToken,
             coordinator: turnContext.leaseCoordinator,
-            driveProjectId:
-              input.context.driveProjectId ?? turnContext.driveProjectId,
+            driveProjectId: input.context.driveProjectId ?? turnContext.driveProjectId,
             driveTurnId: input.context.driveTurnId ?? turnContext.driveTurnId,
             serverId,
             toolName: input.toolName,

@@ -1,4 +1,3 @@
-
 import path from 'path';
 import fs from 'fs';
 import type { AgentConfig } from '../../../src/types';
@@ -25,11 +24,7 @@ export async function ensureSeedAgent(seed: SeedAgent): Promise<void> {
       _comment: 'AUTO-GENERATED snapshot from DB. Edit via UI; this file is overwritten on every boot.',
       ...resolved,
     };
-    fs.writeFileSync(
-      path.join(dir, 'config.json'),
-      JSON.stringify(snapshot, null, 2),
-      'utf8',
-    );
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify(snapshot, null, 2), 'utf8');
   } catch (err) {
     logger.warn({ agentId: seed.id, err }, 'Failed to materialize agent config snapshot');
   }

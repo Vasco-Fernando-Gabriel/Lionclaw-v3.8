@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const saveCalls: Array<Record<string, unknown>> = [];
@@ -26,10 +25,7 @@ import {
 } from '../pipeline-engine/metrics';
 import type { SprintMetrics } from '../harness-engine';
 
-function makeResult(overrides?: {
-  metadata?: MetricsSpawnResult['metadata'];
-  costUsd?: number;
-}): MetricsSpawnResult {
+function makeResult(overrides?: { metadata?: MetricsSpawnResult['metadata']; costUsd?: number }): MetricsSpawnResult {
   return {
     metrics: {
       inputTokens: 100,
@@ -62,7 +58,7 @@ describe('accumulateMetrics: BUG 3 F1 — uniao de sessionIds entre rounds', () 
     const state = makeState();
     accumulateMetrics(state, 5, makeResult({ metadata: { sessionIds: ['s-1'] } }));
     accumulateMetrics(state, 5, makeResult({ metadata: { sessionIds: ['s-2', 's-1'] } }));
-    accumulateMetrics(state, 5, makeResult({})); // round sem metadata nao apaga
+    accumulateMetrics(state, 5, makeResult({}));
 
     const accum = state.phaseMetricAccum.get(5);
     expect(accum?.sessionIds).toEqual(['s-1', 's-2']);
@@ -79,12 +75,20 @@ describe('accumulateMetrics: BUG 3 F1 — uniao de sessionIds entre rounds', () 
         costUSD: cost,
       },
     });
-    accumulateMetrics(state, 5, makeResult({
-      metadata: { modelUsage: mu(1.0), costSource: 'calculated' },
-    }));
-    accumulateMetrics(state, 5, makeResult({
-      metadata: { modelUsage: mu(0.5), costSource: 'sdk_total_cost_usd' },
-    }));
+    accumulateMetrics(
+      state,
+      5,
+      makeResult({
+        metadata: { modelUsage: mu(1.0), costSource: 'calculated' },
+      }),
+    );
+    accumulateMetrics(
+      state,
+      5,
+      makeResult({
+        metadata: { modelUsage: mu(0.5), costSource: 'sdk_total_cost_usd' },
+      }),
+    );
 
     const accum = state.phaseMetricAccum.get(5);
     expect(accum?.modelUsage?.['claude-opus-4-8']).toEqual({
@@ -111,14 +115,26 @@ describe('accumulateMetrics: BUG 3 F1 — uniao de sessionIds entre rounds', () 
         costUsdTicks,
       },
     });
-    accumulateMetrics(state, 5, makeResult({ metadata: {
-      modelUsage: usage(3, 1, 100),
-      grok: { reasoningTokens: 3, modelCalls: 1, costUsdTicks: 100, requestId: 'r-1' },
-    } }));
-    accumulateMetrics(state, 5, makeResult({ metadata: {
-      modelUsage: usage(4, 2, 250),
-      grok: { reasoningTokens: 4, modelCalls: 2, costUsdTicks: 250, requestId: 'r-2' },
-    } }));
+    accumulateMetrics(
+      state,
+      5,
+      makeResult({
+        metadata: {
+          modelUsage: usage(3, 1, 100),
+          grok: { reasoningTokens: 3, modelCalls: 1, costUsdTicks: 100, requestId: 'r-1' },
+        },
+      }),
+    );
+    accumulateMetrics(
+      state,
+      5,
+      makeResult({
+        metadata: {
+          modelUsage: usage(4, 2, 250),
+          grok: { reasoningTokens: 4, modelCalls: 2, costUsdTicks: 250, requestId: 'r-2' },
+        },
+      }),
+    );
 
     expect(state.phaseMetricAccum.get(5)?.modelUsage?.['grok-4.5']).toMatchObject({
       reasoningTokens: 7,
@@ -142,9 +158,13 @@ describe('flushAccumulatedMetrics: metadata chega ao save', () => {
       model: 'glm-4.7',
       entry: { input: 0.6, output: 2.2, cacheRead: 0.11, cacheCreation: 0.6 },
     };
-    accumulateMetrics(state, 7, makeResult({
-      metadata: { sessionIds: ['s-a', 's-b'], costSource: 'calculated', pricingSnapshot },
-    }));
+    accumulateMetrics(
+      state,
+      7,
+      makeResult({
+        metadata: { sessionIds: ['s-a', 's-b'], costSource: 'calculated', pricingSnapshot },
+      }),
+    );
 
     flushAccumulatedMetrics('proj-1', 7, 'agent-x', state, 'completed');
 
@@ -158,9 +178,15 @@ describe('flushAccumulatedMetrics: metadata chega ao save', () => {
 
   it('persiste metadata Grok agregada', () => {
     const state = makeState();
-    accumulateMetrics(state, 7, makeResult({ metadata: {
-      grok: { reasoningTokens: 5, modelCalls: 1, costUsdTicks: 900 },
-    } }));
+    accumulateMetrics(
+      state,
+      7,
+      makeResult({
+        metadata: {
+          grok: { reasoningTokens: 5, modelCalls: 1, costUsdTicks: 900 },
+        },
+      }),
+    );
 
     flushAccumulatedMetrics('proj-1', 7, 'agent-x', state, 'completed');
 
@@ -172,19 +198,21 @@ describe('flushAccumulatedMetrics: metadata chega ao save', () => {
   });
 
   it('soma a metrica automatica persistida antes de concluir a revisao conversacional', () => {
-    persistedRows = [{
-      phaseNumber: 91,
-      sprintIndex: -1,
-      inputTokens: 300,
-      outputTokens: 30,
-      cacheReadTokens: 200,
-      cacheCreationTokens: 50,
-      costUsd: 0.3,
-      durationMs: 3_000,
-      toolUses: 3,
-      apiRequests: 3,
-      metadata: { sessionIds: ['auto-session'] },
-    }];
+    persistedRows = [
+      {
+        phaseNumber: 91,
+        sprintIndex: -1,
+        inputTokens: 300,
+        outputTokens: 30,
+        cacheReadTokens: 200,
+        cacheCreationTokens: 50,
+        costUsd: 0.3,
+        durationMs: 3_000,
+        toolUses: 3,
+        apiRequests: 3,
+        metadata: { sessionIds: ['auto-session'] },
+      },
+    ];
     const state = makeState();
     accumulateMetrics(state, 91, makeResult({ metadata: { sessionIds: ['review-session'] } }));
 
@@ -206,9 +234,15 @@ describe('flushAccumulatedMetrics: metadata chega ao save', () => {
 
 describe('collectMetrics (single-shot): metadata chega ao save', () => {
   it('persiste sessionIds/costSource e nao inventa campos ausentes', () => {
-    collectMetrics('proj-1', 3, 'agent-y', makeResult({
-      metadata: { sessionIds: ['s-z'], costSource: 'sdk_total_cost_usd' },
-    }), 'completed');
+    collectMetrics(
+      'proj-1',
+      3,
+      'agent-y',
+      makeResult({
+        metadata: { sessionIds: ['s-z'], costSource: 'sdk_total_cost_usd' },
+      }),
+      'completed',
+    );
 
     expect(saveCalls).toHaveLength(1);
     const meta = saveCalls[0].metadata as Record<string, unknown>;

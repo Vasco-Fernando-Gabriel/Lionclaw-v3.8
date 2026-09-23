@@ -1,12 +1,8 @@
-
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { sep } from 'node:path';
 import { createLogger } from '../logger';
 import { resolveArtifactPath, sha256Hex } from './workflow-artifacts';
-import type {
-  DynamicWorkflowJournalCallKey,
-  DynamicWorkflowJournalEntry,
-} from './types';
+import type { DynamicWorkflowJournalCallKey, DynamicWorkflowJournalEntry } from './types';
 
 const logger = createLogger('dynamic-workflow-checkpoints');
 
@@ -72,9 +68,7 @@ function emptyIndex(): DynamicWorkflowRunCheckpointIndex {
   return { nodes: {} };
 }
 
-export function parseRunCheckpointIndex(
-  raw: string | null | undefined,
-): DynamicWorkflowRunCheckpointIndex {
+export function parseRunCheckpointIndex(raw: string | null | undefined): DynamicWorkflowRunCheckpointIndex {
   if (!raw) return emptyIndex();
   let parsed: unknown;
   try {
@@ -91,16 +85,12 @@ export function parseRunCheckpointIndex(
   return { ...obj, nodes };
 }
 
-export function saveNodeCheckpoint(
-  deps: WorkflowCheckpointsDeps,
-  input: SaveCheckpointInput,
-): SaveCheckpointResult {
+export function saveNodeCheckpoint(deps: WorkflowCheckpointsDeps, input: SaveCheckpointInput): SaveCheckpointResult {
   const now = (deps.now ?? (() => new Date()))();
   const savedAt = now.toISOString();
 
   const serializedState = safeSerialize(input.state);
-  const outputHash =
-    input.outputHash !== undefined ? input.outputHash : sha256Hex(serializedState);
+  const outputHash = input.outputHash !== undefined ? input.outputHash : sha256Hex(serializedState);
 
   const file: DynamicWorkflowNodeCheckpointFile = {
     nodeId: input.nodeId,
@@ -150,16 +140,10 @@ export function saveNodeCheckpoint(
   return { file, absolutePath, index };
 }
 
-export function readNodeCheckpoint(
-  runDir: string,
-  nodeId: string,
-): DynamicWorkflowNodeCheckpointFile | null {
+export function readNodeCheckpoint(runDir: string, nodeId: string): DynamicWorkflowNodeCheckpointFile | null {
   let absolutePath: string;
   try {
-    absolutePath = resolveArtifactPath(
-      runDir,
-      `${CHECKPOINTS_SUBDIR}/${sanitizeNodeIdForFile(nodeId)}.json`,
-    );
+    absolutePath = resolveArtifactPath(runDir, `${CHECKPOINTS_SUBDIR}/${sanitizeNodeIdForFile(nodeId)}.json`);
   } catch {
     return null;
   }
@@ -197,7 +181,6 @@ function safeSerialize(state: unknown): string {
 function sanitizeNodeIdForFile(nodeId: string): string {
   return nodeId.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
-
 
 const JOURNAL_KEY_FIELDS: ReadonlyArray<keyof DynamicWorkflowJournalCallKey> = [
   'callPath',

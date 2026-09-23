@@ -1,14 +1,9 @@
-
 import { BrowserWindow } from 'electron';
 import Anthropic from '@anthropic-ai/sdk';
 import { CohereClient } from 'cohere-ai';
 import { createLogger } from './logger';
 import { getSecret } from './secrets-vault';
-import {
-  getKnowledgeSource,
-  updateKnowledgeBenchmark,
-  updateKnowledgeSource,
-} from './db';
+import { getKnowledgeSource, updateKnowledgeBenchmark, updateKnowledgeSource } from './db';
 import {
   loadRawDocument,
   chunkDocument,
@@ -20,7 +15,6 @@ import {
 } from './knowledge-engine';
 
 const logger = createLogger('knowledge-benchmark');
-
 
 const MODEL_MAP = {
   sonnet: 'claude-sonnet-4-6',
@@ -39,7 +33,6 @@ const STRATEGY_BY_TYPE: Record<string, ChunkStrategy[]> = {
   csv: ['csv', 'recursive'],
 };
 
-
 interface BenchmarkProgressData {
   benchmarkId: string;
   stage: string;
@@ -50,7 +43,6 @@ interface BenchmarkProgressData {
   done?: boolean;
 }
 
-
 interface CombinationResult {
   avg_score: number;
   true_rate: number;
@@ -58,14 +50,11 @@ interface CombinationResult {
   raw_scores: number[];
 }
 
-
 async function waitCohereRateLimit(): Promise<void> {
   const now = Date.now();
   const elapsed = now - lastCohereCallAt;
   if (elapsed < COHERE_RATE_LIMIT_MS) {
-    await new Promise<void>((resolve) =>
-      setTimeout(resolve, COHERE_RATE_LIMIT_MS - elapsed),
-    );
+    await new Promise<void>((resolve) => setTimeout(resolve, COHERE_RATE_LIMIT_MS - elapsed));
   }
   lastCohereCallAt = Date.now();
 }
@@ -82,9 +71,7 @@ async function localCohereRerank(
   const apiKey = await getSecret('COHERE_API_KEY');
   if (!apiKey) {
     logger.warn('No COHERE_API_KEY configured, skipping rerank');
-    return documents
-      .slice(0, topN)
-      .map((_, i) => ({ index: i, relevanceScore: 0 }));
+    return documents.slice(0, topN).map((_, i) => ({ index: i, relevanceScore: 0 }));
   }
 
   await waitCohereRateLimit();
@@ -104,12 +91,9 @@ async function localCohereRerank(
     }));
   } catch (err) {
     logger.warn({ err }, 'Cohere rerank failed in benchmark, using identity ranking');
-    return documents
-      .slice(0, topN)
-      .map((_, i) => ({ index: i, relevanceScore: 0 }));
+    return documents.slice(0, topN).map((_, i) => ({ index: i, relevanceScore: 0 }));
   }
 }
-
 
 function simpleBM25(
   query: string,
@@ -128,7 +112,6 @@ function simpleBM25(
   });
   return scores.sort((a, b) => b.score - a.score).slice(0, topK);
 }
-
 
 function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   let dot = 0;
@@ -156,7 +139,6 @@ function vectorSearch(
   return scores.sort((a, b) => b.score - a.score).slice(0, topK);
 }
 
-
 function rrfMerge(
   list1: Array<{ id: string }>,
   list2: Array<{ id: string }>,
@@ -174,12 +156,7 @@ function rrfMerge(
     .sort((a, b) => b.score - a.score);
 }
 
-
-async function generateQuestions(
-  rawText: string,
-  n: number,
-  client: Anthropic,
-): Promise<string[]> {
+async function generateQuestions(rawText: string, n: number, client: Anthropic): Promise<string[]> {
   const prompt = `Voce recebera o conteudo de um documento. Gere ${n} perguntas variadas que esse documento responde.
 Inclua: perguntas factuais diretas, perguntas que exigem sintese de multiplas partes, e perguntas
 sobre detalhes tecnicos. Escreva as perguntas como um usuario real as faria, em linguagem natural.
@@ -203,7 +180,6 @@ ${rawText.slice(0, 12000)}`;
   const parsed = JSON.parse(cleaned) as { questions: string[] };
   return parsed.questions.slice(0, n);
 }
-
 
 async function judgeRelevance(
   query: string,
@@ -244,11 +220,7 @@ Retorne APENAS JSON sem markdown: { "score": N, "reason": "explicacao em 1 linha
   }
 }
 
-
-async function generateHypotheticalDoc(
-  query: string,
-  client: Anthropic,
-): Promise<string | null> {
+async function generateHypotheticalDoc(query: string, client: Anthropic): Promise<string | null> {
   try {
     const response = await client.messages.create({
       model: MODEL_MAP.haiku,
@@ -266,7 +238,6 @@ async function generateHypotheticalDoc(
     return null;
   }
 }
-
 
 interface InMemoryIndices {
   vectorIndex: Map<string, Float32Array>;
@@ -308,16 +279,12 @@ async function searchInMemory(
     return { topContent: '', topScore: 0 };
   }
 
-  const candidateContents = candidateIds
-    .map((id) => idToContent.get(id) ?? '')
-    .filter((c) => c.length > 0);
+  const candidateContents = candidateIds.map((id) => idToContent.get(id) ?? '').filter((c) => c.length > 0);
 
   const rerankResults = await localCohereRerank(query, candidateContents, 1);
   const topResult = rerankResults[0];
   const topScore = topResult?.relevanceScore ?? 0;
-  const topContent = topResult !== undefined
-    ? (candidateContents[topResult.index] ?? '')
-    : '';
+  const topContent = topResult !== undefined ? (candidateContents[topResult.index] ?? '') : '';
 
   if (mode === 'hybrid' && topScore < hydeThreshold) {
     const hypothetical = await generateHypotheticalDoc(query, client);
@@ -339,9 +306,7 @@ async function searchInMemory(
           const hydeTopResult = hydeRerankResults[0];
           const hydeScore = hydeTopResult?.relevanceScore ?? 0;
           if (hydeScore > topScore) {
-            const hydeContent = hydeTopResult !== undefined
-              ? (hydeCandidateContents[hydeTopResult.index] ?? '')
-              : '';
+            const hydeContent = hydeTopResult !== undefined ? (hydeCandidateContents[hydeTopResult.index] ?? '') : '';
             return { topContent: hydeContent, topScore: hydeScore };
           }
         }
@@ -351,7 +316,6 @@ async function searchInMemory(
 
   return { topContent, topScore };
 }
-
 
 export async function runBenchmarkPipeline(
   benchmarkId: string,
@@ -450,9 +414,7 @@ export async function runBenchmarkPipeline(
         total: totalCombinations,
       });
 
-      const embeddingArrays = await generateEmbeddingsBatch(
-        chunks.map((c) => c.content),
-      );
+      const embeddingArrays = await generateEmbeddingsBatch(chunks.map((c) => c.content));
 
       const vectorIndex = new Map<string, Float32Array>();
       const bm25Docs: Array<{ id: string; content: string }> = [];
@@ -497,13 +459,7 @@ export async function runBenchmarkPipeline(
             total: totalCombinations,
           });
 
-          const { topContent, topScore } = await searchInMemory(
-            question,
-            mode,
-            indices,
-            config.threshold,
-            client,
-          );
+          const { topContent, topScore } = await searchInMemory(question, mode, indices, config.threshold, client);
 
           rawScores.push(topScore);
 
@@ -517,32 +473,19 @@ export async function runBenchmarkPipeline(
               total: totalCombinations,
             });
 
-            const judgeScore = await judgeRelevance(
-              question,
-              topContent,
-              config.modelJudge,
-              client,
-            );
+            const judgeScore = await judgeRelevance(question, topContent, config.modelJudge, client);
             judgeScores.push(judgeScore);
           } else {
             judgeScores.push(0);
           }
         }
 
-        const avgScore =
-          rawScores.length > 0
-            ? rawScores.reduce((a, b) => a + b, 0) / rawScores.length
-            : 0;
+        const avgScore = rawScores.length > 0 ? rawScores.reduce((a, b) => a + b, 0) / rawScores.length : 0;
 
         const trueRate =
-          rawScores.length > 0
-            ? rawScores.filter((s) => s >= config.threshold).length / rawScores.length
-            : 0;
+          rawScores.length > 0 ? rawScores.filter((s) => s >= config.threshold).length / rawScores.length : 0;
 
-        const llmJudgeAvg =
-          judgeScores.length > 0
-            ? judgeScores.reduce((a, b) => a + b, 0) / judgeScores.length
-            : 0;
+        const llmJudgeAvg = judgeScores.length > 0 ? judgeScores.reduce((a, b) => a + b, 0) / judgeScores.length : 0;
 
         strategiesResults[strategy][mode] = {
           avg_score: avgScore,
@@ -551,10 +494,7 @@ export async function runBenchmarkPipeline(
           raw_scores: rawScores,
         };
 
-        logger.info(
-          { benchmarkId, strategy, mode, avgScore, trueRate, llmJudgeAvg },
-          'Combination evaluated',
-        );
+        logger.info({ benchmarkId, strategy, mode, avgScore, trueRate, llmJudgeAvg }, 'Combination evaluated');
       }
 
       vectorIndex.clear();
@@ -577,10 +517,7 @@ export async function runBenchmarkPipeline(
 
     const [winnerStrategy] = winnerKey.split('_');
 
-    logger.info(
-      { benchmarkId, winnerKey, winnerScore },
-      'Benchmark winner determined',
-    );
+    logger.info({ benchmarkId, winnerKey, winnerScore }, 'Benchmark winner determined');
 
     const executionTimeSec = Math.round((Date.now() - startTime) / 1000);
 
@@ -613,20 +550,14 @@ export async function runBenchmarkPipeline(
 
     const winnerChunkStrategy = (winnerStrategy ?? 'recursive') as ChunkStrategy;
 
-    await reprocessDocument(
-      sourceId,
-      winnerChunkStrategy,
-      1000,
-      200,
-      (data) => {
-        emitProgress({
-          benchmarkId,
-          stage: `Reprocessando: ${data.stage}`,
-          current: totalCombinations,
-          total: totalCombinations,
-        });
-      },
-    );
+    await reprocessDocument(sourceId, winnerChunkStrategy, 1000, 200, (data) => {
+      emitProgress({
+        benchmarkId,
+        stage: `Reprocessando: ${data.stage}`,
+        current: totalCombinations,
+        total: totalCombinations,
+      });
+    });
 
     updateKnowledgeSource(sourceId, {
       bestStrategy: winnerChunkStrategy,

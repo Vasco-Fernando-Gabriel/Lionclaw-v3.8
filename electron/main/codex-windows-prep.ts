@@ -1,4 +1,3 @@
-
 import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -15,12 +14,7 @@ import { isCodexAvailable } from './codex-runtime/binary';
 
 const logger = createLogger('codex-windows-prep');
 
-
-export type CodexWindowsIssueType =
-  | 'autocrlf-true'
-  | 'no-gitattributes'
-  | 'mixed-line-endings'
-  | 'powershell-5.1';
+export type CodexWindowsIssueType = 'autocrlf-true' | 'no-gitattributes' | 'mixed-line-endings' | 'powershell-5.1';
 
 export interface CodexWindowsIssue {
   type: CodexWindowsIssueType;
@@ -53,10 +47,8 @@ export type PrepResult =
       message?: string;
     };
 
-
 const LARGE_RENORMALIZE_THRESHOLD = 5000;
 const GIT_ATTRIBUTES_LF_RULE = '* text=auto eol=lf';
-
 
 function gitExec(repoRoot: string, args: string[], timeoutMs = 30_000): string {
   return execFileSync('git', ['-C', repoRoot, ...args], {
@@ -147,7 +139,10 @@ function gitStatusClean(repoRoot: string): boolean {
 function gitStatusPorcelain(repoRoot: string): string[] {
   const out = gitExecSafe(repoRoot, ['status', '--porcelain']);
   if (out === null || out.length === 0) return [];
-  return out.split('\n').map((line) => line.trim()).filter(Boolean);
+  return out
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function isOnlyPrepGeneratedGitAttributesDirty(repoRoot: string): boolean {
@@ -208,14 +203,7 @@ function listLineEndingMismatches(repoRoot: string): string[] {
     const indexEol = m[1];
     const worktreeEol = m[2];
 
-    if (
-      indexEol !== 'none' &&
-      (
-        indexEol !== worktreeEol ||
-        indexEol === 'mixed' ||
-        worktreeEol === 'mixed'
-      )
-    ) {
+    if (indexEol !== 'none' && (indexEol !== worktreeEol || indexEol === 'mixed' || worktreeEol === 'mixed')) {
       mismatched.push(filename);
     }
   }
@@ -262,7 +250,6 @@ function rewriteWorkingTreeLineEndingsToLf(repoRoot: string, files: string[]): n
 
   return changed;
 }
-
 
 export function detectCodexWindowsIssues(repoRoot: string): CodexWindowsIssue[] {
   if (process.platform !== 'win32') return [];
@@ -341,11 +328,7 @@ export async function checkProjectNeedsPrep(projectPath: string): Promise<CheckP
   }
 
   const consent = getCodexWindowsPrepConsent(repoRoot);
-  if (
-    consent &&
-    consent.prepVersion >= CODEX_PREP_VERSION_CURRENT &&
-    consent.action === 'skip'
-  ) {
+  if (consent && consent.prepVersion >= CODEX_PREP_VERSION_CURRENT && consent.action === 'skip') {
     return {
       needs: false,
       reason: 'consent-skip-current',
@@ -410,11 +393,7 @@ export function runPrep(repoRoot: string): PrepResult {
     } else {
       const content = fs.readFileSync(gaPath, 'utf-8');
       if (!/eol\s*=\s*lf/i.test(content)) {
-        fs.appendFileSync(
-          gaPath,
-          (content.endsWith('\n') ? '' : '\n') + GIT_ATTRIBUTES_LF_RULE + '\n',
-          'utf-8',
-        );
+        fs.appendFileSync(gaPath, (content.endsWith('\n') ? '' : '\n') + GIT_ATTRIBUTES_LF_RULE + '\n', 'utf-8');
         logger.info({ repoRoot }, 'runPrep: appended LF rule to .gitattributes');
       }
     }
@@ -422,17 +401,12 @@ export function runPrep(repoRoot: string): PrepResult {
     const mixed = countMixedLineEndings(repoRoot);
     logger.info(
       { repoRoot, filesPlanned: mixed.count, sample: mixed.sample },
-      mixed.count > LARGE_RENORMALIZE_THRESHOLD
-        ? 'runPrep: large renormalize incoming'
-        : 'runPrep: renormalize plan',
+      mixed.count > LARGE_RENORMALIZE_THRESHOLD ? 'runPrep: large renormalize incoming' : 'runPrep: renormalize plan',
     );
 
     gitExec(repoRoot, ['add', '.gitattributes']);
     gitExec(repoRoot, ['add', '--renormalize', '.'], 600_000);
-    const changedInWorkingTree = rewriteWorkingTreeLineEndingsToLf(
-      repoRoot,
-      listLineEndingMismatches(repoRoot),
-    );
+    const changedInWorkingTree = rewriteWorkingTreeLineEndingsToLf(repoRoot, listLineEndingMismatches(repoRoot));
     if (changedInWorkingTree > 0) {
       gitExec(repoRoot, ['add', '--renormalize', '.'], 600_000);
     }

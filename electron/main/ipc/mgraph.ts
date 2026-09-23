@@ -69,10 +69,7 @@ export function registerMgraphHandlers(ctx: IpcContext): void {
     const win = getMainWindow();
     try {
       const result = await seedVault(win, forceReseed === true);
-      logger.info(
-        { notes: result.notes, connections: result.connections },
-        'Vault seed completed',
-      );
+      logger.info({ notes: result.notes, connections: result.connections }, 'Vault seed completed');
       return result;
     } catch (err) {
       logger.error({ err }, 'Vault seed failed');
@@ -100,21 +97,18 @@ export function registerMgraphHandlers(ctx: IpcContext): void {
     }
   });
 
-  ipcMain.handle(
-    'mgraph:delete-note',
-    (_event, notePath: string, options?: { force?: boolean }) => {
-      if (!isMgraphEnabled()) return mgraphDisabled();
-      try {
-        return deleteVaultNote(notePath, options);
-      } catch (err) {
-        logger.error({ err }, 'mgraph:delete-note failed');
-        return {
-          success: false,
-          error: err instanceof Error ? err.message : String(err),
-        };
-      }
-    },
-  );
+  ipcMain.handle('mgraph:delete-note', (_event, notePath: string, options?: { force?: boolean }) => {
+    if (!isMgraphEnabled()) return mgraphDisabled();
+    try {
+      return deleteVaultNote(notePath, options);
+    } catch (err) {
+      logger.error({ err }, 'mgraph:delete-note failed');
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
 
   ipcMain.handle('mgraph:note-backlinks', (_event, notePath: string) => {
     if (!isMgraphEnabled()) return mgraphDisabled();
@@ -126,19 +120,15 @@ export function registerMgraphHandlers(ctx: IpcContext): void {
     }
   });
 
-
-  ipcMain.handle(
-    'mgraph:ingest-file',
-    async (_event, filePath: string, fileName: string) => {
-      if (!isMgraphEnabled()) return mgraphDisabled();
-      try {
-        return await ingestFile(filePath, fileName);
-      } catch (err) {
-        logger.error({ err }, 'mgraph:ingest-file failed');
-        return { error: err instanceof Error ? err.message : String(err) };
-      }
-    },
-  );
+  ipcMain.handle('mgraph:ingest-file', async (_event, filePath: string, fileName: string) => {
+    if (!isMgraphEnabled()) return mgraphDisabled();
+    try {
+      return await ingestFile(filePath, fileName);
+    } catch (err) {
+      logger.error({ err }, 'mgraph:ingest-file failed');
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
 
   ipcMain.handle('mgraph:ingest-url', async (_event, url: string) => {
     if (!isMgraphEnabled()) return mgraphDisabled();
@@ -150,18 +140,15 @@ export function registerMgraphHandlers(ctx: IpcContext): void {
     }
   });
 
-  ipcMain.handle(
-    'mgraph:ingest-text',
-    async (_event, text: string, title?: string) => {
-      if (!isMgraphEnabled()) return mgraphDisabled();
-      try {
-        return await ingestText(text, title);
-      } catch (err) {
-        logger.error({ err }, 'mgraph:ingest-text failed');
-        return { error: err instanceof Error ? err.message : String(err) };
-      }
-    },
-  );
+  ipcMain.handle('mgraph:ingest-text', async (_event, text: string, title?: string) => {
+    if (!isMgraphEnabled()) return mgraphDisabled();
+    try {
+      return await ingestText(text, title);
+    } catch (err) {
+      logger.error({ err }, 'mgraph:ingest-text failed');
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
 
   ipcMain.handle('mgraph:ingest-resume', async (_event, jobId: string) => {
     if (!isMgraphEnabled()) return mgraphDisabled();
@@ -235,24 +222,19 @@ export function registerMgraphHandlers(ctx: IpcContext): void {
     };
   });
 
-  ipcMain.handle(
-    'mgraph:ingest-settings-update',
-    (_event, settings: Record<string, string>) => {
-      if (!isMgraphEnabled()) return mgraphDisabled();
-      for (const [key, value] of Object.entries(settings)) {
-        const settingKey = `ingest_${key.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase())}`;
-        setSetting(settingKey, String(value));
-      }
-      return { ok: true as const };
-    },
-  );
+  ipcMain.handle('mgraph:ingest-settings-update', (_event, settings: Record<string, string>) => {
+    if (!isMgraphEnabled()) return mgraphDisabled();
+    for (const [key, value] of Object.entries(settings)) {
+      const settingKey = `ingest_${key.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase())}`;
+      setSetting(settingKey, String(value));
+    }
+    return { ok: true as const };
+  });
 
   if (isMgraphEnabled()) {
     createVaultStructure();
     logger.info('Memory Graph handlers registered (enabled)');
   } else {
-    logger.info(
-      'Memory Graph handlers registered (disabled — handlers return error)',
-    );
+    logger.info('Memory Graph handlers registered (disabled — handlers return error)');
   }
 }

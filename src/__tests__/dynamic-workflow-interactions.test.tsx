@@ -16,13 +16,8 @@ import {
   deriveWorkflowUIStatus,
   extractQuestionPrompt,
 } from '@/stores/dynamic-workflow-store';
-import type {
-  DynamicWorkflowRun,
-  DynamicWorkflowStreamChunk,
-  DynamicWorkflowEvent,
-} from '@/types';
+import type { DynamicWorkflowRun, DynamicWorkflowStreamChunk, DynamicWorkflowEvent } from '@/types';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
 
 function makeRun(patch: Partial<DynamicWorkflowRun> = {}): DynamicWorkflowRun {
   return {
@@ -83,7 +78,6 @@ function resetStore(): void {
   });
 }
 
-
 describe('store: awaiting-user, narracao do Maestro e eco (AC-23 + F6)', () => {
   beforeEach(() => {
     resetStore();
@@ -125,9 +119,7 @@ describe('store: awaiting-user, narracao do Maestro e eco (AC-23 + F6)', () => {
   });
 
   it('deriveWorkflowUIStatus: awaiting-user vence streaming; status terminal ignora flags', () => {
-    expect(deriveWorkflowUIStatus('running', { awaitingUser: true, isStreaming: true })).toBe(
-      'awaiting-user',
-    );
+    expect(deriveWorkflowUIStatus('running', { awaitingUser: true, isStreaming: true })).toBe('awaiting-user');
     expect(deriveWorkflowUIStatus('running', { isStreaming: true })).toBe('streaming');
     expect(deriveWorkflowUIStatus('completed', { awaitingUser: true })).toBe('completed');
   });
@@ -170,13 +162,15 @@ describe('store: awaiting-user, narracao do Maestro e eco (AC-23 + F6)', () => {
     });
     act(() => {
       useDynamicWorkflowStore.getState()._handleStreamChunk({
-        kind: 'narrator', runId: 'run-1', type: 'text', content: 'Troquei pro opus.',
+        kind: 'narrator',
+        runId: 'run-1',
+        type: 'text',
+        content: 'Troquei pro opus.',
       });
     });
     expect(useDynamicWorkflowStore.getState().maestroBusyRunIds.has('run-1')).toBe(false);
   });
 });
-
 
 describe('store: openRun re-hidrata narracao/decisoes do cockpit (E6.1/T11)', () => {
   beforeEach(() => {
@@ -246,7 +240,6 @@ describe('store: openRun re-hidrata narracao/decisoes do cockpit (E6.1/T11)', ()
   });
 });
 
-
 describe('WorkflowEventTimeline (F6 sec 5.1, aba secundaria)', () => {
   let container: HTMLDivElement;
   let root: Root | null = null;
@@ -255,8 +248,7 @@ describe('WorkflowEventTimeline (F6 sec 5.1, aba secundaria)', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     if (typeof Element.prototype.scrollIntoView !== 'function') {
-      Element.prototype.scrollIntoView = function stub(): void {
-      };
+      Element.prototype.scrollIntoView = function stub(): void {};
     }
   });
 
@@ -294,7 +286,6 @@ describe('WorkflowEventTimeline (F6 sec 5.1, aba secundaria)', () => {
   });
 });
 
-
 describe('CloserChatView (AC-28 / 13.8)', () => {
   let container: HTMLDivElement;
   let root: Root | null = null;
@@ -303,8 +294,7 @@ describe('CloserChatView (AC-28 / 13.8)', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     if (typeof Element.prototype.scrollIntoView !== 'function') {
-      Element.prototype.scrollIntoView = function stub(): void {
-      };
+      Element.prototype.scrollIntoView = function stub(): void {};
     }
   });
 
@@ -317,11 +307,7 @@ describe('CloserChatView (AC-28 / 13.8)', () => {
     container.remove();
   });
 
-  function renderCloser(
-    status: string,
-    onFinalize = vi.fn(async () => ({ ok: true as const })),
-    isBusy = false,
-  ): void {
+  function renderCloser(status: string, onFinalize = vi.fn(async () => ({ ok: true as const })), isBusy = false): void {
     root = createRoot(container);
     act(() => {
       root?.render(
@@ -352,9 +338,7 @@ describe('CloserChatView (AC-28 / 13.8)', () => {
   it('finalize chama onFinalize', async () => {
     const onFinalize = vi.fn(async () => ({ ok: true }) as { ok: true });
     renderCloser('delivered', onFinalize);
-    const btn = container.querySelector(
-      '[data-testid="finalize-workflow"]',
-    ) as HTMLButtonElement;
+    const btn = container.querySelector('[data-testid="finalize-workflow"]') as HTMLButtonElement;
     await act(async () => {
       btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -378,7 +362,6 @@ describe('CloserChatView (AC-28 / 13.8)', () => {
   });
 });
 
-
 describe('DynamicWorkflowGateModal: re-plan affordance (SM-2)', () => {
   let container: HTMLDivElement;
   let root: Root | null = null;
@@ -399,10 +382,7 @@ describe('DynamicWorkflowGateModal: re-plan affordance (SM-2)', () => {
 
   function renderModal(
     allowReplan: boolean,
-    onDecide = vi.fn(
-      async (_decision: 'approve' | 'reject' | 'replan', _reason?: string) =>
-        null as string | null,
-    ),
+    onDecide = vi.fn(async (_decision: 'approve' | 'reject' | 'replan', _reason?: string) => null as string | null),
   ): typeof onDecide {
     root = createRoot(container);
     act(() => {
@@ -438,9 +418,7 @@ describe('DynamicWorkflowGateModal: re-plan affordance (SM-2)', () => {
 
   it('clicar "Voltar pro planner" chama onDecide com a decisao "replan" (RunView monta o payload action:replan)', async () => {
     const onDecide = renderModal(true);
-    const btn = container.querySelector(
-      '[data-testid="gate-replan-button"]',
-    ) as HTMLButtonElement;
+    const btn = container.querySelector('[data-testid="gate-replan-button"]') as HTMLButtonElement;
     await act(async () => {
       btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -461,7 +439,6 @@ describe('DynamicWorkflowGateModal: re-plan affordance (SM-2)', () => {
   });
 });
 
-
 describe('summarizeCloserWalkthrough (resumo do walkthrough do closer)', () => {
   it('pega a ULTIMA fala do closer (a apresentacao mais recente da entrega)', () => {
     const summary = summarizeCloserWalkthrough([
@@ -474,23 +451,17 @@ describe('summarizeCloserWalkthrough (resumo do walkthrough do closer)', () => {
   });
 
   it('sem fala do closer retorna string vazia', () => {
-    expect(
-      summarizeCloserWalkthrough([{ id: '1', role: 'human', content: 'oi' }]),
-    ).toBe('');
+    expect(summarizeCloserWalkthrough([{ id: '1', role: 'human', content: 'oi' }])).toBe('');
     expect(summarizeCloserWalkthrough([])).toBe('');
   });
 
   it('trunca textos longos com reticencias', () => {
     const long = 'x'.repeat(2000);
-    const summary = summarizeCloserWalkthrough(
-      [{ id: '1', role: 'closer', content: long }],
-      100,
-    );
+    const summary = summarizeCloserWalkthrough([{ id: '1', role: 'closer', content: long }], 100);
     expect(summary.length).toBeLessThanOrEqual(103);
     expect(summary.endsWith('...')).toBe(true);
   });
 });
-
 
 describe('WorkflowEventTimeline D22: tipo cru + label, node encurtado, hora local', () => {
   let container: HTMLDivElement;
@@ -500,8 +471,7 @@ describe('WorkflowEventTimeline D22: tipo cru + label, node encurtado, hora loca
     container = document.createElement('div');
     document.body.appendChild(container);
     if (typeof Element.prototype.scrollIntoView !== 'function') {
-      Element.prototype.scrollIntoView = function stub(): void {
-      };
+      Element.prototype.scrollIntoView = function stub(): void {};
     }
   });
 
@@ -580,14 +550,22 @@ describe('WorkflowEventTimeline D22: tipo cru + label, node encurtado, hora loca
 
   it('severidade e detalhes por tipo/payload (failed, attention, ok, neutral)', () => {
     const failed = timelineItemFromEvent(
-      ev(1, 'node-failed', 'coder', 'impl', { attempt: 0, failureClass: 'logic', error: 'writeset violado em src/x.ts' }),
+      ev(1, 'node-failed', 'coder', 'impl', {
+        attempt: 0,
+        failureClass: 'logic',
+        error: 'writeset violado em src/x.ts',
+      }),
     );
     expect(failed.severity).toBe('failed');
     expect(failed.details).toContain('classe logic');
     expect(failed.details?.some((d) => d.includes('writeset violado'))).toBe(true);
 
     const provider = timelineItemFromEvent(
-      ev(2, 'run-blocked-provider', 'coder', null, { failureClass: 'provider-limit', retriesExhausted: true, nodeError: 'rate limited' }),
+      ev(2, 'run-blocked-provider', 'coder', null, {
+        failureClass: 'provider-limit',
+        retriesExhausted: true,
+        nodeError: 'rate limited',
+      }),
     );
     expect(provider.severity).toBe('failed');
     expect(provider.details).toContain('rate limited');
@@ -608,11 +586,17 @@ describe('WorkflowEventTimeline D22: tipo cru + label, node encurtado, hora loca
     );
     expect(boundary.severity).toBe('attention');
     expect(boundary.details).toContain('SEMAFORO: ATENCAO');
-    const humanGate = timelineItemFromEvent(ev(7, 'gate-blocked', null, null, { gateId: 'cc-delivery', mode: 'orchestrator' }));
+    const humanGate = timelineItemFromEvent(
+      ev(7, 'gate-blocked', null, null, { gateId: 'cc-delivery', mode: 'orchestrator' }),
+    );
     expect(humanGate.severity).toBe('failed');
 
     const p1 = timelineItemFromEvent(
-      ev(8, 'node-completed', 'v', 'S1', { attempt: 0, validatorVerdict: { verdict: 'fail', findingsTotal: 2, blockers: 1 }, p1Count: 1 }),
+      ev(8, 'node-completed', 'v', 'S1', {
+        attempt: 0,
+        validatorVerdict: { verdict: 'fail', findingsTotal: 2, blockers: 1 },
+        p1Count: 1,
+      }),
     );
     expect(p1.severity).toBe('attention');
     expect(p1.details).toContain('fail, 1 P1');

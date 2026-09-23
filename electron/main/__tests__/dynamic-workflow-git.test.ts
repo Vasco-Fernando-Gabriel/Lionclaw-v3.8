@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
@@ -61,9 +60,7 @@ describe('mensagens de commit padrao (8.6.1)', () => {
   it('node/WIP/squash seguem o formato da spec', () => {
     expect(nodeCommitMessage('run1', 'coder', 2)).toBe('wf(run1): coder attempt 2');
     expect(wipCommitMessage('run1', 'coder', 2)).toBe('wf-wip(run1): coder attempt 2 interrupted');
-    expect(squashCommitMessage('Feature X', 'entrega pronta', 'run1')).toBe(
-      'wf(Feature X): entrega pronta (run run1)',
-    );
+    expect(squashCommitMessage('Feature X', 'entrega pronta', 'run1')).toBe('wf(Feature X): entrega pronta (run run1)');
   });
 });
 
@@ -136,9 +133,7 @@ describe('commit do host por node e WIP (8.6.1)', () => {
 
   it('git add -A transitorio: retry recupera (nao mata o node)', async () => {
     let addCalls = 0;
-    const fakeGit = async (
-      args: string[],
-    ): Promise<{ code: number; stdout: string; stderr: string }> => {
+    const fakeGit = async (args: string[]): Promise<{ code: number; stdout: string; stderr: string }> => {
       const cmd = args.join(' ');
       if (cmd === 'add -A') {
         addCalls += 1;
@@ -155,22 +150,17 @@ describe('commit do host por node e WIP (8.6.1)', () => {
       { runId: 'run1', nodeId: 'coder', attempt: 1, cwd: '/x' },
       fakeGit as unknown as typeof runGit,
     );
-    expect(addCalls).toBe(2); // falhou 1x, retry passou
+    expect(addCalls).toBe(2);
     expect(res).toEqual({ sha: 'sha-abc', empty: false });
   });
 
   it('git add -A persistente: propaga COM o stderr (que antes se perdia)', async () => {
-    const fakeGit = async (
-      args: string[],
-    ): Promise<{ code: number; stdout: string; stderr: string }> =>
+    const fakeGit = async (args: string[]): Promise<{ code: number; stdout: string; stderr: string }> =>
       args.join(' ') === 'add -A'
         ? { code: 1, stdout: '', stderr: 'fatal: not enough disk space' }
         : { code: 0, stdout: '', stderr: '' };
     await expect(
-      commitNode(
-        { runId: 'run1', nodeId: 'coder', attempt: 1, cwd: '/x' },
-        fakeGit as unknown as typeof runGit,
-      ),
+      commitNode({ runId: 'run1', nodeId: 'coder', attempt: 1, cwd: '/x' }, fakeGit as unknown as typeof runGit),
     ).rejects.toThrow('not enough disk space');
   });
 });
@@ -419,10 +409,7 @@ describe('squash merge pos-gate (8.6.2)', () => {
       const stagingTip = await branchTipSha(repo, 'dynworkflow-staging/run1', runGit);
       expect(stagingTip).toBe(outcome.stagingSha);
 
-      const fin = await finalizeStagedMerge(
-        { cwd: repo, baseBranch: 'main', stagingSha: outcome.stagingSha },
-        runGit,
-      );
+      const fin = await finalizeStagedMerge({ cwd: repo, baseBranch: 'main', stagingSha: outcome.stagingSha }, runGit);
       expect(await branchTipSha(repo, 'main', runGit)).toBe(fin.mergeSha);
     }
   });
@@ -642,9 +629,7 @@ describe('S4: transitorios por-run fora dos commits e da entrega', () => {
 
     expect(outcome.kind).toBe('squashed');
     expect(existsSync(join(repo, 'docs', 'minha-spec.md'))).toBe(true);
-    expect(readFileSync(join(repo, 'docs', 'minha-spec.md'), 'utf8')).toBe(
-      '# spec original do usuario',
-    );
+    expect(readFileSync(join(repo, 'docs', 'minha-spec.md'), 'utf8')).toBe('# spec original do usuario');
     expect(() => git(repo, 'cat-file', '-e', 'main:docs/minha-spec.md')).toThrow();
     git(repo, 'cat-file', '-e', 'main:feature.ts');
   });

@@ -1,10 +1,6 @@
-
 import { createLogger } from '../logger';
 import { TOOL_SCRIPT_HELPER_ID } from '../mcp-risk-patterns';
-import {
-  isToolScriptAvailable,
-  getToolScriptAvailabilityReason,
-} from './tool-script-engine';
+import { isToolScriptAvailable, getToolScriptAvailabilityReason } from './tool-script-engine';
 import { isToolScriptSettingEnabled } from './tool-script-settings';
 
 const logger = createLogger('tool-script-availability');
@@ -30,8 +26,7 @@ export function resolveToolScriptRegistration(): ToolScriptRegistrationDecision 
 
 export async function applyToolScriptEnabledChange(enabled: boolean): Promise<void> {
   try {
-    const { getAllMCPServers, updateMCPServer, startServer, stopServer } =
-      await import('../mcp-manager');
+    const { getAllMCPServers, updateMCPServer, startServer, stopServer } = await import('../mcp-manager');
     const row = getAllMCPServers().find((s) => s.id === TOOL_SCRIPT_HELPER_ID);
 
     if (!enabled) {

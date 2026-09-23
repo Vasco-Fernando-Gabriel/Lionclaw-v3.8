@@ -1,4 +1,3 @@
-
 import type { BrowserWindow } from 'electron';
 import { randomUUID } from 'crypto';
 import net from 'net';
@@ -6,13 +5,9 @@ import fs from 'fs';
 import path from 'path';
 import { createLogger } from '../logger';
 import { textProbe } from '../pipeline-shared/text-probe';
+import { KANBAN_PROTOCOL_VERSION, isKanbanExternalClientId } from '../../../mcp-servers/_shared/kanban-protocol';
 import { resolveHelperTokenOwner } from '../helper-identity';
-import {
-  dispatch,
-  type JsonRpcContext,
-  type JsonRpcRequest,
-  type LocalIpcConnectionIdentity,
-} from './jsonrpc-methods';
+import { dispatch, type JsonRpcContext, type JsonRpcRequest, type LocalIpcConnectionIdentity } from './jsonrpc-methods';
 import {
   listenUnix,
   cleanupUnix,
@@ -48,7 +43,6 @@ function destroyClientSockets(): void {
   clientSockets.clear();
 }
 
-
 export function registerWindowProvider(provider: () => BrowserWindow | null): void {
   windowProvider = provider;
 }
@@ -79,9 +73,21 @@ function getEndpointFilePath(): string {
   return path.join(getRuntimeDir(), 'ipc-endpoint.json');
 }
 
+let externalClientServers: Record<string, string> = {};
+
+export async function publishExternalClientServers(servers: Record<string, string>): Promise<void> {
+  externalClientServers = { ...externalClientServers, ...servers };
+  if (!state) return;
+  await writeEndpointFile(state.transport, state.address);
+}
+
 async function writeEndpointFile(transport: 'unix' | 'pipe', address: string): Promise<string> {
   const file = getEndpointFilePath();
-  const payload = JSON.stringify({ transport, address });
+  const payload = JSON.stringify({
+    transport,
+    address,
+    ...(Object.keys(externalClientServers).length > 0 ? { externalClientServers } : {}),
+  });
   await fs.promises.writeFile(file, payload, { encoding: 'utf8' });
   if (process.platform !== 'win32') {
     try {
@@ -96,10 +102,8 @@ async function writeEndpointFile(transport: 'unix' | 'pipe', address: string): P
 async function removeEndpointFile(file: string): Promise<void> {
   try {
     await fs.promises.unlink(file);
-  } catch {
-  }
+  } catch {}
 }
-
 
 function handleConnection(socket: net.Socket): void {
   let buffer = '';
@@ -170,9 +174,47 @@ function handleHandshake(
   req: JsonRpcRequest,
 ): { jsonrpc: '2.0'; id: number | string | null; result?: unknown; error?: { code: number; message: string } } {
   const id = req.id ?? null;
-  const params = (req.params ?? {}) as { token?: unknown };
+  const params = (req.params ?? {}) as { token?: unknown; client?: unknown; clientDetail?: unknown };
   const token = typeof params.token === 'string' ? params.token.trim() : '';
+  const client = typeof params.client === 'string' ? params.client.trim().toLowerCase() : '';
   const connection = ensureConnectionState(socket);
+  connection.authenticatedHelper = false;
+  delete connection.serverId;
+  delete connection.externalClient;
+
+  if (client.length > 0) {
+    if (!isKanbanExternalClientId(client)) {
+      logger.warn({ client }, 'handshake com cliente externo desconhecido — conexao recusada');
+      return {
+        jsonrpc: '2.0',
+        id,
+        error: { code: -32002, message: `handshake: cliente externo desconhecido: ${client}` },
+      };
+    }
+    const rawDetail =
+      typeof params.clientDetail === 'string'
+        ? params.clientDetail
+            .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+            .trim()
+            .slice(0, 120)
+        : '';
+    const detail = rawDetail.length > 0 ? rawDetail : null;
+    connection.externalClient = { id: client, detail };
+    logger.info(
+      { client, detail, connectionId: connection.connectionId },
+      'conexao local-ipc identificada como cliente externo',
+    );
+    return {
+      jsonrpc: '2.0',
+      id,
+      result: {
+        ok: true,
+        authenticated: false,
+        externalClient: client,
+        kanbanProtocol: KANBAN_PROTOCOL_VERSION,
+      },
+    };
+  }
 
   if (token.length === 0 || token === 'none') {
     logger.debug('handshake sem token (client nao-gated) — conexao segue anonima');
@@ -209,7 +251,6 @@ function writeResponse(socket: net.Socket, response: unknown): void {
   }
 }
 
-
 export async function startLocalIpcServer(): Promise<void> {
   if (state) {
     logger.warn('startLocalIpcServer called while already running - ignoring');
@@ -223,9 +264,7 @@ export async function startLocalIpcServer(): Promise<void> {
   }
 
   const listenResult: ListenResult =
-    process.platform === 'win32'
-      ? await listenWindows(handleConnection)
-      : await listenUnix(handleConnection);
+    process.platform === 'win32' ? await listenWindows(handleConnection) : await listenUnix(handleConnection);
 
   const endpointFile = await writeEndpointFile(listenResult.transport, listenResult.address);
 
@@ -264,9 +303,7 @@ export async function stopLocalIpcServer(): Promise<void> {
   logger.info({ transport, address }, 'local-ipc server stopped');
 }
 
-export function getCurrentEndpoint():
-  | { transport: 'unix' | 'pipe'; address: string; endpointFile: string }
-  | null {
+export function getCurrentEndpoint(): { transport: 'unix' | 'pipe'; address: string; endpointFile: string } | null {
   if (!state) return null;
   return {
     transport: state.transport,

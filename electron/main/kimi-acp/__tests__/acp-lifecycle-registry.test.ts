@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../../logger', () => ({
@@ -154,7 +153,7 @@ describe('reapForCap', () => {
     expect(reg.liveCount()).toBe(MAX_LIVE_KIMI_ACP_PROCESSES + 1);
     const reaped = reg.reapForCap(MAX_LIVE_KIMI_ACP_PROCESSES, now);
     expect(reaped).toHaveLength(2);
-    expect(reaped.map((h) => h.key.runId)).toEqual(['r-0', 'r-1']); // createdAt now-1000, now-999
+    expect(reaped.map((h) => h.key.runId)).toEqual(['r-0', 'r-1']);
     expect(reg.liveCount()).toBe(MAX_LIVE_KIMI_ACP_PROCESSES - 1);
   });
 

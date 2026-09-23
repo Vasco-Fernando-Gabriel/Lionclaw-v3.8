@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const OLD_SECTION = `## Green-check objetivo por rodada (host; obrigatorio no dev-loop)
 
 Os validadores de codigo sao ESTATICOS (so LEEM): convergir contando SO os findings deles deixa a sprint convergir mesmo com typecheck/test VERMELHO. Por isso o workflow.js que voce gera DEVE, em cada rodada do dev-loop (apos o coder e o fix da rodada), chamar a primitiva HOST greenCheck() e MESCLAR os findings dela no MESMO set de convergencia que o devBlockersOf consome, ANTES dele:

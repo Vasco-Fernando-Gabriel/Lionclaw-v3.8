@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../cloud-executor', () => ({ cloudExecutor: { run: (...a: unknown[]) => cloudRun(...a) } }));
@@ -65,8 +64,14 @@ function makeResult(): AgentExecutionResult {
   return {
     output: 'feito',
     metrics: {
-      inputTokens: 1, outputTokens: 2, cacheReadTokens: 0, cacheCreationTokens: 0,
-      toolUses: 1, apiRequests: 1, costUsd: 0, durationMs: 5,
+      inputTokens: 1,
+      outputTokens: 2,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      toolUses: 1,
+      apiRequests: 1,
+      costUsd: 0,
+      durationMs: 5,
     },
     model: 'claude-sonnet-4-5',
     runtime: 'cloud',
@@ -96,18 +101,23 @@ describe('auditoria V144 no executeAgent', () => {
     await flushAsyncAudits();
 
     expect(insertAuditEntry).toHaveBeenCalledTimes(1);
-    expect(insertAuditEntry).toHaveBeenCalledWith(expect.objectContaining({
-      eventType: 'tool_call',
-      toolName: 'Read',
-      subagent: 'harness-coder',
-      source: 'pipeline',
-      input: JSON.stringify({ file_path: '/tmp/a.ts' }),
-    }));
-    expect(emitIPC).toHaveBeenCalledWith('logs:entry', expect.objectContaining({
-      id: -1,
-      eventType: 'tool_call',
-      source: 'pipeline',
-    }));
+    expect(insertAuditEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'tool_call',
+        toolName: 'Read',
+        subagent: 'harness-coder',
+        source: 'pipeline',
+        input: JSON.stringify({ file_path: '/tmp/a.ts' }),
+      }),
+    );
+    expect(emitIPC).toHaveBeenCalledWith(
+      'logs:entry',
+      expect.objectContaining({
+        id: -1,
+        eventType: 'tool_call',
+        source: 'pipeline',
+      }),
+    );
   });
 
   it('sem executionContext nao audita nada (caminho reserva)', async () => {
@@ -126,25 +136,25 @@ describe('auditoria V144 no executeAgent', () => {
   it('erro terminal audita eventType error com a mensagem', async () => {
     cloudRun.mockRejectedValueOnce(new Error('boom do provider'));
 
-    await expect(
-      executeAgent(makeReq({ executionContext: makeContext('harness') })),
-    ).rejects.toThrow();
+    await expect(executeAgent(makeReq({ executionContext: makeContext('harness') }))).rejects.toThrow();
     await flushAsyncAudits();
 
-    expect(insertAuditEntry).toHaveBeenCalledWith(expect.objectContaining({
-      eventType: 'error',
-      source: 'harness',
-      subagent: 'harness-coder',
-      output: 'boom do provider',
-    }));
+    expect(insertAuditEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'error',
+        source: 'harness',
+        subagent: 'harness-coder',
+        output: 'boom do provider',
+      }),
+    );
   });
 
   it('PipelinePausedError (controle de fluxo) NAO vira entrada de erro', async () => {
     cloudRun.mockRejectedValueOnce(new PipelinePausedError('aguardando usuario', 'other'));
 
-    await expect(
-      executeAgent(makeReq({ executionContext: makeContext('pipeline') })),
-    ).rejects.toBeInstanceOf(PipelinePausedError);
+    await expect(executeAgent(makeReq({ executionContext: makeContext('pipeline') }))).rejects.toBeInstanceOf(
+      PipelinePausedError,
+    );
     await flushAsyncAudits();
 
     expect(insertAuditEntry).not.toHaveBeenCalled();
@@ -173,10 +183,12 @@ describe('auditoria V144 no executeAgent', () => {
       return makeResult();
     });
 
-    await executeAgent(makeReq({
-      executionContext: makeContext('pipeline'),
-      onToolUseComplete: callerCallback,
-    }));
+    await executeAgent(
+      makeReq({
+        executionContext: makeContext('pipeline'),
+        onToolUseComplete: callerCallback,
+      }),
+    );
 
     expect(callerCallback).toHaveBeenCalledWith('Bash', { command: 'ls' });
   });

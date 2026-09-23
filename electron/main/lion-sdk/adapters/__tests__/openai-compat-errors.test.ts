@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 
 import {
@@ -48,10 +47,9 @@ describe('SB-6 openai-compat-errors (AC-B15)', () => {
   });
 
   it('AC-B15: transporte ECONNREFUSED de provider local vira LLM-LOCAL-DOWN', () => {
-    const norm = normalizeOpenAiCompatTransportError(
-      new Error('connect ECONNREFUSED 127.0.0.1:11434'),
-      { provider: 'ollama' },
-    );
+    const norm = normalizeOpenAiCompatTransportError(new Error('connect ECONNREFUSED 127.0.0.1:11434'), {
+      provider: 'ollama',
+    });
     expect(norm.code).toBe('LLM-LOCAL-DOWN');
     expect(norm.userMessage).toContain('[LLM-LOCAL-DOWN]');
   });

@@ -1,18 +1,18 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const LLM_ARCHITECT_ID = 'llm-architect';
 
 export const llmArchitect: Omit<AgentConfig, 'sortOrder'> = {
   id: LLM_ARCHITECT_ID,
-  name: "Arquiteto de LLMs",
-  description: "Use quando precisar projetar e implementar sistemas com LLMs, incluindo arquitetura de RAG, fine-tuning, serving de modelos e mecanismos de segurança em produção",
-  model: "claude-opus-4-8",
+  name: 'Arquiteto de LLMs',
+  description:
+    'Use quando precisar projetar e implementar sistemas com LLMs, incluindo arquitetura de RAG, fine-tuning, serving de modelos e mecanismos de segurança em produção',
+  model: 'claude-opus-5-5',
   effort: 'medium' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,
   maxToolRounds: 5,
-  allowedTools: ["Read","Write","Edit","Bash","Glob","Grep","WebSearch"],
+  allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch'],
   mcpServers: [],
   isActive: true,
   skills: [],

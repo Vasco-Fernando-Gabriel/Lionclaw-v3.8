@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  dayLabel,
-  formatLocalDateTime,
-  formatLocalTime,
-  parseSqliteUtc,
-} from '@/lib/sqlite-time';
+import { dayLabel, formatLocalDateTime, formatLocalTime, parseSqliteUtc } from '@/lib/sqlite-time';
 import { formatDateTime } from '@/components/kanban/kanban-ui';
 
 const SP = { timeZone: 'America/Sao_Paulo' };

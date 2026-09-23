@@ -1,16 +1,7 @@
-
 import { calculateCost, hasKnownPricing } from '../pricing';
 
 export type DynamicWorkflowNodeRuntime =
-  | 'cloud'
-  | 'local'
-  | 'external'
-  | 'codex'
-  | 'kimi'
-  | 'grok'
-  | 'zai'
-  | 'minimax-tp'
-  | 'cursor';
+  'cloud' | 'local' | 'external' | 'codex' | 'kimi' | 'grok' | 'zai' | 'minimax-tp' | 'cursor';
 
 const API_RUNTIMES: ReadonlySet<DynamicWorkflowNodeRuntime> = new Set([
   'cloud',
@@ -30,7 +21,6 @@ export interface PricingHelpers {
 
 const DEFAULT_PRICING: PricingHelpers = { calculateCost, hasKnownPricing };
 
-
 export {
   COST_STATUS_REASON_ORDER,
   mergeCostStatusReasons,
@@ -38,11 +28,8 @@ export {
   decodeCostStatusReasonsFromMetricsMetadata,
 } from '../../../src/lib/cost-status-reasons';
 export type { CostStatusReason } from '../../../src/lib/cost-status-reasons';
-import {
-  mergeCostStatusReasons,
-} from '../../../src/lib/cost-status-reasons';
+import { mergeCostStatusReasons } from '../../../src/lib/cost-status-reasons';
 import type { CostStatusReason } from '../../../src/lib/cost-status-reasons';
-
 
 export interface RawCostReport {
   runtime: DynamicWorkflowNodeRuntime;
@@ -75,18 +62,10 @@ export interface NormalizedCost {
 }
 
 function totalTokens(r: RawCostReport): number {
-  return (
-    (r.inputTokens ?? 0) +
-    (r.outputTokens ?? 0) +
-    (r.cacheReadTokens ?? 0) +
-    (r.cacheCreationTokens ?? 0)
-  );
+  return (r.inputTokens ?? 0) + (r.outputTokens ?? 0) + (r.cacheReadTokens ?? 0) + (r.cacheCreationTokens ?? 0);
 }
 
-export function normalizeCost(
-  report: RawCostReport,
-  pricing: PricingHelpers = DEFAULT_PRICING,
-): NormalizedCost {
+export function normalizeCost(report: RawCostReport, pricing: PricingHelpers = DEFAULT_PRICING): NormalizedCost {
   const inputTokens = report.inputTokens ?? 0;
   const outputTokens = report.outputTokens ?? 0;
   const cacheReadTokens = report.cacheReadTokens ?? 0;
@@ -113,13 +92,7 @@ export function normalizeCost(
   const costUsd =
     report.costUsd !== undefined
       ? report.costUsd
-      : pricing.calculateCost(
-          report.model,
-          inputTokens,
-          outputTokens,
-          cacheReadTokens,
-          cacheCreationTokens,
-        );
+      : pricing.calculateCost(report.model, inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens);
 
   let costStatus = report.costStatus;
   let costUnknownReason = report.costUnknownReason ?? null;

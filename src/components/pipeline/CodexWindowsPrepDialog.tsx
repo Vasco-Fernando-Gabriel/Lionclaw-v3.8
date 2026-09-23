@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { AlertTriangle, X, CheckCircle2, AlertOctagon, Loader2 } from 'lucide-react';
 import type { CodexPrepCheckResult, CodexPrepApplyResult } from '@/types';
@@ -48,7 +47,9 @@ export function CodexWindowsPrepDialog({ check, onClose, onDone }: Props) {
       if (followup.needs) {
         setActiveCheck(followup);
         setResult(null);
-        setError('Preparacao aplicada, mas ainda existem issues detectados. Revise a lista atualizada e tente novamente se fizer sentido.');
+        setError(
+          'Preparacao aplicada, mas ainda existem issues detectados. Revise a lista atualizada e tente novamente se fizer sentido.',
+        );
         return;
       }
 
@@ -81,9 +82,7 @@ export function CodexWindowsPrepDialog({ check, onClose, onDone }: Props) {
         <div className="flex items-start justify-between p-5 border-b border-zinc-800">
           <div className="flex items-center gap-3">
             <AlertTriangle className="w-6 h-6 text-amber-400" />
-            <h2 className="text-lg font-semibold text-zinc-100">
-              Preparar projeto pra Codex no Windows?
-            </h2>
+            <h2 className="text-lg font-semibold text-zinc-100">Preparar projeto pra Codex no Windows?</h2>
           </div>
           <button
             type="button"
@@ -98,15 +97,12 @@ export function CodexWindowsPrepDialog({ check, onClose, onDone }: Props) {
 
         <div className="p-5 space-y-4">
           <p className="text-sm text-zinc-300">
-            Codex CLI tem dificuldade com line endings Windows (CRLF) e encoding
-            UTF-8 sem BOM. Sem esta preparacao, edicoes de codigo podem falhar em loop
-            (apply_patch verification failed).
+            Codex CLI tem dificuldade com line endings Windows (CRLF) e encoding UTF-8 sem BOM. Sem esta preparacao,
+            edicoes de codigo podem falhar em loop (apply_patch verification failed).
           </p>
 
           <div className="bg-zinc-950/50 rounded p-3 border border-zinc-800">
-            <div className="text-xs text-zinc-400 uppercase font-medium mb-2">
-              Issues detectados
-            </div>
+            <div className="text-xs text-zinc-400 uppercase font-medium mb-2">Issues detectados</div>
             <ul className="space-y-1.5 text-sm">
               {activeCheck.issues?.map((issue) => (
                 <li key={issue.type} className="flex items-start gap-2">
@@ -148,8 +144,8 @@ export function CodexWindowsPrepDialog({ check, onClose, onDone }: Props) {
           </div>
 
           <div className="text-xs text-amber-300/70 bg-amber-950/20 rounded p-2 border border-amber-900/40">
-            <span className="font-medium">Pre-requisito:</span> working tree limpo
-            ou contendo apenas .gitattributes gerado por este preparo. Arquivos ignorados, untracked e binarios nao entram.
+            <span className="font-medium">Pre-requisito:</span> working tree limpo ou contendo apenas .gitattributes
+            gerado por este preparo. Arquivos ignorados, untracked e binarios nao entram.
           </div>
 
           {error && (

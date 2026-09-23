@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -38,18 +37,11 @@ import {
 } from '../tool-script/tool-script-engine';
 import { buildToolScriptEnv } from '../tool-script/tool-script-env';
 import { executeLocalTool } from '../local-tool-executor';
-import {
-  registerChatCapabilityTurn,
-  __resetChatCapabilityContextForTests,
-} from '../chat-capability-context';
+import { registerChatCapabilityTurn, __resetChatCapabilityContextForTests } from '../chat-capability-context';
 import type { ToolScriptEngineDeps } from '../tool-script/tool-script-types';
 
 function resolveTestPython(): string | undefined {
-  for (const candidate of [
-    '/opt/homebrew/bin/python3',
-    '/usr/local/bin/python3',
-    '/usr/bin/python3',
-  ]) {
+  for (const candidate of ['/opt/homebrew/bin/python3', '/usr/local/bin/python3', '/usr/bin/python3']) {
     if (fs.existsSync(candidate)) return candidate;
   }
   return undefined;
@@ -82,10 +74,7 @@ afterEach(() => {
   fs.rmSync(tmpCwd, { recursive: true, force: true });
 });
 
-function runReal(
-  code: string,
-  depsOverrides: Partial<ToolScriptEngineDeps> = {},
-) {
+function runReal(code: string, depsOverrides: Partial<ToolScriptEngineDeps> = {}) {
   const dispatchRpc = createToolScriptDispatcher({
     code,
     getWindow: () => null,
@@ -106,15 +95,11 @@ function estTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
-
 (hasPython ? describe : describe.skip)('AC-B2 - contexto cresce ~stdout, nao ~soma dos reads', () => {
   it('3 read_file de ~3k tok cada + print("ok") -> retorno ao modelo mede ~o print', async () => {
     const fileNames = ['a.txt', 'b.txt', 'c.txt'];
     for (const name of fileNames) {
-      fs.writeFileSync(
-        path.join(tmpCwd, name),
-        `conteudo-${name}-`.repeat(800).slice(0, 12_000),
-      );
+      fs.writeFileSync(path.join(tmpCwd, name), `conteudo-${name}-`.repeat(800).slice(0, 12_000));
     }
 
     const code = [
@@ -144,13 +129,9 @@ function estTokens(text: string): number {
   }, 30_000);
 });
 
-
 (hasPython ? describe : describe.skip)('AC-B9 - overflow do stdout (e2e)', () => {
   it('stdout > cap -> head+nota+tail; completo persistido no cwd; read_file do path funciona; gitignore criado', async () => {
-    const code = [
-      'import sys',
-      'sys.stdout.write("HEAD-MARK-" + ("a" * 20000) + "-TAIL-MARK")',
-    ].join('\n');
+    const code = ['import sys', 'sys.stdout.write("HEAD-MARK-" + ("a" * 20000) + "-TAIL-MARK")'].join('\n');
 
     const result = await runReal(code, { maxStdoutBytes: 2_000 });
 
@@ -176,10 +157,7 @@ function estTokens(text: string): number {
     expect(read.result).toContain('HEAD-MARK-');
     expect(read.result.endsWith('-TAIL-MARK')).toBe(true);
 
-    const gitignore = fs.readFileSync(
-      path.join(tmpCwd, TOOL_SCRIPT_OVERFLOW_DIRNAME, '.gitignore'),
-      'utf8',
-    );
+    const gitignore = fs.readFileSync(path.join(tmpCwd, TOOL_SCRIPT_OVERFLOW_DIRNAME, '.gitignore'), 'utf8');
     expect(gitignore.split('\n').some((l) => l.trim() === '*')).toBe(true);
   }, 30_000);
 
@@ -197,7 +175,6 @@ describe.skipIf(hasPython)('Tool Script S4 e2e (SKIP: python3 ausente)', () => {
     expect(hasPython).toBe(false);
   });
 });
-
 
 describe('applyStdoutOverflowPolicy (unit, sem python)', () => {
   it('head 40% + tail 60% do cap, nota com N omitidos e o path', () => {
@@ -228,9 +205,7 @@ describe('applyStdoutOverflowPolicy (unit, sem python)', () => {
       .filter((l) => l.trim() === '*');
     expect(lines).toHaveLength(1);
 
-    const files = fs
-      .readdirSync(path.join(tmpCwd, TOOL_SCRIPT_OVERFLOW_DIRNAME))
-      .filter((f) => f !== '.gitignore');
+    const files = fs.readdirSync(path.join(tmpCwd, TOOL_SCRIPT_OVERFLOW_DIRNAME)).filter((f) => f !== '.gitignore');
     expect(files).toHaveLength(2);
   });
 

@@ -6,11 +6,10 @@ import { createLogger } from './logger';
 
 const logger = createLogger('auth');
 const SALT_ROUNDS = 12;
-const SESSION_DURATION_MS = 60 * 60 * 1000; // 1 hour default
-const TOTP_PERIOD = 30; // seconds
+const SESSION_DURATION_MS = 60 * 60 * 1000;
+const TOTP_PERIOD = 30;
 const TOTP_DIGITS = 6;
-const TOTP_WINDOW = 1; // allow +/- 1 step for clock skew
-
+const TOTP_WINDOW = 1;
 
 const BASE32_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
@@ -50,7 +49,6 @@ function base32Decode(encoded: string): Buffer {
   return Buffer.from(bytes);
 }
 
-
 function generateTOTPCode(secret: string, timeStep: number): string {
   const key = base32Decode(secret);
   const timeBuffer = Buffer.alloc(8);
@@ -88,7 +86,6 @@ function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
-
 
 export async function setupPassword(password: string): Promise<string> {
   const hash = await bcrypt.hash(password, SALT_ROUNDS);

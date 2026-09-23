@@ -28,8 +28,8 @@ function loadPty(): PtyModule | null {
   try {
     ptyMod = ptyLoaderOverride
       ? ptyLoaderOverride()
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      : (require('node-pty') as PtyModule);
+      : // eslint-disable-next-line @typescript-eslint/no-require-imports
+        (require('node-pty') as PtyModule);
     return ptyMod;
   } catch (err) {
     ptyLoadError = err instanceof Error ? err.message : String(err);
@@ -49,9 +49,7 @@ function resolveUserShell(): { file: string; args: string[] } {
     return { file: 'powershell.exe', args: [] };
   }
   const snapshotShell = getBootEnvSnapshot().SHELL;
-  const shell = snapshotShell && snapshotShell.trim().length > 0
-    ? snapshotShell
-    : '/bin/bash';
+  const shell = snapshotShell && snapshotShell.trim().length > 0 ? snapshotShell : '/bin/bash';
   return { file: shell, args: ['-l'] };
 }
 
@@ -210,12 +208,7 @@ export function writeTerminalSession(senderId: number, sessionId: string, data: 
   }
 }
 
-export function resizeTerminalSession(
-  senderId: number,
-  sessionId: string,
-  cols: unknown,
-  rows: unknown,
-): void {
+export function resizeTerminalSession(senderId: number, sessionId: string, cols: unknown, rows: unknown): void {
   const session = sessions.get(sessionKey(senderId, sessionId));
   if (!session) return;
   try {
@@ -235,8 +228,7 @@ export function resetTerminalPtyStateForTests(): void {
     sessions.delete(key);
     try {
       session?.pty.kill();
-    } catch {
-    }
+    } catch {}
   }
   windowCleanupRegistered.clear();
   ptyMod = null;

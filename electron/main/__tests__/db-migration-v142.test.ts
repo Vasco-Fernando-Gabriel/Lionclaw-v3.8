@@ -13,9 +13,8 @@ function makeDb(seed?: string): Database.Database {
 }
 
 function readModel(db: Database.Database): string | undefined {
-  const row = db
-    .prepare("SELECT value FROM settings WHERE key = 'orchestrator_model'")
-    .get() as { value: string } | undefined;
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'orchestrator_model'").get() as
+    { value: string } | undefined;
   return row?.value;
 }
 
@@ -61,14 +60,11 @@ describe('migration v142 - Claude Opus 5 como modelo do orquestrador', () => {
 
   it('nao toca outras chaves de settings', () => {
     const db = makeDb('claude-opus-4-8');
-    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(
-      'orchestrator_provider',
-      'anthropic',
-    );
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('orchestrator_provider', 'anthropic');
     applyMigrationV142(db);
-    const provider = db
-      .prepare("SELECT value FROM settings WHERE key = 'orchestrator_provider'")
-      .get() as { value: string };
+    const provider = db.prepare("SELECT value FROM settings WHERE key = 'orchestrator_provider'").get() as {
+      value: string;
+    };
     expect(provider.value).toBe('anthropic');
   });
 });

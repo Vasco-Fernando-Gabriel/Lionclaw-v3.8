@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -34,7 +33,6 @@ import {
 import { createPermissionGuard } from '../permission-guard';
 
 const WINDOW_UNAVAILABLE = 'Janela nao disponivel para confirmacao';
-
 
 const LEGACY_DESTRUCTIVE = [
   /^.*-delete$/i,
@@ -113,7 +111,7 @@ describe('mcp-risk-patterns: paridade com os regex antigos do guard', () => {
 
 describe('permission-guard: comportamento identico apos a extracao', () => {
   beforeEach(() => {
-    bypassState.value = false; // OFF: destrutivo/medio -> confirmacao (deny sem janela)
+    bypassState.value = false;
   });
 
   const guard = () => createPermissionGuard(() => null);
@@ -142,7 +140,7 @@ describe('permission-guard: comportamento identico apos a extracao', () => {
 });
 
 describe('DIRECT_MCP_HELPERS: fonte unica dos helpers diretos (P4)', () => {
-  it('contem os 11 IDs REAIS de registro', () => {
+  it('contem os 12 IDs REAIS de registro', () => {
     expect([...DIRECT_MCP_HELPERS].sort()).toEqual(
       [
         'lionclaw-user-question',
@@ -151,6 +149,7 @@ describe('DIRECT_MCP_HELPERS: fonte unica dos helpers diretos (P4)', () => {
         'lionclaw-pipeline-control',
         'lionclaw-preview',
         'lionclaw-dynamic-workflows',
+        'lionclaw-swarm',
         'repo-graph',
         'lionclaw-agents',
         'lionclaw-skills',

@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { GIT_RESTRICTIONS_BLOCK } from './_shared/git-restrictions';
 

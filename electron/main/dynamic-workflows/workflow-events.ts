@@ -1,13 +1,7 @@
-
 import { createLogger } from '../logger';
-import type {
-  DynamicWorkflowEvent,
-  DynamicWorkflowEventInsertInput,
-  DynamicWorkflowStreamChunk,
-} from './types';
+import type { DynamicWorkflowEvent, DynamicWorkflowEventInsertInput, DynamicWorkflowStreamChunk } from './types';
 
 const logger = createLogger('dynamic-workflow-events');
-
 
 export type WorkflowEventListener = (event: DynamicWorkflowEvent) => void;
 
@@ -27,10 +21,7 @@ class WorkflowEventBus {
       try {
         listener(event);
       } catch (err) {
-        logger.warn(
-          { err, runId: event.runId, type: event.type },
-          'workflow event listener falhou (ignorado)',
-        );
+        logger.warn({ err, runId: event.runId, type: event.type }, 'workflow event listener falhou (ignorado)');
       }
     }
   }
@@ -49,7 +40,6 @@ class WorkflowEventBus {
 
 export const workflowEventBus = new WorkflowEventBus();
 
-
 export const DYNAMIC_WORKFLOW_STREAM_CHANNEL = 'dynamic-workflow:stream';
 
 export interface WorkflowEventsDeps {
@@ -66,7 +56,6 @@ export interface WorkflowEventInput {
   phaseId?: string | null;
   payload?: unknown;
 }
-
 
 function safeStringify(value: unknown): string {
   try {
@@ -94,10 +83,7 @@ function toStreamChunk(event: DynamicWorkflowEvent): DynamicWorkflowStreamChunk 
   return chunk;
 }
 
-export function emitWorkflowEvent(
-  deps: WorkflowEventsDeps,
-  input: WorkflowEventInput,
-): DynamicWorkflowEvent {
+export function emitWorkflowEvent(deps: WorkflowEventsDeps, input: WorkflowEventInput): DynamicWorkflowEvent {
   const payloadJson = safeStringify(input.payload);
 
   const event = deps.insertEvent({
@@ -122,10 +108,7 @@ export function emitWorkflowEvent(
         }),
       );
     } catch (err) {
-      logger.warn(
-        { err, runId: event.runId, seq: event.seq },
-        'falha ao espelhar evento em events.jsonl (ignorado)',
-      );
+      logger.warn({ err, runId: event.runId, seq: event.seq }, 'falha ao espelhar evento em events.jsonl (ignorado)');
     }
   }
 
@@ -135,10 +118,7 @@ export function emitWorkflowEvent(
   try {
     deps.emit(DYNAMIC_WORKFLOW_STREAM_CHANNEL, toStreamChunk(event));
   } catch (err) {
-    logger.warn(
-      { err, runId: event.runId, seq: event.seq },
-      'falha no broadcast dynamic-workflow:stream (ignorado)',
-    );
+    logger.warn({ err, runId: event.runId, seq: event.seq }, 'falha no broadcast dynamic-workflow:stream (ignorado)');
   }
 
   return event;

@@ -1,19 +1,20 @@
+import type { SwarmRunSummary, SwarmRunStatus } from '../../src/types/swarm';
+import { applyMigrationV153 } from './db-migrations/v153-swarm';
+import { applyMigrationV154 } from './db-migrations/v154-kanban-external-actor';
+import { applyMigrationV155 } from './db-migrations/v155-session-timeline';
+import { applyMigrationV156 } from './db-migrations/v156-drive-session-column';
+import { applyMigrationV157 } from './db-migrations/v157-opus-5-5-orchestrator-default';
+import { applyMigrationV158 } from './db-migrations/v158-gpt6-sol-codex-default';
+import { applyMigrationV159 } from './db-migrations/v159-subagents-follow-opus-5-5';
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { createLogger } from './logger';
 import { loadSqliteVecForRuntime } from './sqlite-vec-runtime';
-// (F8 - SPEC estrada-fixes, Trilho A) sonda de integridade de texto (sha256 +
-// byte-length) das costuras de pipeline_messages. Helper PURO (so node:crypto).
 import { textProbe } from './pipeline-shared/text-probe';
 import { getLionClawHome } from './paths';
-// SPEC robustez-chat SB-7 + DB migration safety: erros tipados do boot.
-import {
-  DatabaseInitError,
-  DatabaseIntegrityError,
-  DatabaseSchemaRepairError,
-  MigrationError,
-} from './db-init-error';
+import { ALL_SESSIONS_SQL } from './sessions-query';
+import { DatabaseInitError, DatabaseIntegrityError, DatabaseSchemaRepairError, MigrationError } from './db-init-error';
 import {
   assertDatabaseIntegrity,
   clearMigrationInProgressMarker,
@@ -21,6 +22,8 @@ import {
   prepareDatabaseForMigrations,
 } from './db-migration-safety';
 import { migrateLegacyHarnessSprintsJsonFile } from './pipeline-paths';
+import { acquireDriveLock } from './drive-lock';
+import { DriveRebindRefusedError, getDriveRebindRuntimeSync } from './drive-rebind-sync';
 import { harnessPlanner, harnessCoder, harnessEvaluator, skillCreator } from './seed-agents';
 import { applyMigrationV50 } from './db-migrations/v50-prompts';
 import { applyMigrationV53 } from './db-migrations/v53-architecture-review';
@@ -122,6 +125,8 @@ import { applyMigrationV148 } from './db-migrations/v148-fable-5-1';
 import { applyMigrationV149 } from './db-migrations/v149-workflow-adjustment-consumed';
 import { applyMigrationV150 } from './db-migrations/v150-gpt6-astra-codex-default';
 import { applyMigrationV151 } from './db-migrations/v151-dynamic-workflow-writer-turns';
+import { applyMigrationV152 } from './db-migrations/v152-lanes';
+import { MAX_DESKTOP_LANES, pickFreeLaneBadge, type LaneSessionState, type SessionOrchestrator } from './lanes';
 import { buildDynamicWorkflowEventsQuery } from './dynamic-workflows/events-query';
 import type {
   DynamicWorkflowDefinition,
@@ -190,6 +195,13 @@ import type {
   LiveActivity,
   ActivityTurnBlock,
   ChatFeatureToggles,
+  TimelineTurn,
+  TimelineTurnOrigin,
+  TimelineRuntime,
+  TimelineFidelity,
+  TimelineEvent,
+  TimelineEventKind,
+  TimelineTurnWithEvents,
 } from '../../src/types';
 import { CHAT_CAPABILITIES_DEFAULT_OFF } from '../../src/types';
 import type { PipelineType, RoundDetail, SecuritySummary } from '../../src/types/pipeline';
@@ -222,25 +234,17 @@ export function getDb(): Database.Database {
   return db;
 }
 
-// SPEC robustez-chat SB-7 (P7): estado do boot do banco.
-//  - `vecAvailable`: false quando `sqliteVec.load` falhou (VEC-UNAVAILABLE,
-//    boot DEGRADADO em vez de mudo/morto — busca semantica fora, resto vivo).
-//  - `databaseInitError`: escrito no catch de qualquer preflight/migration
-//    fail-closed antes do re-throw (dialog antes de createWindow, AC-B17).
 let vecAvailable = true;
 let databaseInitError: DatabaseInitError | null = null;
 
-/** SB-7: false quando a extensao sqlite-vec nao carregou (modo degradado). */
 export function isVecAvailable(): boolean {
   return vecAvailable;
 }
 
-/** SB-7 (AC-B17): erro de migration capturado no boot, se houve. */
 export function getDatabaseInitError(): DatabaseInitError | null {
   return databaseInitError;
 }
 
-/** SB-7 (AC-B17): path canonico do arquivo do banco (para o dialog do boot). */
 export function getDatabaseFilePath(): string {
   return path.join(getLionClawPath(), 'data', 'lionclaw.db');
 }
@@ -276,9 +280,6 @@ export function initDatabase(hooks: DatabaseInitHooks = {}): void {
     phase = 'preflight';
     assertDatabaseIntegrity(db, dbPath);
 
-    // A extensao e opcional no boot normal. O preflight/validator do snapshot
-    // so exige vec0 quando o load real desta maquina funcionou; caso contrario,
-    // preserva a degradacao VEC-UNAVAILABLE existente.
     try {
       loadVec(db);
       vecAvailable = true;
@@ -291,8 +292,7 @@ export function initDatabase(hooks: DatabaseInitHooks = {}): void {
     }
 
     const harnessSql = getHarnessProjectsCreateSql(db);
-    const requiresHarnessRepair =
-      harnessSql !== null && !harnessProjectStatusCheckSupportsTerminalStates(db);
+    const requiresHarnessRepair = harnessSql !== null && !harnessProjectStatusCheckSupportsTerminalStates(db);
     const requiresVecRepair = vecAvailable && semanticMemoriesVecNeedsRepair(db);
     const prepareSafety = hooks.prepareSafety ?? prepareDatabaseForMigrations;
     const safety = prepareSafety({
@@ -302,11 +302,8 @@ export function initDatabase(hooks: DatabaseInitHooks = {}): void {
       latestSchemaVersion: LATEST_SCHEMA_VERSION,
       requiresSchemaRepair: requiresHarnessRepair || requiresVecRepair,
       integrityAlreadyChecked: true,
-      openReadonlyDatabase: (backupDbPath) =>
-        new Database(backupDbPath, { readonly: true, fileMustExist: true }),
-      ...(vecAvailable
-        ? { loadSqliteVec: (backupDatabase: Database.Database) => loadVec(backupDatabase) }
-        : {}),
+      openReadonlyDatabase: (backupDbPath) => new Database(backupDbPath, { readonly: true, fileMustExist: true }),
+      ...(vecAvailable ? { loadSqliteVec: (backupDatabase: Database.Database) => loadVec(backupDatabase) } : {}),
     });
     backupPath = safety.backupPath;
 
@@ -337,8 +334,7 @@ export function initDatabase(hooks: DatabaseInitHooks = {}): void {
     phase = 'finalize';
     if (backupPath) {
       clearMigrationInProgressMarker(dbPath, backupPath, {
-        openReadonlyDatabase: (backupDbPath) =>
-          new Database(backupDbPath, { readonly: true, fileMustExist: true }),
+        openReadonlyDatabase: (backupDbPath) => new Database(backupDbPath, { readonly: true, fileMustExist: true }),
       });
     }
   } catch (cause) {
@@ -347,9 +343,9 @@ export function initDatabase(hooks: DatabaseInitHooks = {}): void {
         ? cause
         : phase === 'schema-repair'
           ? new DatabaseSchemaRepairError(dbPath, backupPath, cause)
-        : dbOpen
-          ? new MigrationError(safeMaxSchemaVersion() + 1, dbPath, cause, backupPath)
-          : new DatabaseIntegrityError(dbPath, cause);
+          : dbOpen
+            ? new MigrationError(safeMaxSchemaVersion() + 1, dbPath, cause, backupPath)
+            : new DatabaseIntegrityError(dbPath, cause);
     databaseInitError = failed;
     if (dbOpen) {
       try {
@@ -367,12 +363,9 @@ export function initDatabase(hooks: DatabaseInitHooks = {}): void {
   logger.info({ path: dbPath, vecAvailable }, 'Database ready');
 }
 
-/** Ultima versao de migration gravada (0 se a leitura falhar/na primeira). */
 function safeMaxSchemaVersion(): number {
   try {
-    const row = db.prepare('SELECT MAX(version) as v FROM schema_version').get() as
-      | { v: number | null }
-      | undefined;
+    const row = db.prepare('SELECT MAX(version) as v FROM schema_version').get() as { v: number | null } | undefined;
     return row?.v ?? 0;
   } catch {
     return 0;
@@ -432,7 +425,6 @@ function runMigrations(hooks?: RunMigrationsHooks): void {
   }
 
   if (currentVersion < 7) {
-    // Must disable FK checks via pragma() before table recreation
     db.pragma('foreign_keys = OFF');
     db.exec(MIGRATION_V7);
     db.pragma('foreign_keys = ON');
@@ -500,11 +492,11 @@ function runMigrations(hooks?: RunMigrationsHooks): void {
     logger.info('Applied migration v17 - personal tasks');
   }
 
-  // V18: Migrate telegram channels config from allowedUserId/allowedUserIds to allowedUsers[]
   if (currentVersion < 18) {
-    const rows = db.prepare(
-      "SELECT id, config FROM channels WHERE type = 'telegram'",
-    ).all() as Array<{ id: string; config: string }>;
+    const rows = db.prepare("SELECT id, config FROM channels WHERE type = 'telegram'").all() as Array<{
+      id: string;
+      config: string;
+    }>;
 
     for (const row of rows) {
       try {
@@ -525,10 +517,7 @@ function runMigrations(hooks?: RunMigrationsHooks): void {
           const updated = { ...cfg, allowedUsers };
           delete updated.allowedUserId;
           delete updated.allowedUserIds;
-          db.prepare('UPDATE channels SET config = ? WHERE id = ?').run(
-            JSON.stringify(updated),
-            row.id,
-          );
+          db.prepare('UPDATE channels SET config = ? WHERE id = ?').run(JSON.stringify(updated), row.id);
         }
       } catch {
         // skip malformed config rows
@@ -543,9 +532,6 @@ function runMigrations(hooks?: RunMigrationsHooks): void {
     try {
       db.exec(MIGRATION_V19);
     } catch (error) {
-      // SB-7 (P7): catch ESTREITADO — so engole o caso conhecido de coluna ja
-      // existente (build anterior a um merge conflict). Qualquer outra falha
-      // sobe e vira MigrationError no boot (antes: catch vazio engolia tudo).
       const msg = error instanceof Error ? error.message : String(error);
       if (!/duplicate column/i.test(msg)) {
         throw error;
@@ -649,7 +635,6 @@ function runMigrations(hooks?: RunMigrationsHooks): void {
   }
 
   if (currentVersion < 35) {
-    // Disable FK enforcement during table recreation to avoid issues with child tables
     db.pragma('foreign_keys = OFF');
     db.exec(MIGRATION_V35_HARNESS_STATUS_IDLE);
     db.pragma('foreign_keys = ON');
@@ -674,7 +659,9 @@ function runMigrations(hooks?: RunMigrationsHooks): void {
   if (currentVersion < 38) {
     db.exec(MIGRATION_V38_PIPELINE_MSG_SPRINT_COLS);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(38);
-    logger.info('Applied migration v38 - add sprint_index/round_index/agent_id to pipeline_messages and round_index to pipeline_phase_metrics');
+    logger.info(
+      'Applied migration v38 - add sprint_index/round_index/agent_id to pipeline_messages and round_index to pipeline_phase_metrics',
+    );
   }
 
   if (currentVersion < 39) {
@@ -737,12 +724,6 @@ function runMigrations(hooks?: RunMigrationsHooks): void {
     logger.info('Applied migration v47 - codex runtime + codex_config column on agents');
   }
 
-  // P1.6: guard idempotente por schema real. Se schema_version>=48 vier de uma
-  // branch onde V48 significava outra coisa (drift), o CHECK pode estar sem
-  // 'aborted'/'interrupted'. O helper aplica a migration baseado no SCHEMA REAL,
-  // nao em schema_version. Se a coluna ja aceita os estados, no-op.
-  // FK off/on: harness_sprints/harness_rounds reference harness_projects(id);
-  // recreating the parent table invalidaria FK pointers mid-DDL — o helper trata.
   hooks?.onSchemaRepairStart();
   try {
     ensureHarnessProjectStatusCheckExpanded(db);
@@ -830,7 +811,9 @@ function runMigrations(hooks?: RunMigrationsHooks): void {
   if (currentVersion < 61) {
     applyMigrationV61(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(61);
-    logger.info('Applied migration v61 - strip harness_projects.config.openDesign.openDesignRoot (Open Design vendor Sprint 1)');
+    logger.info(
+      'Applied migration v61 - strip harness_projects.config.openDesign.openDesignRoot (Open Design vendor Sprint 1)',
+    );
   }
 
   if (currentVersion < 62) {
@@ -988,9 +971,7 @@ function runMigrations(hooks?: RunMigrationsHooks): void {
   if (currentVersion < 86) {
     applyMigrationV86(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(86);
-    logger.info(
-      'Applied migration v86: seed dynamic-workflow-narrator (cockpit narrator agent, INSERT OR IGNORE)',
-    );
+    logger.info('Applied migration v86: seed dynamic-workflow-narrator (cockpit narrator agent, INSERT OR IGNORE)');
   }
 
   if (currentVersion < 87) {
@@ -1168,169 +1149,225 @@ function runMigrations(hooks?: RunMigrationsHooks): void {
   if (currentVersion < 109) {
     applyMigrationV109(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(109);
-    logger.info('Applied migration v109 - validator-tests sem containment de writeSet (enforcement desligado; R10 par do seed)');
+    logger.info(
+      'Applied migration v109 - validator-tests sem containment de writeSet (enforcement desligado; R10 par do seed)',
+    );
   }
 
   if (currentVersion < 110) {
     applyMigrationV110(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(110);
-    logger.info('Applied migration v110 - builder gera coder com disciplina rodar-ate-verde (typecheck/test/build; R10 par do seed)');
+    logger.info(
+      'Applied migration v110 - builder gera coder com disciplina rodar-ate-verde (typecheck/test/build; R10 par do seed)',
+    );
   }
 
   if (currentVersion < 111) {
     applyMigrationV111(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(111);
-    logger.info('Applied migration v111 - builder emite greenCheck() no dev-loop e mescla findings do host antes do devBlockersOf (F1-S4; R10 par do seed)');
+    logger.info(
+      'Applied migration v111 - builder emite greenCheck() no dev-loop e mescla findings do host antes do devBlockersOf (F1-S4; R10 par do seed)',
+    );
   }
 
   if (currentVersion < 112) {
     applyMigrationV112(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(112);
-    logger.info('Applied migration v112 - semeia o seed dynamic-workflow-refuter (refuter por evidencia do dev-loop; F2-S6; R10 par do seed novo)');
+    logger.info(
+      'Applied migration v112 - semeia o seed dynamic-workflow-refuter (refuter por evidencia do dev-loop; F2-S6; R10 par do seed novo)',
+    );
   }
 
   if (currentVersion < 113) {
     applyMigrationV113(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(113);
-    logger.info('Applied migration v113 - builder emite no refuter no dev-loop e convergencia consome refutados (P1+P2 de severityConfirmada; F2-S7; R10 par do seed)');
+    logger.info(
+      'Applied migration v113 - builder emite no refuter no dev-loop e convergencia consome refutados (P1+P2 de severityConfirmada; F2-S7; R10 par do seed)',
+    );
   }
 
   if (currentVersion < 114) {
     applyMigrationV114(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(114);
-    logger.info('Applied migration v114 - green-check com cwd da sprint (sprintIndex) + correlacao do refuter por id estavel (fix 2x P1 da revisao; R10 par dos seeds builder/refuter)');
+    logger.info(
+      'Applied migration v114 - green-check com cwd da sprint (sprintIndex) + correlacao do refuter por id estavel (fix 2x P1 da revisao; R10 par dos seeds builder/refuter)',
+    );
   }
 
   if (currentVersion < 115) {
     applyMigrationV115(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(115);
-    logger.info('Applied migration v115 - authoring_model em dynamic_workflow_definitions + 4 eixos de permissao por agentType (access/allow_bash/allowed_commands/allow_network) como ADD COLUMN, defaults conservadores (Fase 0 claude-code authoring)');
+    logger.info(
+      'Applied migration v115 - authoring_model em dynamic_workflow_definitions + 4 eixos de permissao por agentType (access/allow_bash/allowed_commands/allow_network) como ADD COLUMN, defaults conservadores (Fase 0 claude-code authoring)',
+    );
   }
 
   if (currentVersion < 116) {
     applyMigrationV116(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(116);
-    logger.info('Applied migration v116 - dynamic-workflow-sprint-planner: planeja o projeto INTEIRO do estado do repo e ignora secoes da SPEC enderecadas a outro motor (dev-v2 4.8/DevelopmentV2SprintMetadata); R10 par do seed');
+    logger.info(
+      'Applied migration v116 - dynamic-workflow-sprint-planner: planeja o projeto INTEIRO do estado do repo e ignora secoes da SPEC enderecadas a outro motor (dev-v2 4.8/DevelopmentV2SprintMetadata); R10 par do seed',
+    );
   }
 
   if (currentVersion < 117) {
     applyMigrationV117(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(117);
-    logger.info('Applied migration v117 - dynamic-workflow-builder: gera runPlanReviewGate que honra decisionPayload.action=replan nos 2 caminhos (fim do replan no-op no plan-review) + pre-expande planner-replan-N no manifest; R10 par do seed');
+    logger.info(
+      'Applied migration v117 - dynamic-workflow-builder: gera runPlanReviewGate que honra decisionPayload.action=replan nos 2 caminhos (fim do replan no-op no plan-review) + pre-expande planner-replan-N no manifest; R10 par do seed',
+    );
   }
 
   if (currentVersion < 118) {
     applyMigrationV118(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(118);
-    logger.info('Applied migration v118 - dynamic-workflow-builder: retry efetivo (deteccao de nao-progresso por assinatura de blockers + reframe do proximo writer) nos 2 loops; R10 par do seed (template ja tem blockerSignature/stuckNote)');
+    logger.info(
+      'Applied migration v118 - dynamic-workflow-builder: retry efetivo (deteccao de nao-progresso por assinatura de blockers + reframe do proximo writer) nos 2 loops; R10 par do seed (template ja tem blockerSignature/stuckNote)',
+    );
   }
 
   if (currentVersion < 119) {
     applyMigrationV119(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(119);
-    logger.info('Applied migration v119 - dynamic-workflow-builder: DOIS ids de plan-review (human + orchestrator) + selecao ternaria dos gates tecnicos por autonomia (semi/full/auto-drive, tabela 1.3); R10 par do seed (template adversarial-feature-delivery ja tem os dois gates + selecao ternaria)');
+    logger.info(
+      'Applied migration v119 - dynamic-workflow-builder: DOIS ids de plan-review (human + orchestrator) + selecao ternaria dos gates tecnicos por autonomia (semi/full/auto-drive, tabela 1.3); R10 par do seed (template adversarial-feature-delivery ja tem os dois gates + selecao ternaria)',
+    );
   }
 
   if (currentVersion < 120) {
     applyMigrationV120(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(120);
-    logger.info('Applied migration v120 - dynamic-workflow-builder: MODO UNICO full-automatico - colapsa para UM id por gate (gate-plan-review/gate-delivery) sempre mode orchestrator, remove gate humano/semi/full/auto-drive; R10 par do seed (template ja em 2.7.0, sem gate humano)');
+    logger.info(
+      'Applied migration v120 - dynamic-workflow-builder: MODO UNICO full-automatico - colapsa para UM id por gate (gate-plan-review/gate-delivery) sempre mode orchestrator, remove gate humano/semi/full/auto-drive; R10 par do seed (template ja em 2.7.0, sem gate humano)',
+    );
   }
 
   if (currentVersion < 121) {
     applyMigrationV121(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(121);
-    logger.info('Applied migration v121 - dynamic-workflow-builder: planejamento SEM gauntlet - validateSprintPlan auto-corrige o cosmetico e so reprova o real, 1 plan-validator de COBERTURA (eixos topology/criteria aposentados, integridade estrutural deterministica no host); R10 par do seed + template 2.8.0');
+    logger.info(
+      'Applied migration v121 - dynamic-workflow-builder: planejamento SEM gauntlet - validateSprintPlan auto-corrige o cosmetico e so reprova o real, 1 plan-validator de COBERTURA (eixos topology/criteria aposentados, integridade estrutural deterministica no host); R10 par do seed + template 2.8.0',
+    );
   }
 
   if (currentVersion < 122) {
     applyMigrationV122(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(122);
-    logger.info('Applied migration v122 - semeia o seed security-spec-validator (validator do loop spec-builder<->validator da fase 6 do pipeline security; R10 par do seed novo)');
+    logger.info(
+      'Applied migration v122 - semeia o seed security-spec-validator (validator do loop spec-builder<->validator da fase 6 do pipeline security; R10 par do seed novo)',
+    );
   }
 
   if (currentVersion < 123) {
     applyMigrationV123(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(123);
-    logger.info('Applied migration v123 - telegram-cron-compaction 5.1/9: colunas de compactacao in-place em sessions (compacted_up_to_message_id, rolling_summary, pending_seed, active_context_tokens_est), todas nullable/aditivas');
+    logger.info(
+      'Applied migration v123 - telegram-cron-compaction 5.1/9: colunas de compactacao in-place em sessions (compacted_up_to_message_id, rolling_summary, pending_seed, active_context_tokens_est), todas nullable/aditivas',
+    );
   }
 
   if (currentVersion < 124) {
     applyMigrationV124(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(124);
-    logger.info('Applied migration v124 - orquestrador-fonte-unica 1.2/5: aposenta default_model. Garante o triple orchestrator_* completo (triple completo intocado; runtime presente completa pelo catalogo curado; runtime vazio infere de default_model com alias ou grava PRODUCT_DEFAULT) e apaga default_model. Sem re-bump de valores existentes');
+    logger.info(
+      'Applied migration v124 - orquestrador-fonte-unica 1.2/5: aposenta default_model. Garante o triple orchestrator_* completo (triple completo intocado; runtime presente completa pelo catalogo curado; runtime vazio infere de default_model com alias ou grava PRODUCT_DEFAULT) e apaga default_model. Sem re-bump de valores existentes',
+    );
   }
 
   if (currentVersion < 125) {
     applyMigrationV125(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(125);
-    logger.info('Applied migration v125 - vision-transcricao-imagens 1.2: semeia vision_provider/vision_model a partir do catalogo curado (VISION_DEFAULT) via INSERT OR IGNORE. Preserva customizacao do usuario');
+    logger.info(
+      'Applied migration v125 - vision-transcricao-imagens 1.2: semeia vision_provider/vision_model a partir do catalogo curado (VISION_DEFAULT) via INSERT OR IGNORE. Preserva customizacao do usuario',
+    );
   }
 
   if (currentVersion < 126) {
     applyMigrationV126(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(126);
-    logger.info('Applied migration v126 - mcp-index-invoke 1: registry completo (input_schema/last_discovered_at em mcp_tool_registry, index_mode em mcp_servers, idempotente via PRAGMA table_info) + seed mcp_prompt_mode=index via INSERT OR IGNORE. description ja existia desde a V16');
+    logger.info(
+      'Applied migration v126 - mcp-index-invoke 1: registry completo (input_schema/last_discovered_at em mcp_tool_registry, index_mode em mcp_servers, idempotente via PRAGMA table_info) + seed mcp_prompt_mode=index via INSERT OR IGNORE. description ja existia desde a V16',
+    );
   }
 
   if (currentVersion < 127) {
     applyMigrationV127(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(127);
-    logger.info('Applied migration v127 - chat-context-reduction A.2 (S2): tabela chat_session_features (toggles Pipeline/Workflows por sessao de chat desktop, FK ON DELETE CASCADE) + backfill true/true das sessoes chat/manual existentes (telegram/scheduled sem linha). Idempotente (IF NOT EXISTS + INSERT OR IGNORE)');
+    logger.info(
+      'Applied migration v127 - chat-context-reduction A.2 (S2): tabela chat_session_features (toggles Pipeline/Workflows por sessao de chat desktop, FK ON DELETE CASCADE) + backfill true/true das sessoes chat/manual existentes (telegram/scheduled sem linha). Idempotente (IF NOT EXISTS + INSERT OR IGNORE)',
+    );
   }
 
   if (currentVersion < 128) {
     applyMigrationV128(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(128);
-    logger.info('Applied migration v128 - chat-context-reduction B.8 (Fase B, S4): seed dos settings tool_script_* (enabled/tools/timeout_ms/max_stdout_bytes/max_stderr_bytes/max_tool_calls) via INSERT OR IGNORE. Idempotente; preserva customizacao do usuario');
+    logger.info(
+      'Applied migration v128 - chat-context-reduction B.8 (Fase B, S4): seed dos settings tool_script_* (enabled/tools/timeout_ms/max_stdout_bytes/max_stderr_bytes/max_tool_calls) via INSERT OR IGNORE. Idempotente; preserva customizacao do usuario',
+    );
   }
 
   if (currentVersion < 129) {
     applyMigrationV129(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(129);
-    logger.info('Applied migration v129 - robustez-chat SA-5 (Pilar A): seed dos settings da compactacao automatica leve do chat (chat_compaction_target_tokens=50000 D2; orchestrator_compaction_threshold_percent=80 D1, alinhando gatilho e barrinha) via INSERT OR IGNORE. Idempotente; preserva customizacao do usuario');
+    logger.info(
+      'Applied migration v129 - robustez-chat SA-5 (Pilar A): seed dos settings da compactacao automatica leve do chat (chat_compaction_target_tokens=50000 D2; orchestrator_compaction_threshold_percent=80 D1, alinhando gatilho e barrinha) via INSERT OR IGNORE. Idempotente; preserva customizacao do usuario',
+    );
   }
 
   if (currentVersion < 130) {
     applyMigrationV130(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(130);
-    logger.info('Applied migration v130 - contexto-vivo-runtimes 3.5/3.6/6: colunas do PISO forte em sessions (agentic_context_tokens_est = acumulador persistente de args+results da thread principal no compat; thread_reset_message_id = fence de reset de thread sem compactacao), ambas nullable/aditivas');
+    logger.info(
+      'Applied migration v130 - contexto-vivo-runtimes 3.5/3.6/6: colunas do PISO forte em sessions (agentic_context_tokens_est = acumulador persistente de args+results da thread principal no compat; thread_reset_message_id = fence de reset de thread sem compactacao), ambas nullable/aditivas',
+    );
   }
 
   if (currentVersion < 131) {
     applyMigrationV131(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(131);
-    logger.info('Applied migration v131 - dynamic-workflow fechamento S2: seed dynamic-workflow-maestro vira NARRADOR PURO (narra marcos em PT-BR, 1-3 frases, nunca aprova/intervem/executa; prompt e description novos). Padrao V50/V103: UPDATE guardado (so quando valor == default antigo pos-v103), preserva customizacao do usuario; R10 par do seed .ts');
+    logger.info(
+      'Applied migration v131 - dynamic-workflow fechamento S2: seed dynamic-workflow-maestro vira NARRADOR PURO (narra marcos em PT-BR, 1-3 frases, nunca aprova/intervem/executa; prompt e description novos). Padrao V50/V103: UPDATE guardado (so quando valor == default antigo pos-v103), preserva customizacao do usuario; R10 par do seed .ts',
+    );
   }
 
   if (currentVersion < 132) {
     applyMigrationV132(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(132);
-    logger.info('Applied migration v132 - dynamic-workflow fechamento S3: remocao da feature de budget. Corrige a linha "Respeite o budget..." do prompt do seed dynamic-workflow-builder por replace() direcionado na linha (guardado por LIKE, preserva o resto de prompts customizados); R10 par do seed .ts');
+    logger.info(
+      'Applied migration v132 - dynamic-workflow fechamento S3: remocao da feature de budget. Corrige a linha "Respeite o budget..." do prompt do seed dynamic-workflow-builder por replace() direcionado na linha (guardado por LIKE, preserva o resto de prompts customizados); R10 par do seed .ts',
+    );
   }
 
   if (currentVersion < 133) {
     applyMigrationV133(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(133);
-    logger.info('Applied migration v133 - dynamic-workflow fechamento S6: fresh fixer no dev-loop (retry efetivo Increment 2). Insere no prompt do seed dynamic-workflow-builder a instrucao do fresh fixer (stuck >= 2 troca o fix pro node fixer-s{S}-r{R} com o fixer dedicado; fail-safe pro coder) por replace() na linha-ancora, guardado por LIKE + NOT LIKE (idempotente, preserva customizacao); R10 par do seed .ts');
+    logger.info(
+      'Applied migration v133 - dynamic-workflow fechamento S6: fresh fixer no dev-loop (retry efetivo Increment 2). Insere no prompt do seed dynamic-workflow-builder a instrucao do fresh fixer (stuck >= 2 troca o fix pro node fixer-s{S}-r{R} com o fixer dedicado; fail-safe pro coder) por replace() na linha-ancora, guardado por LIKE + NOT LIKE (idempotente, preserva customizacao); R10 par do seed .ts',
+    );
   }
 
   if (currentVersion < 134) {
     applyMigrationV134(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(134);
-    logger.info('Applied migration v134 - spec-gpt56 S4: default codex vira gpt-5.6-sol. UPDATE direcionado no seed dynamic-workflow-coder-codex ainda no default antigo (gpt-5.5), trocando SO model + codex_config.$.model via json_set pontual (sandbox/effort/chaves futuras preservados; json_valid guarda JSON corrompido; modelo customizado intocado); R10 par do seed .ts');
+    logger.info(
+      'Applied migration v134 - spec-gpt56 S4: default codex vira gpt-5.6-sol. UPDATE direcionado no seed dynamic-workflow-coder-codex ainda no default antigo (gpt-5.5), trocando SO model + codex_config.$.model via json_set pontual (sandbox/effort/chaves futuras preservados; json_valid guarda JSON corrompido; modelo customizado intocado); R10 par do seed .ts',
+    );
   }
 
   if (currentVersion < 135) {
     applyMigrationV135(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(135);
-    logger.info('Applied migration v135 - remove Whisper local/FFmpeg: selecoes local-whisper migram para whisper-1; overrides de paths locais obsoletos sao removidos; arquivos do usuario permanecem intactos');
+    logger.info(
+      'Applied migration v135 - remove Whisper local/FFmpeg: selecoes local-whisper migram para whisper-1; overrides de paths locais obsoletos sao removidos; arquivos do usuario permanecem intactos',
+    );
   }
 
   if (currentVersion < 136) {
     applyMigrationV136(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(136);
-    logger.info('Applied migration v136 - branding LionDesign: troca o nome upstream nos prompts/descriptions dos tres seeds de design, preservando IDs, paths e IPCs internos');
+    logger.info(
+      'Applied migration v136 - branding LionDesign: troca o nome upstream nos prompts/descriptions dos tres seeds de design, preservando IDs, paths e IPCs internos',
+    );
   }
 
   if (currentVersion < 137) {
@@ -1413,19 +1450,80 @@ function runMigrations(hooks?: RunMigrationsHooks): void {
   if (currentVersion < 149) {
     applyMigrationV149(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(149);
-    logger.info('Applied migration v149 - dynamic_workflow_messages.applied_node_id/consumed_at (ajuste consumido, SPEC orquestrador-driver D8)');
+    logger.info(
+      'Applied migration v149 - dynamic_workflow_messages.applied_node_id/consumed_at (ajuste consumido, SPEC orquestrador-driver D8)',
+    );
   }
 
   if (currentVersion < 150) {
     applyMigrationV150(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(150);
-    logger.info('Applied migration v150 - GPT-6 Astra vira o default do codex: UPDATE direcionado no seed dynamic-workflow-coder-codex ainda em gpt-5.6-sol (model + codex_config.$.model via json_set; customizacoes e settings explicitas intocadas); R10 par do seed .ts');
+    logger.info(
+      'Applied migration v150 - GPT-6 Astra vira o default do codex: UPDATE direcionado no seed dynamic-workflow-coder-codex ainda em gpt-5.6-sol (model + codex_config.$.model via json_set; customizacoes e settings explicitas intocadas); R10 par do seed .ts',
+    );
   }
 
   if (currentVersion < 151) {
     applyMigrationV151(db);
     db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(151);
-    logger.info('Applied migration v151 - writers do dynamic-workflow: maxTurns 80->150 (doc-writer 60->100) e allowedCommands com build/lint/diagnostico (follow-up L1.2/L1.8)');
+    logger.info(
+      'Applied migration v151 - writers do dynamic-workflow: maxTurns 80->150 (doc-writer 60->100) e allowedCommands com build/lint/diagnostico (follow-up L1.2/L1.8)',
+    );
+  }
+
+  if (currentVersion < 152) {
+    applyMigrationV152(db);
+    db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(152);
+    logger.info(
+      'Applied migration v152 - lanes: sessions.lane_badge/orchestrator_*/sdk_thread_history/dreaming_* + virada das conversas desktop ativas',
+    );
+  }
+  if (currentVersion < 153) {
+    applyMigrationV153(db);
+    db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(153);
+  }
+  if (currentVersion < 154) {
+    applyMigrationV154(db);
+    db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(154);
+    logger.info('Applied migration v154 - Kanban: actor lioncode + actor_detail em kanban_card_events');
+  }
+
+  if (currentVersion < 155) {
+    applyMigrationV155(db);
+    db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(155);
+    logger.info(
+      'Applied migration v155 - timeline de tools: session_timeline_turns/events + lion_session_summaries com mode e selection_hash na PK',
+    );
+  }
+
+  if (currentVersion < 156) {
+    applyMigrationV156(db);
+    db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(156);
+    logger.info(
+      'Applied migration v156 - drive por lane: harness_projects.session_id + indice, backfill do config.drive.sessionId e saneamento de lane duplicada',
+    );
+  }
+
+  if (currentVersion < 157) {
+    applyMigrationV157(db);
+    db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(157);
+    logger.info('Applied migration v157 - Claude Opus 5.5 como modelo do orquestrador (quem estava no Opus 5)');
+  }
+
+  if (currentVersion < 158) {
+    applyMigrationV158(db);
+    db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(158);
+    logger.info(
+      'Applied migration v158 - GPT-6 Sol vira o default do codex: UPDATE direcionado no seed dynamic-workflow-coder-codex ainda em gpt-6-astra',
+    );
+  }
+
+  if (currentVersion < 159) {
+    applyMigrationV159(db);
+    db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(159);
+    logger.info(
+      'Applied migration v159 - sub-agentes seguem o orquestrador: agents cloud em claude-opus-5 sobem para claude-opus-5-5 quando o orquestrador esta no Opus 5.5',
+    );
   }
 }
 
@@ -1439,8 +1537,6 @@ export function semanticMemoriesVecNeedsRepair(database: Database.Database): boo
 
 function fixVecTableIfNeeded(): void {
   if (!semanticMemoriesVecNeedsRepair(db)) return;
-  // DB safety: so schema ausente/incompativel autoriza o reparo. Erros
-  // operacionais nunca podem cair num catch-all que apaga uma tabela valida.
   logger.info('Recreating semantic_memories_vec with correct schema (1536 dims)');
   db.exec('DROP TABLE IF EXISTS semantic_memories_vec');
   db.exec(`CREATE VIRTUAL TABLE semantic_memories_vec USING vec0(
@@ -1729,12 +1825,6 @@ const MIGRATION_V31 = `
   ALTER TABLE harness_projects ADD COLUMN prd_path TEXT DEFAULT NULL;
 `;
 
-// V32: Migrate legacy harness metrics into pipeline_phase_metrics so old projects
-// show data in the unified Pipeline metrics view.
-// Planner data lives on harness_projects columns; Coder+Evaluator data lives in harness_rounds.
-// We aggregate per project and insert as phase 8 (Planner), 10 (Coder), 11 (Evaluator).
-// Only projects that DON'T already have rows in pipeline_phase_metrics are migrated
-// (i.e. projects created before the pipeline system).
 const MIGRATION_V32_MIGRATE_HARNESS_TO_PIPELINE = `
   -- Phase 8 (Planner) from harness_projects planner columns
   INSERT OR IGNORE INTO pipeline_phase_metrics
@@ -1817,13 +1907,6 @@ const MIGRATION_V32_MIGRATE_HARNESS_TO_PIPELINE = `
   GROUP BY s.project_id;
 `;
 
-// V33: Add sprint_index column to pipeline_phase_metrics so each sprint gets its own row.
-// The old UNIQUE(project_id, phase_number) only allowed one row per phase per project,
-// which meant per-sprint cost breakdowns were impossible.
-// New UNIQUE is (project_id, phase_number, sprint_index).
-// sprint_index = -1 for non-sprint phases (1-9); >= 0 for sprint phases (10, 11, 12).
-// SQLite can't ALTER a UNIQUE constraint, so we recreate the table entirely.
-// Also re-migrates harness_rounds data as per-sprint rows instead of aggregated totals.
 const MIGRATION_V33_SPRINT_INDEX_COLUMN = `
   -- 1. Create new table with sprint_index column and updated UNIQUE constraint
   CREATE TABLE pipeline_phase_metrics_new (
@@ -1934,10 +2017,6 @@ const MIGRATION_V33_SPRINT_INDEX_COLUMN = `
   GROUP BY s.project_id, s.sprint_index;
 `;
 
-// V34: Fix agent_id on pipeline_phase_metrics for sprint phases (10, 11).
-// V33 may have already run with the correct agent IDs, but if it ran before the
-// COALESCE(s.coder_agent_id) fix was added, rows still have generic 'harness-coder'.
-// This migration updates all sprint-phase rows to use the real agent_id from harness_sprints.
 const MIGRATION_V34_FIX_AGENT_IDS = `
   -- Fix Coder (phase 10) agent_id: use harness_sprints.coder_agent_id when available
   UPDATE pipeline_phase_metrics
@@ -1978,10 +2057,6 @@ const MIGRATION_V34_FIX_AGENT_IDS = `
     );
 `;
 
-// V35: Add 'idle' to harness_projects status CHECK constraint.
-// The pipeline system uses 'idle' as the initial status, but the old harness
-// CHECK constraint only allows: planning, reviewing, ready, running, paused, done, failed.
-// SQLite cannot ALTER CHECK constraints, so we recreate the table.
 const MIGRATION_V35_HARNESS_STATUS_IDLE = `
   CREATE TABLE harness_projects_new (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
@@ -2032,10 +2107,6 @@ const MIGRATION_V36_PIPELINE_STATE = `
   ALTER TABLE harness_projects ADD COLUMN pipeline_discovery_block INTEGER DEFAULT 1;
 `;
 
-// V37: Drop pipeline_tech_substep column from harness_projects (column was abandoned) and
-// clean up pipeline data for phase numbers >= 5 (old numbering being abandoned).
-// Because SQLite ALTER TABLE DROP COLUMN requires 3.35+, we use the table-recreate pattern
-// to be safe. Keep pipeline_sprint_index and pipeline_discovery_block from V36.
 const MIGRATION_V37_DROP_TECH_SUBSTEP = `
   CREATE TABLE harness_projects_v37 (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
@@ -2088,8 +2159,6 @@ const MIGRATION_V37_DROP_TECH_SUBSTEP = `
   DELETE FROM pipeline_messages WHERE phase_number >= 5;
 `;
 
-// V38: Add sprint_index, round_index, agent_id to pipeline_messages and
-// add round_index to pipeline_phase_metrics, then create supporting indexes.
 const MIGRATION_V38_PIPELINE_MSG_SPRINT_COLS = `
   ALTER TABLE pipeline_messages ADD COLUMN sprint_index INTEGER DEFAULT NULL;
   ALTER TABLE pipeline_messages ADD COLUMN round_index INTEGER DEFAULT NULL;
@@ -2104,9 +2173,6 @@ const MIGRATION_V38_PIPELINE_MSG_SPRINT_COLS = `
     ON pipeline_phase_metrics(project_id, phase_number, sprint_index, round_index);
 `;
 
-// V39: Add verdict, updated_at columns and 'rejected' to the status CHECK on harness_sprints.
-// SQLite cannot ALTER CHECK constraints, so we recreate the table.
-// FK checks are disabled in the runMigrations block for this version.
 const MIGRATION_V39_HARNESS_SPRINT_VERDICT = `
   CREATE TABLE harness_sprints_v39 (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
@@ -2181,10 +2247,6 @@ const MIGRATION_V42_SECURITY_SUMMARY = `
   ALTER TABLE harness_projects ADD COLUMN security_summary_json TEXT DEFAULT NULL;
 `;
 
-// V43: Add external runtime support to agents table.
-// SQLite does not support ALTER TABLE ... ADD CONSTRAINT, so the table is recreated
-// using the same pattern as V35 to update the runtime CHECK constraint.
-// The external_config column (nullable JSON) is added for the new runtime path.
 const MIGRATION_V43 = `
   CREATE TABLE agents_new (
     id TEXT PRIMARY KEY,
@@ -2230,8 +2292,6 @@ const MIGRATION_V43 = `
   ALTER TABLE agents_new RENAME TO agents;
 `;
 
-// V44: Add cost source tracking and runtime/provider/model snapshots to harness_rounds.
-// All 4 columns are nullable so existing rows remain valid (they will have NULL values).
 const MIGRATION_V44 = `
   ALTER TABLE harness_rounds ADD COLUMN cost_source TEXT;
   ALTER TABLE harness_rounds ADD COLUMN runtime_used TEXT;
@@ -2239,20 +2299,14 @@ const MIGRATION_V44 = `
   ALTER TABLE harness_rounds ADD COLUMN model_used TEXT;
 `;
 
-// V45: Add pipeline_docs_id to harness_projects for document organization per pipeline run.
 const MIGRATION_V45 = `
   ALTER TABLE harness_projects ADD COLUMN pipeline_docs_id TEXT DEFAULT NULL;
 `;
 
-// V46: Add metadata JSON column to harness_rounds for telemetry (e.g. evaluatorParseTier).
 const MIGRATION_V46 = `
   ALTER TABLE harness_rounds ADD COLUMN metadata TEXT DEFAULT '{}';
 `;
 
-// V47: Add runtime 'codex' support to agents table.
-// SQLite does not support ALTER TABLE ... ADD CONSTRAINT, so the table is recreated
-// using the same pattern as V43 to update the runtime CHECK constraint.
-// The codex_config column (nullable JSON) is added for the new runtime path.
 const MIGRATION_V47 = `
   CREATE TABLE agents_new (
     id TEXT PRIMARY KEY,
@@ -2301,19 +2355,6 @@ const MIGRATION_V47 = `
   ALTER TABLE agents_new RENAME TO agents;
 `;
 
-// V48: Expand harness_projects.status CHECK constraint to include
-// 'aborted' and 'interrupted'.
-//
-// Why: pre-V48, the only "stop" statuses persisted were 'paused' and 'failed'.
-// recoverInterruptedPipelines (boot crash recovery) wrote 'paused' to the DB
-// but emitted 'interrupted' over IPC — a gambiarra. Similarly, abortPipeline
-// persisted 'failed' even though the abort was an explicit user action, not
-// an actual failure. Post-V48, the persisted status equals the truth: aborted
-// means user-aborted, interrupted means crash-recovered.
-//
-// SQLite cannot ALTER CHECK constraints, so the table is recreated. All 27
-// existing columns (V37 base + V41 pipeline_type + V42 security_summary_json
-// + V45 pipeline_docs_id) are preserved verbatim.
 const MIGRATION_V48_EXPAND_PROJECT_STATUS_CHECK = `
   CREATE TABLE harness_projects_v48 (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
@@ -2370,43 +2411,20 @@ const MIGRATION_V48_EXPAND_PROJECT_STATUS_CHECK = `
   CREATE INDEX IF NOT EXISTS idx_harness_projects_pipeline_type ON harness_projects(pipeline_type);
 `;
 
-/**
- * Le o SQL do CREATE TABLE atual de harness_projects via sqlite_master.
- * Retorna null se a tabela nao existir (DB ainda nao migrou).
- */
 export function getHarnessProjectsCreateSql(database: Database.Database): string | null {
-  const row = database
-    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='harness_projects'")
-    .get() as { sql: string | null } | undefined;
+  const row = database.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='harness_projects'").get() as
+    { sql: string | null } | undefined;
   return row?.sql ?? null;
 }
 
-/**
- * Verifica se o CHECK constraint de harness_projects.status aceita
- * 'aborted' E 'interrupted'. Retorna false se a tabela nao existir
- * ou se o CHECK nao mencionar ambos.
- */
 export function harnessProjectStatusCheckSupportsTerminalStates(database: Database.Database): boolean {
   const sql = getHarnessProjectsCreateSql(database);
   if (!sql) return false;
-  // Match dentro do CHECK do status. Procuramos por 'aborted' E 'interrupted'
-  // entre apostrofes (literais SQL) — evita falso positivo em comentarios.
   return sql.includes("'aborted'") && sql.includes("'interrupted'");
 }
 
-/**
- * Garante que o CHECK de harness_projects.status aceita 'aborted'/'interrupted'.
- * Idempotente: se ja aceita, no-op. Senao aplica MIGRATION_V48_EXPAND_PROJECT_STATUS_CHECK
- * (FK off/on, table-recreate preservando colunas e indices).
- *
- * NAO mexe em schema_version — quem chama decide se bumpa V48.
- *
- * Cobre o caso de drift onde schema_version >= 48 mas o CHECK real nao tem os
- * estados (DB criado em outra branch onde V48 significava outra coisa).
- */
 export function ensureHarnessProjectStatusCheckExpanded(database: Database.Database): void {
   if (harnessProjectStatusCheckSupportsTerminalStates(database)) return;
-  // Se a tabela nao existir, MIGRATION_V21 ainda vai criar — nao tentar aqui.
   if (getHarnessProjectsCreateSql(database) === null) return;
   database.pragma('foreign_keys = OFF');
   try {
@@ -2419,13 +2437,6 @@ export function ensureHarnessProjectStatusCheckExpanded(database: Database.Datab
   }
 }
 
-// V49: Reconciliacao insert-only de squads pra DBs antigas (fresh installs ja
-// nascem certo via S6.4a). Sem isso, instalacoes anteriores ao S6.4a continuam
-// com squad NULL ou 'workflow' nos agents seed.
-//
-// - tech-* foi seedado historicamente como 'workflow', deveria ser 'pipeline'
-// - harness/pipeline/security agents nunca tiveram squad declarado nos seeds
-//   antigos, entao nasceram NULL (reconcileSeedAgent so faz INSERT, nao UPDATE)
 const MIGRATION_V49_FIX_AGENT_SQUADS = `
   UPDATE agents SET squad = 'pipeline'
     WHERE id IN ('tech-database', 'tech-backend', 'tech-frontend', 'tech-security')
@@ -2446,10 +2457,6 @@ const MIGRATION_V49_FIX_AGENT_SQUADS = `
     );
 `;
 
-// V49 (TS prepared statement): allowed_tools pra security-secrets-scanner.
-// O seed atual exige Bash (pra rodar 'git log' e detectar .env commitados).
-// DBs antigos podem ter persistido sem Bash; condicional pra preservar
-// customizacoes do user.
 function applyMigrationV49Tools(database: Database.Database): void {
   const OLD_TOOLS = '["Read","Grep","Glob"]';
   const NEW_TOOLS = '["Read","Grep","Glob","Bash"]';
@@ -2458,21 +2465,6 @@ function applyMigrationV49Tools(database: Database.Database): void {
     .run(NEW_TOOLS, OLD_TOOLS);
 }
 
-/**
- * V52: Remove a tool 'Write' dos 8 agentes tech-* (feature pipeline + dev pipeline).
- *
- * Motivacao: esses agentes editam APENAS uma secao do PRD ja existente. 'Write' nao
- * tem uso legitimo neles e e footgun pra modelos fracos (ex: GLM-4.7-flash sobrescreveu
- * PRD inteira em vez de fazer Edit cirurgico). Edit sozinho cobre todos os casos
- * (modificar secao existente E adicionar nova secao).
- *
- * Condicional: so atualiza se allowed_tools = OLD exato. Preserva customizacoes do user
- * (mesmo padrao da V49).
- *
- * Agentes afetados:
- * - Feature: feat-tech-database, feat-tech-backend, feat-tech-frontend, feat-tech-security
- * - Dev:     tech-database, tech-backend, tech-frontend, tech-security
- */
 function applyMigrationV52TechWriteRemoval(database: Database.Database): void {
   const OLD_TOOLS = '["Read","Write","Edit","Glob","Grep"]';
   const NEW_TOOLS = '["Read","Edit","Glob","Grep"]';
@@ -2486,19 +2478,12 @@ function applyMigrationV52TechWriteRemoval(database: Database.Database): void {
     'tech-frontend',
     'tech-security',
   ];
-  const stmt = database.prepare(
-    `UPDATE agents SET allowed_tools = ? WHERE id = ? AND allowed_tools = ?`,
-  );
+  const stmt = database.prepare(`UPDATE agents SET allowed_tools = ? WHERE id = ? AND allowed_tools = ?`);
   for (const id of AGENT_IDS) {
     stmt.run(NEW_TOOLS, id, OLD_TOOLS);
   }
 }
 
-// V51: Codex Windows fix infrastructure.
-// 1. codex_windows_prep_consent — opt-in versionado por repo Git para auto-prep
-//    (CRLF/.gitattributes). Ver SPEC-codex-windows-fix.md Camada 2.
-// 2. codex_patch_failures — telemetria de apply_patch verification failures por
-//    round (Camada 4). Default 0; runtimes nao-Codex sempre persistem 0.
 const MIGRATION_V51 = `
   CREATE TABLE IF NOT EXISTS codex_windows_prep_consent (
     repo_root TEXT PRIMARY KEY,
@@ -2966,16 +2951,20 @@ const MIGRATION_V1 = `
   CREATE INDEX IF NOT EXISTS idx_audit_source ON audit_log(source);
 `;
 
-// ---- Sessions ----
-
 export function createSession(
   id: string,
   title?: string,
   subagent?: string,
-  options?: { type?: 'chat' | 'scheduled' | 'manual' | 'telegram'; taskId?: string },
+  options?: {
+    type?: 'chat' | 'scheduled' | 'manual' | 'telegram';
+    taskId?: string;
+    orchestrator?: SessionOrchestrator | null;
+  },
 ): ChatSession {
   const stmt = db.prepare(`
-    INSERT INTO sessions (id, title, subagent, type, task_id) VALUES (?, ?, ?, ?, ?)
+    INSERT INTO sessions (id, title, subagent, type, task_id,
+      orchestrator_runtime, orchestrator_provider, orchestrator_model, orchestrator_effort)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   stmt.run(
     id,
@@ -2983,9 +2972,11 @@ export function createSession(
     subagent ?? null,
     options?.type ?? 'chat',
     options?.taskId ?? null,
+    options?.orchestrator?.runtime ?? null,
+    options?.orchestrator?.provider ?? null,
+    options?.orchestrator?.model ?? null,
+    options?.orchestrator?.effort ?? null,
   );
-  // SPEC chat-context-reduction A.2 (S2): sessao desktop NOVA nasce com toggles
-  // OFF/OFF (linha 0/0 em chat_session_features); telegram/scheduled sem linha.
   ensureChatFeatureToggles(id, options?.type ?? 'chat');
   return getSession(id)!;
 }
@@ -2997,19 +2988,15 @@ export function getSession(id: string): ChatSession | undefined {
 }
 
 export function getAllSessions(): ChatSession[] {
-  const rows = db.prepare(`
-    SELECT * FROM sessions
-    WHERE type IN ('chat', 'manual', 'telegram')
-      AND status != 'trashed'
-      AND task_id IS NULL
-      AND (title IS NULL OR title NOT LIKE '[Scheduler]%')
-    ORDER BY updated_at DESC, created_at DESC
-  `).all() as Record<string, unknown>[];
+  const rows = db.prepare(ALL_SESSIONS_SQL).all() as Record<string, unknown>[];
   return rows.map(mapSession);
 }
 
 export function getScheduledSessions(): ChatSession[] {
-  const rows = db.prepare("SELECT * FROM sessions WHERE type = 'scheduled' ORDER BY updated_at DESC").all() as Record<string, unknown>[];
+  const rows = db.prepare("SELECT * FROM sessions WHERE type = 'scheduled' ORDER BY updated_at DESC").all() as Record<
+    string,
+    unknown
+  >[];
   return rows.map(mapSession);
 }
 
@@ -3030,10 +3017,23 @@ export function deleteSessionById(id: string): void {
   tx();
 }
 
+export function deleteSessionsByIds(ids: string[], dbh: Database.Database = db): void {
+  if (ids.length === 0) return;
+  const placeholders = ids.map(() => '?').join(', ');
+  const tx = dbh.transaction(() => {
+    dbh.prepare(`DELETE FROM messages WHERE session_id IN (${placeholders})`).run(...ids);
+    dbh.prepare(`DELETE FROM sessions WHERE id IN (${placeholders})`).run(...ids);
+  });
+  tx();
+}
+
+export function getAllSessionIds(): string[] {
+  const rows = db.prepare('SELECT id FROM sessions').all() as Array<{ id: string }>;
+  return rows.map((row) => row.id);
+}
+
 export function trashSession(id: string): { success: boolean; error?: string } {
-  const session = db.prepare('SELECT status FROM sessions WHERE id = ?').get(id) as
-    | { status: string }
-    | undefined;
+  const session = db.prepare('SELECT status FROM sessions WHERE id = ?').get(id) as { status: string } | undefined;
 
   if (!session) return { success: false, error: 'session_not_found' };
   if (session.status === 'active') return { success: false, error: 'cannot_trash_active_session' };
@@ -3043,45 +3043,23 @@ export function trashSession(id: string): { success: boolean; error?: string } {
   return { success: true };
 }
 
-// ---- Chat feature toggles (SPEC chat-context-reduction A.2 — Sprint S2) ----
-//
-// Tabela chat_session_features (V127): toggles Pipeline/Workflows POR SESSAO de
-// chat desktop. Convencao: linha presente = sessao desktop (chat/manual);
-// telegram/scheduled NUNCA tem linha (lanes nao-desktop rodam false/false por
-// resolucao, A.9). O parametro `dbh` existe para injecao em teste (precedente
-// ensureHarnessProjectStatusCheckExpanded) — producao SEMPRE usa o default
-// (o `db` do modulo).
-
-/** Tipos de sessao DESKTOP — os unicos com linha em chat_session_features. */
 const DESKTOP_SESSION_TYPES: ReadonlySet<string> = new Set(['chat', 'manual']);
 
-/** Codigos de rejeicao de setChatFeatureToggles (A.2 — erro estruturado, sem throw). */
-export type SetChatFeatureTogglesRejectCode =
-  | 'session_not_found'
-  | 'session_not_desktop'
-  | 'session_not_active';
+export type SetChatFeatureTogglesRejectCode = 'session_not_found' | 'session_not_desktop' | 'session_not_active';
 
 export type SetChatFeatureTogglesResult =
-  | { ok: true; toggles: ChatFeatureToggles }
-  | { ok: false; code: SetChatFeatureTogglesRejectCode };
+  { ok: true; toggles: ChatFeatureToggles } | { ok: false; code: SetChatFeatureTogglesRejectCode };
 
 interface ChatSessionFeaturesRow {
   pipeline_control_enabled: number;
   dynamic_workflows_enabled: number;
+  swarm_enabled: number;
 }
 
-/**
- * Toggles persistidos da sessao. `null` = SEM linha (sessao telegram/scheduled,
- * sessao inexistente ou orfa pre-ensure) — o caller decide o fallback
- * (resolveChatCapabilitiesForTurn cai em CHAT_CAPABILITIES_DEFAULT_OFF, A.4).
- */
-export function getChatFeatureToggles(
-  sessionId: string,
-  dbh: Database.Database = db,
-): ChatFeatureToggles | null {
+export function getChatFeatureToggles(sessionId: string, dbh: Database.Database = db): ChatFeatureToggles | null {
   const row = dbh
     .prepare(
-      `SELECT pipeline_control_enabled, dynamic_workflows_enabled
+      `SELECT pipeline_control_enabled, dynamic_workflows_enabled, swarm_enabled
          FROM chat_session_features WHERE session_id = ?`,
     )
     .get(sessionId) as ChatSessionFeaturesRow | undefined;
@@ -3089,16 +3067,10 @@ export function getChatFeatureToggles(
   return {
     pipelineControl: row.pipeline_control_enabled !== 0,
     dynamicWorkflows: row.dynamic_workflows_enabled !== 0,
+    swarm: row.swarm_enabled !== 0,
   };
 }
 
-/**
- * Garante a linha de toggles da sessao (chamada por createSession):
- * chat/manual -> INSERT OR IGNORE com 0/0 (sessao nova nasce OFF, A.1-2;
- * linha existente NUNCA e sobrescrita); telegram/scheduled -> no-op (sem
- * linha). NUNCA lanca: a tabela e auxiliar e nao pode quebrar a criacao de
- * sessao — erro e logado e o resolver cai no default OFF.
- */
 export function ensureChatFeatureToggles(
   sessionId: string,
   type: 'chat' | 'scheduled' | 'manual' | 'telegram',
@@ -3121,24 +3093,13 @@ export function ensureChatFeatureToggles(
   }
 }
 
-/**
- * Persiste um patch parcial de toggles (A.2). Validacoes (erro estruturado
- * `{ ok:false, code }`, nunca throw em fluxo normal):
- *  - sessao inexistente        -> session_not_found
- *  - type fora de chat/manual  -> session_not_desktop
- *  - status !== 'active'       -> session_not_active (status real:
- *    active/archived/compacted/trashed)
- * Upsert: cobre sessao desktop legada sem linha (merge do patch sobre o
- * persistido ou, sem linha, sobre o default OFF).
- */
 export function setChatFeatureToggles(
   sessionId: string,
   patch: Partial<ChatFeatureToggles>,
   dbh: Database.Database = db,
 ): SetChatFeatureTogglesResult {
-  const session = dbh
-    .prepare('SELECT type, status FROM sessions WHERE id = ?')
-    .get(sessionId) as { type: string | null; status: string | null } | undefined;
+  const session = dbh.prepare('SELECT type, status FROM sessions WHERE id = ?').get(sessionId) as
+    { type: string | null; status: string | null } | undefined;
   if (!session) return { ok: false, code: 'session_not_found' };
   if (!DESKTOP_SESSION_TYPES.has(session.type ?? 'chat')) {
     return { ok: false, code: 'session_not_desktop' };
@@ -3153,18 +3114,20 @@ export function setChatFeatureToggles(
   const next: ChatFeatureToggles = {
     pipelineControl: patch.pipelineControl ?? current.pipelineControl,
     dynamicWorkflows: patch.dynamicWorkflows ?? current.dynamicWorkflows,
+    swarm: patch.swarm ?? current.swarm ?? false,
   };
   dbh
     .prepare(
       `INSERT INTO chat_session_features
-         (session_id, pipeline_control_enabled, dynamic_workflows_enabled, updated_at)
-       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+         (session_id, pipeline_control_enabled, dynamic_workflows_enabled, swarm_enabled, updated_at)
+       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
        ON CONFLICT(session_id) DO UPDATE SET
          pipeline_control_enabled = excluded.pipeline_control_enabled,
          dynamic_workflows_enabled = excluded.dynamic_workflows_enabled,
+         swarm_enabled = excluded.swarm_enabled,
          updated_at = CURRENT_TIMESTAMP`,
     )
-    .run(sessionId, next.pipelineControl ? 1 : 0, next.dynamicWorkflows ? 1 : 0);
+    .run(sessionId, next.pipelineControl ? 1 : 0, next.dynamicWorkflows ? 1 : 0, next.swarm ? 1 : 0);
   return { ok: true, toggles: next };
 }
 
@@ -3174,9 +3137,12 @@ function parseRuntimeCosts(value: unknown): Record<string, number> {
   try {
     const parsed = JSON.parse(String(value ?? '{}')) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, number] => (
-      typeof entry[1] === 'number' && Number.isFinite(entry[1]) && entry[1] >= 0
-    )));
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, number] =>
+          typeof entry[1] === 'number' && Number.isFinite(entry[1]) && entry[1] >= 0,
+      ),
+    );
   } catch {
     return {};
   }
@@ -3186,9 +3152,12 @@ function parseRuntimeCostStatuses(value: unknown): Record<string, ChatCostStatus
   try {
     const parsed = JSON.parse(String(value ?? '{}')) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, ChatCostStatus] => (
-      entry[1] === 'known' || entry[1] === 'estimated-partial' || entry[1] === 'unknown'
-    )));
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, ChatCostStatus] =>
+          entry[1] === 'known' || entry[1] === 'estimated-partial' || entry[1] === 'unknown',
+      ),
+    );
   } catch {
     return {};
   }
@@ -3207,19 +3176,21 @@ function mapSession(row: Record<string, unknown>): ChatSession {
     ownerId: id,
     executionKinds: ['subagent', 'native-task'],
   });
-  const parentCostStatus = row['cost_status'] === 'unknown' || row['cost_status'] === 'estimated-partial'
-    ? row['cost_status']
-    : 'known';
-  const costStatus = subagents.costStatus === 'unknown' || parentCostStatus === 'unknown'
-    ? 'unknown'
-    : subagents.costStatus === 'estimated-partial' || parentCostStatus === 'estimated-partial'
-      ? 'estimated-partial'
-      : 'known';
+  const parentCostStatus =
+    row['cost_status'] === 'unknown' || row['cost_status'] === 'estimated-partial' ? row['cost_status'] : 'known';
+  const costStatus =
+    subagents.costStatus === 'unknown' || parentCostStatus === 'unknown'
+      ? 'unknown'
+      : subagents.costStatus === 'estimated-partial' || parentCostStatus === 'estimated-partial'
+        ? 'estimated-partial'
+        : 'known';
   let parentReasons: string[] = [];
   try {
     const parsed = JSON.parse(String(row['cost_unknown_reasons'] ?? '[]')) as unknown;
     if (Array.isArray(parsed)) parentReasons = parsed.filter((value): value is string => typeof value === 'string');
-  } catch { /* legacy/corrupt quality metadata */ }
+  } catch {
+    /* legacy/corrupt quality metadata */
+  }
   const parentCostByRuntime = parseRuntimeCosts(row['parent_cost_by_runtime']);
   const costByRuntime = { ...parentCostByRuntime };
   for (const [runtime, cost] of Object.entries(subagents.costByRuntime)) {
@@ -3227,32 +3198,24 @@ function mapSession(row: Record<string, unknown>): ChatSession {
   }
   const costStatusByRuntime = parseRuntimeCostStatuses(row['parent_cost_status_by_runtime']);
   for (const entry of subagents.usageMetadata.pricingProvenance) {
-    costStatusByRuntime[entry.runtime] = worstChatCostStatus(
-      costStatusByRuntime[entry.runtime],
-      entry.costStatus,
-    );
+    costStatusByRuntime[entry.runtime] = worstChatCostStatus(costStatusByRuntime[entry.runtime], entry.costStatus);
   }
   const childSubscriptionEquivalentCost = subagents.usageMetadata.pricingProvenance
     .filter((entry) => entry.costEstimationKind === 'subscription-equivalent-payg')
     .reduce((sum, entry) => sum + entry.costUsd, 0);
-  const subscriptionEquivalentCost = Number(row['parent_subscription_equivalent_cost_usd'] ?? 0)
-    + childSubscriptionEquivalentCost;
+  const subscriptionEquivalentCost =
+    Number(row['parent_subscription_equivalent_cost_usd'] ?? 0) + childSubscriptionEquivalentCost;
   return {
     id,
     sdkSessionId: row['sdk_session_id'] as string | undefined,
     subagent: row['subagent'] as string | undefined,
     title: row['title'] as string | undefined,
-    // Tokens e custo da SESSAO sao SO do orquestrador (decisao do dono,
-    // 2026-09-06): o rollup dos subagentes nunca entra na soma que a sidebar e
-    // o TokenCounter mostram. O detalhe por tarefa (TasksPage, API tasks.*) le
-    // task_executions direto e continua com o total real.
     inputTokens: (row['input_tokens'] as number) || 0,
     outputTokens: (row['output_tokens'] as number) || 0,
     costUsd: (row['cost_usd'] as number) || 0,
     costStatus,
-    tokenStatus: row['token_status'] === 'not_reported' || subagents.tokenStatus === 'not_reported'
-      ? 'not_reported'
-      : 'reported',
+    tokenStatus:
+      row['token_status'] === 'not_reported' || subagents.tokenStatus === 'not_reported' ? 'not_reported' : 'reported',
     unknownCostCount: ((row['unknown_cost_count'] as number) || 0) + subagents.unknownCostCount,
     costUnknownReasons: [...new Set([...parentReasons, ...subagents.costUnknownReasons])].sort(),
     costByRuntime,
@@ -3263,21 +3226,262 @@ function mapSession(row: Record<string, unknown>): ChatSession {
     taskId: row['task_id'] as string | undefined,
     createdAt: row['created_at'] as string,
     updatedAt: row['updated_at'] as string,
-    // SPEC telegram-cron-compaction 5.1 (V123): estado da compactacao in-place.
-    // NULL em todo desktop/cron/telegram nao-compactado (caminhos byte-identicos).
     compactedUpToMessageId: (row['compacted_up_to_message_id'] as number | null) ?? undefined,
     rollingSummary: (row['rolling_summary'] as string | null) ?? undefined,
     pendingSeed: (row['pending_seed'] as string | null) ?? undefined,
     activeContextTokensEst: (row['active_context_tokens_est'] as number | null) ?? undefined,
-    // SPEC contexto-vivo-runtimes 3.5/3.6 (V130): acumulador agentico
-    // persistente (compat) + fence de reset de thread sem compactacao.
-    // NULL/undefined em toda sessao fora do regime persistente do compat.
     agenticContextTokensEst: (row['agentic_context_tokens_est'] as number | null) ?? undefined,
     threadResetMessageId: (row['thread_reset_message_id'] as number | null) ?? undefined,
+    laneBadge: (row['lane_badge'] as number | null) ?? null,
+    orchestrator: mapSessionOrchestrator(row),
+    sdkThreadHistory: parseSdkThreadHistory(row['sdk_thread_history']),
+    dreamingStartedAt: (row['dreaming_started_at'] as string | null) ?? undefined,
+    dreamingTurnCount: (row['dreaming_turn_count'] as number | null) ?? 0,
   };
 }
 
-// ---- Messages ----
+function mapSessionOrchestrator(row: Record<string, unknown>): SessionOrchestrator | null {
+  const runtime = row['orchestrator_runtime'];
+  const provider = row['orchestrator_provider'];
+  const model = row['orchestrator_model'];
+  if (typeof runtime !== 'string' || typeof provider !== 'string' || typeof model !== 'string') {
+    return null;
+  }
+  if (!runtime || !provider || !model) return null;
+  const effort = row['orchestrator_effort'];
+  return {
+    runtime: runtime as SessionOrchestrator['runtime'],
+    provider: provider as SessionOrchestrator['provider'],
+    model,
+    ...(typeof effort === 'string' && effort ? { effort } : {}),
+  };
+}
+
+function parseSdkThreadHistory(raw: unknown): string[] {
+  if (typeof raw !== 'string' || !raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function threadIdOf(session: { id: string; sdkSessionId?: string | null }): string {
+  return session.sdkSessionId ?? session.id;
+}
+
+const DESKTOP_CONVERSATION_SQL = `
+  s.type IN ('chat', 'manual')
+  AND s.task_id IS NULL
+  AND (s.title IS NULL OR s.title NOT LIKE '[Scheduler]%')
+  AND s.id NOT LIKE 'dw-drive-%'
+`;
+
+export interface OpenDesktopSessionRow {
+  id: string;
+  laneBadge: number;
+  title: string;
+  orchestrator: SessionOrchestrator | null;
+  messageCount: number;
+  lastUserMessageAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  dreamingStartedAt: string | null;
+}
+
+export interface OpenDesktopSession extends OpenDesktopSessionRow {
+  state: LaneSessionState;
+}
+
+export function listOpenDesktopSessionRows(): OpenDesktopSessionRow[] {
+  const rows = db
+    .prepare(
+      `
+    SELECT s.id, s.lane_badge, s.title, s.created_at, s.updated_at, s.dreaming_started_at,
+           s.orchestrator_runtime, s.orchestrator_provider, s.orchestrator_model, s.orchestrator_effort,
+           (SELECT COUNT(*) FROM messages m WHERE m.session_id = s.id) AS message_count,
+           (SELECT MAX(m.created_at) FROM messages m WHERE m.session_id = s.id AND m.role = 'user') AS last_user_message_at
+    FROM sessions s
+    WHERE s.status = 'active'
+      AND s.lane_badge IS NOT NULL
+      AND ${DESKTOP_CONVERSATION_SQL}
+    ORDER BY s.lane_badge ASC
+  `,
+    )
+    .all() as Record<string, unknown>[];
+  return rows.map((row) => ({
+    id: row['id'] as string,
+    laneBadge: row['lane_badge'] as number,
+    title: (row['title'] as string | null) ?? '',
+    orchestrator: mapSessionOrchestrator(row),
+    messageCount: (row['message_count'] as number) || 0,
+    lastUserMessageAt: (row['last_user_message_at'] as string | null) ?? null,
+    createdAt: row['created_at'] as string,
+    updatedAt: row['updated_at'] as string,
+    dreamingStartedAt: (row['dreaming_started_at'] as string | null) ?? null,
+  }));
+}
+
+export function listOpenDesktopSessions(
+  resolveState: (row: OpenDesktopSessionRow) => LaneSessionState,
+): OpenDesktopSession[] {
+  return listOpenDesktopSessionRows().map((row) => ({ ...row, state: resolveState(row) }));
+}
+
+export function getOpenLaneSessionById(id: string): OpenDesktopSessionRow | null {
+  return listOpenDesktopSessionRows().find((row) => row.id === id) ?? null;
+}
+
+export function isOpenDesktopConversation(session: ChatSession): boolean {
+  return (
+    session.status === 'active' &&
+    (session.type === 'chat' || session.type === 'manual') &&
+    !session.taskId &&
+    !(session.title ?? '').startsWith('[Scheduler]') &&
+    !session.id.startsWith('dw-drive-')
+  );
+}
+
+export function getSessionOrchestrator(sessionId: string): SessionOrchestrator | null {
+  const row = db
+    .prepare(
+      `
+    SELECT orchestrator_runtime, orchestrator_provider, orchestrator_model, orchestrator_effort
+    FROM sessions WHERE id = ?
+  `,
+    )
+    .get(sessionId) as Record<string, unknown> | undefined;
+  if (!row) return null;
+  return mapSessionOrchestrator(row);
+}
+
+export function setSessionOrchestrator(sessionId: string, orchestrator: SessionOrchestrator | null): void {
+  db.prepare(
+    `
+    UPDATE sessions
+    SET orchestrator_runtime = ?, orchestrator_provider = ?, orchestrator_model = ?, orchestrator_effort = ?
+    WHERE id = ?
+  `,
+  ).run(
+    orchestrator?.runtime ?? null,
+    orchestrator?.provider ?? null,
+    orchestrator?.model ?? null,
+    orchestrator?.effort ?? null,
+    sessionId,
+  );
+}
+
+export function appendSdkThreadHistory(sessionId: string, threadId: string): void {
+  const row = db.prepare('SELECT sdk_thread_history FROM sessions WHERE id = ?').get(sessionId) as
+    { sdk_thread_history: string | null } | undefined;
+  if (!row) return;
+  const history = parseSdkThreadHistory(row.sdk_thread_history);
+  if (history.includes(threadId)) return;
+  history.push(threadId);
+  db.prepare('UPDATE sessions SET sdk_thread_history = ? WHERE id = ?').run(JSON.stringify(history), sessionId);
+}
+
+export function countSessionMessages(sessionId: string): number {
+  const row = db.prepare('SELECT COUNT(*) AS n FROM messages WHERE session_id = ?').get(sessionId) as
+    { n: number } | undefined;
+  return row?.n ?? 0;
+}
+
+export function setDreamingStartedAt(sessionId: string, startedAt: string | null): void {
+  db.prepare('UPDATE sessions SET dreaming_started_at = ? WHERE id = ?').run(startedAt, sessionId);
+}
+
+export function getSessionsWithDreamingStarted(): ChatSession[] {
+  const rows = db
+    .prepare(
+      `
+    SELECT * FROM sessions
+    WHERE dreaming_started_at IS NOT NULL AND status = 'active'
+    ORDER BY dreaming_started_at ASC
+  `,
+    )
+    .all() as Record<string, unknown>[];
+  return rows.map(mapSession);
+}
+
+export type CreateLaneSessionResult = { ok: true; session: ChatSession } | { ok: false; code: 'lanes_full' };
+
+export function createLaneSession(input: {
+  orchestrator: SessionOrchestrator | null;
+  reservedBadges?: Iterable<number>;
+  maxLanes?: number;
+}): CreateLaneSessionResult {
+  const tx = db.transaction((): CreateLaneSessionResult => {
+    const taken = listOpenDesktopSessionRows().map((row) => row.laneBadge);
+    for (const badge of input.reservedBadges ?? []) taken.push(badge);
+    const badge = pickFreeLaneBadge(taken, input.maxLanes ?? MAX_DESKTOP_LANES);
+    if (badge === null) return { ok: false, code: 'lanes_full' };
+    const id = crypto.randomUUID();
+    db.prepare(
+      `
+      INSERT INTO sessions (id, title, subagent, type, task_id, lane_badge,
+        orchestrator_runtime, orchestrator_provider, orchestrator_model, orchestrator_effort)
+      VALUES (?, '', NULL, 'chat', NULL, ?, ?, ?, ?, ?)
+    `,
+    ).run(
+      id,
+      badge,
+      input.orchestrator?.runtime ?? null,
+      input.orchestrator?.provider ?? null,
+      input.orchestrator?.model ?? null,
+      input.orchestrator?.effort ?? null,
+    );
+    ensureChatFeatureToggles(id, 'chat');
+    return { ok: true, session: getSession(id)! };
+  });
+  return tx.immediate();
+}
+
+export function replaceLaneSession(input: {
+  sessionId: string;
+  finalStatus: 'archived' | 'compacted';
+  orchestrator: SessionOrchestrator | null;
+  purgeActivityLog?: boolean;
+}): { newSessionId: string | null } {
+  const tx = db.transaction((): { newSessionId: string | null } => {
+    const current = getSession(input.sessionId);
+    if (!current) return { newSessionId: null };
+    const badge = current.laneBadge ?? null;
+    db.prepare(
+      `
+      UPDATE sessions
+      SET status = ?, lane_badge = NULL, dreaming_started_at = NULL, updated_at = datetime('now')
+      WHERE id = ?
+    `,
+    ).run(input.finalStatus, input.sessionId);
+    if (input.purgeActivityLog) purgeActivityLog(input.sessionId);
+    if (badge === null || !isOpenDesktopConversation({ ...current, status: 'active' })) {
+      return { newSessionId: null };
+    }
+    const id = crypto.randomUUID();
+    db.prepare(
+      `
+      INSERT INTO sessions (id, title, subagent, type, task_id, lane_badge,
+        orchestrator_runtime, orchestrator_provider, orchestrator_model, orchestrator_effort)
+      VALUES (?, '', ?, ?, NULL, ?, ?, ?, ?, ?)
+    `,
+    ).run(
+      id,
+      current.subagent ?? null,
+      current.type,
+      badge,
+      input.orchestrator?.runtime ?? null,
+      input.orchestrator?.provider ?? null,
+      input.orchestrator?.model ?? null,
+      input.orchestrator?.effort ?? null,
+    );
+    ensureChatFeatureToggles(id, current.type);
+    rebindDriveSessions(input.sessionId, id);
+    return { newSessionId: id };
+  });
+  return tx.immediate();
+}
 
 export function insertMessage(
   sessionId: string,
@@ -3286,10 +3490,14 @@ export function insertMessage(
   subagent?: string,
   metadata?: string,
 ): number {
-  const result = db.prepare(`
+  const result = db
+    .prepare(
+      `
     INSERT INTO messages (session_id, role, content, subagent, metadata)
     VALUES (?, ?, ?, ?, ?)
-  `).run(sessionId, role, content, subagent ?? null, metadata ?? null);
+  `,
+    )
+    .run(sessionId, role, content, subagent ?? null, metadata ?? null);
 
   db.prepare(`UPDATE sessions SET updated_at = datetime('now') WHERE id = ?`).run(sessionId);
 
@@ -3297,27 +3505,17 @@ export function insertMessage(
 }
 
 export function getSessionMessages(sessionId: string): ChatMessage[] {
-  const rows = db.prepare(
-    'SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC'
-  ).all(sessionId) as Record<string, unknown>[];
+  const rows = db
+    .prepare('SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC')
+    .all(sessionId) as Record<string, unknown>[];
   return rows.map(mapMessage);
 }
 
-/**
- * Variante com FENCE do historico (SPEC contexto-vivo-runtimes 3.4): so
- * mensagens com `id > fence`, onde `fence = max(compacted_up_to_message_id,
- * thread_reset_message_id)` (resolvido pelo caller via resolveHistoryFence).
- * `fence` null = sem fence = identica a getSessionMessages (callers atuais
- * seguem intocados — funcao NOVA, aditiva).
- */
-export function getSessionMessagesAfterFence(
-  sessionId: string,
-  fenceMessageId: number | null,
-): ChatMessage[] {
+export function getSessionMessagesAfterFence(sessionId: string, fenceMessageId: number | null): ChatMessage[] {
   if (fenceMessageId === null) return getSessionMessages(sessionId);
-  const rows = db.prepare(
-    'SELECT * FROM messages WHERE session_id = ? AND id > ? ORDER BY created_at ASC'
-  ).all(sessionId, fenceMessageId) as Record<string, unknown>[];
+  const rows = db
+    .prepare('SELECT * FROM messages WHERE session_id = ? AND id > ? ORDER BY created_at ASC')
+    .all(sessionId, fenceMessageId) as Record<string, unknown>[];
   return rows.map(mapMessage);
 }
 
@@ -3333,34 +3531,182 @@ function mapMessage(row: Record<string, unknown>): ChatMessage {
   };
 }
 
-// ---- Activity Log (v2) ----
+function mapTimelineTurn(row: Record<string, unknown>): TimelineTurn {
+  return {
+    seqId: row['seq_id'] as number,
+    runId: row['run_id'] as string,
+    sessionId: row['session_id'] as string,
+    turnIndex: row['turn_index'] as number,
+    anchorMessageId: (row['anchor_message_id'] as number | null) ?? null,
+    currentUserMessageId: (row['current_user_message_id'] as number | null) ?? null,
+    assistantMessageId: (row['assistant_message_id'] as number | null) ?? null,
+    origin: row['origin'] as TimelineTurnOrigin,
+    runtime: row['runtime'] as TimelineRuntime,
+    fidelity: row['fidelity'] as TimelineFidelity,
+    status: row['status'] as TimelineTurn['status'],
+    cwd: (row['cwd'] as string | null) ?? null,
+    textTokensEst: (row['text_tokens_est'] as number | null) ?? null,
+    toolTokensEst: (row['tool_tokens_est'] as number | null) ?? null,
+    createdAt: row['created_at'] as string,
+  };
+}
 
-/**
- * INSERT OR UPDATE de uma atividade por (session_id, turn_index, activity_id).
- *
- * O start insere; updates/end fazem MERGE: so os campos preenchidos em `ev`
- * sobrescrevem o que ja existe. Implementado via ON CONFLICT DO UPDATE com
- * COALESCE(excluded.col, activity_log.col) — quando o caller nao manda um campo
- * passamos NULL e o COALESCE preserva o valor anterior.
- *
- * Campos de valor com zero significativo (changed=false, exit_code=0, *_tokens=0,
- * cost_usd=0, duration_ms=0, tool_uses=0) sobrevivem porque so viram NULL quando
- * o campo esta ausente em `ev` (undefined), nunca quando o valor real e 0/false.
- *
- * `label` usa NULLIF(excluded.label, '') p/ nao apagar o nome real com um '' do
- * tool-end (caso intencional da v1).
- */
-export function upsertActivityLog(
-  sessionId: string,
-  turnIndex: number,
-  ev: LiveActivityEvent,
+function mapTimelineEvent(row: Record<string, unknown>): TimelineEvent {
+  return {
+    id: row['id'] as number,
+    runId: row['run_id'] as string,
+    sessionId: row['session_id'] as string,
+    seq: row['seq'] as number,
+    kind: row['kind'] as TimelineEventKind,
+    toolUseId: (row['tool_use_id'] as string | null) ?? null,
+    toolName: (row['tool_name'] as string | null) ?? null,
+    content: row['content'] as string,
+    toolCallsJson: (row['tool_calls_json'] as string | null) ?? null,
+    reasoningContent: (row['reasoning_content'] as string | null) ?? null,
+    isError: Number(row['is_error'] ?? 0) !== 0,
+    originalBytes: (row['original_bytes'] as number | null) ?? null,
+    spillPath: (row['spill_path'] as string | null) ?? null,
+    createdAt: row['created_at'] as string,
+  };
+}
+
+export interface InsertTimelineTurnInput {
+  runId: string;
+  sessionId: string;
+  turnIndex: number;
+  anchorMessageId: number | null;
+  currentUserMessageId: number | null;
+  origin: TimelineTurnOrigin;
+  runtime: TimelineRuntime;
+  fidelity: TimelineFidelity;
+  cwd: string | null;
+}
+
+export interface InsertTimelineEventInput {
+  runId: string;
+  sessionId: string;
+  seq: number;
+  kind: TimelineEventKind;
+  toolUseId?: string | null;
+  toolName?: string | null;
+  content: string;
+  toolCallsJson?: string | null;
+  reasoningContent?: string | null;
+  isError?: boolean;
+  originalBytes?: number | null;
+  spillPath?: string | null;
+}
+
+export function insertTimelineTurn(input: InsertTimelineTurnInput, dbh: Database.Database = db): number {
+  const result = dbh
+    .prepare(
+      `
+    INSERT INTO session_timeline_turns
+      (run_id, session_id, turn_index, anchor_message_id, current_user_message_id,
+       origin, runtime, fidelity, status, cwd)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'interrupted', ?)
+  `,
+    )
+    .run(
+      input.runId,
+      input.sessionId,
+      input.turnIndex,
+      input.anchorMessageId,
+      input.currentUserMessageId,
+      input.origin,
+      input.runtime,
+      input.fidelity,
+      input.cwd,
+    );
+  return result.lastInsertRowid as number;
+}
+
+export function insertTimelineEvent(input: InsertTimelineEventInput, dbh: Database.Database = db): number {
+  const result = dbh
+    .prepare(
+      `
+    INSERT INTO session_timeline_events
+      (run_id, session_id, seq, kind, tool_use_id, tool_name, content,
+       tool_calls_json, reasoning_content, is_error, original_bytes, spill_path)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `,
+    )
+    .run(
+      input.runId,
+      input.sessionId,
+      input.seq,
+      input.kind,
+      input.toolUseId ?? null,
+      input.toolName ?? null,
+      input.content,
+      input.toolCallsJson ?? null,
+      input.reasoningContent ?? null,
+      input.isError ? 1 : 0,
+      input.originalBytes ?? null,
+      input.spillPath ?? null,
+    );
+  return result.lastInsertRowid as number;
+}
+
+export function setTimelineTurnStatus(runId: string, status: 'complete', dbh: Database.Database = db): void {
+  dbh.prepare('UPDATE session_timeline_turns SET status = ? WHERE run_id = ?').run(status, runId);
+}
+
+export function setTimelineTurnMetrics(
+  runId: string,
+  textTokensEst: number | null,
+  toolTokensEst: number | null,
+  dbh: Database.Database = db,
 ): void {
+  dbh
+    .prepare('UPDATE session_timeline_turns SET text_tokens_est = ?, tool_tokens_est = ? WHERE run_id = ?')
+    .run(textTokensEst, toolTokensEst, runId);
+}
+
+export function setTimelineTurnAssistantMessageId(runId: string, messageId: number, dbh: Database.Database = db): void {
+  dbh.prepare('UPDATE session_timeline_turns SET assistant_message_id = ? WHERE run_id = ?').run(messageId, runId);
+}
+
+export function getTimelineTurnsAfterFence(
+  sessionId: string,
+  fenceMessageId: number | null,
+  dbh: Database.Database = db,
+): TimelineTurnWithEvents[] {
+  const fenceClause = fenceMessageId === null ? '' : 'AND t.anchor_message_id > ?';
+  const params: Array<string | number> =
+    fenceMessageId === null ? [sessionId, sessionId] : [sessionId, fenceMessageId, sessionId];
+  const rows = dbh
+    .prepare(
+      `
+    SELECT t.* FROM session_timeline_turns t
+    WHERE t.session_id = ?
+      AND t.anchor_message_id IS NOT NULL
+      ${fenceClause}
+      AND EXISTS (
+        SELECT 1 FROM messages m
+        WHERE m.id = t.anchor_message_id AND m.session_id = ?
+      )
+    ORDER BY t.anchor_message_id, t.seq_id
+  `,
+    )
+    .all(...params) as Record<string, unknown>[];
+
+  const eventsStmt = dbh.prepare('SELECT * FROM session_timeline_events WHERE run_id = ? ORDER BY seq');
+  return rows.map((row) => {
+    const turn = mapTimelineTurn(row);
+    const eventRows = eventsStmt.all(turn.runId) as Record<string, unknown>[];
+    return { ...turn, events: eventRows.map(mapTimelineEvent) };
+  });
+}
+
+export function upsertActivityLog(sessionId: string, turnIndex: number, ev: LiveActivityEvent): void {
   const inputTokens = ev.tokens?.input;
   const outputTokens = ev.tokens?.output;
   const cacheRead = ev.tokens?.cacheRead;
   const cacheCreation = ev.tokens?.cacheCreation;
 
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO activity_log (
       session_id, turn_index, activity_id, parent_id, kind, label, description,
       agent_id, model, status, summary, file, command, files_changed, changed,
@@ -3396,7 +3742,8 @@ export function upsertActivityLog(
       started_at = COALESCE(excluded.started_at, activity_log.started_at),
       ended_at = COALESCE(excluded.ended_at, activity_log.ended_at),
       project_id = COALESCE(excluded.project_id, activity_log.project_id)
-  `).run({
+  `,
+  ).run({
     session_id: sessionId,
     turn_index: turnIndex,
     activity_id: ev.id,
@@ -3455,7 +3802,6 @@ function mapActivityRow(row: Record<string, unknown>): LiveActivity {
     changed: changedRaw === null ? undefined : changedRaw === 1,
     exitCode: exitCodeRaw ?? undefined,
     toolUses: (row['tool_uses'] as number | null) ?? undefined,
-    // I2: clique do bloco pipeline tambem em blocos rehidratados (V81)
     projectId: (row['project_id'] as string | null) ?? undefined,
     tokens:
       inputTokens || outputTokens || cacheRead || cacheCreation
@@ -3464,17 +3810,16 @@ function mapActivityRow(row: Record<string, unknown>): LiveActivity {
   };
 }
 
-/**
- * Le o activity_log de uma sessao e monta blocos por turno. Agrupa por
- * turn_index e devolve a arvore achatada (items por parent_id) com totais.
- * O renderer so renderiza — nao recalcula turn_index.
- */
 export function getActivityBlocks(sessionId: string): ActivityTurnBlock[] {
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT * FROM activity_log
     WHERE session_id = ?
     ORDER BY turn_index ASC, id ASC
-  `).all(sessionId) as Record<string, unknown>[];
+  `,
+    )
+    .all(sessionId) as Record<string, unknown>[];
 
   const byTurn = new Map<number, Record<string, unknown>[]>();
   for (const row of rows) {
@@ -3532,41 +3877,33 @@ export function getActivityBlocks(sessionId: string): ActivityTurnBlock[] {
   return blocks;
 }
 
-/**
- * turnIndex de um user message: posicao (1-based) da mensagem dentro das
- * mensagens role='user' da sessao. Derivado do DB (nao contador em memoria).
- */
 export function getTurnIndexForUserMessage(sessionId: string, messageId: number): number {
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT COUNT(*) AS c FROM messages
     WHERE session_id = ? AND role = 'user' AND id <= ?
-  `).get(sessionId, messageId) as { c: number };
+  `,
+    )
+    .get(sessionId, messageId) as { c: number };
   return row.c;
 }
 
-/**
- * Ultimo turno (maior turnIndex) da sessao = total de user messages. Usado em
- * retry / _forceNewSession: REUTILIZA o ultimo turno, NAO incrementa.
- */
 export function getLatestUserTurnIndex(sessionId: string): number {
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT COUNT(*) AS c FROM messages
     WHERE session_id = ? AND role = 'user'
-  `).get(sessionId) as { c: number };
+  `,
+    )
+    .get(sessionId) as { c: number };
   return row.c;
 }
 
-/**
- * Purga o activity_log de uma sessao (SPEC K2 v2, secao 5.6 / AC-6). Chamado no
- * fluxo de compaction: a sessao velha vira `compacted` e uma nova e criada;
- * o log da velha e descartado para a sessao nova comecar vazia (e para conter o
- * crescimento — escopo de purga = a sessao compactada).
- */
 export function purgeActivityLog(sessionId: string): void {
   db.prepare('DELETE FROM activity_log WHERE session_id = ?').run(sessionId);
 }
-
-// ---- Agents ----
 
 export function getAllAgents(): AgentConfig[] {
   const rows = db.prepare('SELECT * FROM agents ORDER BY sort_order ASC').all() as Record<string, unknown>[];
@@ -3581,10 +3918,12 @@ export function getAgent(id: string): AgentConfig | undefined {
 
 export function insertAgent(agent: Omit<AgentConfig, 'sortOrder'> & { sortOrder?: number }): AgentConfig {
   const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), 0) as m FROM agents').get() as { m: number };
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO agents (id, name, description, system_prompt, model, allowed_tools, mcp_servers, is_active, sort_order, effort, thinking, thinking_budget, max_turns, skills, runtime, local_config, external_config, codex_config, local_mode, max_tool_rounds, squad, access, allow_bash, allowed_commands, allow_network)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     agent.id,
     agent.name,
     agent.description,
@@ -3606,8 +3945,6 @@ export function insertAgent(agent: Omit<AgentConfig, 'sortOrder'> & { sortOrder?
     agent.localMode || 'simple',
     agent.maxToolRounds ?? 5,
     agent.squad ?? null,
-    // Eixos de permissao por agentType (SPEC dynamic-workflow claude-code, Sec 5).
-    // Defaults CONSERVADORES quando o campo vem undefined: read-only, sem Bash/rede.
     agent.access ?? 'read-only',
     agent.allowBash ? 1 : 0,
     JSON.stringify(agent.allowedCommands ?? []),
@@ -3616,49 +3953,72 @@ export function insertAgent(agent: Omit<AgentConfig, 'sortOrder'> & { sortOrder?
   return getAgent(agent.id)!;
 }
 
-/**
- * Patch aceito pelo updateAgent. Mesmo shape que `Partial<AgentConfig>`, EXCETO
- * que os 3 configs de runtime (`localConfig`, `externalConfig`, `codexConfig`)
- * aceitam tambem `null` — que vira NULL no SQL e LIMPA a coluna no DB.
- *
- * Por que existe: o motor `agent-sync` precisa zerar os 2 configs nao-correspondentes
- * ao runtime alvo quando troca um agent entre runtimes (ex: agent que era `external`
- * vira `codex` deve ter `external_config = NULL` para nao deixar credencial fantasma).
- *
- * Direcao de dependencia (Decisao-2.G): o tipo vive no proprio `db.ts` ao lado de
- * `updateAgent` que ele tipa. `agent-sync.ts` importa daqui. NUNCA alargar
- * `Partial<AgentConfig>` globalmente — isso vazaria null pra todos os callers de
- * `updateAgent` (renderer/preload incluso).
- *
- * `Partial<AgentConfig>` permanece estruturalmente assignable para `AgentUpdatePatch`,
- * entao callers existentes que mandam `Partial<AgentConfig>` continuam tipando OK.
- */
-export type AgentUpdatePatch =
-  Omit<Partial<AgentConfig>, 'localConfig' | 'externalConfig' | 'codexConfig'> & {
-    localConfig?: AgentConfig['localConfig'] | null;
-    externalConfig?: AgentConfig['externalConfig'] | null;
-    codexConfig?: AgentConfig['codexConfig'] | null;
-  };
+export type AgentUpdatePatch = Omit<Partial<AgentConfig>, 'localConfig' | 'externalConfig' | 'codexConfig'> & {
+  localConfig?: AgentConfig['localConfig'] | null;
+  externalConfig?: AgentConfig['externalConfig'] | null;
+  codexConfig?: AgentConfig['codexConfig'] | null;
+};
 
 export function updateAgent(id: string, updates: AgentUpdatePatch): AgentConfig {
   const fields: string[] = [];
   const values: unknown[] = [];
 
-  if (updates.name !== undefined) { fields.push('name = ?'); values.push(updates.name); }
-  if (updates.description !== undefined) { fields.push('description = ?'); values.push(updates.description); }
-  if (updates.systemPrompt !== undefined) { fields.push('system_prompt = ?'); values.push(updates.systemPrompt); }
-  if (updates.model !== undefined) { fields.push('model = ?'); values.push(updates.model); }
-  if (updates.allowedTools !== undefined) { fields.push('allowed_tools = ?'); values.push(JSON.stringify(updates.allowedTools)); }
-  if (updates.mcpServers !== undefined) { fields.push('mcp_servers = ?'); values.push(JSON.stringify(updates.mcpServers)); }
-  if (updates.isActive !== undefined) { fields.push('is_active = ?'); values.push(updates.isActive ? 1 : 0); }
-  if (updates.sortOrder !== undefined) { fields.push('sort_order = ?'); values.push(updates.sortOrder); }
-  if (updates.effort !== undefined) { fields.push('effort = ?'); values.push(updates.effort); }
-  if (updates.thinking !== undefined) { fields.push('thinking = ?'); values.push(updates.thinking); }
-  if (updates.thinkingBudget !== undefined) { fields.push('thinking_budget = ?'); values.push(updates.thinkingBudget); }
-  if (updates.maxTurns !== undefined) { fields.push('max_turns = ?'); values.push(updates.maxTurns); }
-  if (updates.skills !== undefined) { fields.push('skills = ?'); values.push(JSON.stringify(updates.skills)); }
-  if (updates.runtime !== undefined) { fields.push('runtime = ?'); values.push(updates.runtime); }
-  // `null` explicito -> NULL SQL (limpa a coluna). `undefined` -> ignora o campo.
+  if (updates.name !== undefined) {
+    fields.push('name = ?');
+    values.push(updates.name);
+  }
+  if (updates.description !== undefined) {
+    fields.push('description = ?');
+    values.push(updates.description);
+  }
+  if (updates.systemPrompt !== undefined) {
+    fields.push('system_prompt = ?');
+    values.push(updates.systemPrompt);
+  }
+  if (updates.model !== undefined) {
+    fields.push('model = ?');
+    values.push(updates.model);
+  }
+  if (updates.allowedTools !== undefined) {
+    fields.push('allowed_tools = ?');
+    values.push(JSON.stringify(updates.allowedTools));
+  }
+  if (updates.mcpServers !== undefined) {
+    fields.push('mcp_servers = ?');
+    values.push(JSON.stringify(updates.mcpServers));
+  }
+  if (updates.isActive !== undefined) {
+    fields.push('is_active = ?');
+    values.push(updates.isActive ? 1 : 0);
+  }
+  if (updates.sortOrder !== undefined) {
+    fields.push('sort_order = ?');
+    values.push(updates.sortOrder);
+  }
+  if (updates.effort !== undefined) {
+    fields.push('effort = ?');
+    values.push(updates.effort);
+  }
+  if (updates.thinking !== undefined) {
+    fields.push('thinking = ?');
+    values.push(updates.thinking);
+  }
+  if (updates.thinkingBudget !== undefined) {
+    fields.push('thinking_budget = ?');
+    values.push(updates.thinkingBudget);
+  }
+  if (updates.maxTurns !== undefined) {
+    fields.push('max_turns = ?');
+    values.push(updates.maxTurns);
+  }
+  if (updates.skills !== undefined) {
+    fields.push('skills = ?');
+    values.push(JSON.stringify(updates.skills));
+  }
+  if (updates.runtime !== undefined) {
+    fields.push('runtime = ?');
+    values.push(updates.runtime);
+  }
   if (updates.localConfig !== undefined) {
     fields.push('local_config = ?');
     values.push(updates.localConfig === null ? null : JSON.stringify(updates.localConfig));
@@ -3671,14 +4031,34 @@ export function updateAgent(id: string, updates: AgentUpdatePatch): AgentConfig 
     fields.push('codex_config = ?');
     values.push(updates.codexConfig === null ? null : JSON.stringify(updates.codexConfig));
   }
-  if (updates.localMode !== undefined) { fields.push('local_mode = ?'); values.push(updates.localMode); }
-  if (updates.maxToolRounds !== undefined) { fields.push('max_tool_rounds = ?'); values.push(updates.maxToolRounds); }
-  if (updates.squad !== undefined) { fields.push('squad = ?'); values.push(updates.squad); }
-  // Eixos de permissao por agentType (SPEC dynamic-workflow claude-code, Sec 5).
-  if (updates.access !== undefined) { fields.push('access = ?'); values.push(updates.access); }
-  if (updates.allowBash !== undefined) { fields.push('allow_bash = ?'); values.push(updates.allowBash ? 1 : 0); }
-  if (updates.allowedCommands !== undefined) { fields.push('allowed_commands = ?'); values.push(JSON.stringify(updates.allowedCommands)); }
-  if (updates.allowNetwork !== undefined) { fields.push('allow_network = ?'); values.push(updates.allowNetwork ? 1 : 0); }
+  if (updates.localMode !== undefined) {
+    fields.push('local_mode = ?');
+    values.push(updates.localMode);
+  }
+  if (updates.maxToolRounds !== undefined) {
+    fields.push('max_tool_rounds = ?');
+    values.push(updates.maxToolRounds);
+  }
+  if (updates.squad !== undefined) {
+    fields.push('squad = ?');
+    values.push(updates.squad);
+  }
+  if (updates.access !== undefined) {
+    fields.push('access = ?');
+    values.push(updates.access);
+  }
+  if (updates.allowBash !== undefined) {
+    fields.push('allow_bash = ?');
+    values.push(updates.allowBash ? 1 : 0);
+  }
+  if (updates.allowedCommands !== undefined) {
+    fields.push('allowed_commands = ?');
+    values.push(JSON.stringify(updates.allowedCommands));
+  }
+  if (updates.allowNetwork !== undefined) {
+    fields.push('allow_network = ?');
+    values.push(updates.allowNetwork ? 1 : 0);
+  }
 
   if (fields.length > 0) {
     fields.push(`updated_at = datetime('now')`);
@@ -3711,13 +4091,13 @@ function mapAgent(row: Record<string, unknown>): AgentConfig {
     kbEnabled: row['kb_enabled'] !== 0,
     runtime: (row['runtime'] as AgentConfig['runtime']) || 'cloud',
     localConfig: row['local_config'] ? JSON.parse(row['local_config'] as string) : undefined,
-    externalConfig: row['external_config'] ? (JSON.parse(row['external_config'] as string) as ExternalConfig) : undefined,
+    externalConfig: row['external_config']
+      ? (JSON.parse(row['external_config'] as string) as ExternalConfig)
+      : undefined,
     codexConfig: row['codex_config'] ? (JSON.parse(row['codex_config'] as string) as CodexConfig) : undefined,
     localMode: (row['local_mode'] as AgentConfig['localMode']) || 'simple',
     maxToolRounds: (row['max_tool_rounds'] as number) || 5,
     squad: (row['squad'] as string) || undefined,
-    // Eixos de permissao por agentType (SPEC dynamic-workflow claude-code, Sec 5).
-    // Defaults CONSERVADORES quando a coluna vier vazia/legada: read-only, sem Bash/rede.
     access: (row['access'] as AgentConfig['access']) || 'read-only',
     allowBash: !!row['allow_bash'],
     allowedCommands: JSON.parse((row['allowed_commands'] as string) || '[]'),
@@ -3725,16 +4105,13 @@ function mapAgent(row: Record<string, unknown>): AgentConfig {
   };
 }
 
-// ---- Audit Log ----
-
 export function insertAuditEntry(entry: Omit<AuditEntry, 'id' | 'createdAt'>): void {
-  // Default 'chat': todos os escritores historicos (orchestrator, SDKs de chat,
-  // permission-guard) sao do lado do chat. Escritores nao-chat (executeAgent,
-  // workflow-control-core, subagent-dispatch) passam `source` explicito (V144).
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO audit_log (session_id, subagent, event_type, tool_name, input, output, duration_ms, approved, source)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     entry.sessionId ?? null,
     entry.subagent ?? null,
     entry.eventType,
@@ -3751,12 +4128,30 @@ export function queryAuditLog(filters: LogFilters): AuditEntry[] {
   const conditions: string[] = [];
   const params: unknown[] = [];
 
-  if (filters.sessionId) { conditions.push('session_id = ?'); params.push(filters.sessionId); }
-  if (filters.subagent) { conditions.push('subagent = ?'); params.push(filters.subagent); }
-  if (filters.eventType) { conditions.push('event_type = ?'); params.push(filters.eventType); }
-  if (filters.source) { conditions.push('source = ?'); params.push(filters.source); }
-  if (filters.from) { conditions.push('created_at >= ?'); params.push(filters.from); }
-  if (filters.to) { conditions.push('created_at <= ?'); params.push(filters.to); }
+  if (filters.sessionId) {
+    conditions.push('session_id = ?');
+    params.push(filters.sessionId);
+  }
+  if (filters.subagent) {
+    conditions.push('subagent = ?');
+    params.push(filters.subagent);
+  }
+  if (filters.eventType) {
+    conditions.push('event_type = ?');
+    params.push(filters.eventType);
+  }
+  if (filters.source) {
+    conditions.push('source = ?');
+    params.push(filters.source);
+  }
+  if (filters.from) {
+    conditions.push('created_at >= ?');
+    params.push(filters.from);
+  }
+  if (filters.to) {
+    conditions.push('created_at <= ?');
+    params.push(filters.to);
+  }
   if (filters.search) {
     conditions.push('(tool_name LIKE ? OR input LIKE ? OR output LIKE ?)');
     const term = `%${filters.search}%`;
@@ -3767,9 +4162,9 @@ export function queryAuditLog(filters: LogFilters): AuditEntry[] {
   const limit = filters.limit ?? 100;
   const offset = filters.offset ?? 0;
 
-  const rows = db.prepare(
-    `SELECT * FROM audit_log ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`
-  ).all(...params, limit, offset) as Record<string, unknown>[];
+  const rows = db
+    .prepare(`SELECT * FROM audit_log ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+    .all(...params, limit, offset) as Record<string, unknown>[];
 
   return rows.map(mapAudit);
 }
@@ -3790,18 +4185,18 @@ function mapAudit(row: Record<string, unknown>): AuditEntry {
   };
 }
 
-// ---- Settings ----
-
 export function getSetting(key: string): string | undefined {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value;
 }
 
 export function setSetting(key: string, value: string): void {
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-  `).run(key, value);
+  `,
+  ).run(key, value);
 }
 
 export interface OrchestratorCompactionSelectionSetting {
@@ -3810,9 +4205,7 @@ export interface OrchestratorCompactionSelectionSetting {
   model: string;
 }
 
-export function setOrchestratorCompactionSelection(
-  selection: OrchestratorCompactionSelectionSetting | null,
-): void {
+export function setOrchestratorCompactionSelection(selection: OrchestratorCompactionSelectionSetting | null): void {
   if (selection && (!selection.runtime || !selection.provider || !selection.model)) {
     throw new Error('Compaction selection must be complete or null');
   }
@@ -3841,20 +4234,6 @@ export function setOrchestratorCompactionSelection(
   })();
 }
 
-// ---- Permission bypass ----
-//
-// Controla a camada de CONFIRMACAO de acoes destrutivas (o popup ConfirmDialog).
-// Quando ligado (default), o permission-guard auto-aprova tudo que normalmente
-// exigiria confirmacao (Bash destrutivo, escrita em arquivo sensivel, MCP
-// destrutivo). Quando desligado, essas acoes pedem confirmacao via popup.
-//
-// Fonte unica de verdade, lida em runtime pelo guard compartilhado por
-// claude-sdk, claude-compat-sdk e lion-sdk. NAO afeta o bloqueio de git
-// (regra de produto independente) nem os pipelines/harness/security (que
-// usam PERM_BYPASS_NO_GUARD e nao passam pelo guard).
-//
-// Default = true: e a preferencia do usuario (bypass total). Ausencia da
-// chave = ligado.
 const PERMISSION_BYPASS_KEY = 'permission:bypass';
 
 export function getPermissionBypass(): boolean {
@@ -3865,13 +4244,6 @@ export function setPermissionBypass(enabled: boolean): void {
   setSetting(PERMISSION_BYPASS_KEY, enabled ? 'true' : 'false');
 }
 
-// ---- Telegram arm-state (gate anti-spam do telegram_notify) ----
-//
-// Controla se o agente pode empurrar mensagens proativas para o Telegram do
-// dono via a tool telegram_notify. O icone de Telegram no composer do chat
-// arma/desarma esse estado. Polaridade INVERTIDA vs getPermissionBypass:
-// ausencia da chave = DESARMADO (false). So getSetting === 'true' arma.
-// E a exigencia anti-spam do dono (o agente nunca empurra sem armar).
 const TELEGRAM_ARMED_KEY = 'telegram:armed';
 
 export function getTelegramArmed(): boolean {
@@ -3882,15 +4254,22 @@ export function setTelegramArmed(enabled: boolean): void {
   setSetting(TELEGRAM_ARMED_KEY, enabled ? 'true' : 'false');
 }
 
-// ---- Auth ----
-
-export function getAuthRow(): { password_hash: string; totp_secret: string | null; session_token: string | null; session_expires_at: string | null } | undefined {
-  return db.prepare('SELECT * FROM auth WHERE id = 1').get() as {
-    password_hash: string;
-    totp_secret: string | null;
-    session_token: string | null;
-    session_expires_at: string | null;
-  } | undefined;
+export function getAuthRow():
+  | {
+      password_hash: string;
+      totp_secret: string | null;
+      session_token: string | null;
+      session_expires_at: string | null;
+    }
+  | undefined {
+  return db.prepare('SELECT * FROM auth WHERE id = 1').get() as
+    | {
+        password_hash: string;
+        totp_secret: string | null;
+        session_token: string | null;
+        session_expires_at: string | null;
+      }
+    | undefined;
 }
 
 export function createAuthRow(passwordHash: string): void {
@@ -3909,8 +4288,6 @@ export function setTotpSecret(secret: string): void {
   db.prepare('UPDATE auth SET totp_secret = ? WHERE id = 1').run(secret);
 }
 
-// ---- MCP Servers ----
-
 export function getAllMCPServers(): MCPServerConfig[] {
   const rows = db.prepare('SELECT * FROM mcp_servers').all() as Record<string, unknown>[];
   return rows.map((row) => ({
@@ -3924,15 +4301,22 @@ export function getAllMCPServers(): MCPServerConfig[] {
   }));
 }
 
-// ---- Daily Summaries ----
-
 export function getDailySummaries(from?: string, to?: string): DailySummary[] {
   const conditions: string[] = [];
   const params: unknown[] = [];
-  if (from) { conditions.push('date >= ?'); params.push(from); }
-  if (to) { conditions.push('date <= ?'); params.push(to); }
+  if (from) {
+    conditions.push('date >= ?');
+    params.push(from);
+  }
+  if (to) {
+    conditions.push('date <= ?');
+    params.push(to);
+  }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const rows = db.prepare(`SELECT * FROM daily_summaries ${where} ORDER BY date DESC`).all(...params) as Record<string, unknown>[];
+  const rows = db.prepare(`SELECT * FROM daily_summaries ${where} ORDER BY date DESC`).all(...params) as Record<
+    string,
+    unknown
+  >[];
   return rows.map((row) => ({
     id: row['id'] as number,
     date: row['date'] as string,
@@ -3947,8 +4331,6 @@ export function getDailySummaries(from?: string, to?: string): DailySummary[] {
   }));
 }
 
-// ---- Session Tokens (sessions table; CodeBurn embed handles dashboard) ----
-
 export function updateSessionTokens(
   sessionId: string,
   inputTokens: number,
@@ -3962,31 +4344,29 @@ export function updateSessionTokens(
     costEstimationKind?: 'subscription-equivalent-payg';
   } = { costStatus: 'known', tokenStatus: 'reported' },
 ): void {
-  // Contabilidade HISTORICA pura: input_tokens/output_tokens/cost_usd sao
-  // acumulados por turno e NUNCA reescritos.
-  //
-  // SUPERSEDING (spec-orquestrador-fonte-unica): esta funcao NAO toca mais
-  // active_context_tokens_est. O incremento antigo (SPEC telegram-cron 5.1)
-  // usava usage do turno como se fosse contexto vivo, mas o usage e incoerente
-  // por runtime (codex reporta CUMULATIVO do turno agentico -> estourava 591%;
-  // kimi reporta zero; compat um filete). O contador ativo agora e um SET
-  // ABSOLUTO com a estimativa do contexto VIVO, feito por cada executor no
-  // sucesso do turno via setSessionActiveContextTokens (o UNICO setter).
   db.transaction(() => {
-    const row = db.prepare(`
+    const row = db
+      .prepare(
+        `
       SELECT cost_unknown_reasons, parent_cost_by_runtime, parent_cost_status_by_runtime
       FROM sessions WHERE id = ?
-    `).get(sessionId) as {
-      cost_unknown_reasons: string | null;
-      parent_cost_by_runtime: string | null;
-      parent_cost_status_by_runtime: string | null;
-    } | undefined;
+    `,
+      )
+      .get(sessionId) as
+      | {
+          cost_unknown_reasons: string | null;
+          parent_cost_by_runtime: string | null;
+          parent_cost_status_by_runtime: string | null;
+        }
+      | undefined;
     if (!row) return;
     let reasons: string[] = [];
     try {
       const parsed = JSON.parse(row.cost_unknown_reasons ?? '[]') as unknown;
       if (Array.isArray(parsed)) reasons = parsed.filter((value): value is string => typeof value === 'string');
-    } catch { /* preserve accounting even if legacy metadata is malformed */ }
+    } catch {
+      /* preserve accounting even if legacy metadata is malformed */
+    }
     if (quality.costUnknownReason) reasons.push(quality.costUnknownReason);
     const parentCostByRuntime = parseRuntimeCosts(row.parent_cost_by_runtime);
     const parentCostStatusByRuntime = parseRuntimeCostStatuses(row.parent_cost_status_by_runtime);
@@ -3997,7 +4377,8 @@ export function updateSessionTokens(
         quality.costStatus,
       );
     }
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE sessions
       SET input_tokens = input_tokens + ?,
           output_tokens = output_tokens + ?,
@@ -4018,7 +4399,8 @@ export function updateSessionTokens(
           parent_subscription_equivalent_cost_usd = parent_subscription_equivalent_cost_usd + ?,
           updated_at = datetime('now')
       WHERE id = ?
-    `).run(
+    `,
+    ).run(
       inputTokens,
       outputTokens,
       costUsd,
@@ -4035,46 +4417,28 @@ export function updateSessionTokens(
   }).immediate();
 }
 
-// ---- Telegram in-place compaction session state (SPEC telegram-cron-compaction 5.1) ----
-
-/**
- * Grava o id da thread SDK desacoplado do sessionId do DB (resolver 4.1:
- * `sdkThreadId = session?.sdkSessionId ?? sessionId`). Setado pela compactacao
- * in-place ao semear uma thread nova; NULL = comportamento legado byte-identico.
- */
 export function setSessionSdkSessionId(sessionId: string, sdkSessionId: string | null): void {
-  db.prepare(`UPDATE sessions SET sdk_session_id = ?, updated_at = datetime('now') WHERE id = ?`)
-    .run(sdkSessionId, sessionId);
+  db.prepare(`UPDATE sessions SET sdk_session_id = ?, updated_at = datetime('now') WHERE id = ?`).run(
+    sdkSessionId,
+    sessionId,
+  );
 }
 
-/**
- * Escrita ATOMICA do estado de compactacao (fronteira + resumo rolante + seed
- * pendente) numa unica UPDATE - o re-seed da SPEC 5.4 avanca os tres juntos.
- * NUNCA toca input_tokens/output_tokens/cost_usd (contabilidade historica).
- */
 export function setSessionCompactionState(
   sessionId: string,
   state: {
     compactedUpToMessageId: number | null;
     rollingSummary: string | null;
     pendingSeed: string | null;
-    /**
-     * Opcional (SPEC 5.4 passo 8): quando presente (inclusive null), o re-seed
-     * troca TAMBEM a thread SDK na MESMA escrita atomica — fronteira, resumo,
-     * seed e sdk_session_id avancam juntos ou nada avanca.
-     */
     sdkSessionId?: string | null;
   },
 ): void {
   const includeSdk = state.sdkSessionId !== undefined;
-  const params: Array<string | number | null> = [
-    state.compactedUpToMessageId,
-    state.rollingSummary,
-    state.pendingSeed,
-  ];
+  const params: Array<string | number | null> = [state.compactedUpToMessageId, state.rollingSummary, state.pendingSeed];
   if (includeSdk) params.push(state.sdkSessionId as string | null);
   params.push(sessionId);
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE sessions
     SET compacted_up_to_message_id = ?,
         rolling_summary = ?,
@@ -4082,40 +4446,21 @@ export function setSessionCompactionState(
         ${includeSdk ? 'sdk_session_id = ?,' : ''}
         updated_at = datetime('now')
     WHERE id = ?
-  `).run(...params);
+  `,
+  ).run(...params);
 }
 
-/**
- * Consumo atomico do seed (SPEC 4.3): chamado no sucesso do turno, no mesmo
- * ponto da escrita da lane. Falha do turno NAO chama (seed preservado).
- */
 export function clearSessionPendingSeed(sessionId: string): void {
-  db.prepare(`UPDATE sessions SET pending_seed = NULL, updated_at = datetime('now') WHERE id = ?`)
-    .run(sessionId);
+  db.prepare(`UPDATE sessions SET pending_seed = NULL, updated_at = datetime('now') WHERE id = ?`).run(sessionId);
 }
 
-/**
- * Setter ABSOLUTO apenas do contador de contexto ativo (recalibracao
- * pos-compactacao para o tamanho do seed, AC-21). Restrito por contrato a
- * `active_context_tokens_est`: os historicos input_tokens/output_tokens/
- * cost_usd NUNCA sao reescritos por nenhum fluxo desta SPEC.
- */
 export function setSessionActiveContextTokens(sessionId: string, tokens: number | null): void {
-  db.prepare(`UPDATE sessions SET active_context_tokens_est = ?, updated_at = datetime('now') WHERE id = ?`)
-    .run(tokens, sessionId);
+  db.prepare(`UPDATE sessions SET active_context_tokens_est = ?, updated_at = datetime('now') WHERE id = ?`).run(
+    tokens,
+    sessionId,
+  );
 }
 
-// ---- Contexto vivo: acumulador agentico persistente (SPEC contexto-vivo 3.5/3.6, V130) ----
-
-/**
- * Escrita do acumulador AGENTICO persistente do regime de thread continua
- * (compat). Chamada no SUCESSO do turno (no maximo 1 UPDATE/turno, SPEC §5).
- * `threadResetMessageId` opcional: quando presente (inclusive null), grava o
- * fence NA MESMA escrita (caso compact_boundary mid-turno — acumulador e
- * fence avancam juntos). Restrita por contrato as colunas novas da V130:
- * NUNCA toca input_tokens/output_tokens/cost_usd (contabilidade historica)
- * nem active_context_tokens_est (setter proprio acima).
- */
 export function setSessionAgenticContextTokens(
   sessionId: string,
   tokens: number | null,
@@ -4125,24 +4470,17 @@ export function setSessionAgenticContextTokens(
   const params: Array<string | number | null> = [tokens];
   if (includeFence) params.push(threadResetMessageId as number | null);
   params.push(sessionId);
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE sessions
     SET agentic_context_tokens_est = ?,
         ${includeFence ? 'thread_reset_message_id = ?,' : ''}
         updated_at = datetime('now')
     WHERE id = ?
-  `).run(...params);
+  `,
+  ).run(...params);
 }
 
-/**
- * Reset/rebase do acumulador agentico (SPEC contexto-vivo 3.6): zera (ou
- * re-semeia com `seedTokens`, caso compact_boundary com resumo estimavel) e,
- * quando a thread foi recriada SEM compactacao, grava `threadResetMessageId`
- * como fence do historico (senao o PISO contaria historico que a thread nova
- * nao tem). Com compactacao (pending_seed), o fence e o
- * compacted_up_to_message_id que a compactacao ja gravou — nao passar
- * threadResetMessageId nesse caso.
- */
 export function resetSessionAgenticContext(
   sessionId: string,
   opts?: { threadResetMessageId?: number | null; seedTokens?: number },
@@ -4166,6 +4504,12 @@ export function clearAllSessions(): void {
   database.exec('DELETE FROM sessions');
 }
 
+export function clearNonSessionResetTables(): void {
+  const database = getDb();
+  database.exec('DELETE FROM audit_log');
+  database.exec('DELETE FROM task_executions');
+}
+
 type ActiveSessionSummary = {
   id: string;
   title: string;
@@ -4187,7 +4531,9 @@ function mapActiveSession(row: Record<string, unknown>): ActiveSessionSummary {
 }
 
 export function getActiveSession(): ActiveSessionSummary | null {
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT id, title, type, created_at, input_tokens, output_tokens
     FROM sessions
     WHERE status = 'active'
@@ -4195,13 +4541,17 @@ export function getActiveSession(): ActiveSessionSummary | null {
       AND task_id IS NULL
     ORDER BY updated_at DESC, created_at DESC
     LIMIT 1
-  `).get() as Record<string, unknown> | undefined;
+  `,
+    )
+    .get() as Record<string, unknown> | undefined;
   if (!row) return null;
   return mapActiveSession(row);
 }
 
 export function getActiveChatSession(): ActiveSessionSummary | null {
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT id, title, type, created_at, input_tokens, output_tokens
     FROM sessions
     WHERE status = 'active'
@@ -4210,19 +4560,17 @@ export function getActiveChatSession(): ActiveSessionSummary | null {
       AND (title IS NULL OR title NOT LIKE '[Scheduler]%')
     ORDER BY updated_at DESC, created_at DESC
     LIMIT 1
-  `).get() as Record<string, unknown> | undefined;
+  `,
+    )
+    .get() as Record<string, unknown> | undefined;
   if (!row) return null;
   return mapActiveSession(row);
 }
 
-// Lookup por id que aplica o MESMO predicado de getActiveChatSession (acima):
-// sessao do desktop (chat/manual), ativa, sem task_id e nunca [Scheduler]%.
-// NUNCA casa telegram (ao contrario de getActiveSession). Usado por
-// chat:ensure-session para validar um preferredSessionId.
-export function getDesktopActiveSessionById(
-  id: string,
-): ActiveSessionSummary | null {
-  const row = db.prepare(`
+export function getDesktopActiveSessionById(id: string): ActiveSessionSummary | null {
+  const row = db
+    .prepare(
+      `
     SELECT id, title, type, created_at, input_tokens, output_tokens
     FROM sessions
     WHERE id = ?
@@ -4231,38 +4579,44 @@ export function getDesktopActiveSessionById(
       AND task_id IS NULL
       AND (title IS NULL OR title NOT LIKE '[Scheduler]%')
     LIMIT 1
-  `).get(id) as Record<string, unknown> | undefined;
+  `,
+    )
+    .get(id) as Record<string, unknown> | undefined;
   if (!row) return null;
   return mapActiveSession(row);
 }
 
-/**
- * SPEC telegram-cron-compaction 3.1/10: sessoes type='telegram' com
- * status='active'. Usada pela unicidade de sessao ativa
- * (setActiveTelegramSession, telegram-bridge.ts) e pela migracao de boot dos
- * .jsonl. Pela invariante 3.1 sera no maximo uma; a query tolera varias
- * (estado legado pre-upgrade).
- */
 export function listActiveTelegramSessions(): Array<{ id: string; sdkSessionId?: string }> {
   const database = getDb();
-  const rows = database.prepare(`
+  const rows = database
+    .prepare(
+      `
     SELECT id, sdk_session_id
     FROM sessions
     WHERE type = 'telegram' AND status = 'active'
     ORDER BY updated_at DESC, created_at DESC
-  `).all() as Array<Record<string, unknown>>;
+  `,
+    )
+    .all() as Array<Record<string, unknown>>;
   return rows.map((row) => ({
     id: row['id'] as string,
     sdkSessionId: (row['sdk_session_id'] as string | null) ?? undefined,
   }));
 }
 
-// ---- Tool Settings ----
-
 const ALL_TOOLS = [
-  'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash',
-  'WebSearch', 'WebFetch', 'Agent', 'TodoWrite',
-  'NotebookEdit', 'AskUserQuestion',
+  'Read',
+  'Write',
+  'Edit',
+  'Glob',
+  'Grep',
+  'Bash',
+  'WebSearch',
+  'WebFetch',
+  'Agent',
+  'TodoWrite',
+  'NotebookEdit',
+  'AskUserQuestion',
 ] as const;
 
 const DEFAULT_DISABLED_TOOLS = new Set(['WebSearch', 'WebFetch', 'NotebookEdit']);
@@ -4298,9 +4652,18 @@ export function getToolSettings(): Record<string, boolean> {
 
 export function seedToolDefaults(): void {
   const defaults: Record<string, boolean> = {
-    Read: true, Write: true, Edit: true, Glob: true, Grep: true,
-    Bash: true, Agent: true, TodoWrite: true, AskUserQuestion: true,
-    WebSearch: false, WebFetch: false, NotebookEdit: false,
+    Read: true,
+    Write: true,
+    Edit: true,
+    Glob: true,
+    Grep: true,
+    Bash: true,
+    Agent: true,
+    TodoWrite: true,
+    AskUserQuestion: true,
+    WebSearch: false,
+    WebFetch: false,
+    NotebookEdit: false,
   };
 
   for (const [tool, enabled] of Object.entries(defaults)) {
@@ -4311,8 +4674,6 @@ export function seedToolDefaults(): void {
   }
 }
 
-// ---- Seed default agents ----
-
 export function seedDefaultAgents(): void {
   const existing = db.prepare('SELECT COUNT(*) as c FROM agents').get() as { c: number };
   if (existing.c > 0) return;
@@ -4322,8 +4683,9 @@ export function seedDefaultAgents(): void {
       id: 'coder',
       name: 'Coder',
       description: 'Especialista em codigo, debugging, arquitetura de software',
-      systemPrompt: 'Voce e o Coder, um engenheiro de software senior. Escreva codigo limpo, testavel e bem documentado. Use TypeScript por padrao. Siga SOLID principles.',
-      model: 'claude-sonnet-4-6', // gate-allow: seed de agente e DADO (SPEC 4.6), nao execucao do orquestrador
+      systemPrompt:
+        'Voce e o Coder, um engenheiro de software senior. Escreva codigo limpo, testavel e bem documentado. Use TypeScript por padrao. Siga SOLID principles.',
+      model: 'claude-sonnet-4-6', // gate-allow: seed de agente e DADO, nao execucao do orquestrador
       allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch'],
       mcpServers: [],
       isActive: true,
@@ -4336,8 +4698,9 @@ export function seedDefaultAgents(): void {
       id: 'researcher',
       name: 'Researcher',
       description: 'Pesquisa web, analise de documentos, sintese de informacao',
-      systemPrompt: 'Voce e o Researcher, especialista em pesquisa e analise. Busque informacoes na web, analise documentos e sintetize insights claros e acionaveis.',
-      model: 'claude-sonnet-4-6', // gate-allow: seed de agente e DADO (SPEC 4.6), nao execucao do orquestrador
+      systemPrompt:
+        'Voce e o Researcher, especialista em pesquisa e analise. Busque informacoes na web, analise documentos e sintetize insights claros e acionaveis.',
+      model: 'claude-sonnet-4-6', // gate-allow: seed de agente e DADO, nao execucao do orquestrador
       allowedTools: ['Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch'],
       mcpServers: [],
       isActive: true,
@@ -4350,8 +4713,9 @@ export function seedDefaultAgents(): void {
       id: 'writer',
       name: 'Writer',
       description: 'Redacao, emails, documentos, conteudo',
-      systemPrompt: 'Voce e o Writer, especialista em comunicacao escrita. Redija textos claros, persuasivos e adaptados ao publico-alvo. Tom informal e direto em portugues brasileiro.',
-      model: 'claude-sonnet-4-6', // gate-allow: seed de agente e DADO (SPEC 4.6), nao execucao do orquestrador
+      systemPrompt:
+        'Voce e o Writer, especialista em comunicacao escrita. Redija textos claros, persuasivos e adaptados ao publico-alvo. Tom informal e direto em portugues brasileiro.',
+      model: 'claude-sonnet-4-6', // gate-allow: seed de agente e DADO, nao execucao do orquestrador
       allowedTools: ['Read', 'Write', 'Edit', 'WebSearch'],
       mcpServers: [],
       isActive: true,
@@ -4364,8 +4728,9 @@ export function seedDefaultAgents(): void {
       id: 'ops',
       name: 'Ops',
       description: 'Automacao, scripts, gestao de arquivos, sistema',
-      systemPrompt: 'Voce e o Ops, especialista em operacoes e automacao. Execute tarefas no sistema, gerencie arquivos, crie scripts de automacao. Sempre confirme antes de acoes destrutivas.',
-      model: 'claude-sonnet-4-6', // gate-allow: seed de agente e DADO (SPEC 4.6), nao execucao do orquestrador
+      systemPrompt:
+        'Voce e o Ops, especialista em operacoes e automacao. Execute tarefas no sistema, gerencie arquivos, crie scripts de automacao. Sempre confirme antes de acoes destrutivas.',
+      model: 'claude-sonnet-4-6', // gate-allow: seed de agente e DADO, nao execucao do orquestrador
       allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
       mcpServers: [],
       isActive: true,
@@ -4375,7 +4740,6 @@ export function seedDefaultAgents(): void {
       runtime: 'cloud' as const,
     },
     skillCreator,
-    // Harness agents (Planner, Coder, Evaluator)
     harnessPlanner,
     harnessCoder,
     harnessEvaluator,
@@ -4390,68 +4754,51 @@ export function seedDefaultAgents(): void {
   logger.info('Seeded default agents');
 }
 
-// ---- Semantic Memories with Embeddings ----
-
 export function insertChunkWithEmbedding(content: string, topic: string, embedding: number[]): number {
   const embeddingBuf = Buffer.from(new Float32Array(embedding).buffer);
 
-  const result = db.prepare(
-    `INSERT INTO semantic_memories (content, topic, embedding, created_at) VALUES (?, ?, ?, datetime('now'))`,
-  ).run(content, topic, embeddingBuf);
+  const result = db
+    .prepare(`INSERT INTO semantic_memories (content, topic, embedding, created_at) VALUES (?, ?, ?, datetime('now'))`)
+    .run(content, topic, embeddingBuf);
 
   const rowId = Number(result.lastInsertRowid);
   const vecId = String(rowId);
 
   try {
     db.prepare('DELETE FROM semantic_memories_vec WHERE id = ?').run(vecId);
-  } catch { /* ignore if not exists */ }
+  } catch {
+    /* ignore if not exists */
+  }
 
-  db.prepare(
-    'INSERT INTO semantic_memories_vec (id, embedding) VALUES (?, ?)',
-  ).run(vecId, embeddingBuf);
+  db.prepare('INSERT INTO semantic_memories_vec (id, embedding) VALUES (?, ?)').run(vecId, embeddingBuf);
 
-  // Also insert into FTS5 for BM25 search
   try {
-    db.prepare(
-      'INSERT INTO semantic_memories_fts(rowid, content, topic) VALUES (?, ?, ?)',
-    ).run(rowId, content, topic || '');
-  } catch { /* FTS5 table may not exist yet */ }
+    db.prepare('INSERT INTO semantic_memories_fts(rowid, content, topic) VALUES (?, ?, ?)').run(
+      rowId,
+      content,
+      topic || '',
+    );
+  } catch {
+    /* FTS5 table may not exist yet */
+  }
 
   return rowId;
 }
 
-export function insertChunkPlainWithFTS(content: string, topic: string): number {
-  const result = db.prepare(
-    `INSERT INTO semantic_memories (content, topic, created_at) VALUES (?, ?, datetime('now'))`,
-  ).run(content, topic);
-
-  const rowId = Number(result.lastInsertRowid);
-
-  try {
-    db.prepare(
-      'INSERT INTO semantic_memories_fts(rowid, content, topic) VALUES (?, ?, ?)',
-    ).run(rowId, content, topic || '');
-  } catch { /* FTS5 table may not exist yet */ }
-
-  return rowId;
-}
-
-/**
- * BM25 search via FTS5.
- * Returns rows sorted by BM25 relevance (lower = more relevant in SQLite FTS5).
- */
-export function searchBM25(query: string, limit: number = 20): Array<{ id: number; content: string; topic: string; created_at: string; bm25_score: number }> {
-  // Escape FTS5 special chars and build query
+export function searchBM25(
+  query: string,
+  limit: number = 20,
+): Array<{ id: number; content: string; topic: string; created_at: string; bm25_score: number }> {
   const sanitized = query.replace(/["*(){}[\]^~\\:]/g, ' ').trim();
   if (!sanitized) return [];
 
-  // Convert to OR between terms (FTS5 uses implicit AND by default)
   const terms = sanitized.split(/\s+/).filter(Boolean);
   if (terms.length === 0) return [];
   const orQuery = terms.join(' OR ');
 
-  // Use FTS5 match with BM25 ranking
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT sm.id, sm.content, sm.topic, sm.created_at,
            bm25(semantic_memories_fts) AS bm25_score
     FROM semantic_memories_fts fts
@@ -4459,48 +4806,51 @@ export function searchBM25(query: string, limit: number = 20): Array<{ id: numbe
     WHERE semantic_memories_fts MATCH ?
     ORDER BY bm25_score ASC
     LIMIT ?
-  `).all(orQuery, limit) as Array<{ id: number; content: string; topic: string; created_at: string; bm25_score: number }>;
+  `,
+    )
+    .all(orQuery, limit) as Array<{
+    id: number;
+    content: string;
+    topic: string;
+    created_at: string;
+    bm25_score: number;
+  }>;
 
   return rows;
 }
 
-/**
- * Vector cosine similarity search via sqlite-vec.
- */
-export function searchVector(queryEmbedding: Buffer, limit: number = 20): Array<{ id: number; content: string; topic: string; created_at: string; distance: number }> {
-  const rows = db.prepare(`
+export function searchVector(
+  queryEmbedding: Buffer,
+  limit: number = 20,
+): Array<{ id: number; content: string; topic: string; created_at: string; distance: number }> {
+  const rows = db
+    .prepare(
+      `
     SELECT sm.id, sm.content, sm.topic, sm.created_at,
            vec_distance_cosine(v.embedding, ?) AS distance
     FROM semantic_memories_vec v
     JOIN semantic_memories sm ON CAST(sm.id AS TEXT) = v.id
     ORDER BY distance ASC
     LIMIT ?
-  `).all(queryEmbedding, limit) as Array<{ id: number; content: string; topic: string; created_at: string; distance: number }>;
+  `,
+    )
+    .all(queryEmbedding, limit) as Array<{
+    id: number;
+    content: string;
+    topic: string;
+    created_at: string;
+    distance: number;
+  }>;
 
   return rows;
 }
 
-/**
- * Reconcile a single seed agent with the database.
- *
- * Behaviour:
- *  - If the agent does not exist, INSERT it (full record from the seed).
- *  - If it exists, do nothing — user edits via the UI are authoritative and
- *    must survive every app boot.
- */
 export function reconcileSeedAgent(agent: Omit<AgentConfig, 'sortOrder'>, category: string): void {
   const existing = db.prepare('SELECT id FROM agents WHERE id = ?').get(agent.id);
   if (existing) return;
   insertAgent(agent);
   logger.info({ agentId: agent.id, category }, 'Created seed agent');
 }
-
-// NOTE: as funcoes ensure*Agents() historicas foram removidas. O boot agora
-// usa `ensureAllSeedAgents()` de `seed-agents/ensure.ts`, que reconcilia todos
-// os seeds (insert-only) e materializa snapshots em .lionclaw/agents/.
-// reconcileSeedAgent permanece exportado pra ser usado por aquele modulo.
-
-// ---- Knowledge Base CRUD ----
 
 export interface KnowledgeSourceRow {
   id: string;
@@ -4549,13 +4899,15 @@ function mapKnowledgeSource(row: Record<string, unknown>): KnowledgeSourceRow {
 }
 
 export function insertKnowledgeSource(source: Omit<KnowledgeSourceRow, 'createdAt' | 'updatedAt'>): KnowledgeSourceRow {
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO knowledge_sources
       (id, agent_id, file_name, file_type, file_size, file_path, title, description,
        status, chunks_count, chunk_strategy, chunk_size, chunk_overlap,
        quality_score, best_strategy, error_message, processed_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     source.id,
     source.agentId,
     source.fileName,
@@ -4584,39 +4936,91 @@ export function getKnowledgeSource(id: string): KnowledgeSourceRow | undefined {
 }
 
 export function getKnowledgeSources(agentId: string): KnowledgeSourceRow[] {
-  const rows = db.prepare(
-    'SELECT * FROM knowledge_sources WHERE agent_id = ? ORDER BY created_at DESC',
-  ).all(agentId) as Record<string, unknown>[];
+  const rows = db
+    .prepare('SELECT * FROM knowledge_sources WHERE agent_id = ? ORDER BY created_at DESC')
+    .all(agentId) as Record<string, unknown>[];
   return rows.map(mapKnowledgeSource);
 }
 
 export function getCompletedDocsCount(agentId: string): number {
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT COUNT(*) as count FROM knowledge_sources
     WHERE agent_id = ? AND status = 'completed'
-  `).get(agentId) as { count: number } | undefined;
+  `,
+    )
+    .get(agentId) as { count: number } | undefined;
   return row?.count ?? 0;
 }
 
-export function updateKnowledgeSource(id: string, updates: Partial<Omit<KnowledgeSourceRow, 'id' | 'agentId' | 'createdAt'>>): KnowledgeSourceRow {
+export function updateKnowledgeSource(
+  id: string,
+  updates: Partial<Omit<KnowledgeSourceRow, 'id' | 'agentId' | 'createdAt'>>,
+): KnowledgeSourceRow {
   const fields: string[] = [];
   const values: unknown[] = [];
 
-  if (updates.fileName !== undefined)    { fields.push('file_name = ?');      values.push(updates.fileName); }
-  if (updates.fileType !== undefined)    { fields.push('file_type = ?');      values.push(updates.fileType); }
-  if (updates.fileSize !== undefined)    { fields.push('file_size = ?');      values.push(updates.fileSize); }
-  if (updates.filePath !== undefined)    { fields.push('file_path = ?');      values.push(updates.filePath); }
-  if (updates.title !== undefined)       { fields.push('title = ?');          values.push(updates.title); }
-  if (updates.description !== undefined) { fields.push('description = ?');    values.push(updates.description); }
-  if (updates.status !== undefined)      { fields.push('status = ?');         values.push(updates.status); }
-  if (updates.chunksCount !== undefined) { fields.push('chunks_count = ?');   values.push(updates.chunksCount); }
-  if (updates.chunkStrategy !== undefined) { fields.push('chunk_strategy = ?'); values.push(updates.chunkStrategy); }
-  if (updates.chunkSize !== undefined)   { fields.push('chunk_size = ?');     values.push(updates.chunkSize); }
-  if (updates.chunkOverlap !== undefined){ fields.push('chunk_overlap = ?');  values.push(updates.chunkOverlap); }
-  if (updates.qualityScore !== undefined){ fields.push('quality_score = ?');  values.push(updates.qualityScore); }
-  if (updates.bestStrategy !== undefined){ fields.push('best_strategy = ?');  values.push(updates.bestStrategy); }
-  if (updates.errorMessage !== undefined){ fields.push('error_message = ?');  values.push(updates.errorMessage); }
-  if (updates.processedAt !== undefined) { fields.push('processed_at = ?');   values.push(updates.processedAt); }
+  if (updates.fileName !== undefined) {
+    fields.push('file_name = ?');
+    values.push(updates.fileName);
+  }
+  if (updates.fileType !== undefined) {
+    fields.push('file_type = ?');
+    values.push(updates.fileType);
+  }
+  if (updates.fileSize !== undefined) {
+    fields.push('file_size = ?');
+    values.push(updates.fileSize);
+  }
+  if (updates.filePath !== undefined) {
+    fields.push('file_path = ?');
+    values.push(updates.filePath);
+  }
+  if (updates.title !== undefined) {
+    fields.push('title = ?');
+    values.push(updates.title);
+  }
+  if (updates.description !== undefined) {
+    fields.push('description = ?');
+    values.push(updates.description);
+  }
+  if (updates.status !== undefined) {
+    fields.push('status = ?');
+    values.push(updates.status);
+  }
+  if (updates.chunksCount !== undefined) {
+    fields.push('chunks_count = ?');
+    values.push(updates.chunksCount);
+  }
+  if (updates.chunkStrategy !== undefined) {
+    fields.push('chunk_strategy = ?');
+    values.push(updates.chunkStrategy);
+  }
+  if (updates.chunkSize !== undefined) {
+    fields.push('chunk_size = ?');
+    values.push(updates.chunkSize);
+  }
+  if (updates.chunkOverlap !== undefined) {
+    fields.push('chunk_overlap = ?');
+    values.push(updates.chunkOverlap);
+  }
+  if (updates.qualityScore !== undefined) {
+    fields.push('quality_score = ?');
+    values.push(updates.qualityScore);
+  }
+  if (updates.bestStrategy !== undefined) {
+    fields.push('best_strategy = ?');
+    values.push(updates.bestStrategy);
+  }
+  if (updates.errorMessage !== undefined) {
+    fields.push('error_message = ?');
+    values.push(updates.errorMessage);
+  }
+  if (updates.processedAt !== undefined) {
+    fields.push('processed_at = ?');
+    values.push(updates.processedAt);
+  }
 
   if (fields.length > 0) {
     fields.push(`updated_at = datetime('now')`);
@@ -4630,10 +5034,7 @@ export function deleteKnowledgeSource(id: string): void {
   const source = getKnowledgeSource(id);
 
   const doDelete = db.transaction(() => {
-    // Remove FTS and vec entries for all chunks of this source
-    const chunkIds = db.prepare(
-      'SELECT id FROM knowledge_chunks WHERE source_id = ?',
-    ).all(id) as Array<{ id: string }>;
+    const chunkIds = db.prepare('SELECT id FROM knowledge_chunks WHERE source_id = ?').all(id) as Array<{ id: string }>;
 
     for (const { id: cid } of chunkIds) {
       db.prepare('DELETE FROM knowledge_chunks_fts WHERE chunk_id = ?').run(cid);
@@ -4646,7 +5047,6 @@ export function deleteKnowledgeSource(id: string): void {
   });
   doDelete();
 
-  // Remove filesystem files after DB transaction succeeds
   if (source) {
     try {
       const dir = path.dirname(source.filePath);
@@ -4658,8 +5058,6 @@ export function deleteKnowledgeSource(id: string): void {
     }
   }
 }
-
-// ---- Knowledge Chunks ----
 
 export interface KnowledgeChunkRow {
   id: string;
@@ -4688,11 +5086,13 @@ function mapKnowledgeChunk(row: Record<string, unknown>): KnowledgeChunkRow {
 }
 
 export function insertKnowledgeChunk(chunk: Omit<KnowledgeChunkRow, 'createdAt'>): void {
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO knowledge_chunks
       (id, source_id, agent_id, chunk_index, content, token_count, metadata, strategy_used)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     chunk.id,
     chunk.sourceId,
     chunk.agentId,
@@ -4705,16 +5105,16 @@ export function insertKnowledgeChunk(chunk: Omit<KnowledgeChunkRow, 'createdAt'>
 }
 
 export function getKnowledgeChunks(sourceId: string): KnowledgeChunkRow[] {
-  const rows = db.prepare(
-    'SELECT * FROM knowledge_chunks WHERE source_id = ? ORDER BY chunk_index ASC',
-  ).all(sourceId) as Record<string, unknown>[];
+  const rows = db
+    .prepare('SELECT * FROM knowledge_chunks WHERE source_id = ? ORDER BY chunk_index ASC')
+    .all(sourceId) as Record<string, unknown>[];
   return rows.map(mapKnowledgeChunk);
 }
 
 export function deleteKnowledgeChunksBySource(sourceId: string): void {
-  const chunkIds = db.prepare(
-    'SELECT id FROM knowledge_chunks WHERE source_id = ?',
-  ).all(sourceId) as Array<{ id: string }>;
+  const chunkIds = db.prepare('SELECT id FROM knowledge_chunks WHERE source_id = ?').all(sourceId) as Array<{
+    id: string;
+  }>;
 
   for (const { id: cid } of chunkIds) {
     db.prepare('DELETE FROM knowledge_chunks_fts WHERE chunk_id = ?').run(cid);
@@ -4722,8 +5122,6 @@ export function deleteKnowledgeChunksBySource(sourceId: string): void {
   }
   db.prepare('DELETE FROM knowledge_chunks WHERE source_id = ?').run(sourceId);
 }
-
-// ---- Knowledge Vec / FTS entries ----
 
 export function insertKnowledgeChunkVec(chunkId: string, embedding: number[]): void {
   const buf = Buffer.from(new Float32Array(embedding).buffer);
@@ -4735,21 +5133,21 @@ export function deleteKnowledgeChunkVec(chunkId: string): void {
 }
 
 export function insertKnowledgeChunkFts(chunkId: string, agentId: string, content: string): void {
-  db.prepare(
-    'INSERT INTO knowledge_chunks_fts (chunk_id, agent_id, content) VALUES (?, ?, ?)',
-  ).run(chunkId, agentId, content);
+  db.prepare('INSERT INTO knowledge_chunks_fts (chunk_id, agent_id, content) VALUES (?, ?, ?)').run(
+    chunkId,
+    agentId,
+    content,
+  );
 }
 
 export function deleteKnowledgeChunkFtsBySource(sourceId: string): void {
-  const chunkIds = db.prepare(
-    'SELECT id FROM knowledge_chunks WHERE source_id = ?',
-  ).all(sourceId) as Array<{ id: string }>;
+  const chunkIds = db.prepare('SELECT id FROM knowledge_chunks WHERE source_id = ?').all(sourceId) as Array<{
+    id: string;
+  }>;
   for (const { id: cid } of chunkIds) {
     db.prepare('DELETE FROM knowledge_chunks_fts WHERE chunk_id = ?').run(cid);
   }
 }
-
-// ---- Knowledge Benchmarks ----
 
 export interface KnowledgeBenchmarkRow {
   id: string;
@@ -4786,12 +5184,14 @@ function mapKnowledgeBenchmark(row: Record<string, unknown>): KnowledgeBenchmark
 }
 
 export function insertKnowledgeBenchmark(benchmark: Omit<KnowledgeBenchmarkRow, 'createdAt'>): KnowledgeBenchmarkRow {
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO knowledge_benchmarks
       (id, source_id, agent_id, status, winner_strategy, winner_score,
        questions, results, total_questions, execution_time, model_judge, completed_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     benchmark.id,
     benchmark.sourceId,
     benchmark.agentId,
@@ -4809,24 +5209,55 @@ export function insertKnowledgeBenchmark(benchmark: Omit<KnowledgeBenchmarkRow, 
 }
 
 export function getKnowledgeBenchmark(id: string): KnowledgeBenchmarkRow | undefined {
-  const row = db.prepare('SELECT * FROM knowledge_benchmarks WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  const row = db.prepare('SELECT * FROM knowledge_benchmarks WHERE id = ?').get(id) as
+    Record<string, unknown> | undefined;
   if (!row) return undefined;
   return mapKnowledgeBenchmark(row);
 }
 
-export function updateKnowledgeBenchmark(id: string, updates: Partial<Omit<KnowledgeBenchmarkRow, 'id' | 'sourceId' | 'agentId' | 'createdAt'>>): KnowledgeBenchmarkRow {
+export function updateKnowledgeBenchmark(
+  id: string,
+  updates: Partial<Omit<KnowledgeBenchmarkRow, 'id' | 'sourceId' | 'agentId' | 'createdAt'>>,
+): KnowledgeBenchmarkRow {
   const fields: string[] = [];
   const values: unknown[] = [];
 
-  if (updates.status !== undefined)         { fields.push('status = ?');          values.push(updates.status); }
-  if (updates.winnerStrategy !== undefined) { fields.push('winner_strategy = ?'); values.push(updates.winnerStrategy); }
-  if (updates.winnerScore !== undefined)    { fields.push('winner_score = ?');    values.push(updates.winnerScore); }
-  if (updates.questions !== undefined)      { fields.push('questions = ?');       values.push(JSON.stringify(updates.questions)); }
-  if (updates.results !== undefined)        { fields.push('results = ?');         values.push(JSON.stringify(updates.results)); }
-  if (updates.totalQuestions !== undefined) { fields.push('total_questions = ?'); values.push(updates.totalQuestions); }
-  if (updates.executionTime !== undefined)  { fields.push('execution_time = ?');  values.push(updates.executionTime); }
-  if (updates.modelJudge !== undefined)     { fields.push('model_judge = ?');     values.push(updates.modelJudge); }
-  if (updates.completedAt !== undefined)    { fields.push('completed_at = ?');    values.push(updates.completedAt); }
+  if (updates.status !== undefined) {
+    fields.push('status = ?');
+    values.push(updates.status);
+  }
+  if (updates.winnerStrategy !== undefined) {
+    fields.push('winner_strategy = ?');
+    values.push(updates.winnerStrategy);
+  }
+  if (updates.winnerScore !== undefined) {
+    fields.push('winner_score = ?');
+    values.push(updates.winnerScore);
+  }
+  if (updates.questions !== undefined) {
+    fields.push('questions = ?');
+    values.push(JSON.stringify(updates.questions));
+  }
+  if (updates.results !== undefined) {
+    fields.push('results = ?');
+    values.push(JSON.stringify(updates.results));
+  }
+  if (updates.totalQuestions !== undefined) {
+    fields.push('total_questions = ?');
+    values.push(updates.totalQuestions);
+  }
+  if (updates.executionTime !== undefined) {
+    fields.push('execution_time = ?');
+    values.push(updates.executionTime);
+  }
+  if (updates.modelJudge !== undefined) {
+    fields.push('model_judge = ?');
+    values.push(updates.modelJudge);
+  }
+  if (updates.completedAt !== undefined) {
+    fields.push('completed_at = ?');
+    values.push(updates.completedAt);
+  }
 
   if (fields.length > 0) {
     values.push(id);
@@ -4834,8 +5265,6 @@ export function updateKnowledgeBenchmark(id: string, updates: Partial<Omit<Knowl
   }
   return getKnowledgeBenchmark(id)!;
 }
-
-// ---- Knowledge Agent Config ----
 
 export interface KnowledgeAgentConfigRow {
   agentId: string;
@@ -4866,7 +5295,8 @@ function mapKnowledgeAgentConfig(row: Record<string, unknown>): KnowledgeAgentCo
 }
 
 export function getKnowledgeAgentConfig(agentId: string): KnowledgeAgentConfigRow | undefined {
-  const row = db.prepare('SELECT * FROM knowledge_agent_config WHERE agent_id = ?').get(agentId) as Record<string, unknown> | undefined;
+  const row = db.prepare('SELECT * FROM knowledge_agent_config WHERE agent_id = ?').get(agentId) as
+    Record<string, unknown> | undefined;
   if (!row) return undefined;
   return mapKnowledgeAgentConfig(row);
 }
@@ -4878,12 +5308,14 @@ export function upsertKnowledgeAgentConfig(
   const existing = getKnowledgeAgentConfig(agentId);
 
   if (!existing) {
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO knowledge_agent_config
         (agent_id, hyde_enabled, hyde_threshold, min_score, default_strategy,
          rerank_enabled, rerank_top_k, search_top_k)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `,
+    ).run(
       agentId,
       config.hydeEnabled !== undefined ? (config.hydeEnabled ? 1 : 0) : 1,
       config.hydeThreshold ?? 0.5,
@@ -4897,13 +5329,34 @@ export function upsertKnowledgeAgentConfig(
     const fields: string[] = [];
     const values: unknown[] = [];
 
-    if (config.hydeEnabled !== undefined)    { fields.push('hyde_enabled = ?');    values.push(config.hydeEnabled ? 1 : 0); }
-    if (config.hydeThreshold !== undefined)  { fields.push('hyde_threshold = ?');  values.push(config.hydeThreshold); }
-    if (config.minScore !== undefined)       { fields.push('min_score = ?');       values.push(config.minScore); }
-    if (config.defaultStrategy !== undefined){ fields.push('default_strategy = ?');values.push(config.defaultStrategy); }
-    if (config.rerankEnabled !== undefined)  { fields.push('rerank_enabled = ?');  values.push(config.rerankEnabled ? 1 : 0); }
-    if (config.rerankTopK !== undefined)     { fields.push('rerank_top_k = ?');    values.push(config.rerankTopK); }
-    if (config.searchTopK !== undefined)     { fields.push('search_top_k = ?');    values.push(config.searchTopK); }
+    if (config.hydeEnabled !== undefined) {
+      fields.push('hyde_enabled = ?');
+      values.push(config.hydeEnabled ? 1 : 0);
+    }
+    if (config.hydeThreshold !== undefined) {
+      fields.push('hyde_threshold = ?');
+      values.push(config.hydeThreshold);
+    }
+    if (config.minScore !== undefined) {
+      fields.push('min_score = ?');
+      values.push(config.minScore);
+    }
+    if (config.defaultStrategy !== undefined) {
+      fields.push('default_strategy = ?');
+      values.push(config.defaultStrategy);
+    }
+    if (config.rerankEnabled !== undefined) {
+      fields.push('rerank_enabled = ?');
+      values.push(config.rerankEnabled ? 1 : 0);
+    }
+    if (config.rerankTopK !== undefined) {
+      fields.push('rerank_top_k = ?');
+      values.push(config.rerankTopK);
+    }
+    if (config.searchTopK !== undefined) {
+      fields.push('search_top_k = ?');
+      values.push(config.searchTopK);
+    }
 
     if (fields.length > 0) {
       fields.push(`updated_at = datetime('now')`);
@@ -4914,8 +5367,6 @@ export function upsertKnowledgeAgentConfig(
 
   return getKnowledgeAgentConfig(agentId)!;
 }
-
-// ---- Personal Tasks ----
 
 export interface TaskRow {
   id: string;
@@ -4971,7 +5422,6 @@ export function getAllTasks(filters?: {
     params.push(filters.priority);
   }
 
-  // Period filter: show pending/in_progress always, filter done by period
   const period = filters?.period || 'last30';
   if (period !== 'all') {
     const days = period === 'last90' ? 90 : 30;
@@ -4980,13 +5430,17 @@ export function getAllTasks(filters?: {
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT * FROM tasks ${where}
     ORDER BY
       CASE WHEN due_date IS NOT NULL THEN 0 ELSE 1 END ASC,
       CASE WHEN due_date IS NOT NULL THEN due_date END ASC,
       created_at DESC
-  `).all(...params) as Record<string, unknown>[];
+  `,
+    )
+    .all(...params) as Record<string, unknown>[];
 
   return rows.map(mapTask);
 }
@@ -5004,10 +5458,12 @@ export function insertTask(task: {
   due_date?: string;
 }): TaskRow {
   const id = require('crypto').randomBytes(16).toString('hex');
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO tasks (id, title, description, category, priority, due_date)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     id,
     task.title,
     task.description || null,
@@ -5018,24 +5474,45 @@ export function insertTask(task: {
   return getTask(id)!;
 }
 
-export function updateTask(id: string, updates: Partial<{
-  title: string;
-  description: string | null;
-  category: string | null;
-  status: string;
-  priority: string;
-  due_date: string | null;
-  done_comment: string | null;
-}>): TaskRow {
+export function updateTask(
+  id: string,
+  updates: Partial<{
+    title: string;
+    description: string | null;
+    category: string | null;
+    status: string;
+    priority: string;
+    due_date: string | null;
+    done_comment: string | null;
+  }>,
+): TaskRow {
   const fields: string[] = [];
   const values: unknown[] = [];
 
-  if (updates.title !== undefined)        { fields.push('title = ?');        values.push(updates.title); }
-  if (updates.description !== undefined)  { fields.push('description = ?');  values.push(updates.description); }
-  if (updates.category !== undefined)     { fields.push('category = ?');     values.push(updates.category); }
-  if (updates.priority !== undefined)     { fields.push('priority = ?');     values.push(updates.priority); }
-  if (updates.due_date !== undefined)     { fields.push('due_date = ?');     values.push(updates.due_date); }
-  if (updates.done_comment !== undefined) { fields.push('done_comment = ?'); values.push(updates.done_comment); }
+  if (updates.title !== undefined) {
+    fields.push('title = ?');
+    values.push(updates.title);
+  }
+  if (updates.description !== undefined) {
+    fields.push('description = ?');
+    values.push(updates.description);
+  }
+  if (updates.category !== undefined) {
+    fields.push('category = ?');
+    values.push(updates.category);
+  }
+  if (updates.priority !== undefined) {
+    fields.push('priority = ?');
+    values.push(updates.priority);
+  }
+  if (updates.due_date !== undefined) {
+    fields.push('due_date = ?');
+    values.push(updates.due_date);
+  }
+  if (updates.done_comment !== undefined) {
+    fields.push('done_comment = ?');
+    values.push(updates.done_comment);
+  }
 
   if (updates.status !== undefined) {
     fields.push('status = ?');
@@ -5061,20 +5538,20 @@ export function deleteTask(id: string): void {
 }
 
 export function getTaskCategories(): string[] {
-  const rows = db.prepare(
-    `SELECT DISTINCT category FROM tasks WHERE category IS NOT NULL AND category != '' ORDER BY category`
-  ).all() as Array<{ category: string }>;
-  return rows.map(r => r.category);
+  const rows = db
+    .prepare(`SELECT DISTINCT category FROM tasks WHERE category IS NOT NULL AND category != '' ORDER BY category`)
+    .all() as Array<{ category: string }>;
+  return rows.map((r) => r.category);
 }
 
 export function getPendingTasksDueCount(): number {
-  const row = db.prepare(
-    `SELECT COUNT(*) as count FROM tasks WHERE status != 'done' AND due_date IS NOT NULL AND due_date <= date('now')`
-  ).get() as { count: number };
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) as count FROM tasks WHERE status != 'done' AND due_date IS NOT NULL AND due_date <= date('now')`,
+    )
+    .get() as { count: number };
   return row.count;
 }
-
-// ---- Task Executions (per-subagent usage tracking) ----
 
 export function insertTaskExecution(data: {
   sessionId: string;
@@ -5122,7 +5599,6 @@ export function insertTaskExecution(data: {
 
 export interface TaskExecutionStart {
   executionId: string;
-  /** ID observado do provider; usa executionId nos dispatches Lion. */
   taskId?: string;
   rootExecutionId: string;
   parentExecutionId: string | null;
@@ -5196,7 +5672,10 @@ function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
   if (value && typeof value === 'object') {
     const record = value as Record<string, unknown>;
-    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(',')}}`;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
+      .join(',')}}`;
   }
   return JSON.stringify(value) ?? 'null';
 }
@@ -5221,25 +5700,29 @@ export function startTaskExecution(data: TaskExecutionStart): void {
 
   db.transaction(() => {
     if (data.parentExecutionId) {
-      const parent = db.prepare(`
+      const parent = db
+        .prepare(
+          `
         SELECT execution_id, root_execution_id, owner_kind, owner_id, session_id
         FROM task_executions WHERE execution_id = ?
-      `).get(data.parentExecutionId) as Pick<
-        TaskExecutionLedgerRow,
-        'execution_id' | 'root_execution_id' | 'owner_kind' | 'owner_id' | 'session_id'
-      > | undefined;
+      `,
+        )
+        .get(data.parentExecutionId) as
+        | Pick<TaskExecutionLedgerRow, 'execution_id' | 'root_execution_id' | 'owner_kind' | 'owner_id' | 'session_id'>
+        | undefined;
       if (!parent) throw new Error(`Parent execution nao encontrada: ${data.parentExecutionId}`);
       if (
-        parent.root_execution_id !== data.rootExecutionId
-        || parent.owner_kind !== data.ownerKind
-        || parent.owner_id !== data.ownerId
-        || parent.session_id !== data.sessionId
+        parent.root_execution_id !== data.rootExecutionId ||
+        parent.owner_kind !== data.ownerKind ||
+        parent.owner_id !== data.ownerId ||
+        parent.session_id !== data.sessionId
       ) {
         throw new Error('Execution parent pertence a outra arvore/owner/sessao.');
       }
     }
 
-    db.prepare(`
+    db.prepare(
+      `
       INSERT OR IGNORE INTO task_executions (
         session_id, task_id, tool_use_id, agent_id, agent_name, model,
         description, status, summary, input_tokens, output_tokens,
@@ -5249,7 +5732,8 @@ export function startTaskExecution(data: TaskExecutionStart): void {
         provider, cost_status, token_status, cost_unknown_reason, metadata
       ) VALUES (?, ?, ?, ?, ?, ?, ?, 'running', '', 0, 0, 0, 0, 0, 0, 0, 0,
         ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?)
-    `).run(
+    `,
+    ).run(
       data.sessionId,
       data.taskId ?? data.executionId,
       data.toolUseId,
@@ -5268,28 +5752,32 @@ export function startTaskExecution(data: TaskExecutionStart): void {
       stableJson(data.metadata),
     );
 
-    const stored = db.prepare(`
+    const stored = db
+      .prepare(
+        `
       SELECT task_id, execution_id, root_execution_id, parent_execution_id, execution_kind,
         owner_kind, owner_id, session_id, tool_use_id, agent_id, agent_name,
         model, description, runtime, provider, metadata
       FROM task_executions WHERE execution_id = ?
-    `).get(data.executionId) as TaskExecutionLedgerRow;
+    `,
+      )
+      .get(data.executionId) as TaskExecutionLedgerRow;
     if (
-      stored.task_id !== (data.taskId ?? data.executionId)
-      || stored.root_execution_id !== data.rootExecutionId
-      || stored.parent_execution_id !== data.parentExecutionId
-      || stored.execution_kind !== data.executionKind
-      || stored.owner_kind !== data.ownerKind
-      || stored.owner_id !== data.ownerId
-      || stored.session_id !== data.sessionId
-      || stored.tool_use_id !== data.toolUseId
-      || stored.agent_id !== data.agentId
-      || stored.agent_name !== data.agentName
-      || (stored.model ?? '') !== data.model
-      || stored.description !== data.description
-      || stored.runtime !== data.runtime
-      || stored.provider !== data.provider
-      || (stored.metadata ?? 'null') !== stableJson(data.metadata)
+      stored.task_id !== (data.taskId ?? data.executionId) ||
+      stored.root_execution_id !== data.rootExecutionId ||
+      stored.parent_execution_id !== data.parentExecutionId ||
+      stored.execution_kind !== data.executionKind ||
+      stored.owner_kind !== data.ownerKind ||
+      stored.owner_id !== data.ownerId ||
+      stored.session_id !== data.sessionId ||
+      stored.tool_use_id !== data.toolUseId ||
+      stored.agent_id !== data.agentId ||
+      stored.agent_name !== data.agentName ||
+      (stored.model ?? '') !== data.model ||
+      stored.description !== data.description ||
+      stored.runtime !== data.runtime ||
+      stored.provider !== data.provider ||
+      (stored.metadata ?? 'null') !== stableJson(data.metadata)
     ) {
       throw new Error(`Execution idempotente divergente: ${data.executionId}`);
     }
@@ -5302,22 +5790,32 @@ export function finalizeRunningTaskExecutionTree(
   reason: string,
 ): void {
   db.transaction(() => {
-    const rows = db.prepare(`
+    const rows = db
+      .prepare(
+        `
       SELECT execution_id, execution_kind, metadata
       FROM task_executions
       WHERE root_execution_id = ? AND status = 'running'
       ORDER BY CASE WHEN execution_kind = 'root' THEN 1 ELSE 0 END, execution_id
-    `).all(rootExecutionId) as Array<Pick<TaskExecutionLedgerRow, 'execution_id' | 'execution_kind' | 'metadata'>>;
+    `,
+      )
+      .all(rootExecutionId) as Array<Pick<TaskExecutionLedgerRow, 'execution_id' | 'execution_kind' | 'metadata'>>;
     for (const row of rows) {
       let metadata: Record<string, unknown> = {};
-      try { metadata = row.metadata ? JSON.parse(row.metadata) as Record<string, unknown> : {}; } catch { /* legacy metadata */ }
+      try {
+        metadata = row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : {};
+      } catch {
+        /* legacy metadata */
+      }
       const isRoot = row.execution_kind === 'root';
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE task_executions SET
           status = ?, summary = ?, cost_status = ?, token_status = ?,
           cost_unknown_reason = ?, metadata = ?
         WHERE execution_id = ? AND status = 'running'
-      `).run(
+      `,
+      ).run(
         isRoot ? rootStatus : 'cancelled',
         reason,
         isRoot ? 'known' : 'unknown',
@@ -5331,90 +5829,114 @@ export function finalizeRunningTaskExecutionTree(
 }
 
 export function finalizeTaskExecutionRootIfIdle(rootExecutionId: string): boolean {
-  return db.transaction(() => {
-    const pending = db.prepare(`
+  return db
+    .transaction(() => {
+      const pending = db
+        .prepare(
+          `
       SELECT COUNT(*) AS count
       FROM task_executions
       WHERE root_execution_id = ? AND execution_kind <> 'root' AND status = 'running'
-    `).get(rootExecutionId) as { count: number };
-    if (pending.count > 0) return false;
-    const changed = db.prepare(`
+    `,
+        )
+        .get(rootExecutionId) as { count: number };
+      if (pending.count > 0) return false;
+      const changed = db
+        .prepare(
+          `
       UPDATE task_executions SET
         status = 'completed', summary = 'Arvore de subagentes concluida',
         cost_status = 'known', token_status = 'reported', cost_unknown_reason = NULL
       WHERE execution_id = ? AND execution_kind = 'root' AND status = 'running'
-    `).run(rootExecutionId);
-    return changed.changes === 1;
-  }).immediate();
+    `,
+        )
+        .run(rootExecutionId);
+      return changed.changes === 1;
+    })
+    .immediate();
 }
 
 export function reconcileInterruptedTaskExecutions(): number {
-  const table = db.prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'task_executions'")
+  const table = db
+    .prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'task_executions'")
     .get() as { present: number } | undefined;
   if (!table) return 0;
   const columns = db.prepare('PRAGMA table_info(task_executions)').all() as Array<{ name: string }>;
   if (!columns.some((column) => column.name === 'execution_id')) return 0;
-  return db.transaction(() => {
-    const rows = db.prepare(`
+  return db
+    .transaction(() => {
+      const rows = db
+        .prepare(
+          `
       SELECT execution_id, execution_kind, metadata
       FROM task_executions
       WHERE status = 'running' AND execution_id IS NOT NULL
       ORDER BY CASE WHEN execution_kind = 'root' THEN 1 ELSE 0 END, execution_id
-    `).all() as Array<Pick<TaskExecutionLedgerRow, 'execution_id' | 'execution_kind' | 'metadata'>>;
-    for (const row of rows) {
-      let metadata: Record<string, unknown> = {};
-      try { metadata = row.metadata ? JSON.parse(row.metadata) as Record<string, unknown> : {}; } catch { /* legacy */ }
-      const isRoot = row.execution_kind === 'root';
-      db.prepare(`
+    `,
+        )
+        .all() as Array<Pick<TaskExecutionLedgerRow, 'execution_id' | 'execution_kind' | 'metadata'>>;
+      for (const row of rows) {
+        let metadata: Record<string, unknown> = {};
+        try {
+          metadata = row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : {};
+        } catch {
+          /* legacy */
+        }
+        const isRoot = row.execution_kind === 'root';
+        db.prepare(
+          `
         UPDATE task_executions SET
           status = 'cancelled', summary = 'Execucao interrompida pelo encerramento anterior',
           cost_status = ?, token_status = ?, cost_unknown_reason = ?, metadata = ?
         WHERE execution_id = ? AND status = 'running'
-      `).run(
-        isRoot ? 'known' : 'unknown',
-        isRoot ? 'reported' : 'not_reported',
-        isRoot ? null : 'no-usage-reported',
-        stableJson({ ...metadata, finalizationReason: 'reconciled-on-boot' }),
-        row.execution_id,
-      );
-    }
-    return rows.length;
-  }).immediate();
+      `,
+        ).run(
+          isRoot ? 'known' : 'unknown',
+          isRoot ? 'reported' : 'not_reported',
+          isRoot ? null : 'no-usage-reported',
+          stableJson({ ...metadata, finalizationReason: 'reconciled-on-boot' }),
+          row.execution_id,
+        );
+      }
+      return rows.length;
+    })
+    .immediate();
 }
 
 function finalizedPayloadMatches(row: TaskExecutionLedgerRow, data: TaskExecutionFinalize): boolean {
-  return row.status === data.status
-    && (row.summary ?? '') === data.summary
-    && (row.model ?? '') === data.model
-    && row.runtime === data.runtime
-    && row.provider === data.provider
-    && row.input_tokens === data.inputTokens
-    && row.output_tokens === data.outputTokens
-    && row.cache_read_tokens === data.cacheReadTokens
-    && row.cache_creation_tokens === data.cacheCreationTokens
-    && row.cost_usd === data.costUsd
-    && row.api_requests === data.apiRequests
-    && row.tool_uses === data.toolUses
-    && row.duration_ms === data.durationMs
-    && row.cost_status === data.costStatus
-    && row.token_status === data.tokenStatus
-    && row.cost_unknown_reason === data.costUnknownReason
-    && (row.metadata ?? 'null') === stableJson(data.metadata);
+  return (
+    row.status === data.status &&
+    (row.summary ?? '') === data.summary &&
+    (row.model ?? '') === data.model &&
+    row.runtime === data.runtime &&
+    row.provider === data.provider &&
+    row.input_tokens === data.inputTokens &&
+    row.output_tokens === data.outputTokens &&
+    row.cache_read_tokens === data.cacheReadTokens &&
+    row.cache_creation_tokens === data.cacheCreationTokens &&
+    row.cost_usd === data.costUsd &&
+    row.api_requests === data.apiRequests &&
+    row.tool_uses === data.toolUses &&
+    row.duration_ms === data.durationMs &&
+    row.cost_status === data.costStatus &&
+    row.token_status === data.tokenStatus &&
+    row.cost_unknown_reason === data.costUnknownReason &&
+    (row.metadata ?? 'null') === stableJson(data.metadata)
+  );
 }
 
-export function finalizeTaskExecutionOnce(
-  executionId: string,
-  data: TaskExecutionFinalize,
-): void {
+export function finalizeTaskExecutionOnce(executionId: string, data: TaskExecutionFinalize): void {
   db.transaction(() => {
-    const row = db.prepare('SELECT * FROM task_executions WHERE execution_id = ?')
-      .get(executionId) as TaskExecutionLedgerRow | undefined;
+    const row = db.prepare('SELECT * FROM task_executions WHERE execution_id = ?').get(executionId) as
+      TaskExecutionLedgerRow | undefined;
     if (!row) throw new Error(`Execution nao encontrada: ${executionId}`);
     if (row.status !== 'running') {
       if (finalizedPayloadMatches(row, data)) return;
       throw new Error(`Execution ${executionId} ja foi finalizada com payload divergente.`);
     }
-    const changed = db.prepare(`
+    const changed = db
+      .prepare(
+        `
       UPDATE task_executions SET
         status = ?, summary = ?, model = ?, runtime = ?, provider = ?,
         input_tokens = ?, output_tokens = ?, cache_read_tokens = ?,
@@ -5422,26 +5944,28 @@ export function finalizeTaskExecutionOnce(
         duration_ms = ?, cost_status = ?, token_status = ?,
         cost_unknown_reason = ?, metadata = ?
       WHERE execution_id = ? AND status = 'running'
-    `).run(
-      data.status,
-      data.summary,
-      data.model,
-      data.runtime,
-      data.provider,
-      data.inputTokens,
-      data.outputTokens,
-      data.cacheReadTokens,
-      data.cacheCreationTokens,
-      data.costUsd,
-      data.apiRequests,
-      data.toolUses,
-      data.durationMs,
-      data.costStatus,
-      data.tokenStatus,
-      data.costUnknownReason,
-      stableJson(data.metadata),
-      executionId,
-    );
+    `,
+      )
+      .run(
+        data.status,
+        data.summary,
+        data.model,
+        data.runtime,
+        data.provider,
+        data.inputTokens,
+        data.outputTokens,
+        data.cacheReadTokens,
+        data.cacheCreationTokens,
+        data.costUsd,
+        data.apiRequests,
+        data.toolUses,
+        data.durationMs,
+        data.costStatus,
+        data.tokenStatus,
+        data.costUnknownReason,
+        stableJson(data.metadata),
+        executionId,
+      );
     if (changed.changes !== 1) throw new Error(`Falha ao finalizar execution ${executionId}.`);
   }).immediate();
 }
@@ -5484,16 +6008,19 @@ export interface TaskExecutionRollup {
   unknownCostCount: number;
   notReportedTokenCount: number;
   usageMetadata: {
-    modelUsage: Record<string, {
-      inputTokens: number;
-      outputTokens: number;
-      cacheReadInputTokens: number;
-      cacheCreationInputTokens: number;
-      costUSD: number;
-      reasoningTokens?: number;
-      modelCalls?: number;
-      costUsdTicks?: number;
-    }>;
+    modelUsage: Record<
+      string,
+      {
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadInputTokens: number;
+        cacheCreationInputTokens: number;
+        costUSD: number;
+        reasoningTokens?: number;
+        modelCalls?: number;
+        costUsdTicks?: number;
+      }
+    >;
     pricingProvenance: Array<{
       executionId: string;
       model: string;
@@ -5538,11 +6065,6 @@ const COST_QUALITY_RANK: Record<TaskExecutionFinalize['costStatus'], number> = {
   unknown: 2,
 };
 
-/**
- * Le o ledger V138 sem incluir a raiz contabil do turno. A janela defensiva
- * torna cada execution_id uma unica contribuicao mesmo se um banco anterior
- * ao indice unico contiver duplicatas.
- */
 export function getTaskExecutionRollup(scope: TaskExecutionRollupScope): TaskExecutionRollup {
   let predicate: string;
   let bindings: string[];
@@ -5572,7 +6094,9 @@ export function getTaskExecutionRollup(scope: TaskExecutionRollupScope): TaskExe
     throw new Error('Rollup de task executions exige execution, root ou owner.');
   }
 
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     WITH canonical AS (
       SELECT
         execution_id, status, input_tokens, output_tokens, cache_read_tokens,
@@ -5590,7 +6114,9 @@ export function getTaskExecutionRollup(scope: TaskExecutionRollupScope): TaskExe
     FROM canonical
     WHERE position = 1
     ORDER BY execution_id
-  `).all(...bindings) as TaskExecutionRollupRow[];
+  `,
+    )
+    .all(...bindings) as TaskExecutionRollupRow[];
 
   const rollup: TaskExecutionRollup = {
     executionCount: rows.length,
@@ -5637,8 +6163,10 @@ export function getTaskExecutionRollup(scope: TaskExecutionRollupScope): TaskExe
 
     let metadata: Record<string, unknown> = {};
     try {
-      metadata = row.metadata ? JSON.parse(row.metadata) as Record<string, unknown> : {};
-    } catch { /* metadata legado/corrompido fica sem breakdown */ }
+      metadata = row.metadata ? (JSON.parse(row.metadata) as Record<string, unknown>) : {};
+    } catch {
+      /* metadata legado/corrompido fica sem breakdown */
+    }
     const rawModelUsage = metadata['modelUsage'];
     if (rawModelUsage && typeof rawModelUsage === 'object' && !Array.isArray(rawModelUsage)) {
       for (const [model, rawUsage] of Object.entries(rawModelUsage as Record<string, unknown>)) {
@@ -5653,24 +6181,28 @@ export function getTaskExecutionRollup(scope: TaskExecutionRollupScope): TaskExe
           cacheReadInputTokens: number('cacheReadInputTokens'),
           cacheCreationInputTokens: number('cacheCreationInputTokens'),
           costUSD: number('costUSD'),
-          ...(typeof usage['reasoningTokens'] === 'number'
-            ? { reasoningTokens: number('reasoningTokens') } : {}),
+          ...(typeof usage['reasoningTokens'] === 'number' ? { reasoningTokens: number('reasoningTokens') } : {}),
           ...(typeof usage['modelCalls'] === 'number' ? { modelCalls: number('modelCalls') } : {}),
           ...(typeof usage['costUsdTicks'] === 'number' ? { costUsdTicks: number('costUsdTicks') } : {}),
         };
-        rollup.usageMetadata.modelUsage[model] = previous ? {
-          inputTokens: previous.inputTokens + next.inputTokens,
-          outputTokens: previous.outputTokens + next.outputTokens,
-          cacheReadInputTokens: previous.cacheReadInputTokens + next.cacheReadInputTokens,
-          cacheCreationInputTokens: previous.cacheCreationInputTokens + next.cacheCreationInputTokens,
-          costUSD: previous.costUSD + next.costUSD,
-          ...(previous.reasoningTokens !== undefined || next.reasoningTokens !== undefined
-            ? { reasoningTokens: (previous.reasoningTokens ?? 0) + (next.reasoningTokens ?? 0) } : {}),
-          ...(previous.modelCalls !== undefined || next.modelCalls !== undefined
-            ? { modelCalls: (previous.modelCalls ?? 0) + (next.modelCalls ?? 0) } : {}),
-          ...(previous.costUsdTicks !== undefined || next.costUsdTicks !== undefined
-            ? { costUsdTicks: (previous.costUsdTicks ?? 0) + (next.costUsdTicks ?? 0) } : {}),
-        } : next;
+        rollup.usageMetadata.modelUsage[model] = previous
+          ? {
+              inputTokens: previous.inputTokens + next.inputTokens,
+              outputTokens: previous.outputTokens + next.outputTokens,
+              cacheReadInputTokens: previous.cacheReadInputTokens + next.cacheReadInputTokens,
+              cacheCreationInputTokens: previous.cacheCreationInputTokens + next.cacheCreationInputTokens,
+              costUSD: previous.costUSD + next.costUSD,
+              ...(previous.reasoningTokens !== undefined || next.reasoningTokens !== undefined
+                ? { reasoningTokens: (previous.reasoningTokens ?? 0) + (next.reasoningTokens ?? 0) }
+                : {}),
+              ...(previous.modelCalls !== undefined || next.modelCalls !== undefined
+                ? { modelCalls: (previous.modelCalls ?? 0) + (next.modelCalls ?? 0) }
+                : {}),
+              ...(previous.costUsdTicks !== undefined || next.costUsdTicks !== undefined
+                ? { costUsdTicks: (previous.costUsdTicks ?? 0) + (next.costUsdTicks ?? 0) }
+                : {}),
+            }
+          : next;
       }
     }
     rollup.usageMetadata.pricingProvenance.push({
@@ -5690,23 +6222,18 @@ export function getTaskExecutionRollup(scope: TaskExecutionRollupScope): TaskExe
 
     const rowCostStatus = row.cost_status ?? 'unknown';
     if (rowCostStatus === 'unknown') rollup.unknownCostCount += 1;
-    if (
-      rollup.costStatus === null
-      || COST_QUALITY_RANK[rowCostStatus] > COST_QUALITY_RANK[rollup.costStatus]
-    ) {
+    if (rollup.costStatus === null || COST_QUALITY_RANK[rowCostStatus] > COST_QUALITY_RANK[rollup.costStatus]) {
       rollup.costStatus = rowCostStatus;
     }
     if (row.token_status !== 'reported') {
       rollup.tokenStatus = 'not_reported';
       rollup.notReportedTokenCount += 1;
-    }
-    else if (rollup.tokenStatus === null) rollup.tokenStatus = 'reported';
+    } else if (rollup.tokenStatus === null) rollup.tokenStatus = 'reported';
     if (row.cost_unknown_reason) unknownReasons.add(row.cost_unknown_reason);
   }
 
   rollup.costUnknownReasons = [...unknownReasons].sort();
-  const attributedCost = Object.values(rollup.usageMetadata.modelUsage)
-    .reduce((sum, usage) => sum + usage.costUSD, 0);
+  const attributedCost = Object.values(rollup.usageMetadata.modelUsage).reduce((sum, usage) => sum + usage.costUSD, 0);
   if (rollup.costStatus === 'known') {
     const attributionDelta = rollup.metrics.costUsd - attributedCost;
     if (attributionDelta >= 0) {
@@ -5718,8 +6245,6 @@ export function getTaskExecutionRollup(scope: TaskExecutionRollupScope): TaskExe
   }
   return rollup;
 }
-
-// ---- Harness Projects ----
 
 function mapHarnessProject(row: Record<string, unknown>): HarnessProject {
   return {
@@ -5757,11 +6282,13 @@ function applyLegacyHarnessSprintsJsonMigration(project: HarnessProject): Harnes
   try {
     const result = migrateLegacyHarnessSprintsJsonFile(project);
     if (result.shouldUpdateDb) {
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE harness_projects
         SET sprints_json_path = ?, updated_at = datetime('now')
         WHERE id = ?
-      `).run(result.canonicalPath, project.id);
+      `,
+      ).run(result.canonicalPath, project.id);
       return { ...project, sprintsJsonPath: result.canonicalPath };
     }
   } catch (err) {
@@ -5773,11 +6300,15 @@ function applyLegacyHarnessSprintsJsonMigration(project: HarnessProject): Harnes
 export function migrateLegacyHarnessSprintsJsonPaths(): void {
   let rows: Record<string, unknown>[];
   try {
-    rows = db.prepare(`
+    rows = db
+      .prepare(
+        `
       SELECT * FROM harness_projects
       WHERE sprints_json_path IS NOT NULL
         AND sprints_json_path != ''
-    `).all() as Record<string, unknown>[];
+    `,
+      )
+      .all() as Record<string, unknown>[];
   } catch (err) {
     logger.warn({ err }, 'Failed to query harness projects for legacy sprints migration');
     return;
@@ -5798,66 +6329,122 @@ export function insertHarnessProject(data: {
   pipelineType?: PipelineType;
   pipelineDocsId?: string | null;
 }): HarnessProject {
-  const result = db.prepare(`
+  const result = db
+    .prepare(
+      `
     INSERT INTO harness_projects (name, description, project_path, spec_path, sprints_json_path, config, pipeline_type, pipeline_docs_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    data.name,
-    data.description ?? null,
-    data.projectPath,
-    data.specPath,
-    data.sprintsJsonPath ?? null,
-    JSON.stringify(data.config),
-    data.pipelineType ?? 'development',
-    data.pipelineDocsId ?? null,
-  );
-  const id = db.prepare('SELECT id FROM harness_projects WHERE rowid = ?').get(result.lastInsertRowid) as { id: string };
+  `,
+    )
+    .run(
+      data.name,
+      data.description ?? null,
+      data.projectPath,
+      data.specPath,
+      data.sprintsJsonPath ?? null,
+      JSON.stringify(data.config),
+      data.pipelineType ?? 'development',
+      data.pipelineDocsId ?? null,
+    );
+  const id = db.prepare('SELECT id FROM harness_projects WHERE rowid = ?').get(result.lastInsertRowid) as {
+    id: string;
+  };
   return getHarnessProject(id.id)!;
 }
 
-export function updateHarnessProject(id: string, updates: Partial<{
-  name: string;
-  description: string | null;
-  projectPath: string;
-  specPath: string;
-  sprintsJsonPath: string | null;
-  status: HarnessProject['status'];
-  config: HarnessProject['config'];
-  currentSprintIndex: number;
-  totalSprints: number;
-  totalFeatures: number;
-  plannerInputTokens: number;
-  plannerOutputTokens: number;
-  plannerCacheTokens: number;
-  plannerCostUsd: number;
-  plannerDurationMs: number;
-  pipelineDocsId: string | null;
-  /**
-   * SPEC-005 Sprint 2: set to 1 when the planner result had costStatus === 'unknown'.
-   * Idempotent on re-runs (SET, not increment).
-   */
-  plannerUnknownCostCount: number;
-}>): HarnessProject {
+export function updateHarnessProject(
+  id: string,
+  updates: Partial<{
+    name: string;
+    description: string | null;
+    projectPath: string;
+    specPath: string;
+    sprintsJsonPath: string | null;
+    status: HarnessProject['status'];
+    config: HarnessProject['config'];
+    currentSprintIndex: number;
+    totalSprints: number;
+    totalFeatures: number;
+    plannerInputTokens: number;
+    plannerOutputTokens: number;
+    plannerCacheTokens: number;
+    plannerCostUsd: number;
+    plannerDurationMs: number;
+    pipelineDocsId: string | null;
+    plannerUnknownCostCount: number;
+  }>,
+): HarnessProject {
   const fields: string[] = [];
   const values: unknown[] = [];
 
-  if (updates.name !== undefined)              { fields.push('name = ?');                values.push(updates.name); }
-  if (updates.description !== undefined)       { fields.push('description = ?');         values.push(updates.description); }
-  if (updates.projectPath !== undefined)       { fields.push('project_path = ?');        values.push(updates.projectPath); }
-  if (updates.specPath !== undefined)          { fields.push('spec_path = ?');           values.push(updates.specPath); }
-  if (updates.sprintsJsonPath !== undefined)   { fields.push('sprints_json_path = ?');   values.push(updates.sprintsJsonPath); }
-  if (updates.status !== undefined)            { fields.push('status = ?');              values.push(updates.status); }
-  if (updates.config !== undefined)            { fields.push('config = ?');              values.push(JSON.stringify(updates.config)); }
-  if (updates.currentSprintIndex !== undefined){ fields.push('current_sprint_index = ?'); values.push(updates.currentSprintIndex); }
-  if (updates.totalSprints !== undefined)      { fields.push('total_sprints = ?');       values.push(updates.totalSprints); }
-  if (updates.totalFeatures !== undefined)     { fields.push('total_features = ?');      values.push(updates.totalFeatures); }
-  if (updates.plannerInputTokens !== undefined)  { fields.push('planner_input_tokens = ?');  values.push(updates.plannerInputTokens); }
-  if (updates.plannerOutputTokens !== undefined) { fields.push('planner_output_tokens = ?'); values.push(updates.plannerOutputTokens); }
-  if (updates.plannerCacheTokens !== undefined)  { fields.push('planner_cache_tokens = ?');  values.push(updates.plannerCacheTokens); }
-  if (updates.plannerCostUsd !== undefined)      { fields.push('planner_cost_usd = ?');      values.push(updates.plannerCostUsd); }
-  if (updates.plannerDurationMs !== undefined)   { fields.push('planner_duration_ms = ?');   values.push(updates.plannerDurationMs); }
-  if (updates.pipelineDocsId !== undefined)      { fields.push('pipeline_docs_id = ?');      values.push(updates.pipelineDocsId); }
-  if (updates.plannerUnknownCostCount !== undefined) { fields.push('planner_unknown_cost_count = ?'); values.push(updates.plannerUnknownCostCount); }
+  if (updates.name !== undefined) {
+    fields.push('name = ?');
+    values.push(updates.name);
+  }
+  if (updates.description !== undefined) {
+    fields.push('description = ?');
+    values.push(updates.description);
+  }
+  if (updates.projectPath !== undefined) {
+    fields.push('project_path = ?');
+    values.push(updates.projectPath);
+  }
+  if (updates.specPath !== undefined) {
+    fields.push('spec_path = ?');
+    values.push(updates.specPath);
+  }
+  if (updates.sprintsJsonPath !== undefined) {
+    fields.push('sprints_json_path = ?');
+    values.push(updates.sprintsJsonPath);
+  }
+  if (updates.status !== undefined) {
+    fields.push('status = ?');
+    values.push(updates.status);
+  }
+  if (updates.config !== undefined) {
+    fields.push('config = ?');
+    values.push(JSON.stringify(updates.config));
+  }
+  if (updates.currentSprintIndex !== undefined) {
+    fields.push('current_sprint_index = ?');
+    values.push(updates.currentSprintIndex);
+  }
+  if (updates.totalSprints !== undefined) {
+    fields.push('total_sprints = ?');
+    values.push(updates.totalSprints);
+  }
+  if (updates.totalFeatures !== undefined) {
+    fields.push('total_features = ?');
+    values.push(updates.totalFeatures);
+  }
+  if (updates.plannerInputTokens !== undefined) {
+    fields.push('planner_input_tokens = ?');
+    values.push(updates.plannerInputTokens);
+  }
+  if (updates.plannerOutputTokens !== undefined) {
+    fields.push('planner_output_tokens = ?');
+    values.push(updates.plannerOutputTokens);
+  }
+  if (updates.plannerCacheTokens !== undefined) {
+    fields.push('planner_cache_tokens = ?');
+    values.push(updates.plannerCacheTokens);
+  }
+  if (updates.plannerCostUsd !== undefined) {
+    fields.push('planner_cost_usd = ?');
+    values.push(updates.plannerCostUsd);
+  }
+  if (updates.plannerDurationMs !== undefined) {
+    fields.push('planner_duration_ms = ?');
+    values.push(updates.plannerDurationMs);
+  }
+  if (updates.pipelineDocsId !== undefined) {
+    fields.push('pipeline_docs_id = ?');
+    values.push(updates.pipelineDocsId);
+  }
+  if (updates.plannerUnknownCostCount !== undefined) {
+    fields.push('planner_unknown_cost_count = ?');
+    values.push(updates.plannerUnknownCostCount);
+  }
 
   if (fields.length > 0) {
     fields.push(`updated_at = datetime('now')`);
@@ -5875,11 +6462,9 @@ function parseHarnessConfig(value: unknown): HarnessProject['config'] {
   }
 }
 
-export function getHarnessProviderAuthCheckpoint(
-  projectId: string,
-): HarnessProviderAuthCheckpoint | undefined {
-  const row = db.prepare('SELECT config FROM harness_projects WHERE id = ?')
-    .get(projectId) as { config: string } | undefined;
+export function getHarnessProviderAuthCheckpoint(projectId: string): HarnessProviderAuthCheckpoint | undefined {
+  const row = db.prepare('SELECT config FROM harness_projects WHERE id = ?').get(projectId) as
+    { config: string } | undefined;
   return row ? parseHarnessConfig(row.config).providerAuthCheckpoint : undefined;
 }
 
@@ -5887,45 +6472,60 @@ export function persistHarnessProviderAuthCheckpoint(
   projectId: string,
   checkpoint: HarnessProviderAuthCheckpoint,
 ): boolean {
-  return db.transaction(() => {
-    const row = db.prepare('SELECT config FROM harness_projects WHERE id = ?')
-      .get(projectId) as { config: string } | undefined;
-    if (!row) return false;
-    const config = parseHarnessConfig(row.config);
-    config.providerAuthCheckpoint = { ...checkpoint, claimState: 'pending' };
-    const result = db.prepare(`
+  return db
+    .transaction(() => {
+      const row = db.prepare('SELECT config FROM harness_projects WHERE id = ?').get(projectId) as
+        { config: string } | undefined;
+      if (!row) return false;
+      const config = parseHarnessConfig(row.config);
+      config.providerAuthCheckpoint = { ...checkpoint, claimState: 'pending' };
+      const result = db
+        .prepare(
+          `
       UPDATE harness_projects
       SET config = ?, status = 'paused', updated_at = datetime('now')
       WHERE id = ?
-    `).run(JSON.stringify(config), projectId);
-    return result.changes === 1;
-  }).immediate();
+    `,
+        )
+        .run(JSON.stringify(config), projectId);
+      return result.changes === 1;
+    })
+    .immediate();
 }
 
 export function claimHarnessProviderAuthCheckpoint(
   projectId: string,
   checkpointId: string,
 ): HarnessProviderAuthCheckpoint | undefined {
-  return db.transaction(() => {
-    const row = db.prepare('SELECT config FROM harness_projects WHERE id = ?')
-      .get(projectId) as { config: string } | undefined;
-    if (!row) return undefined;
-    const config = parseHarnessConfig(row.config);
-    const checkpoint = config.providerAuthCheckpoint;
-    if (!checkpoint || checkpoint.checkpointId !== checkpointId) return undefined;
-    if (checkpoint.claimState !== undefined
-      && checkpoint.claimState !== 'pending'
-      && checkpoint.claimState !== 'claimed') return undefined;
-    if (checkpoint.claimState === 'claimed') return checkpoint;
-    const claimed: HarnessProviderAuthCheckpoint = { ...checkpoint, claimState: 'claimed' };
-    config.providerAuthCheckpoint = claimed;
-    const result = db.prepare(`
+  return db
+    .transaction(() => {
+      const row = db.prepare('SELECT config FROM harness_projects WHERE id = ?').get(projectId) as
+        { config: string } | undefined;
+      if (!row) return undefined;
+      const config = parseHarnessConfig(row.config);
+      const checkpoint = config.providerAuthCheckpoint;
+      if (!checkpoint || checkpoint.checkpointId !== checkpointId) return undefined;
+      if (
+        checkpoint.claimState !== undefined &&
+        checkpoint.claimState !== 'pending' &&
+        checkpoint.claimState !== 'claimed'
+      )
+        return undefined;
+      if (checkpoint.claimState === 'claimed') return checkpoint;
+      const claimed: HarnessProviderAuthCheckpoint = { ...checkpoint, claimState: 'claimed' };
+      config.providerAuthCheckpoint = claimed;
+      const result = db
+        .prepare(
+          `
       UPDATE harness_projects
       SET config = ?, updated_at = datetime('now')
       WHERE id = ? AND config = ?
-    `).run(JSON.stringify(config), projectId, row.config);
-    return result.changes === 1 ? claimed : undefined;
-  }).immediate();
+    `,
+        )
+        .run(JSON.stringify(config), projectId, row.config);
+      return result.changes === 1 ? claimed : undefined;
+    })
+    .immediate();
 }
 
 export function advanceClaimedHarnessProviderAuthCheckpoint(
@@ -5933,24 +6533,29 @@ export function advanceClaimedHarnessProviderAuthCheckpoint(
   checkpointId: string,
   resume: unknown,
 ): HarnessProviderAuthCheckpoint | undefined {
-  return db.transaction(() => {
-    const row = db.prepare('SELECT config FROM harness_projects WHERE id = ?')
-      .get(projectId) as { config: string } | undefined;
-    if (!row) return undefined;
-    const config = parseHarnessConfig(row.config);
-    const checkpoint = config.providerAuthCheckpoint;
-    if (!checkpoint
-      || checkpoint.checkpointId !== checkpointId
-      || checkpoint.claimState !== 'claimed') return undefined;
-    const advanced: HarnessProviderAuthCheckpoint = { ...checkpoint, resume };
-    config.providerAuthCheckpoint = advanced;
-    const result = db.prepare(`
+  return db
+    .transaction(() => {
+      const row = db.prepare('SELECT config FROM harness_projects WHERE id = ?').get(projectId) as
+        { config: string } | undefined;
+      if (!row) return undefined;
+      const config = parseHarnessConfig(row.config);
+      const checkpoint = config.providerAuthCheckpoint;
+      if (!checkpoint || checkpoint.checkpointId !== checkpointId || checkpoint.claimState !== 'claimed')
+        return undefined;
+      const advanced: HarnessProviderAuthCheckpoint = { ...checkpoint, resume };
+      config.providerAuthCheckpoint = advanced;
+      const result = db
+        .prepare(
+          `
       UPDATE harness_projects
       SET config = ?, updated_at = datetime('now')
       WHERE id = ? AND config = ?
-    `).run(JSON.stringify(config), projectId, row.config);
-    return result.changes === 1 ? advanced : undefined;
-  }).immediate();
+    `,
+        )
+        .run(JSON.stringify(config), projectId, row.config);
+      return result.changes === 1 ? advanced : undefined;
+    })
+    .immediate();
 }
 
 export interface HarnessEvaluatorRoundCompletion {
@@ -5982,7 +6587,7 @@ export interface HarnessEvaluatorPipelineMessage {
 
 function harnessResumeRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : undefined;
 }
 
@@ -5990,11 +6595,6 @@ function harnessResumeCheckpoint(value: unknown): Record<string, unknown> | unde
   return harnessResumeRecord(harnessResumeRecord(value)?.['checkpoint']);
 }
 
-/**
- * Commits the evaluator terminal result together with the claimed auth checkpoint.
- * Replaying the same completion after the commit is a no-op, including its optional
- * pipeline message.
- */
 export function persistClaimedHarnessEvaluatorCompletion(data: {
   projectId: string;
   checkpointId: string;
@@ -6005,71 +6605,86 @@ export function persistClaimedHarnessEvaluatorCompletion(data: {
 }): HarnessProviderAuthCheckpoint | undefined {
   const requestedResume = harnessResumeRecord(data.resume);
   const requestedCheckpoint = harnessResumeCheckpoint(data.resume);
-  if ((requestedResume?.['kind'] !== 'run' && requestedResume?.['kind'] !== 'pipeline-run')
-    || requestedCheckpoint?.['stage'] !== 'evaluator-completed'
-    || requestedCheckpoint['roundId'] !== data.roundId) {
+  if (
+    (requestedResume?.['kind'] !== 'run' && requestedResume?.['kind'] !== 'pipeline-run') ||
+    requestedCheckpoint?.['stage'] !== 'evaluator-completed' ||
+    requestedCheckpoint['roundId'] !== data.roundId
+  ) {
     throw new Error('Conclusao do evaluator exige checkpoint terminal do mesmo round.');
   }
 
-  return db.transaction(() => {
-    const row = db.prepare('SELECT config FROM harness_projects WHERE id = ?')
-      .get(data.projectId) as { config: string } | undefined;
-    if (!row) return undefined;
-    const config = parseHarnessConfig(row.config);
-    const checkpoint = config.providerAuthCheckpoint;
-    if (!checkpoint
-      || checkpoint.checkpointId !== data.checkpointId
-      || checkpoint.claimState !== 'claimed'
-      || (checkpoint.roundId !== undefined && checkpoint.roundId !== data.roundId)) return undefined;
+  return db
+    .transaction(() => {
+      const row = db.prepare('SELECT config FROM harness_projects WHERE id = ?').get(data.projectId) as
+        { config: string } | undefined;
+      if (!row) return undefined;
+      const config = parseHarnessConfig(row.config);
+      const checkpoint = config.providerAuthCheckpoint;
+      if (
+        !checkpoint ||
+        checkpoint.checkpointId !== data.checkpointId ||
+        checkpoint.claimState !== 'claimed' ||
+        (checkpoint.roundId !== undefined && checkpoint.roundId !== data.roundId)
+      )
+        return undefined;
 
-    const currentResume = harnessResumeRecord(checkpoint.resume);
-    const currentRound = harnessResumeCheckpoint(checkpoint.resume);
-    if (currentResume?.['kind'] !== requestedResume['kind']
-      || currentResume?.['provider'] !== checkpoint.provider
-      || requestedResume['provider'] !== checkpoint.provider
-      || currentRound?.['roundId'] !== data.roundId) return undefined;
+      const currentResume = harnessResumeRecord(checkpoint.resume);
+      const currentRound = harnessResumeCheckpoint(checkpoint.resume);
+      if (
+        currentResume?.['kind'] !== requestedResume['kind'] ||
+        currentResume?.['provider'] !== checkpoint.provider ||
+        requestedResume['provider'] !== checkpoint.provider ||
+        currentRound?.['roundId'] !== data.roundId
+      )
+        return undefined;
 
-    if (currentRound['stage'] === 'evaluator-completed') return checkpoint;
-    if (currentRound['stage'] !== 'evaluator') return undefined;
+      if (currentRound['stage'] === 'evaluator-completed') return checkpoint;
+      if (currentRound['stage'] !== 'evaluator') return undefined;
 
-    updateHarnessRound(data.roundId, data.round);
-    if (data.pipelineMessage) savePipelineMessage(data.pipelineMessage);
+      updateHarnessRound(data.roundId, data.round);
+      if (data.pipelineMessage) savePipelineMessage(data.pipelineMessage);
 
-    const advanced: HarnessProviderAuthCheckpoint = { ...checkpoint, resume: data.resume };
-    config.providerAuthCheckpoint = advanced;
-    const result = db.prepare(`
+      const advanced: HarnessProviderAuthCheckpoint = { ...checkpoint, resume: data.resume };
+      config.providerAuthCheckpoint = advanced;
+      const result = db
+        .prepare(
+          `
       UPDATE harness_projects
       SET config = ?, updated_at = datetime('now')
       WHERE id = ? AND config = ?
-    `).run(JSON.stringify(config), data.projectId, row.config);
-    if (result.changes !== 1) {
-      throw new Error('Checkpoint de autenticacao mudou durante o commit do evaluator.');
-    }
-    return advanced;
-  }).immediate();
+    `,
+        )
+        .run(JSON.stringify(config), data.projectId, row.config);
+      if (result.changes !== 1) {
+        throw new Error('Checkpoint de autenticacao mudou durante o commit do evaluator.');
+      }
+      return advanced;
+    })
+    .immediate();
 }
 
-export function completeHarnessProviderAuthCheckpoint(
-  projectId: string,
-  checkpointId: string,
-): boolean {
-  return db.transaction(() => {
-    const row = db.prepare('SELECT config FROM harness_projects WHERE id = ?')
-      .get(projectId) as { config: string } | undefined;
-    if (!row) return false;
-    const config = parseHarnessConfig(row.config);
-    const checkpoint = config.providerAuthCheckpoint;
-    if (!checkpoint
-      || checkpoint.checkpointId !== checkpointId
-      || checkpoint.claimState !== 'claimed') return false;
-    delete config.providerAuthCheckpoint;
-    const result = db.prepare(`
+export function completeHarnessProviderAuthCheckpoint(projectId: string, checkpointId: string): boolean {
+  return db
+    .transaction(() => {
+      const row = db.prepare('SELECT config FROM harness_projects WHERE id = ?').get(projectId) as
+        { config: string } | undefined;
+      if (!row) return false;
+      const config = parseHarnessConfig(row.config);
+      const checkpoint = config.providerAuthCheckpoint;
+      if (!checkpoint || checkpoint.checkpointId !== checkpointId || checkpoint.claimState !== 'claimed') return false;
+      delete config.providerAuthCheckpoint;
+      const result = db
+        .prepare(
+          `
       UPDATE harness_projects
       SET config = ?, updated_at = datetime('now')
       WHERE id = ? AND config = ?
-    `).run(JSON.stringify(config), projectId, row.config);
-    return result.changes === 1;
-  }).immediate();
+    `,
+        )
+        .run(JSON.stringify(config), projectId, row.config);
+      return result.changes === 1;
+    })
+    .immediate();
 }
 
 export function getHarnessProject(id: string): HarnessProject | undefined {
@@ -6083,40 +6698,20 @@ export function listHarnessProjects(): HarnessProject[] {
   return rows.map((row) => applyLegacyHarnessSprintsJsonMigration(mapHarnessProject(row)));
 }
 
-/**
- * Delete a harness project and all related data (sprints, rounds).
- * Also removes the project directory from filesystem.
- */
 export function deleteHarnessProject(id: string): void {
-  // Database-only cleanup: deletes rounds → sprints → project rows.
-  //
-  // FILES ON DISK ARE NOT TOUCHED. This is intentional and matches the
-  // security pipeline pattern (`.lionclaw/Security/Security-*.md` files
-  // also persist after delete). For architecture-review,
-  // `<projectPath>/.lionclaw/pipelines/architecture-review/<runId>/`
-  // remains on disk so the user retains the human-readable artefacts
-  // (Map / Candidates / Diagnosis / Decisions / SPEC) for review.
-  //
-  // If the user wants to also delete files, they remove the dir manually.
-  // A future `pipeline:delete-artifacts(projectId)` IPC could automate this
-  // with destructive confirmation — explicitly out of scope for the MVP
-  // (per ARCHITECTURE-REVIEW-PIPELINE-SPEC.md §9.3).
   const deleteAll = db.transaction(() => {
-    // 1. Delete rounds (child of sprints)
-    db.prepare(`
+    db.prepare(
+      `
       DELETE FROM harness_rounds
       WHERE sprint_id IN (SELECT id FROM harness_sprints WHERE project_id = ?)
-    `).run(id);
-    // 2. Delete sprints
+    `,
+    ).run(id);
     db.prepare('DELETE FROM harness_sprints WHERE project_id = ?').run(id);
-    // 3. Delete project
     db.prepare('DELETE FROM harness_projects WHERE id = ?').run(id);
   });
   deleteAll();
   logger.info({ projectId: id }, 'Deleted harness project and related data (files on disk preserved)');
 }
-
-// ---- Harness Sprints ----
 
 function mapHarnessSprint(row: Record<string, unknown>): HarnessSprint {
   return {
@@ -6137,9 +6732,6 @@ function mapHarnessSprint(row: Record<string, unknown>): HarnessSprint {
   };
 }
 
-// NAO usar para persistir um PLANO de sprints (append fura o seam idempotente
-// e, pos-V80, estoura o UNIQUE(project_id, sprint_index) em runtime); o caminho
-// canonico de persist de plano e replaceHarnessSprintsForProject.
 export function insertHarnessSprint(data: {
   projectId: string;
   sprintIndex: number;
@@ -6149,37 +6741,28 @@ export function insertHarnessSprint(data: {
   evaluatorAgentId?: string;
   maxRounds?: number;
 }): HarnessSprint {
-  const result = db.prepare(`
+  const result = db
+    .prepare(
+      `
     INSERT INTO harness_sprints (project_id, sprint_index, sprint_json_id, name, coder_agent_id, evaluator_agent_id, max_rounds)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    data.projectId,
-    data.sprintIndex,
-    data.sprintJsonId,
-    data.name,
-    data.coderAgentId ?? null,
-    data.evaluatorAgentId ?? null,
-    data.maxRounds ?? 3,
-  );
-  const row = db.prepare('SELECT id FROM harness_sprints WHERE rowid = ?').get(result.lastInsertRowid) as { id: string };
-  return getHarnessSprints(data.projectId).find(s => s.id === row.id)!;
+  `,
+    )
+    .run(
+      data.projectId,
+      data.sprintIndex,
+      data.sprintJsonId,
+      data.name,
+      data.coderAgentId ?? null,
+      data.evaluatorAgentId ?? null,
+      data.maxRounds ?? 3,
+    );
+  const row = db.prepare('SELECT id FROM harness_sprints WHERE rowid = ?').get(result.lastInsertRowid) as {
+    id: string;
+  };
+  return getHarnessSprints(data.projectId).find((s) => s.id === row.id)!;
 }
 
-/**
- * Substitui atomicamente o plano de sprints de um projeto (persist idempotente).
- *
- * Ordem dentro de db.transaction (rollback em falha; nunca deixa o projeto
- * sem sprints nem com rounds orfaos):
- *  1) deleta harness_rounds dos sprints existentes (FK sem ON DELETE CASCADE);
- *  2) deleta harness_sprints do projeto;
- *  3) insere o plano novo;
- *  4) (BUG 2 P1e/P4, opcional) totals derivados + mapa sprintJsonHashes no
- *     config, na MESMA transacao — crash no meio nunca deixa fila e totals/
- *     hashes inconsistentes.
- *
- * Chamada por saveSprintsJson (harness-planner) - rodar o planner 2x deixa
- * apenas o ultimo plano, 1 linha por (project_id, sprint_index).
- */
 export function replaceHarnessSprintsForProject(
   projectId: string,
   sprints: Array<{
@@ -6196,15 +6779,12 @@ export function replaceHarnessSprintsForProject(
   },
 ): void {
   const replace = db.transaction(() => {
-    // 1) filhos primeiro (FK sem cascade)
-    const existing = db
-      .prepare('SELECT id FROM harness_sprints WHERE project_id = ?')
-      .all(projectId) as Array<{ id: string }>;
+    const existing = db.prepare('SELECT id FROM harness_sprints WHERE project_id = ?').all(projectId) as Array<{
+      id: string;
+    }>;
     const delRounds = db.prepare('DELETE FROM harness_rounds WHERE sprint_id = ?');
     for (const s of existing) delRounds.run(s.id);
-    // 2) plano antigo
     db.prepare('DELETE FROM harness_sprints WHERE project_id = ?').run(projectId);
-    // 3) plano novo
     const ins = db.prepare(`
       INSERT INTO harness_sprints
         (project_id, sprint_index, sprint_json_id, name, coder_agent_id, evaluator_agent_id, max_rounds)
@@ -6221,30 +6801,18 @@ export function replaceHarnessSprintsForProject(
         s.maxRounds ?? 3,
       );
     }
-    // 4) totals + mapa de hashes (BUG 2): mesma transacao do replace
     if (extras?.totals) {
       db.prepare(
         `UPDATE harness_projects SET total_sprints = ?, total_features = ?, updated_at = datetime('now') WHERE id = ?`,
       ).run(extras.totals.totalSprints, extras.totals.totalFeatures, projectId);
     }
     if (extras?.sprintJsonHashes) {
-      // replace do plano => o mapa e SUBSTITUIDO (ids removidos do plano saem
-      // do mapa); campos paralelos do config sao preservados (merge do atual).
       writeSprintJsonHashesInCurrentTx(projectId, extras.sprintJsonHashes, 'replace');
     }
   });
   replace();
 }
 
-/**
- * BUG 2 (bug-atividade-toolcalls-codex.md P1b, ramo "estado misto"):
- * UPDATE transacional das linhas PENDING alteradas pelo Sprint Validator
- * (name/coder_agent_id/max_rounds) preservando status e rounds das demais,
- * + recompute de totals + merge do mapa de hashes, tudo numa transacao unica.
- * `updateHarnessSprint` nao cobre name/sprint_json_id/sprint_index — por isso
- * esta funcao existe. Fail-loud: se alguma linha alvo deixou de estar pending
- * (corrida com o loop do Coder), a transacao inteira reverte.
- */
 export function updateHarnessPendingSprintsFromReseed(
   projectId: string,
   updates: Array<{ id: string; name: string; coderAgentId: string | null; maxRounds: number }>,
@@ -6272,76 +6840,83 @@ export function updateHarnessPendingSprintsFromReseed(
   apply();
 }
 
-/**
- * BUG 2 (P4): grava/semea o mapa sprint_json_id -> sha256 no config do projeto
- * (merge por id). Usado para semear o mapa em projetos legados sem reescrever a
- * fila (no-op do P1 / primeira passagem do P3).
- */
-export function mergeHarnessProjectSprintJsonHashes(
-  projectId: string,
-  sprintJsonHashes: Record<string, string>,
-): void {
+export function mergeHarnessProjectSprintJsonHashes(projectId: string, sprintJsonHashes: Record<string, string>): void {
   const apply = db.transaction(() => {
     writeSprintJsonHashesInCurrentTx(projectId, sprintJsonHashes, 'merge');
   });
   apply();
 }
 
-/**
- * BUG 2 (P1c): total de harness_rounds do projeto — o guard do replace exige
- * all-pending E zero rounds (o replace DELETA rounds dos sprints substituidos).
- */
 export function countHarnessRoundsForProject(projectId: string): number {
-  const row = db.prepare(
-    `SELECT COUNT(*) AS n FROM harness_rounds
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM harness_rounds
      WHERE sprint_id IN (SELECT id FROM harness_sprints WHERE project_id = ?)`,
-  ).get(projectId) as { n: number };
+    )
+    .get(projectId) as { n: number };
   return row.n;
 }
 
-/**
- * BUG 2 (P4): read-modify-write do config ATUAL do banco — nunca sobrescreve
- * campos paralelos de `config` com uma copia velha lida antes. SO pode ser
- * chamada dentro de uma db.transaction ja aberta (as chamadoras garantem).
- */
 function writeSprintJsonHashesInCurrentTx(
   projectId: string,
   sprintJsonHashes: Record<string, string>,
   mode: 'replace' | 'merge',
 ): void {
   const row = db.prepare('SELECT config FROM harness_projects WHERE id = ?').get(projectId) as
-    | { config: string | null }
-    | undefined;
+    { config: string | null } | undefined;
   if (!row) throw new Error(`Projeto ${projectId} nao encontrado ao gravar sprintJsonHashes`);
   const config = row.config ? (JSON.parse(row.config) as Record<string, unknown>) : {};
   const current = (config['sprintJsonHashes'] ?? {}) as Record<string, string>;
-  config['sprintJsonHashes'] =
-    mode === 'replace' ? sprintJsonHashes : { ...current, ...sprintJsonHashes };
+  config['sprintJsonHashes'] = mode === 'replace' ? sprintJsonHashes : { ...current, ...sprintJsonHashes };
   db.prepare(`UPDATE harness_projects SET config = ?, updated_at = datetime('now') WHERE id = ?`).run(
     JSON.stringify(config),
     projectId,
   );
 }
 
-export function updateHarnessSprint(id: string, updates: Partial<{
-  status: HarnessSprint['status'];
-  coderAgentId: string | null;
-  evaluatorAgentId: string | null;
-  roundsUsed: number;
-  maxRounds: number;
-  startedAt: string | null;
-  completedAt: string | null;
-}>): HarnessSprint {
+export function updateHarnessSprint(
+  id: string,
+  updates: Partial<{
+    status: HarnessSprint['status'];
+    coderAgentId: string | null;
+    evaluatorAgentId: string | null;
+    roundsUsed: number;
+    maxRounds: number;
+    startedAt: string | null;
+    completedAt: string | null;
+  }>,
+): HarnessSprint {
   const fields: string[] = [];
   const values: unknown[] = [];
 
-  if (updates.status !== undefined)           { fields.push('status = ?');             values.push(updates.status); }
-  if (updates.coderAgentId !== undefined)     { fields.push('coder_agent_id = ?');     values.push(updates.coderAgentId); }
-  if (updates.evaluatorAgentId !== undefined) { fields.push('evaluator_agent_id = ?'); values.push(updates.evaluatorAgentId); }
-  if (updates.roundsUsed !== undefined)       { fields.push('rounds_used = ?');        values.push(updates.roundsUsed); }
-  if (updates.maxRounds !== undefined)        { fields.push('max_rounds = ?');         values.push(updates.maxRounds); }
-  if (updates.startedAt !== undefined)        { fields.push('started_at = ?');         values.push(updates.startedAt); }
-  if (updates.completedAt !== undefined)      { fields.push('completed_at = ?');       values.push(updates.completedAt); }
+  if (updates.status !== undefined) {
+    fields.push('status = ?');
+    values.push(updates.status);
+  }
+  if (updates.coderAgentId !== undefined) {
+    fields.push('coder_agent_id = ?');
+    values.push(updates.coderAgentId);
+  }
+  if (updates.evaluatorAgentId !== undefined) {
+    fields.push('evaluator_agent_id = ?');
+    values.push(updates.evaluatorAgentId);
+  }
+  if (updates.roundsUsed !== undefined) {
+    fields.push('rounds_used = ?');
+    values.push(updates.roundsUsed);
+  }
+  if (updates.maxRounds !== undefined) {
+    fields.push('max_rounds = ?');
+    values.push(updates.maxRounds);
+  }
+  if (updates.startedAt !== undefined) {
+    fields.push('started_at = ?');
+    values.push(updates.startedAt);
+  }
+  if (updates.completedAt !== undefined) {
+    fields.push('completed_at = ?');
+    values.push(updates.completedAt);
+  }
 
   if (fields.length > 0) {
     values.push(id);
@@ -6353,36 +6928,30 @@ export function updateHarnessSprint(id: string, updates: Partial<{
 }
 
 export function getHarnessSprints(projectId: string): HarnessSprint[] {
-  const rows = db.prepare(
-    'SELECT * FROM harness_sprints WHERE project_id = ? ORDER BY sprint_index ASC',
-  ).all(projectId) as Record<string, unknown>[];
+  const rows = db
+    .prepare('SELECT * FROM harness_sprints WHERE project_id = ? ORDER BY sprint_index ASC')
+    .all(projectId) as Record<string, unknown>[];
   return rows.map(mapHarnessSprint);
 }
 
-// ---- Harness Rounds ----
-
 function mapHarnessRound(row: Record<string, unknown>): HarnessRound {
-  const metadata = row['metadata']
-    ? (JSON.parse(row['metadata'] as string) as Record<string, unknown>)
-    : {};
+  const metadata = row['metadata'] ? (JSON.parse(row['metadata'] as string) as Record<string, unknown>) : {};
   const unknownCostCount = (row['unknown_cost_count'] as number) ?? 0;
-  let costStatus: TaskExecutionFinalize['costStatus'] = unknownCostCount > 0
-    ? 'unknown'
-    : 'known';
+  let costStatus: TaskExecutionFinalize['costStatus'] = unknownCostCount > 0 ? 'unknown' : 'known';
   for (const key of ['coderCostStatus', 'evaluatorCostStatus'] as const) {
     const value = metadata[key];
-    if ((value === 'known' || value === 'unknown' || value === 'estimated-partial')
-      && COST_QUALITY_RANK[value] > COST_QUALITY_RANK[costStatus]) {
+    if (
+      (value === 'known' || value === 'unknown' || value === 'estimated-partial') &&
+      COST_QUALITY_RANK[value] > COST_QUALITY_RANK[costStatus]
+    ) {
       costStatus = value;
     }
   }
   const coderCostUsd = (row['coder_cost_usd'] as number) ?? 0;
   const evaluatorCostUsd = (row['evaluator_cost_usd'] as number) ?? 0;
   const subscriptionEquivalentCost =
-    (metadata['coderCostEstimationKind'] === 'subscription-equivalent-payg' ? coderCostUsd : 0)
-    + (metadata['evaluatorCostEstimationKind'] === 'subscription-equivalent-payg'
-      ? evaluatorCostUsd
-      : 0);
+    (metadata['coderCostEstimationKind'] === 'subscription-equivalent-payg' ? coderCostUsd : 0) +
+    (metadata['evaluatorCostEstimationKind'] === 'subscription-equivalent-payg' ? evaluatorCostUsd : 0);
   return {
     id: row['id'] as string,
     sprintId: row['sprint_id'] as string,
@@ -6428,83 +6997,167 @@ export function insertHarnessRound(data: {
   providerUsed?: string | null;
   modelUsed?: string | null;
 }): HarnessRound {
-  const result = db.prepare(`
+  const result = db
+    .prepare(
+      `
     INSERT INTO harness_rounds (sprint_id, round_number, coder_session_id, cost_source, runtime_used, provider_used, model_used)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    data.sprintId,
-    data.roundNumber,
-    data.coderSessionId ?? null,
-    data.costSource ?? null,
-    data.runtimeUsed ?? null,
-    data.providerUsed ?? null,
-    data.modelUsed ?? null,
-  );
-  const row = db.prepare('SELECT * FROM harness_rounds WHERE rowid = ?').get(result.lastInsertRowid) as Record<string, unknown>;
+  `,
+    )
+    .run(
+      data.sprintId,
+      data.roundNumber,
+      data.coderSessionId ?? null,
+      data.costSource ?? null,
+      data.runtimeUsed ?? null,
+      data.providerUsed ?? null,
+      data.modelUsed ?? null,
+    );
+  const row = db.prepare('SELECT * FROM harness_rounds WHERE rowid = ?').get(result.lastInsertRowid) as Record<
+    string,
+    unknown
+  >;
   return mapHarnessRound(row);
 }
 
-export function updateHarnessRound(id: string, updates: Partial<{
-  coderSessionId: string | null;
-  coderInputTokens: number;
-  coderOutputTokens: number;
-  coderCacheTokens: number;
-  coderCostUsd: number;
-  coderDurationMs: number;
-  coderToolUses: number;
-  coderApiRequests: number;
-  evaluatorSessionId: string | null;
-  evaluatorInputTokens: number;
-  evaluatorOutputTokens: number;
-  evaluatorCacheTokens: number;
-  evaluatorCostUsd: number;
-  evaluatorDurationMs: number;
-  evaluatorToolUses: number;
-  evaluatorApiRequests: number;
-  verdict: HarnessRound['verdict'];
-  feedbackSummary: string | null;
-  completedAt: string | null;
-  costSource: CostSource | null;
-  runtimeUsed: 'cloud' | 'local' | 'external' | 'codex' | 'zai' | 'minimax-tp' | 'kimi' | 'grok' | 'cursor' | null;
-  providerUsed: string | null;
-  modelUsed: string | null;
-  metadata: Record<string, unknown>;
-  codexPatchFailures: number;
-  /**
-   * SPEC-005 Sprint 2: set to 1 when either coder or evaluator had costStatus === 'unknown'.
-   * Caller responsibility to pass 1 when applicable.
-   */
-  unknownCostCount: number;
-}>): HarnessRound {
+export function updateHarnessRound(
+  id: string,
+  updates: Partial<{
+    coderSessionId: string | null;
+    coderInputTokens: number;
+    coderOutputTokens: number;
+    coderCacheTokens: number;
+    coderCostUsd: number;
+    coderDurationMs: number;
+    coderToolUses: number;
+    coderApiRequests: number;
+    evaluatorSessionId: string | null;
+    evaluatorInputTokens: number;
+    evaluatorOutputTokens: number;
+    evaluatorCacheTokens: number;
+    evaluatorCostUsd: number;
+    evaluatorDurationMs: number;
+    evaluatorToolUses: number;
+    evaluatorApiRequests: number;
+    verdict: HarnessRound['verdict'];
+    feedbackSummary: string | null;
+    completedAt: string | null;
+    costSource: CostSource | null;
+    runtimeUsed: 'cloud' | 'local' | 'external' | 'codex' | 'zai' | 'minimax-tp' | 'kimi' | 'grok' | 'cursor' | null;
+    providerUsed: string | null;
+    modelUsed: string | null;
+    metadata: Record<string, unknown>;
+    codexPatchFailures: number;
+    unknownCostCount: number;
+  }>,
+): HarnessRound {
   const fields: string[] = [];
   const values: unknown[] = [];
 
-  if (updates.coderSessionId !== undefined)      { fields.push('coder_session_id = ?');      values.push(updates.coderSessionId); }
-  if (updates.coderInputTokens !== undefined)    { fields.push('coder_input_tokens = ?');    values.push(updates.coderInputTokens); }
-  if (updates.coderOutputTokens !== undefined)   { fields.push('coder_output_tokens = ?');   values.push(updates.coderOutputTokens); }
-  if (updates.coderCacheTokens !== undefined)    { fields.push('coder_cache_tokens = ?');    values.push(updates.coderCacheTokens); }
-  if (updates.coderCostUsd !== undefined)        { fields.push('coder_cost_usd = ?');        values.push(updates.coderCostUsd); }
-  if (updates.coderDurationMs !== undefined)     { fields.push('coder_duration_ms = ?');     values.push(updates.coderDurationMs); }
-  if (updates.coderToolUses !== undefined)       { fields.push('coder_tool_uses = ?');       values.push(updates.coderToolUses); }
-  if (updates.coderApiRequests !== undefined)    { fields.push('coder_api_requests = ?');    values.push(updates.coderApiRequests); }
-  if (updates.evaluatorSessionId !== undefined)  { fields.push('evaluator_session_id = ?');  values.push(updates.evaluatorSessionId); }
-  if (updates.evaluatorInputTokens !== undefined){ fields.push('evaluator_input_tokens = ?');values.push(updates.evaluatorInputTokens); }
-  if (updates.evaluatorOutputTokens !== undefined){ fields.push('evaluator_output_tokens = ?');values.push(updates.evaluatorOutputTokens); }
-  if (updates.evaluatorCacheTokens !== undefined){ fields.push('evaluator_cache_tokens = ?');values.push(updates.evaluatorCacheTokens); }
-  if (updates.evaluatorCostUsd !== undefined)    { fields.push('evaluator_cost_usd = ?');    values.push(updates.evaluatorCostUsd); }
-  if (updates.evaluatorDurationMs !== undefined) { fields.push('evaluator_duration_ms = ?'); values.push(updates.evaluatorDurationMs); }
-  if (updates.evaluatorToolUses !== undefined)   { fields.push('evaluator_tool_uses = ?');   values.push(updates.evaluatorToolUses); }
-  if (updates.evaluatorApiRequests !== undefined){ fields.push('evaluator_api_requests = ?');values.push(updates.evaluatorApiRequests); }
-  if (updates.verdict !== undefined)             { fields.push('verdict = ?');               values.push(updates.verdict); }
-  if (updates.feedbackSummary !== undefined)     { fields.push('feedback_summary = ?');      values.push(updates.feedbackSummary); }
-  if (updates.completedAt !== undefined)         { fields.push('completed_at = ?');          values.push(updates.completedAt); }
-  if (updates.costSource !== undefined)          { fields.push('cost_source = ?');           values.push(updates.costSource); }
-  if (updates.runtimeUsed !== undefined)         { fields.push('runtime_used = ?');          values.push(updates.runtimeUsed); }
-  if (updates.providerUsed !== undefined)        { fields.push('provider_used = ?');         values.push(updates.providerUsed); }
-  if (updates.modelUsed !== undefined)           { fields.push('model_used = ?');            values.push(updates.modelUsed); }
-  if (updates.metadata !== undefined)            { fields.push('metadata = ?');              values.push(JSON.stringify(updates.metadata)); }
-  if (updates.codexPatchFailures !== undefined)  { fields.push('codex_patch_failures = ?');  values.push(updates.codexPatchFailures); }
-  if (updates.unknownCostCount !== undefined)    { fields.push('unknown_cost_count = ?');    values.push(updates.unknownCostCount); }
+  if (updates.coderSessionId !== undefined) {
+    fields.push('coder_session_id = ?');
+    values.push(updates.coderSessionId);
+  }
+  if (updates.coderInputTokens !== undefined) {
+    fields.push('coder_input_tokens = ?');
+    values.push(updates.coderInputTokens);
+  }
+  if (updates.coderOutputTokens !== undefined) {
+    fields.push('coder_output_tokens = ?');
+    values.push(updates.coderOutputTokens);
+  }
+  if (updates.coderCacheTokens !== undefined) {
+    fields.push('coder_cache_tokens = ?');
+    values.push(updates.coderCacheTokens);
+  }
+  if (updates.coderCostUsd !== undefined) {
+    fields.push('coder_cost_usd = ?');
+    values.push(updates.coderCostUsd);
+  }
+  if (updates.coderDurationMs !== undefined) {
+    fields.push('coder_duration_ms = ?');
+    values.push(updates.coderDurationMs);
+  }
+  if (updates.coderToolUses !== undefined) {
+    fields.push('coder_tool_uses = ?');
+    values.push(updates.coderToolUses);
+  }
+  if (updates.coderApiRequests !== undefined) {
+    fields.push('coder_api_requests = ?');
+    values.push(updates.coderApiRequests);
+  }
+  if (updates.evaluatorSessionId !== undefined) {
+    fields.push('evaluator_session_id = ?');
+    values.push(updates.evaluatorSessionId);
+  }
+  if (updates.evaluatorInputTokens !== undefined) {
+    fields.push('evaluator_input_tokens = ?');
+    values.push(updates.evaluatorInputTokens);
+  }
+  if (updates.evaluatorOutputTokens !== undefined) {
+    fields.push('evaluator_output_tokens = ?');
+    values.push(updates.evaluatorOutputTokens);
+  }
+  if (updates.evaluatorCacheTokens !== undefined) {
+    fields.push('evaluator_cache_tokens = ?');
+    values.push(updates.evaluatorCacheTokens);
+  }
+  if (updates.evaluatorCostUsd !== undefined) {
+    fields.push('evaluator_cost_usd = ?');
+    values.push(updates.evaluatorCostUsd);
+  }
+  if (updates.evaluatorDurationMs !== undefined) {
+    fields.push('evaluator_duration_ms = ?');
+    values.push(updates.evaluatorDurationMs);
+  }
+  if (updates.evaluatorToolUses !== undefined) {
+    fields.push('evaluator_tool_uses = ?');
+    values.push(updates.evaluatorToolUses);
+  }
+  if (updates.evaluatorApiRequests !== undefined) {
+    fields.push('evaluator_api_requests = ?');
+    values.push(updates.evaluatorApiRequests);
+  }
+  if (updates.verdict !== undefined) {
+    fields.push('verdict = ?');
+    values.push(updates.verdict);
+  }
+  if (updates.feedbackSummary !== undefined) {
+    fields.push('feedback_summary = ?');
+    values.push(updates.feedbackSummary);
+  }
+  if (updates.completedAt !== undefined) {
+    fields.push('completed_at = ?');
+    values.push(updates.completedAt);
+  }
+  if (updates.costSource !== undefined) {
+    fields.push('cost_source = ?');
+    values.push(updates.costSource);
+  }
+  if (updates.runtimeUsed !== undefined) {
+    fields.push('runtime_used = ?');
+    values.push(updates.runtimeUsed);
+  }
+  if (updates.providerUsed !== undefined) {
+    fields.push('provider_used = ?');
+    values.push(updates.providerUsed);
+  }
+  if (updates.modelUsed !== undefined) {
+    fields.push('model_used = ?');
+    values.push(updates.modelUsed);
+  }
+  if (updates.metadata !== undefined) {
+    fields.push('metadata = ?');
+    values.push(JSON.stringify(updates.metadata));
+  }
+  if (updates.codexPatchFailures !== undefined) {
+    fields.push('codex_patch_failures = ?');
+    values.push(updates.codexPatchFailures);
+  }
+  if (updates.unknownCostCount !== undefined) {
+    fields.push('unknown_cost_count = ?');
+    values.push(updates.unknownCostCount);
+  }
 
   if (fields.length > 0) {
     values.push(id);
@@ -6516,26 +7169,21 @@ export function updateHarnessRound(id: string, updates: Partial<{
 }
 
 export function getHarnessRounds(sprintId: string): HarnessRound[] {
-  const rows = db.prepare(
-    'SELECT * FROM harness_rounds WHERE sprint_id = ? ORDER BY round_number ASC',
-  ).all(sprintId) as Record<string, unknown>[];
+  const rows = db
+    .prepare('SELECT * FROM harness_rounds WHERE sprint_id = ? ORDER BY round_number ASC')
+    .all(sprintId) as Record<string, unknown>[];
   return rows.map(mapHarnessRound);
 }
 
-/**
- * Returns per-round details for a sprint, enriched with the model used by
- * Coder and Evaluator. coderModel/evaluatorModel come from harness_rounds.model_used
- * which is populated by spawnCoder/spawnEvaluator via updateHarnessRound.
- * Falls back to pipeline_phase_metrics.model when rounds have no model_used recorded.
- */
 export function getRoundDetailsForSprint(projectId: string, sprintIndex: number): RoundDetail[] {
-  const sprintRow = db.prepare(
-    `SELECT id FROM harness_sprints WHERE project_id = ? AND sprint_index = ? LIMIT 1`,
-  ).get(projectId, sprintIndex) as { id: string } | undefined;
+  const sprintRow = db
+    .prepare(`SELECT id FROM harness_sprints WHERE project_id = ? AND sprint_index = ? LIMIT 1`)
+    .get(projectId, sprintIndex) as { id: string } | undefined;
   if (!sprintRow) return [];
 
-  const rounds = db.prepare(
-    `SELECT round_number, verdict, feedback_summary,
+  const rounds = db
+    .prepare(
+      `SELECT round_number, verdict, feedback_summary,
             model_used,
             coder_input_tokens, coder_output_tokens, coder_cost_usd, coder_duration_ms,
             evaluator_input_tokens, evaluator_output_tokens, evaluator_cost_usd, evaluator_duration_ms,
@@ -6543,41 +7191,33 @@ export function getRoundDetailsForSprint(projectId: string, sprintIndex: number)
      FROM harness_rounds
      WHERE sprint_id = ?
      ORDER BY round_number ASC`,
-  ).all(sprintRow.id) as Record<string, unknown>[];
+    )
+    .all(sprintRow.id) as Record<string, unknown>[];
 
-  // Fallback: read coder/evaluator model from pipeline_phase_metrics if rounds don't have it.
-  // PER TIPO e PER ROLE (RK-19 + D24-bis item (a).2): coder = 1a fase de loop DO
-  // TIPO ∪ history; evaluator = 2a ∪ history. Cada query mantem seu proprio IN com
-  // LIMIT 1 — a uniao FLAT deixava o coder pegar a linha do evaluator e, pior,
-  // depois do Bug Pipe (loop {8,9}) deixava um projeto `security` casar a linha do
-  // Planner (fase 8) como coderModel: o LIMIT 1 nao tem ORDER BY, entao basta UMA
-  // linha de fase 8 com o mesmo sprint_index do round. O projectId ja esta na
-  // assinatura — nao ha mudanca de contrato. Os numeros sao inteiros derivados
-  // (sem injecao) inlinados no SQL, que continua inteiro dentro de db.ts.
   const pipelineType = getProjectPipelineType(projectId);
-  const coderPhaseIn = [...loopPhasesByRoleWithHistoryOf(pipelineType, 'coder')]
-    .sort((a, b) => a - b)
-    .join(', ');
-  const evalPhaseIn = [...loopPhasesByRoleWithHistoryOf(pipelineType, 'evaluator')]
-    .sort((a, b) => a - b)
-    .join(', ');
-  const coderPhaseRow = db.prepare(
-    `SELECT model FROM pipeline_phase_metrics
+  const coderPhaseIn = [...loopPhasesByRoleWithHistoryOf(pipelineType, 'coder')].sort((a, b) => a - b).join(', ');
+  const evalPhaseIn = [...loopPhasesByRoleWithHistoryOf(pipelineType, 'evaluator')].sort((a, b) => a - b).join(', ');
+  const coderPhaseRow = db
+    .prepare(
+      `SELECT model FROM pipeline_phase_metrics
      WHERE project_id = ? AND sprint_index = ? AND phase_number IN (${coderPhaseIn})
      LIMIT 1`,
-  ).get(projectId, sprintIndex) as { model: string | null } | undefined;
+    )
+    .get(projectId, sprintIndex) as { model: string | null } | undefined;
 
-  const evalPhaseRow = db.prepare(
-    `SELECT model FROM pipeline_phase_metrics
+  const evalPhaseRow = db
+    .prepare(
+      `SELECT model FROM pipeline_phase_metrics
      WHERE project_id = ? AND sprint_index = ? AND phase_number IN (${evalPhaseIn})
      LIMIT 1`,
-  ).get(projectId, sprintIndex) as { model: string | null } | undefined;
+    )
+    .get(projectId, sprintIndex) as { model: string | null } | undefined;
 
   const fallbackCoderModel = coderPhaseRow?.model ?? null;
   const fallbackEvalModel = evalPhaseRow?.model ?? null;
 
-  return rounds.map(r => ({
-    roundNumber: (r['round_number'] as number),
+  return rounds.map((r) => ({
+    roundNumber: r['round_number'] as number,
     verdict: (r['verdict'] as string | null) ?? null,
     feedbackSummary: (r['feedback_summary'] as string | null) ?? null,
     coderModel: (r['model_used'] as string | null) ?? fallbackCoderModel,
@@ -6617,7 +7257,9 @@ export interface HarnessSprintAggregateMetrics {
 }
 
 export function getHarnessSprintAggregateMetrics(sprintId: string): HarnessSprintAggregateMetrics {
-  const row = db.prepare(`
+  const row = db
+    .prepare(
+      `
     SELECT
       COALESCE(SUM(coder_input_tokens), 0)      AS coder_input,
       COALESCE(SUM(coder_output_tokens), 0)     AS coder_output,
@@ -6634,7 +7276,9 @@ export function getHarnessSprintAggregateMetrics(sprintId: string): HarnessSprin
       COALESCE(SUM(evaluator_tool_uses), 0)     AS eval_tools,
       COALESCE(SUM(evaluator_api_requests), 0)  AS eval_requests
     FROM harness_rounds WHERE sprint_id = ?
-  `).get(sprintId) as Record<string, number>;
+  `,
+    )
+    .get(sprintId) as Record<string, number>;
   return {
     coder: {
       inputTokens: row['coder_input'],
@@ -6657,12 +7301,12 @@ export function getHarnessSprintAggregateMetrics(sprintId: string): HarnessSprin
   };
 }
 
-// ---- Harness Metrics ----
-
 export function getHarnessProjectMetrics(projectId: string): HarnessProjectMetrics {
   const sprints = getHarnessSprints(projectId);
 
-  const qualityFromRounds = (rounds: HarnessRound[]): {
+  const qualityFromRounds = (
+    rounds: HarnessRound[],
+  ): {
     costStatus: TaskExecutionFinalize['costStatus'];
     tokenStatus: TaskExecutionFinalize['tokenStatus'];
     reasons: string[];
@@ -6684,11 +7328,14 @@ export function getHarnessProjectMetrics(projectId: string): HarnessProjectMetri
       }
       for (const key of ['coderCostStatus', 'evaluatorCostStatus'] as const) {
         const status = metadata[key];
-        if ((status === 'known' || status === 'unknown' || status === 'estimated-partial')
-          && COST_QUALITY_RANK[status] > COST_QUALITY_RANK[costStatus]) costStatus = status;
+        if (
+          (status === 'known' || status === 'unknown' || status === 'estimated-partial') &&
+          COST_QUALITY_RANK[status] > COST_QUALITY_RANK[costStatus]
+        )
+          costStatus = status;
       }
-      if (metadata['coderTokenStatus'] === 'not_reported'
-        || metadata['evaluatorTokenStatus'] === 'not_reported') tokenStatus = 'not_reported';
+      if (metadata['coderTokenStatus'] === 'not_reported' || metadata['evaluatorTokenStatus'] === 'not_reported')
+        tokenStatus = 'not_reported';
       for (const key of ['coderCostUnknownReason', 'evaluatorCostUnknownReason'] as const) {
         const reason = metadata[key];
         if (typeof reason === 'string' && reason) reasons.add(reason);
@@ -6721,8 +7368,7 @@ export function getHarnessProjectMetrics(projectId: string): HarnessProjectMetri
       coderCost,
       evaluatorCost,
       totalCost: coderCost + evaluatorCost,
-      subscriptionEquivalentCost:
-        quality.coderSubscriptionEquivalentCost + quality.evaluatorSubscriptionEquivalentCost,
+      subscriptionEquivalentCost: quality.coderSubscriptionEquivalentCost + quality.evaluatorSubscriptionEquivalentCost,
       coderSubscriptionEquivalentCost: quality.coderSubscriptionEquivalentCost,
       evaluatorSubscriptionEquivalentCost: quality.evaluatorSubscriptionEquivalentCost,
       coderInputTokens,
@@ -6738,7 +7384,9 @@ export function getHarnessProjectMetrics(projectId: string): HarnessProjectMetri
     };
   });
 
-  const allRoundsRow = db.prepare(`
+  const allRoundsRow = db
+    .prepare(
+      `
     SELECT
       COALESCE(SUM(r.coder_cost_usd + r.evaluator_cost_usd), 0)            AS total_cost,
       COALESCE(SUM(r.coder_duration_ms + r.evaluator_duration_ms), 0)       AS total_duration,
@@ -6753,13 +7401,14 @@ export function getHarnessProjectMetrics(projectId: string): HarnessProjectMetri
     FROM harness_rounds r
     JOIN harness_sprints s ON s.id = r.sprint_id
     WHERE s.project_id = ?
-  `).get(projectId) as Record<string, number>;
+  `,
+    )
+    .get(projectId) as Record<string, number>;
 
-  const passedSprints = sprints.filter(s => s.status === 'passed').length;
-  const completedSprints = sprints.filter(s => s.status === 'passed' || s.status === 'failed').length;
+  const passedSprints = sprints.filter((s) => s.status === 'passed').length;
+  const completedSprints = sprints.filter((s) => s.status === 'passed' || s.status === 'failed').length;
   const passRate = completedSprints > 0 ? passedSprints / completedSprints : 0;
 
-  // Include planner cost from the project record
   const project = getHarnessProject(projectId);
   const plannerCost = project?.plannerCostUsd ?? 0;
   const plannerDuration = project?.plannerDurationMs ?? 0;
@@ -6769,8 +7418,9 @@ export function getHarnessProjectMetrics(projectId: string): HarnessProjectMetri
     ownerId: projectId,
     executionKinds: ['subagent'],
   });
-  const baseUnknownCostCount = (project?.plannerUnknownCostCount ?? 0)
-    + sprintMetrics.reduce((sum, sprint) => sum + (sprint.unknownCostCount ?? 0), 0);
+  const baseUnknownCostCount =
+    (project?.plannerUnknownCostCount ?? 0) +
+    sprintMetrics.reduce((sum, sprint) => sum + (sprint.unknownCostCount ?? 0), 0);
   const unknownCostCount = baseUnknownCostCount + subagents.unknownCostCount;
   const plannerQuality = project?.config.metricsQuality;
   const plannerSubscriptionEquivalentCost = Math.min(
@@ -6788,41 +7438,50 @@ export function getHarnessProjectMetrics(projectId: string): HarnessProjectMetri
     (sum, sprint) => sum + sprint.evaluatorSubscriptionEquivalentCost,
     0,
   );
-  const subscriptionEquivalentCost = plannerSubscriptionEquivalentCost
-    + subagentSubscriptionEquivalentCost
-    + coderSubscriptionEquivalentCost
-    + evaluatorSubscriptionEquivalentCost;
+  const subscriptionEquivalentCost =
+    plannerSubscriptionEquivalentCost +
+    subagentSubscriptionEquivalentCost +
+    coderSubscriptionEquivalentCost +
+    evaluatorSubscriptionEquivalentCost;
   const baseStatuses = [
     plannerQuality?.plannerCostStatus ?? 'known',
     ...sprintMetrics.map((sprint) => sprint.costStatus ?? 'known'),
   ] as TaskExecutionFinalize['costStatus'][];
-  let costStatus = baseStatuses.reduce((worst, status) =>
-    COST_QUALITY_RANK[status] > COST_QUALITY_RANK[worst] ? status : worst, 'known');
+  let costStatus = baseStatuses.reduce(
+    (worst, status) => (COST_QUALITY_RANK[status] > COST_QUALITY_RANK[worst] ? status : worst),
+    'known',
+  );
   if (subagents.costStatus && COST_QUALITY_RANK[subagents.costStatus] > COST_QUALITY_RANK[costStatus]) {
     costStatus = subagents.costStatus;
   }
   if (unknownCostCount > 0) costStatus = 'unknown';
-  const tokenStatus = plannerQuality?.plannerTokenStatus === 'not_reported'
-    || sprintMetrics.some((sprint) => sprint.tokenStatus === 'not_reported')
-    || subagents.tokenStatus === 'not_reported'
-    ? 'not_reported'
-    : 'reported';
-  const costUnknownReasons = [...new Set([
-    ...(plannerQuality?.plannerCostUnknownReasons ?? []),
-    ...sprintMetrics.flatMap((sprint) => sprint.costUnknownReasons ?? []),
-    ...subagents.costUnknownReasons,
-  ])].sort();
+  const tokenStatus =
+    plannerQuality?.plannerTokenStatus === 'not_reported' ||
+    sprintMetrics.some((sprint) => sprint.tokenStatus === 'not_reported') ||
+    subagents.tokenStatus === 'not_reported'
+      ? 'not_reported'
+      : 'reported';
+  const costUnknownReasons = [
+    ...new Set([
+      ...(plannerQuality?.plannerCostUnknownReasons ?? []),
+      ...sprintMetrics.flatMap((sprint) => sprint.costUnknownReasons ?? []),
+      ...subagents.costUnknownReasons,
+    ]),
+  ].sort();
 
   return {
     totalCost: (allRoundsRow['total_cost'] ?? 0) + plannerCost + subagents.metrics.costUsd,
     totalDuration: (allRoundsRow['total_duration'] ?? 0) + plannerDuration + subagents.metrics.durationMs,
     totalRounds: allRoundsRow['total_rounds'] ?? 0,
-    totalTokens: (allRoundsRow['total_tokens'] ?? 0) + plannerTokens
-      + subagents.metrics.inputTokens + subagents.metrics.outputTokens,
-    totalInputTokens: (allRoundsRow['total_input_tokens'] ?? 0)
-      + (project?.plannerInputTokens ?? 0) + subagents.metrics.inputTokens,
-    totalOutputTokens: (allRoundsRow['total_output_tokens'] ?? 0)
-      + (project?.plannerOutputTokens ?? 0) + subagents.metrics.outputTokens,
+    totalTokens:
+      (allRoundsRow['total_tokens'] ?? 0) +
+      plannerTokens +
+      subagents.metrics.inputTokens +
+      subagents.metrics.outputTokens,
+    totalInputTokens:
+      (allRoundsRow['total_input_tokens'] ?? 0) + (project?.plannerInputTokens ?? 0) + subagents.metrics.inputTokens,
+    totalOutputTokens:
+      (allRoundsRow['total_output_tokens'] ?? 0) + (project?.plannerOutputTokens ?? 0) + subagents.metrics.outputTokens,
     totalApiRequests: (allRoundsRow['total_api_requests'] ?? 0) + subagents.metrics.apiRequests,
     passRate,
     coderCost: allRoundsRow['coder_cost'] ?? 0,
@@ -6840,8 +7499,6 @@ export function getHarnessProjectMetrics(projectId: string): HarnessProjectMetri
     costUnknownReasons,
   };
 }
-
-// ---- Enrich Sessions CRUD ----
 
 export interface EnrichSessionRow {
   id: string;
@@ -6917,11 +7574,15 @@ function mapEnrichSession(row: Record<string, unknown>): EnrichSessionRow {
     validatorTokenStatus: (row['validator_token_status'] as EnrichSessionRow['validatorTokenStatus']) ?? 'reported',
     validatorCostUnknownReason: (row['validator_cost_unknown_reason'] as string | null) ?? null,
     validatorCostSource: (row['validator_cost_source'] as string | null) ?? null,
-    validatorCostEstimationKind: (row['validator_cost_estimation_kind'] as EnrichSessionRow['validatorCostEstimationKind']) ?? null,
+    validatorCostEstimationKind:
+      (row['validator_cost_estimation_kind'] as EnrichSessionRow['validatorCostEstimationKind']) ?? null,
     validatorUnknownCostCount: (row['validator_unknown_cost_count'] as number) ?? 0,
     validatorUsageMetadata: (() => {
-      try { return JSON.parse((row['validator_usage_metadata'] as string) || 'null') as Record<string, unknown> | null; }
-      catch { return null; }
+      try {
+        return JSON.parse((row['validator_usage_metadata'] as string) || 'null') as Record<string, unknown> | null;
+      } catch {
+        return null;
+      }
     })(),
     enricherInputTokens: (row['enricher_input_tokens'] as number) ?? 0,
     enricherOutputTokens: (row['enricher_output_tokens'] as number) ?? 0,
@@ -6936,11 +7597,15 @@ function mapEnrichSession(row: Record<string, unknown>): EnrichSessionRow {
     enricherTokenStatus: (row['enricher_token_status'] as EnrichSessionRow['enricherTokenStatus']) ?? 'reported',
     enricherCostUnknownReason: (row['enricher_cost_unknown_reason'] as string | null) ?? null,
     enricherCostSource: (row['enricher_cost_source'] as string | null) ?? null,
-    enricherCostEstimationKind: (row['enricher_cost_estimation_kind'] as EnrichSessionRow['enricherCostEstimationKind']) ?? null,
+    enricherCostEstimationKind:
+      (row['enricher_cost_estimation_kind'] as EnrichSessionRow['enricherCostEstimationKind']) ?? null,
     enricherUnknownCostCount: (row['enricher_unknown_cost_count'] as number) ?? 0,
     enricherUsageMetadata: (() => {
-      try { return JSON.parse((row['enricher_usage_metadata'] as string) || 'null') as Record<string, unknown> | null; }
-      catch { return null; }
+      try {
+        return JSON.parse((row['enricher_usage_metadata'] as string) || 'null') as Record<string, unknown> | null;
+      } catch {
+        return null;
+      }
     })(),
     createdAt: row['created_at'] as string,
     updatedAt: row['updated_at'] as string,
@@ -6957,10 +7622,12 @@ export function insertEnrichSession(session: {
   validatorAgentId: string;
   enricherAgentId?: string;
 }): EnrichSessionRow {
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO enrich_sessions (id, name, spec_path, project_path, prd_path, user_message, validator_agent_id, enricher_agent_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     session.id,
     session.name,
     session.specPath,
@@ -6979,31 +7646,64 @@ export function getEnrichSession(id: string): EnrichSessionRow | undefined {
   return mapEnrichSession(row);
 }
 
-export function updateEnrichSession(id: string, fields: Partial<{
-  name: string;
-  specPath: string;
-  projectPath: string | null;
-  prdPath: string | null;
-  userMessage: string | null;
-  validatorAgentId: string;
-  enricherAgentId: string;
-  phase: EnrichSessionRow['phase'];
-  status: EnrichSessionRow['status'];
-  finalSpecPath: string | null;
-}>): EnrichSessionRow {
+export function updateEnrichSession(
+  id: string,
+  fields: Partial<{
+    name: string;
+    specPath: string;
+    projectPath: string | null;
+    prdPath: string | null;
+    userMessage: string | null;
+    validatorAgentId: string;
+    enricherAgentId: string;
+    phase: EnrichSessionRow['phase'];
+    status: EnrichSessionRow['status'];
+    finalSpecPath: string | null;
+  }>,
+): EnrichSessionRow {
   const cols: string[] = [];
   const values: unknown[] = [];
 
-  if (fields.name !== undefined)             { cols.push('name = ?');               values.push(fields.name); }
-  if (fields.specPath !== undefined)         { cols.push('spec_path = ?');           values.push(fields.specPath); }
-  if (fields.projectPath !== undefined)      { cols.push('project_path = ?');        values.push(fields.projectPath); }
-  if (fields.prdPath !== undefined)          { cols.push('prd_path = ?');            values.push(fields.prdPath); }
-  if (fields.userMessage !== undefined)      { cols.push('user_message = ?');        values.push(fields.userMessage); }
-  if (fields.validatorAgentId !== undefined) { cols.push('validator_agent_id = ?'); values.push(fields.validatorAgentId); }
-  if (fields.enricherAgentId !== undefined)  { cols.push('enricher_agent_id = ?');  values.push(fields.enricherAgentId); }
-  if (fields.phase !== undefined)            { cols.push('phase = ?');               values.push(fields.phase); }
-  if (fields.status !== undefined)           { cols.push('status = ?');              values.push(fields.status); }
-  if (fields.finalSpecPath !== undefined)    { cols.push('final_spec_path = ?');     values.push(fields.finalSpecPath); }
+  if (fields.name !== undefined) {
+    cols.push('name = ?');
+    values.push(fields.name);
+  }
+  if (fields.specPath !== undefined) {
+    cols.push('spec_path = ?');
+    values.push(fields.specPath);
+  }
+  if (fields.projectPath !== undefined) {
+    cols.push('project_path = ?');
+    values.push(fields.projectPath);
+  }
+  if (fields.prdPath !== undefined) {
+    cols.push('prd_path = ?');
+    values.push(fields.prdPath);
+  }
+  if (fields.userMessage !== undefined) {
+    cols.push('user_message = ?');
+    values.push(fields.userMessage);
+  }
+  if (fields.validatorAgentId !== undefined) {
+    cols.push('validator_agent_id = ?');
+    values.push(fields.validatorAgentId);
+  }
+  if (fields.enricherAgentId !== undefined) {
+    cols.push('enricher_agent_id = ?');
+    values.push(fields.enricherAgentId);
+  }
+  if (fields.phase !== undefined) {
+    cols.push('phase = ?');
+    values.push(fields.phase);
+  }
+  if (fields.status !== undefined) {
+    cols.push('status = ?');
+    values.push(fields.status);
+  }
+  if (fields.finalSpecPath !== undefined) {
+    cols.push('final_spec_path = ?');
+    values.push(fields.finalSpecPath);
+  }
 
   if (cols.length > 0) {
     cols.push(`updated_at = datetime('now')`);
@@ -7051,15 +7751,42 @@ export function accumulateEnrichMetrics(
   const cols: string[] = [];
   const values: unknown[] = [];
 
-  if (metrics.inputTokens)       { cols.push(`${p}_input_tokens = ${p}_input_tokens + ?`);                 values.push(metrics.inputTokens); }
-  if (metrics.outputTokens)      { cols.push(`${p}_output_tokens = ${p}_output_tokens + ?`);               values.push(metrics.outputTokens); }
-  if (metrics.cacheReadTokens)   { cols.push(`${p}_cache_read_tokens = ${p}_cache_read_tokens + ?`);       values.push(metrics.cacheReadTokens); }
-  if (metrics.cacheCreationTokens) { cols.push(`${p}_cache_creation_tokens = ${p}_cache_creation_tokens + ?`); values.push(metrics.cacheCreationTokens); }
-  if (metrics.costUsd)           { cols.push(`${p}_cost_usd = ${p}_cost_usd + ?`);                         values.push(metrics.costUsd); }
-  if (metrics.durationMs)        { cols.push(`${p}_duration_ms = ${p}_duration_ms + ?`);                   values.push(metrics.durationMs); }
-  if (metrics.toolUses)          { cols.push(`${p}_tool_uses = ${p}_tool_uses + ?`);                       values.push(metrics.toolUses); }
-  if (metrics.apiRequests)       { cols.push(`${p}_api_requests = ${p}_api_requests + ?`);                 values.push(metrics.apiRequests); }
-  if (metrics.messages)          { cols.push(`${p}_messages = ${p}_messages + ?`);                         values.push(metrics.messages); }
+  if (metrics.inputTokens) {
+    cols.push(`${p}_input_tokens = ${p}_input_tokens + ?`);
+    values.push(metrics.inputTokens);
+  }
+  if (metrics.outputTokens) {
+    cols.push(`${p}_output_tokens = ${p}_output_tokens + ?`);
+    values.push(metrics.outputTokens);
+  }
+  if (metrics.cacheReadTokens) {
+    cols.push(`${p}_cache_read_tokens = ${p}_cache_read_tokens + ?`);
+    values.push(metrics.cacheReadTokens);
+  }
+  if (metrics.cacheCreationTokens) {
+    cols.push(`${p}_cache_creation_tokens = ${p}_cache_creation_tokens + ?`);
+    values.push(metrics.cacheCreationTokens);
+  }
+  if (metrics.costUsd) {
+    cols.push(`${p}_cost_usd = ${p}_cost_usd + ?`);
+    values.push(metrics.costUsd);
+  }
+  if (metrics.durationMs) {
+    cols.push(`${p}_duration_ms = ${p}_duration_ms + ?`);
+    values.push(metrics.durationMs);
+  }
+  if (metrics.toolUses) {
+    cols.push(`${p}_tool_uses = ${p}_tool_uses + ?`);
+    values.push(metrics.toolUses);
+  }
+  if (metrics.apiRequests) {
+    cols.push(`${p}_api_requests = ${p}_api_requests + ?`);
+    values.push(metrics.apiRequests);
+  }
+  if (metrics.messages) {
+    cols.push(`${p}_messages = ${p}_messages + ?`);
+    values.push(metrics.messages);
+  }
   if (metrics.costStatus !== undefined) {
     cols.push(`${p}_cost_status = CASE
       WHEN ${p}_cost_status = 'unknown' OR ? = 'unknown' THEN 'unknown'
@@ -7087,7 +7814,8 @@ export function accumulateEnrichMetrics(
     values.push(metrics.unknownCostCount);
   }
   if (metrics.usageMetadata !== undefined) {
-    const stored = db.prepare(`SELECT ${p}_usage_metadata AS usage_metadata FROM enrich_sessions WHERE id = ?`)
+    const stored = db
+      .prepare(`SELECT ${p}_usage_metadata AS usage_metadata FROM enrich_sessions WHERE id = ?`)
       .get(id) as { usage_metadata?: string | null } | undefined;
     let turns: Record<string, unknown>[] = [];
     try {
@@ -7106,12 +7834,6 @@ export function accumulateEnrichMetrics(
   values.push(id);
   db.prepare(`UPDATE enrich_sessions SET ${cols.join(', ')} WHERE id = ?`).run(...values);
 }
-
-// NOTE: ensureEnrichAgents/ensureDevAgents/ensurePipelineAgents/ensureTechAgents/
-// ensureSecurityAgents/ensureFeatureAgents foram removidas — substituidas pela
-// `ensureAllSeedAgents()` em `seed-agents/ensure.ts`.
-
-// ---- Security Agent Status CRUD ----
 
 export interface SecurityAgentStatusRow {
   id: number;
@@ -7162,31 +7884,60 @@ export function insertSecurityAgentStatus(
 export function updateSecurityAgentStatus(
   projectId: string,
   agentId: string,
-  patch: Partial<Pick<SecurityAgentStatusRow, 'status' | 'findingsCount' | 'outputFile' | 'startedAt' | 'completedAt' | 'errorMessage'>>,
+  patch: Partial<
+    Pick<
+      SecurityAgentStatusRow,
+      'status' | 'findingsCount' | 'outputFile' | 'startedAt' | 'completedAt' | 'errorMessage'
+    >
+  >,
 ): void {
   const fields: string[] = [];
   const values: unknown[] = [];
 
-  if (patch.status !== undefined)       { fields.push('status = ?');          values.push(patch.status); }
-  if (patch.findingsCount !== undefined) { fields.push('findings_count = ?');  values.push(patch.findingsCount); }
-  if (patch.outputFile !== undefined)   { fields.push('output_file = ?');      values.push(patch.outputFile); }
-  if (patch.startedAt !== undefined)    { fields.push('started_at = ?');       values.push(patch.startedAt); }
-  if (patch.completedAt !== undefined)  { fields.push('completed_at = ?');     values.push(patch.completedAt); }
-  if (patch.errorMessage !== undefined) { fields.push('error_message = ?');    values.push(patch.errorMessage); }
+  if (patch.status !== undefined) {
+    fields.push('status = ?');
+    values.push(patch.status);
+  }
+  if (patch.findingsCount !== undefined) {
+    fields.push('findings_count = ?');
+    values.push(patch.findingsCount);
+  }
+  if (patch.outputFile !== undefined) {
+    fields.push('output_file = ?');
+    values.push(patch.outputFile);
+  }
+  if (patch.startedAt !== undefined) {
+    fields.push('started_at = ?');
+    values.push(patch.startedAt);
+  }
+  if (patch.completedAt !== undefined) {
+    fields.push('completed_at = ?');
+    values.push(patch.completedAt);
+  }
+  if (patch.errorMessage !== undefined) {
+    fields.push('error_message = ?');
+    values.push(patch.errorMessage);
+  }
 
   if (fields.length === 0) return;
 
   values.push(projectId, agentId);
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE security_agent_status SET ${fields.join(', ')}
     WHERE project_id = ? AND agent_id = ?
-  `).run(...values);
+  `,
+  ).run(...values);
 }
 
 export function getSecurityAgentStatuses(projectId: string): SecurityAgentStatusRow[] {
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT * FROM security_agent_status WHERE project_id = ? ORDER BY id ASC
-  `).all(projectId) as Record<string, unknown>[];
+  `,
+    )
+    .all(projectId) as Record<string, unknown>[];
   return rows.map(mapSecurityAgentStatus);
 }
 
@@ -7196,14 +7947,6 @@ export function deleteSecurityAgentStatuses(projectId: string): void {
 
 export interface AuditAgentRow {
   agentId: string;
-  /**
-   * Slug curto do agente (ex: `root-cause`). EXTENSAO ADITIVA E OPCIONAL
-   * (SPEC spec-sdk-e-bug-pipe.md secao 4.7.1): so o consumidor `bug`
-   * (`getBugAnalysisAgentsState`) preenche, lendo a COLUNA `agent_slug`. O
-   * consumidor `security` (`getAuditAgentsState`) NAO preenche — nada muda do
-   * lado dele, e o renderer segue caindo na derivacao historica por string
-   * surgery quando o campo vem `undefined`.
-   */
   agentSlug?: string;
   agentName: string;
   status: 'queued' | 'running' | 'completed' | 'failed';
@@ -7223,11 +7966,15 @@ export function getAuditAgentsState(projectId: string): AuditAgentRow[] {
   const statuses = getSecurityAgentStatuses(projectId);
   if (statuses.length === 0) return [];
 
-  const metricsRows = db.prepare(`
+  const metricsRows = db
+    .prepare(
+      `
     SELECT agent_id, model, runtime, cost_usd, duration_ms, tool_uses, started_at, completed_at, status, metadata
     FROM pipeline_phase_metrics
     WHERE project_id = ? AND phase_number = 2 AND agent_id IS NOT NULL
-  `).all(projectId) as Array<{
+  `,
+    )
+    .all(projectId) as Array<{
     agent_id: string;
     model: string | null;
     runtime: string | null;
@@ -7240,7 +7987,7 @@ export function getAuditAgentsState(projectId: string): AuditAgentRow[] {
     metadata: string | null;
   }>;
 
-  const metricsByAgent = new Map<string, typeof metricsRows[0]>();
+  const metricsByAgent = new Map<string, (typeof metricsRows)[0]>();
   for (const m of metricsRows) {
     metricsByAgent.set(m.agent_id, m);
   }
@@ -7249,9 +7996,7 @@ export function getAuditAgentsState(projectId: string): AuditAgentRow[] {
     if (!raw) return {};
     try {
       const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-        ? parsed as Record<string, unknown>
-        : {};
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
     } catch {
       return {};
     }
@@ -7283,21 +8028,6 @@ export function getAuditAgentsState(projectId: string): AuditAgentRow[] {
     };
   });
 }
-
-// ---- Bug Analysis Agent Status CRUD (Bug Pipe, fase 2) ----
-//
-// SPEC spec-sdk-e-bug-pipe.md secao 4.7.1 (DECISAO FECHADA): tabela PROPRIA
-// (`bug_analysis_agent_status`, DDL na V143) para a ESCRITA, canal EXISTENTE
-// (`pipeline:get-audit-agents-state`) com ramo por pipelineType para a LEITURA.
-//
-// Divergencias DELIBERADAS vs `security_agent_status`:
-//  - sem `findings_count` (o Bug Pipe nao tem formato de finding);
-//  - COM `agent_slug` persistido (mata a string surgery do renderer, que quebra
-//    para ids `bug-*`: 'bug-root-cause-analyst'.replace(/^security-/,'')
-//    .split('-')[0] === 'bug' para os TRES agentes);
-//  - COM `run_id` na chave unica (project_id, run_id, agent_id) e no WHERE de
-//    update/leitura, para que um run antigo nunca apareca no painel do run
-//    corrente.
 
 export interface BugAnalysisAgentStatusRow {
   id: number;
@@ -7331,14 +8061,6 @@ function mapBugAnalysisAgentStatus(row: Record<string, unknown>): BugAnalysisAge
   };
 }
 
-/**
- * Enfileira (pending) os agentes da fase 2 do Bug Pipe.
- *
- * `INSERT OR IGNORE` so e semanticamente valido por causa do UNIQUE
- * `(project_id, run_id, agent_id)` criado na V143 — sem ele o insert seria um
- * INSERT comum e as linhas ACUMULARIAM a cada re-enfileiramento (foi o bug que
- * a V139 teve que consertar em `security_agent_status`).
- */
 export function insertBugAnalysisAgentStatus(
   projectId: string,
   runId: string,
@@ -7357,67 +8079,75 @@ export function insertBugAnalysisAgentStatus(
   insert();
 }
 
-/**
- * Assinatura DIVERGE do molde (`updateSecurityAgentStatus`): carrega `runId` e o
- * WHERE filtra por ele. O molde nao tem LIMIT, entao sem o filtro de run um
- * update atravessaria runs do mesmo projeto.
- */
 export function updateBugAnalysisAgentStatus(
   projectId: string,
   runId: string,
   agentId: string,
-  patch: Partial<Pick<
-    BugAnalysisAgentStatusRow,
-    'status' | 'outputFile' | 'startedAt' | 'completedAt' | 'errorMessage'
-  >>,
+  patch: Partial<
+    Pick<BugAnalysisAgentStatusRow, 'status' | 'outputFile' | 'startedAt' | 'completedAt' | 'errorMessage'>
+  >,
 ): void {
   const fields: string[] = [];
   const values: unknown[] = [];
 
-  if (patch.status !== undefined)       { fields.push('status = ?');        values.push(patch.status); }
-  if (patch.outputFile !== undefined)   { fields.push('output_file = ?');   values.push(patch.outputFile); }
-  if (patch.startedAt !== undefined)    { fields.push('started_at = ?');    values.push(patch.startedAt); }
-  if (patch.completedAt !== undefined)  { fields.push('completed_at = ?');  values.push(patch.completedAt); }
-  if (patch.errorMessage !== undefined) { fields.push('error_message = ?'); values.push(patch.errorMessage); }
+  if (patch.status !== undefined) {
+    fields.push('status = ?');
+    values.push(patch.status);
+  }
+  if (patch.outputFile !== undefined) {
+    fields.push('output_file = ?');
+    values.push(patch.outputFile);
+  }
+  if (patch.startedAt !== undefined) {
+    fields.push('started_at = ?');
+    values.push(patch.startedAt);
+  }
+  if (patch.completedAt !== undefined) {
+    fields.push('completed_at = ?');
+    values.push(patch.completedAt);
+  }
+  if (patch.errorMessage !== undefined) {
+    fields.push('error_message = ?');
+    values.push(patch.errorMessage);
+  }
 
   if (fields.length === 0) return;
 
   values.push(projectId, runId, agentId);
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE bug_analysis_agent_status SET ${fields.join(', ')}
     WHERE project_id = ? AND run_id = ? AND agent_id = ?
-  `).run(...values);
+  `,
+  ).run(...values);
 }
 
-export function getBugAnalysisAgentStatuses(
-  projectId: string,
-  runId: string,
-): BugAnalysisAgentStatusRow[] {
-  const rows = db.prepare(`
+export function getBugAnalysisAgentStatuses(projectId: string, runId: string): BugAnalysisAgentStatusRow[] {
+  const rows = db
+    .prepare(
+      `
     SELECT * FROM bug_analysis_agent_status
     WHERE project_id = ? AND run_id = ?
     ORDER BY id ASC
-  `).all(projectId, runId) as Record<string, unknown>[];
+  `,
+    )
+    .all(projectId, runId) as Record<string, unknown>[];
   return rows.map(mapBugAnalysisAgentStatus);
 }
 
-/**
- * Estado dos 3 analistas da fase 2 para o painel multi-agente.
- *
- * Espelho de `getAuditAgentsState`: mesmo merge com `pipeline_phase_metrics`
- * WHERE phase_number = 2 (custo, duracao, model, runtime), mesmo shape de
- * retorno. Duas diferencas: filtra por `runId` e preenche `agentSlug` a partir
- * da COLUNA (sem `replace()`).
- */
 export function getBugAnalysisAgentsState(projectId: string, runId: string): AuditAgentRow[] {
   const statuses = getBugAnalysisAgentStatuses(projectId, runId);
   if (statuses.length === 0) return [];
 
-  const metricsRows = db.prepare(`
+  const metricsRows = db
+    .prepare(
+      `
     SELECT agent_id, model, runtime, cost_usd, duration_ms, tool_uses, started_at, completed_at, status, metadata
     FROM pipeline_phase_metrics
     WHERE project_id = ? AND phase_number = 2 AND agent_id IS NOT NULL
-  `).all(projectId) as Array<{
+  `,
+    )
+    .all(projectId) as Array<{
     agent_id: string;
     model: string | null;
     runtime: string | null;
@@ -7430,7 +8160,7 @@ export function getBugAnalysisAgentsState(projectId: string, runId: string): Aud
     metadata: string | null;
   }>;
 
-  const metricsByAgent = new Map<string, typeof metricsRows[0]>();
+  const metricsByAgent = new Map<string, (typeof metricsRows)[0]>();
   for (const m of metricsRows) {
     metricsByAgent.set(m.agent_id, m);
   }
@@ -7439,9 +8169,7 @@ export function getBugAnalysisAgentsState(projectId: string, runId: string): Aud
     if (!raw) return {};
     try {
       const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-        ? parsed as Record<string, unknown>
-        : {};
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
     } catch {
       return {};
     }
@@ -7474,16 +8202,9 @@ export function getBugAnalysisAgentsState(projectId: string, runId: string): Aud
   });
 }
 
-/**
- * Apaga TODAS as linhas do projeto (sem `runId`): e o que o reset das fases 1 e
- * 2 quer nos dois casos — o reset da fase 1 gera runId NOVO e as linhas do run
- * anterior ficariam orfas, com `output_file` apontando para arquivos apagados.
- */
 export function deleteBugAnalysisAgentStatuses(projectId: string): void {
   db.prepare('DELETE FROM bug_analysis_agent_status WHERE project_id = ?').run(projectId);
 }
-
-// ---- Enrich Messages CRUD ----
 
 export interface EnrichMessageRow {
   id: number;
@@ -7502,35 +8223,36 @@ export function insertEnrichMessage(
   content: string,
   toolCalls?: Array<{ tool: string; input: unknown }>,
 ): void {
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO enrich_messages (session_id, phase, role, content, tool_calls)
     VALUES (?, ?, ?, ?, ?)
-  `).run(
-    sessionId,
-    phase,
-    role,
-    content,
-    toolCalls && toolCalls.length > 0 ? JSON.stringify(toolCalls) : null,
-  );
+  `,
+  ).run(sessionId, phase, role, content, toolCalls && toolCalls.length > 0 ? JSON.stringify(toolCalls) : null);
 }
 
-export function getEnrichMessages(
-  sessionId: string,
-  phase?: string,
-): EnrichMessageRow[] {
+export function getEnrichMessages(sessionId: string, phase?: string): EnrichMessageRow[] {
   let rows: Record<string, unknown>[];
   if (phase) {
-    rows = db.prepare(`
+    rows = db
+      .prepare(
+        `
       SELECT * FROM enrich_messages
       WHERE session_id = ? AND phase = ?
       ORDER BY id ASC
-    `).all(sessionId, phase) as Record<string, unknown>[];
+    `,
+      )
+      .all(sessionId, phase) as Record<string, unknown>[];
   } else {
-    rows = db.prepare(`
+    rows = db
+      .prepare(
+        `
       SELECT * FROM enrich_messages
       WHERE session_id = ?
       ORDER BY id ASC
-    `).all(sessionId) as Record<string, unknown>[];
+    `,
+      )
+      .all(sessionId) as Record<string, unknown>[];
   }
 
   return rows.map((row) => ({
@@ -7546,8 +8268,6 @@ export function getEnrichMessages(
   }));
 }
 
-// ---- Ingest Jobs ----
-
 export function insertIngestJob(job: {
   id: string;
   fileName: string;
@@ -7557,10 +8277,12 @@ export function insertIngestJob(job: {
   totalChunks?: number;
   estimatedCostUsd?: number;
 }): void {
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO ingest_jobs (id, file_name, source_type, original_path, file_hash, status, total_chunks, estimated_cost_usd, started_at)
     VALUES (?, ?, ?, ?, ?, 'extracting', ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     job.id,
     job.fileName,
     job.sourceType,
@@ -7572,31 +8294,64 @@ export function insertIngestJob(job: {
   );
 }
 
-export function updateIngestJob(id: string, updates: Partial<{
-  status: string;
-  totalChunks: number;
-  processedChunks: number;
-  lastProcessedChunk: number;
-  notesCreated: number;
-  notesUpdated: number;
-  estimatedCostUsd: number;
-  error: string;
-  completedAt: string;
-  createdNotePaths: string[];
-}>): void {
+export function updateIngestJob(
+  id: string,
+  updates: Partial<{
+    status: string;
+    totalChunks: number;
+    processedChunks: number;
+    lastProcessedChunk: number;
+    notesCreated: number;
+    notesUpdated: number;
+    estimatedCostUsd: number;
+    error: string;
+    completedAt: string;
+    createdNotePaths: string[];
+  }>,
+): void {
   const sets: string[] = [];
   const vals: unknown[] = [];
 
-  if (updates.status !== undefined) { sets.push('status = ?'); vals.push(updates.status); }
-  if (updates.totalChunks !== undefined) { sets.push('total_chunks = ?'); vals.push(updates.totalChunks); }
-  if (updates.processedChunks !== undefined) { sets.push('processed_chunks = ?'); vals.push(updates.processedChunks); }
-  if (updates.lastProcessedChunk !== undefined) { sets.push('last_processed_chunk = ?'); vals.push(updates.lastProcessedChunk); }
-  if (updates.notesCreated !== undefined) { sets.push('notes_created = ?'); vals.push(updates.notesCreated); }
-  if (updates.notesUpdated !== undefined) { sets.push('notes_updated = ?'); vals.push(updates.notesUpdated); }
-  if (updates.estimatedCostUsd !== undefined) { sets.push('estimated_cost_usd = ?'); vals.push(updates.estimatedCostUsd); }
-  if (updates.error !== undefined) { sets.push('error = ?'); vals.push(updates.error); }
-  if (updates.completedAt !== undefined) { sets.push('completed_at = ?'); vals.push(updates.completedAt); }
-  if (updates.createdNotePaths !== undefined) { sets.push('created_note_paths = ?'); vals.push(JSON.stringify(updates.createdNotePaths)); }
+  if (updates.status !== undefined) {
+    sets.push('status = ?');
+    vals.push(updates.status);
+  }
+  if (updates.totalChunks !== undefined) {
+    sets.push('total_chunks = ?');
+    vals.push(updates.totalChunks);
+  }
+  if (updates.processedChunks !== undefined) {
+    sets.push('processed_chunks = ?');
+    vals.push(updates.processedChunks);
+  }
+  if (updates.lastProcessedChunk !== undefined) {
+    sets.push('last_processed_chunk = ?');
+    vals.push(updates.lastProcessedChunk);
+  }
+  if (updates.notesCreated !== undefined) {
+    sets.push('notes_created = ?');
+    vals.push(updates.notesCreated);
+  }
+  if (updates.notesUpdated !== undefined) {
+    sets.push('notes_updated = ?');
+    vals.push(updates.notesUpdated);
+  }
+  if (updates.estimatedCostUsd !== undefined) {
+    sets.push('estimated_cost_usd = ?');
+    vals.push(updates.estimatedCostUsd);
+  }
+  if (updates.error !== undefined) {
+    sets.push('error = ?');
+    vals.push(updates.error);
+  }
+  if (updates.completedAt !== undefined) {
+    sets.push('completed_at = ?');
+    vals.push(updates.completedAt);
+  }
+  if (updates.createdNotePaths !== undefined) {
+    sets.push('created_note_paths = ?');
+    vals.push(JSON.stringify(updates.createdNotePaths));
+  }
 
   if (sets.length === 0) return;
   vals.push(id);
@@ -7610,9 +8365,9 @@ export function getIngestJob(id: string): IngestJob | null {
 }
 
 export function getIngestJobByHash(fileHash: string): IngestJob | null {
-  const row = db.prepare(
-    "SELECT * FROM ingest_jobs WHERE file_hash = ? AND status = 'completed' ORDER BY started_at DESC LIMIT 1"
-  ).get(fileHash) as Record<string, unknown> | undefined;
+  const row = db
+    .prepare("SELECT * FROM ingest_jobs WHERE file_hash = ? AND status = 'completed' ORDER BY started_at DESC LIMIT 1")
+    .get(fileHash) as Record<string, unknown> | undefined;
   if (!row) return null;
   return mapIngestJobRow(row);
 }
@@ -7626,7 +8381,9 @@ function mapIngestJobRow(row: Record<string, unknown>): IngestJob {
   let createdNotePaths: string[] = [];
   try {
     createdNotePaths = JSON.parse((row['created_note_paths'] as string) || '[]');
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   return {
     id: row['id'] as string,
@@ -7647,8 +8404,6 @@ function mapIngestJobRow(row: Record<string, unknown>): IngestJob {
     createdNotePaths,
   };
 }
-
-// ---- Pipeline Phase Metrics ----
 
 export type PipelinePhaseStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'interrupted';
 
@@ -7704,15 +8459,11 @@ export interface PipelineMetrics {
   };
   cloudCost: number;
   localCost: number;
-  /** Custos de fases + subagentes do ledger, agrupados pelo runtime efetivo. */
   costByRuntime: Record<string, number>;
-  /** Pior qualidade de custo observada em cada bucket de runtime. */
   costStatusByRuntime: Record<string, TaskExecutionFinalize['costStatus']>;
-  /** Parcela do total que representa equivalente PAYG de runtimes por assinatura. */
   subscriptionEquivalentCost: number;
   phases: PipelinePhaseMetricsRow[];
   sprintPhases: PipelinePhaseMetricsRow[];
-  /** Map of agent_id -> display name (for UI labels). */
   agentNames: Record<string, string>;
 }
 
@@ -7739,34 +8490,36 @@ function mapPipelinePhaseMetrics(row: Record<string, unknown>): PipelinePhaseMet
     startedAt: (row['started_at'] as string | null) ?? null,
     completedAt: (row['completed_at'] as string | null) ?? null,
     metadata: (() => {
-      try { return JSON.parse((row['metadata'] as string) || '{}'); } catch { return {}; }
+      try {
+        return JSON.parse((row['metadata'] as string) || '{}');
+      } catch {
+        return {};
+      }
     })(),
     unknownCostCount: (row['unknown_cost_count'] as number) ?? 0,
     createdAt: row['created_at'] as string,
   };
 }
 
-function isLegacyDevelopmentV2PhaseNumbering(
-  projectId: string,
-  phaseRows?: Array<Record<string, unknown>>,
-): boolean {
-  const project = db.prepare(
-    'SELECT pipeline_type FROM harness_projects WHERE id = ?',
-  ).get(projectId) as { pipeline_type: string } | undefined;
+function isLegacyDevelopmentV2PhaseNumbering(projectId: string, phaseRows?: Array<Record<string, unknown>>): boolean {
+  const project = db.prepare('SELECT pipeline_type FROM harness_projects WHERE id = ?').get(projectId) as
+    { pipeline_type: string } | undefined;
   if (project?.pipeline_type !== 'development-v2') return false;
 
-  const rows = phaseRows ?? db.prepare(`
+  const rows =
+    phaseRows ??
+    (db
+      .prepare(
+        `
     SELECT phase_number, phase_name
     FROM pipeline_phase_metrics
     WHERE project_id = ?
-  `).all(projectId) as Array<Record<string, unknown>>;
+  `,
+      )
+      .all(projectId) as Array<Record<string, unknown>>);
 
-  const hasOldDesignLock = rows.some(
-    (row) => row['phase_number'] === 5 && row['phase_name'] === 'Design Lock',
-  );
-  const hasNewDesignLock = rows.some(
-    (row) => row['phase_number'] === 6 && row['phase_name'] === 'Design Lock',
-  );
+  const hasOldDesignLock = rows.some((row) => row['phase_number'] === 5 && row['phase_name'] === 'Design Lock');
+  const hasNewDesignLock = rows.some((row) => row['phase_number'] === 6 && row['phase_name'] === 'Design Lock');
   return hasOldDesignLock && !hasNewDesignLock;
 }
 
@@ -7774,20 +8527,23 @@ function hasLegacyDevelopmentV2Phase4OpenDesign(
   projectId: string,
   phaseRows?: Array<Record<string, unknown>>,
 ): boolean {
-  const project = db.prepare(
-    'SELECT pipeline_type FROM harness_projects WHERE id = ?',
-  ).get(projectId) as { pipeline_type: string } | undefined;
+  const project = db.prepare('SELECT pipeline_type FROM harness_projects WHERE id = ?').get(projectId) as
+    { pipeline_type: string } | undefined;
   if (project?.pipeline_type !== 'development-v2') return false;
 
-  const rows = phaseRows ?? db.prepare(`
+  const rows =
+    phaseRows ??
+    (db
+      .prepare(
+        `
     SELECT phase_number, phase_name
     FROM pipeline_phase_metrics
     WHERE project_id = ?
-  `).all(projectId) as Array<Record<string, unknown>>;
+  `,
+      )
+      .all(projectId) as Array<Record<string, unknown>>);
 
-  return rows.some(
-    (row) => row['phase_number'] === 4 && row['phase_name'] === 'Open Design Studio',
-  );
+  return rows.some((row) => row['phase_number'] === 4 && row['phase_name'] === 'Open Design Studio');
 }
 
 function remapLegacyDevelopmentV2MetricPhase(
@@ -7808,19 +8564,14 @@ function remapLegacyDevelopmentV2MetricPhase(
 }
 
 function getProjectPipelineType(projectId: string): string | undefined {
-  const project = db.prepare(
-    'SELECT pipeline_type FROM harness_projects WHERE id = ?',
-  ).get(projectId) as { pipeline_type: string } | undefined;
+  const project = db.prepare('SELECT pipeline_type FROM harness_projects WHERE id = ?').get(projectId) as
+    { pipeline_type: string } | undefined;
   return project?.pipeline_type;
 }
 
 function resolveStoredPhaseForHistoryRead(projectId: string, phaseNumber: number): number {
   if (!isLegacyDevelopmentV2PhaseNumbering(projectId)) return phaseNumber;
   const hasPhase4OpenDesign = hasLegacyDevelopmentV2Phase4OpenDesign(projectId);
-  // Old development-v2 projects predate the explicit Open Design Studio phase.
-  // Stored phase 5 is Design Lock, so every persisted history phase after ODS is
-  // one behind the current UI numbering. Harness round messages were also
-  // historically hardcoded to 13/14, so map current Code/Eval directly there.
   if (hasPhase4OpenDesign && phaseNumber === 5) return 4;
   if (phaseNumber === 16) return 13;
   if (phaseNumber === 17) return 14;
@@ -7832,17 +8583,9 @@ function resolveStoredPhaseCandidatesForHistoryRead(projectId: string, phaseNumb
   const projectType = getProjectPipelineType(projectId);
   const storedPhase = resolveStoredPhaseForHistoryRead(projectId, phaseNumber);
 
-  // Seam (M-4): per-(type, phase) candidate map — NOT a flat union (merging
-  // Coder/Evaluator would corrupt the history read). The shape is preserved; the
-  // only literals replaced by LOOP_HISTORY are the historical 13/14. The role
-  // position (1st loop phase = Coder, 2nd = Evaluator) indexes LOOP_HISTORY,
-  // matching the verbatim 13/14: history[0]=13 for the Coder phase, history[1]=14
-  // for the Evaluator phase, for every type whose history carries them.
-  const loopPhases = projectType
-    ? [...loopPhasesOf(projectType)].sort((a, b) => a - b)
-    : [];
+  const loopPhases = projectType ? [...loopPhasesOf(projectType)].sort((a, b) => a - b) : [];
   const history = LOOP_HISTORY_BY_TYPE[projectType as PipelineType] ?? [];
-  const roleIndex = loopPhases.indexOf(phaseNumber); // 0 = Coder, 1 = Evaluator, -1 otherwise
+  const roleIndex = loopPhases.indexOf(phaseNumber);
 
   if (projectType === 'architecture-review' || projectType === 'security') {
     if (phaseNumber === 10) return Array.from(new Set([storedPhase, history[roleIndex]!]));
@@ -7858,28 +8601,15 @@ function resolveStoredPhaseCandidatesForHistoryRead(projectId: string, phaseNumb
 }
 
 function isSprintLoopPhaseForProject(projectId: string, phaseNumber: number): boolean {
-  // Seam: loop phases are derived from the canonical *_PIPELINE_PHASES arrays.
-  // loopPhasesOf falls back to development (13/14) for undefined/unknown types,
-  // matching the prior `default:` branch.
   return loopPhasesOf(getProjectPipelineType(projectId)).has(phaseNumber);
 }
 
 function getSprintMessagePhaseNumbersForProject(projectId: string): number[] {
-  // Seam: current canonical loop phases plus the historical HarnessEngine
-  // hardcoded phases (13/14) from before pipeline-type-aware persistence.
-  // loopPhasesOf / LOOP_HISTORY_BY_TYPE fall back to development (loop {13,14},
-  // empty history) for undefined/unknown types, matching the prior `default:`.
   const type = getProjectPipelineType(projectId);
   const history = LOOP_HISTORY_BY_TYPE[type as PipelineType] ?? [];
   return [...loopPhasesOf(type), ...history];
 }
 
-/**
- * Save or update a pipeline phase metrics row.
- * If a row for (projectId, phaseNumber, sprintIndex) already exists, it is replaced.
- * sprintIndex defaults to -1 for non-sprint phases; use >= 0 for per-sprint rows (phases 10, 11).
- * Returns the id of the upserted row.
- */
 export function savePipelinePhaseMetrics(data: {
   projectId: string;
   phaseNumber: number;
@@ -7901,38 +8631,31 @@ export function savePipelinePhaseMetrics(data: {
   completedAt?: string;
   metadata?: Record<string, unknown>;
   sprintIndex?: number;
-  /**
-   * SPEC-005 Sprint 2: increment when cost was unknown for this call.
-   * Accumulated via ON CONFLICT DO UPDATE (addition). Pass 1 when costStatus === 'unknown'.
-   */
   unknownCostCount?: number;
 }): number {
   const sprintIdx = data.sprintIndex ?? -1;
   const unknownCostIncrement = data.unknownCostCount ?? 0;
 
-  // SPEC-005 §11 + Sprint 2.2.6:
-  // Merge metadata with any pre-existing metadata for this (projectId, phaseNumber, sprintIndex)
-  // to avoid clobbering fields like sprintIndex, sprintName, round, maxRounds that earlier
-  // upserts wrote. The caller only passes what it knows; this function fuses the rest.
-  const existingRow = db.prepare(
-    `SELECT metadata FROM pipeline_phase_metrics
+  const existingRow = db
+    .prepare(
+      `SELECT metadata FROM pipeline_phase_metrics
      WHERE project_id = ? AND phase_number = ? AND sprint_index = ?`,
-  ).get(data.projectId, data.phaseNumber, sprintIdx) as { metadata?: string } | undefined;
+    )
+    .get(data.projectId, data.phaseNumber, sprintIdx) as { metadata?: string } | undefined;
 
   const existingMeta: Record<string, unknown> = existingRow?.metadata
     ? (() => {
-        try { return JSON.parse(existingRow.metadata) as Record<string, unknown>; } catch { return {}; }
+        try {
+          return JSON.parse(existingRow.metadata) as Record<string, unknown>;
+        } catch {
+          return {};
+        }
       })()
     : {};
   const mergedMeta: Record<string, unknown> = {
     ...existingMeta,
     ...(data.metadata ?? {}),
   };
-  // BUG 3 F1 (bug-atividade-toolcalls-codex.md 3.3): a chave `sessionIds` e
-  // UNIAO array-aware, nunca last-write-wins — o spread acima preserva chaves
-  // DIFERENTES mas clobberaria o MESMO campo entre flushes da fase
-  // (retry/rounds apos o accumulator limpar), apagando ids de turnos
-  // anteriores e cegando o invariante F6 silenciosamente.
   const asStringArray = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string') : [];
   const prevSessionIds = asStringArray(existingMeta['sessionIds']);
@@ -7941,7 +8664,9 @@ export function savePipelinePhaseMetrics(data: {
     mergedMeta['sessionIds'] = Array.from(new Set([...prevSessionIds, ...nextSessionIds]));
   }
 
-  const result = db.prepare(`
+  const result = db
+    .prepare(
+      `
     INSERT INTO pipeline_phase_metrics
       (project_id, phase_number, sprint_index, phase_name, agent_id, status,
        input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
@@ -7967,65 +8692,60 @@ export function savePipelinePhaseMetrics(data: {
       completed_at = excluded.completed_at,
       metadata = excluded.metadata,
       unknown_cost_count = pipeline_phase_metrics.unknown_cost_count + excluded.unknown_cost_count
-  `).run(
-    data.projectId,
-    data.phaseNumber,
-    sprintIdx,
-    data.phaseName,
-    data.agentId ?? null,
-    data.status,
-    data.inputTokens ?? 0,
-    data.outputTokens ?? 0,
-    data.cacheReadTokens ?? 0,
-    data.cacheCreationTokens ?? 0,
-    data.costUsd ?? 0,
-    data.durationMs ?? 0,
-    data.toolUses ?? 0,
-    data.apiRequests ?? 0,
-    data.messagesCount ?? 0,
-    data.model ?? null,
-    data.runtime ?? null,
-    data.startedAt ?? null,
-    data.completedAt ?? null,
-    JSON.stringify(mergedMeta),
-    unknownCostIncrement,
-  );
+  `,
+    )
+    .run(
+      data.projectId,
+      data.phaseNumber,
+      sprintIdx,
+      data.phaseName,
+      data.agentId ?? null,
+      data.status,
+      data.inputTokens ?? 0,
+      data.outputTokens ?? 0,
+      data.cacheReadTokens ?? 0,
+      data.cacheCreationTokens ?? 0,
+      data.costUsd ?? 0,
+      data.durationMs ?? 0,
+      data.toolUses ?? 0,
+      data.apiRequests ?? 0,
+      data.messagesCount ?? 0,
+      data.model ?? null,
+      data.runtime ?? null,
+      data.startedAt ?? null,
+      data.completedAt ?? null,
+      JSON.stringify(mergedMeta),
+      unknownCostIncrement,
+    );
 
   return result.lastInsertRowid as number;
 }
 
-/**
- * BUG 3 F6: rows cruas de pipeline_phase_metrics de um projeto (sem o remap
- * legado do development-v2 de getPipelineMetrics — o invariante de sanidade
- * escreve de volta por (phase_number, sprint_index) e precisa das chaves
- * REAIS do banco, nao das remapeadas para a UI).
- */
 export function getPipelinePhaseMetricsRows(projectId: string): PipelinePhaseMetricsRow[] {
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT * FROM pipeline_phase_metrics
     WHERE project_id = ?
     ORDER BY phase_number ASC, sprint_index ASC
-  `).all(projectId) as Record<string, unknown>[];
+  `,
+    )
+    .all(projectId) as Record<string, unknown>[];
   return rows.map(mapPipelinePhaseMetrics);
 }
 
-/**
- * BUG 3 F6: merge no-clobber SO no metadata de uma row de
- * pipeline_phase_metrics (chaves do patch sobrescrevem as homonimas, todas as
- * demais sao preservadas). Nao toca nenhuma outra coluna — o caminho de
- * UPSERT completo continua sendo savePipelinePhaseMetrics. No-op se a row nao
- * existe (o invariante nunca cria row).
- */
 export function mergePipelinePhaseMetricsMetadata(
   projectId: string,
   phaseNumber: number,
   sprintIndex: number,
   patch: Record<string, unknown>,
 ): void {
-  const row = db.prepare(
-    `SELECT metadata FROM pipeline_phase_metrics
+  const row = db
+    .prepare(
+      `SELECT metadata FROM pipeline_phase_metrics
      WHERE project_id = ? AND phase_number = ? AND sprint_index = ?`,
-  ).get(projectId, phaseNumber, sprintIndex) as { metadata?: string | null } | undefined;
+    )
+    .get(projectId, phaseNumber, sprintIndex) as { metadata?: string | null } | undefined;
   if (!row) return;
   let existing: Record<string, unknown> = {};
   try {
@@ -8039,29 +8759,8 @@ export function mergePipelinePhaseMetricsMetadata(
   ).run(JSON.stringify({ ...existing, ...patch }), projectId, phaseNumber, sprintIndex);
 }
 
-/**
- * Append a message to the pipeline_messages table for a given project and phase.
- */
-/**
- * Sentinel agent_id marking a pipeline conversation GREETING — the auto-sent
- * briefing that kicks off a conversation phase. Stored as a normal role='user'
- * row so the agent still sees it in priorMessages
- * (getPipelinePhaseMessagesAsChatHistory, which does NOT filter), but the
- * renderer display read (getPipelinePhaseMessages) filters it out so it never
- * renders as a user bubble. Set by pipeline-engine sendMessage(..., { isGreeting }).
- */
 export const PIPELINE_GREETING_AGENT_ID = '__greeting__';
 
-/**
- * Writes the given pipeline columns to a harness_projects row. Builds a partial
- * UPDATE from only the provided columns; no-op when none is set. INV-13: this
- * SQL lives in db.ts. Extracted from the file-local helper that used to run raw
- * SQL inside pipeline-engine/index.ts (BUG-21). Behavior-identical: same column
- * order, same `updated_at = datetime('now')` tail, same `WHERE id = ?`.
- *
- * Callers in the engine must go through PipelineEngine.updateProjectColumns
- * (which also emits `pipeline:project-updated`), never this directly.
- */
 export function updateHarnessProjectPipelineColumns(
   projectId: string,
   columns: {
@@ -8123,10 +8822,12 @@ export function savePipelineMessage(data: {
   roundIndex?: number;
   agentId?: string;
 }): void {
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO pipeline_messages (project_id, phase_number, role, content, tool_calls, sprint_index, round_index, agent_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     data.projectId,
     data.phaseNumber,
     data.role,
@@ -8136,19 +8837,12 @@ export function savePipelineMessage(data: {
     data.roundIndex ?? null,
     data.agentId ?? null,
   );
-  // (F8 Trilho A, costura 2-write) Sonda da row GRAVADA em pipeline_messages.
   logger.debug(
     { projectId: data.projectId, phase: data.phaseNumber, role: data.role, probe: textProbe(data.content) },
     '(F8) pipeline_messages row gravada',
   );
 }
 
-/**
- * List all pipeline messages for a specific sprint, ordered by round_index ASC
- * then created_at ASC. Different pipeline types use different loop phase pairs:
- * 10/11 for security + architecture-review, 13/14 for development/feature, and
- * 16/17 for development-v2.
- */
 export function listPipelineMessagesForSprint(
   projectId: string,
   sprintIndex: number,
@@ -8165,12 +8859,16 @@ export function listPipelineMessagesForSprint(
 }> {
   const phaseNumbers = getSprintMessagePhaseNumbersForProject(projectId);
   const placeholders = phaseNumbers.map(() => '?').join(', ');
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT id, phase_number, role, content, tool_calls, sprint_index, round_index, agent_id, created_at
     FROM pipeline_messages
     WHERE project_id = ? AND sprint_index = ? AND phase_number IN (${placeholders})
     ORDER BY round_index ASC, created_at ASC
-  `).all(projectId, sprintIndex, ...phaseNumbers) as Array<{
+  `,
+    )
+    .all(projectId, sprintIndex, ...phaseNumbers) as Array<{
     id: number;
     phase_number: number;
     role: string;
@@ -8195,65 +8893,42 @@ export function listPipelineMessagesForSprint(
   }));
 }
 
-/**
- * Delete all pipeline_messages for a project where phase_number >= fromPhase.
- */
 export function deletePipelineMessagesFromPhase(projectId: string, fromPhase: number): void {
-  db.prepare(`
+  db.prepare(
+    `
     DELETE FROM pipeline_messages WHERE project_id = ? AND phase_number >= ?
-  `).run(projectId, fromPhase);
+  `,
+  ).run(projectId, fromPhase);
 }
 
-/**
- * Delete all pipeline_phase_metrics for a project where phase_number >= fromPhase.
- */
 export function deletePipelinePhaseMetricsFromPhase(projectId: string, fromPhase: number): void {
-  db.prepare(`
+  db.prepare(
+    `
     DELETE FROM pipeline_phase_metrics WHERE project_id = ? AND phase_number >= ?
-  `).run(projectId, fromPhase);
+  `,
+  ).run(projectId, fromPhase);
 }
 
-/**
- * Delete pipeline_messages for a specific sprint across all pipeline loop phase pairs.
- */
 export function deletePipelineMessagesForSprint(projectId: string, sprintIndex: number): void {
-  // Cross-type FLAT (M-3 / D24-bis item (a).4): uniao de TODA fase de loop ∪
-  // history = {8,9,10,11,13,14,16,17}. Este site CONTINUA flat de proposito: o
-  // escopo e `project_id + sprint_index`, entao numero de outro tipo nunca casa
-  // linha alheia, e apagar de MENOS (type-aware) deixaria lixo de projeto
-  // migrado. Inteiros derivados inlinados no SQL, que continua em db.ts.
   const loopPhaseIn = [...allLoopPhasesWithHistory()].sort((a, b) => a - b).join(', ');
-  db.prepare(`
+  db.prepare(
+    `
     DELETE FROM pipeline_messages
     WHERE project_id = ? AND sprint_index = ? AND phase_number IN (${loopPhaseIn})
-  `).run(projectId, sprintIndex);
+  `,
+  ).run(projectId, sprintIndex);
 }
 
-/**
- * Delete pipeline_phase_metrics for a specific sprint across all pipeline loop phase pairs.
- *
- * BUG 3 F6 + pre-step §6 (bug-atividade-toolcalls-codex.md / bug3-prestep-report.md):
- * os `sessionIds` capturados no metadata NAO podem morrer com a row — o
- * resetSprint descarta a tentativa, mas o consumo dela vive nos transcripts e
- * o invariante de sanidade (usage-sanity.ts) precisa dos ids para acusar a
- * subcontagem (99,7% do residuo do episodio Opus estava em tentativas
- * descartadas). Desenho MINIMO: rows COM sessionIds sao zeradas (status
- * 'pending', contadores 0, metadata reduzido a { sessionIds }) em vez de
- * deletadas; o UPSERT do re-run (savePipelinePhaseMetrics) faz a UNIAO
- * array-aware dos ids antigos com os novos. Rows sem sessionIds seguem
- * deletadas como antes.
- */
 export function deletePipelinePhaseMetricsForSprint(projectId: string, sprintIndex: number): void {
-  // Cross-type FLAT (M-3 / D24-bis item (a).4): uniao de TODA fase de loop ∪
-  // history = {8,9,10,11,13,14,16,17}. Este site CONTINUA flat de proposito: o
-  // escopo e `project_id + sprint_index`, entao numero de outro tipo nunca casa
-  // linha alheia, e apagar de MENOS (type-aware) deixaria lixo de projeto
-  // migrado. Inteiros derivados inlinados no SQL, que continua em db.ts.
   const loopPhaseIn = [...allLoopPhasesWithHistory()].sort((a, b) => a - b).join(', ');
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT id, metadata FROM pipeline_phase_metrics
     WHERE project_id = ? AND sprint_index = ? AND phase_number IN (${loopPhaseIn})
-  `).all(projectId, sprintIndex) as Array<{ id: number; metadata?: string | null }>;
+  `,
+    )
+    .all(projectId, sprintIndex) as Array<{ id: number; metadata?: string | null }>;
 
   const deleteStmt = db.prepare('DELETE FROM pipeline_phase_metrics WHERE id = ?');
   const carryStmt = db.prepare(`
@@ -8290,25 +8965,6 @@ export function deletePipelinePhaseMetricsForSprint(projectId: string, sprintInd
   run();
 }
 
-// ---------------------------------------------------------------------------
-// Reset-preview COUNT helpers (RP-1, SPEC §4.10 / Sprint 6).
-//
-// getResetPreview (pipeline-engine) used to run FOUR inline `SELECT COUNT`
-// queries directly via getDb() — SQL outside db.ts, violating INV-13. These
-// helpers move that SQL here. They are the COUNT counterparts of the four
-// delete helpers above and reproduce the original inline queries VERBATIM:
-//
-//   - FromPhase: `phase_number >= ?` — symmetric to deletePipeline*FromPhase.
-//   - ForSprint: `sprint_index = ?` ONLY — NOTE this is the original preview
-//     query, which (unlike deletePipeline*ForSprint) does NOT add the
-//     `phase_number IN (...)` loop filter. Preserving that asymmetry keeps the
-//     preview counts byte-identical (caracterizado em reset-characterization).
-// ---------------------------------------------------------------------------
-
-/**
- * Count pipeline_messages for a project where phase_number >= fromPhase.
- * Reset-preview counterpart of deletePipelineMessagesFromPhase.
- */
 export function countPipelineMessagesFromPhase(projectId: string, fromPhase: number): number {
   const row = db
     .prepare(`SELECT COUNT(*) as cnt FROM pipeline_messages WHERE project_id = ? AND phase_number >= ?`)
@@ -8316,10 +8972,6 @@ export function countPipelineMessagesFromPhase(projectId: string, fromPhase: num
   return row.cnt;
 }
 
-/**
- * Count pipeline_phase_metrics for a project where phase_number >= fromPhase.
- * Reset-preview counterpart of deletePipelinePhaseMetricsFromPhase.
- */
 export function countPipelinePhaseMetricsFromPhase(projectId: string, fromPhase: number): number {
   const row = db
     .prepare(`SELECT COUNT(*) as cnt FROM pipeline_phase_metrics WHERE project_id = ? AND phase_number >= ?`)
@@ -8327,11 +8979,6 @@ export function countPipelinePhaseMetricsFromPhase(projectId: string, fromPhase:
   return row.cnt;
 }
 
-/**
- * Count pipeline_messages for a specific sprint (by sprint_index only).
- * Reset-preview counterpart of deletePipelineMessagesForSprint — but WITHOUT
- * the `phase_number IN (...)` filter, matching the original inline preview query.
- */
 export function countPipelineMessagesForSprint(projectId: string, sprintIndex: number): number {
   const row = db
     .prepare(`SELECT COUNT(*) as cnt FROM pipeline_messages WHERE project_id = ? AND sprint_index = ?`)
@@ -8339,11 +8986,6 @@ export function countPipelineMessagesForSprint(projectId: string, sprintIndex: n
   return row.cnt;
 }
 
-/**
- * Count pipeline_phase_metrics for a specific sprint (by sprint_index only).
- * Reset-preview counterpart of deletePipelinePhaseMetricsForSprint — but WITHOUT
- * the `phase_number IN (...)` filter, matching the original inline preview query.
- */
 export function countPipelinePhaseMetricsForSprint(projectId: string, sprintIndex: number): number {
   const row = db
     .prepare(`SELECT COUNT(*) as cnt FROM pipeline_phase_metrics WHERE project_id = ? AND sprint_index = ?`)
@@ -8351,10 +8993,6 @@ export function countPipelinePhaseMetricsForSprint(projectId: string, sprintInde
   return row.cnt;
 }
 
-/**
- * Lifecycle recovery/pause SQL relocated from pipeline-engine/lifecycle.ts so all
- * SQL stays in db.ts (INV-13). Moved verbatim — behavior unchanged (P2-1).
- */
 export function getMostRecentInProgressRoundId(sprintId: string): string | undefined {
   const row = db
     .prepare(
@@ -8394,49 +9032,30 @@ export function markPhaseMetricInterrupted(id: number): void {
   ).run(id);
 }
 
-/**
- * Delete all harness_rounds belonging to the sprint identified by projectId + sprintIndex.
- */
 export function deleteHarnessRoundsForSprint(projectId: string, sprintIndex: number): void {
-  const sprint = db.prepare(
-    'SELECT id FROM harness_sprints WHERE project_id = ? AND sprint_index = ?',
-  ).get(projectId, sprintIndex) as { id: string } | undefined;
+  const sprint = db
+    .prepare('SELECT id FROM harness_sprints WHERE project_id = ? AND sprint_index = ?')
+    .get(projectId, sprintIndex) as { id: string } | undefined;
   if (!sprint) return;
   db.prepare('DELETE FROM harness_rounds WHERE sprint_id = ?').run(sprint.id);
 }
 
-/**
- * BUG 3 F6 (achado do validador S6): reset de sprint EM EXECUCAO ainda perdia
- * os sessionIds da tentativa abortada. runSprint so persiste
- * pipeline_phase_metrics APOS o loop terminar com sucesso (retorna cedo nos
- * dois caminhos de abort, sem row inicial 'running'), entao para a tentativa
- * em voo NAO existe row para o carry de deletePipelinePhaseMetricsForSprint
- * preservar — mas os session ids por round JA foram persistidos em
- * harness_rounds (F1: coder_session_id/evaluator_session_id), e
- * deleteHarnessRoundsForSprint os hard-deleta. Esta funcao colhe os ids das
- * rounds e semeia/mergeia no metadata.sessionIds das rows de
- * pipeline_phase_metrics (criando row minima 'pending' quando ausente) — DEVE
- * rodar ANTES dos deletes do resetSprint. Uniao array-aware, nunca clobber;
- * o UPSERT do re-run (savePipelinePhaseMetrics) e o carry do delete preservam
- * dali em diante.
- */
 export function carryHarnessRoundSessionIdsForSprint(
   projectId: string,
   sprintIndex: number,
   coderPhase: number,
   evaluatorPhase: number,
 ): void {
-  const sprint = db.prepare(
-    'SELECT id FROM harness_sprints WHERE project_id = ? AND sprint_index = ?',
-  ).get(projectId, sprintIndex) as { id: string } | undefined;
+  const sprint = db
+    .prepare('SELECT id FROM harness_sprints WHERE project_id = ? AND sprint_index = ?')
+    .get(projectId, sprintIndex) as { id: string } | undefined;
   if (!sprint) return;
 
-  const rounds = db.prepare(
-    'SELECT coder_session_id, evaluator_session_id FROM harness_rounds WHERE sprint_id = ?',
-  ).all(sprint.id) as Array<{ coder_session_id?: string | null; evaluator_session_id?: string | null }>;
+  const rounds = db
+    .prepare('SELECT coder_session_id, evaluator_session_id FROM harness_rounds WHERE sprint_id = ?')
+    .all(sprint.id) as Array<{ coder_session_id?: string | null; evaluator_session_id?: string | null }>;
   if (rounds.length === 0) return;
 
-  // Colunas TEXT guardam a uniao do round separada por virgula (F1).
   const collect = (col: 'coder_session_id' | 'evaluator_session_id'): string[] => {
     const ids = new Set<string>();
     for (const r of rounds) {
@@ -8450,10 +9069,12 @@ export function carryHarnessRoundSessionIdsForSprint(
 
   const seed = (phaseNumber: number, sessionIds: string[]): void => {
     if (sessionIds.length === 0) return;
-    const row = db.prepare(
-      `SELECT id, metadata FROM pipeline_phase_metrics
+    const row = db
+      .prepare(
+        `SELECT id, metadata FROM pipeline_phase_metrics
        WHERE project_id = ? AND phase_number = ? AND sprint_index = ?`,
-    ).get(projectId, phaseNumber, sprintIndex) as { id: number; metadata?: string | null } | undefined;
+      )
+      .get(projectId, phaseNumber, sprintIndex) as { id: number; metadata?: string | null } | undefined;
     if (row) {
       let meta: Record<string, unknown> = {};
       try {
@@ -8465,17 +9086,15 @@ export function carryHarnessRoundSessionIdsForSprint(
         ? (meta['sessionIds'] as unknown[]).filter((s): s is string => typeof s === 'string')
         : [];
       meta['sessionIds'] = Array.from(new Set([...prev, ...sessionIds]));
-      db.prepare('UPDATE pipeline_phase_metrics SET metadata = ? WHERE id = ?')
-        .run(JSON.stringify(meta), row.id);
+      db.prepare('UPDATE pipeline_phase_metrics SET metadata = ? WHERE id = ?').run(JSON.stringify(meta), row.id);
     } else {
-      // Row minima: mesma forma que o carry do delete deixa (pending, zeros,
-      // metadata { sessionIds }). phase_name provisorio — o UPSERT do re-run
-      // sobrescreve com o nome real.
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO pipeline_phase_metrics
           (project_id, phase_number, sprint_index, phase_name, status, metadata)
         VALUES (?, ?, ?, ?, 'pending', ?)
-      `).run(projectId, phaseNumber, sprintIndex, `Phase ${phaseNumber}`, JSON.stringify({ sessionIds }));
+      `,
+      ).run(projectId, phaseNumber, sprintIndex, `Phase ${phaseNumber}`, JSON.stringify({ sessionIds }));
     }
   };
 
@@ -8485,47 +9104,34 @@ export function carryHarnessRoundSessionIdsForSprint(
   })();
 }
 
-/**
- * Reset a sprint back to pending status, clearing its verdict.
- */
 export function resetHarnessSprintStatus(projectId: string, sprintIndex: number): void {
-  db.prepare(`
+  db.prepare(
+    `
     UPDATE harness_sprints
     SET status = 'pending', verdict = NULL, updated_at = datetime('now')
     WHERE project_id = ? AND sprint_index = ?
-  `).run(projectId, sprintIndex);
+  `,
+  ).run(projectId, sprintIndex);
 }
 
-/**
- * Delete all harness_rounds and harness_sprints belonging to a project.
- */
 export function deleteHarnessSprintsForProject(projectId: string): void {
-  // Delete rounds first (child table)
-  const sprints = db.prepare(
-    'SELECT id FROM harness_sprints WHERE project_id = ?',
-  ).all(projectId) as Array<{ id: string }>;
+  const sprints = db.prepare('SELECT id FROM harness_sprints WHERE project_id = ?').all(projectId) as Array<{
+    id: string;
+  }>;
   for (const sprint of sprints) {
     db.prepare('DELETE FROM harness_rounds WHERE sprint_id = ?').run(sprint.id);
   }
   db.prepare('DELETE FROM harness_sprints WHERE project_id = ?').run(projectId);
 }
 
-/**
- * Retrieve a single harness sprint by projectId and sprintIndex.
- * Returns null if not found.
- */
 export function getHarnessSprintByIndex(projectId: string, sprintIndex: number): HarnessSprint | null {
-  const row = db.prepare(
-    'SELECT * FROM harness_sprints WHERE project_id = ? AND sprint_index = ?',
-  ).get(projectId, sprintIndex) as Record<string, unknown> | undefined;
+  const row = db
+    .prepare('SELECT * FROM harness_sprints WHERE project_id = ? AND sprint_index = ?')
+    .get(projectId, sprintIndex) as Record<string, unknown> | undefined;
   if (!row) return null;
   return mapHarnessSprint(row);
 }
 
-/**
- * Update the pipeline-specific columns on a harness_projects row.
- * These are V31 columns not covered by updateHarnessProject().
- */
 export function updateHarnessProjectPipelineMeta(
   projectId: string,
   columns: {
@@ -8560,88 +9166,149 @@ export function updateHarnessProjectPipelineMeta(
   }
 }
 
-// ---------------------------------------------------------------------------
-// DriveState (SPEC orchestrator-pipeline-control secao 4.5)
-//
-// Persistido em harness_projects.config.drive (sobrevive restart). Le/grava no
-// config JSON via getHarnessProject + updateHarnessProject; sem coluna dedicada
-// (R10-friendly). Coordena QUEM dirige o pipeline (orquestrador vs humano).
-// ---------------------------------------------------------------------------
-
-/**
- * Le o DriveState persistido em config.drive, ou null se nao houver.
- */
 export function getDriveState(projectId: string): DriveState | null {
   const project = getHarnessProject(projectId);
   if (!project) return null;
-  return project.config.drive ?? null;
+  const drive = project.config.drive;
+  if (!drive) return null;
+  return { ...drive, sessionId: getDriveSessionId(projectId) ?? undefined };
 }
 
-/**
- * (Leva 1.5 - drive-webhooks-od) True quando o ORQUESTRADOR esta ENGAJADO no
- * drive do projeto: o config.drive existe, o motorista e o orquestrador e o
- * drive NAO foi parado. Cobre `driving` E `awaiting-human` (escalacao do semi:
- * pausa temporaria em que o orquestrador AINDA dirige e vai retomar).
- *
- * Distincao critica vs `getDriveState(id) !== null`: o config.drive PERSISTE
- * apos `stopDrive` (so seta status:'stopped') e apos handoff PERMANENTE
- * (driver:'human'). Gates que usavam `!== null` barravam o HUMANO para sempre
- * depois de Parar/Assumir (design_prompt caixa-preta eterno; UI do OD presa em
- * 'drive-pending-go' sem GO que viesse). Este predicado so e verdadeiro enquanto
- * o orquestrador realmente conduz, devolvendo o controle ao humano apos
- * stop/Assumir.
- */
+export function getDriveSessionId(projectId: string): string | null {
+  const row = db.prepare('SELECT session_id FROM harness_projects WHERE id = ?').get(projectId) as
+    { session_id: string | null } | undefined;
+  return row?.session_id ?? null;
+}
+
+export function listHarnessProjectsBySession(sessionId: string): HarnessProject[] {
+  const rows = db
+    .prepare('SELECT * FROM harness_projects WHERE session_id = ? ORDER BY created_at DESC')
+    .all(sessionId) as Record<string, unknown>[];
+  return rows.map((row) => applyLegacyHarnessSprintsJsonMigration(mapHarnessProject(row)));
+}
+
+export function rebindDriveSessions(oldSessionId: string, newSessionId: string): number {
+  if (!oldSessionId || !newSessionId || oldSessionId === newSessionId) return 0;
+
+  const projects = listHarnessProjectsBySession(oldSessionId);
+  if (projects.length === 0) return 0;
+
+  const engaged = projects.filter((project) => {
+    const drive = project.config.drive;
+    return drive?.driver === 'orchestrator' && drive.status !== 'stopped';
+  });
+
+  const runtimeSync = getDriveRebindRuntimeSync();
+  for (const project of engaged) {
+    if (runtimeSync?.isTurnInFlight(project.id)) {
+      throw new DriveRebindRefusedError(project.id);
+    }
+  }
+
+  const changed = db
+    .prepare(
+      `
+      UPDATE harness_projects
+         SET session_id = ?,
+             config = json_set(config, '$.drive.sessionId', ?, '$.drive.rebindFrom', ?),
+             updated_at = datetime('now')
+       WHERE session_id = ?
+    `,
+    )
+    .run(newSessionId, newSessionId, oldSessionId, oldSessionId).changes;
+
+  const migrated: string[] = [];
+  try {
+    for (const project of engaged) {
+      const lock = acquireDriveLock(project.id, newSessionId, {
+        allowRebind: true,
+        turnInFlight: false,
+      });
+      if (!lock.ok) {
+        throw new Error(
+          `drive_rebind_lock_refused: ${lock.reason} ao mover o drive do projeto ` +
+            `"${project.id}" para a lane "${newSessionId}"`,
+        );
+      }
+      runtimeSync?.onRebound(project.id, oldSessionId, newSessionId);
+      migrated.push(project.id);
+    }
+  } catch (err) {
+    for (const projectId of migrated.reverse()) {
+      try {
+        acquireDriveLock(projectId, oldSessionId, { allowRebind: true, turnInFlight: false });
+        runtimeSync?.onRollback(projectId, oldSessionId, newSessionId);
+      } catch (rollbackErr) {
+        logger.error(
+          { projectId, error: (rollbackErr as Error).message },
+          'rebindDriveSessions: rollback de lock/runtime falhou',
+        );
+      }
+    }
+    throw err;
+  }
+
+  logger.info(
+    { oldSessionId, newSessionId, changed, engaged: engaged.length },
+    'rebindDriveSessions: lane re-apontada para a conversa nova',
+  );
+  return changed;
+}
+
+export function findEngagedDriveBySession(sessionId: string): HarnessProject | null {
+  if (!sessionId) return null;
+  const engaged = listHarnessProjectsBySession(sessionId).filter((project) => {
+    const drive = project.config.drive;
+    return drive?.driver === 'orchestrator' && drive.status !== 'stopped';
+  });
+  if (engaged.length === 0) return null;
+  if (engaged.length > 1) {
+    throw new Error(
+      `drive_uniqueness_violated: ${engaged.length} pipelines engajados na sessao "${sessionId}": ${engaged
+        .map((project) => project.id)
+        .join(', ')}`,
+    );
+  }
+  return engaged[0];
+}
+
 export function isDriveEngaged(projectId: string): boolean {
   const drive = getDriveState(projectId);
   if (!drive) return false;
   return drive.driver === 'orchestrator' && drive.status !== 'stopped';
 }
 
-/**
- * Grava (patch shallow merge) o DriveState em config.drive.
- *
- * Se ainda nao existir drive no config, o patch precisa conter os campos
- * obrigatorios (driver/status/handoff/mode/requiresHumanPhases). Em updates
- * subsequentes, so os campos passados sao sobrescritos.
- *
- * Retorna o DriveState resultante.
- */
-export function setDriveState(
-  projectId: string,
-  patch: Partial<DriveState>,
-): DriveState {
+export function setDriveState(projectId: string, patch: Partial<DriveState>): DriveState {
   const project = getHarnessProject(projectId);
   if (!project) {
     throw new Error(`setDriveState: project not found: ${projectId}`);
   }
   const existing = project.config.drive;
+  const currentSessionId = getDriveSessionId(projectId) ?? existing?.sessionId;
   const merged: DriveState = {
     driver: patch.driver ?? existing?.driver ?? 'orchestrator',
     status: patch.status ?? existing?.status ?? 'driving',
     handoff: patch.handoff ?? existing?.handoff ?? 'none',
     mode: patch.mode ?? existing?.mode ?? 'semi',
-    sessionId:
-      patch.sessionId !== undefined ? patch.sessionId : existing?.sessionId,
-    requiresHumanPhases:
-      patch.requiresHumanPhases ?? existing?.requiresHumanPhases ?? [],
-    // B3.1: startedAt e ADITIVO e sobrevive a patches parciais (ex.: transicao
-    // pra awaiting-human nao pode zerar o relogio do indicador).
-    startedAt:
-      patch.startedAt !== undefined ? patch.startedAt : existing?.startedAt,
+    sessionId: patch.sessionId !== undefined ? patch.sessionId : currentSessionId,
+    requiresHumanPhases: patch.requiresHumanPhases ?? existing?.requiresHumanPhases ?? [],
+    startedAt: patch.startedAt !== undefined ? patch.startedAt : existing?.startedAt,
+    stoppedReason: patch.stoppedReason !== undefined ? patch.stoppedReason : existing?.stoppedReason,
+    rebindFrom: patch.rebindFrom !== undefined ? patch.rebindFrom : existing?.rebindFrom,
+    lastEscalation: 'lastEscalation' in patch ? patch.lastEscalation : existing?.lastEscalation,
   };
   updateHarnessProject(projectId, {
     config: { ...project.config, drive: merged },
   });
+  if (patch.sessionId !== undefined) {
+    db.prepare('UPDATE harness_projects SET session_id = ? WHERE id = ?').run(patch.sessionId, projectId);
+  }
   return merged;
 }
 
-/**
- * Read the SecuritySummary stored for a project, or null if none.
- */
 export function getSecuritySummaryJson(projectId: string): SecuritySummary | null {
-  const row = db
-    .prepare('SELECT security_summary_json FROM harness_projects WHERE id = ?')
-    .get(projectId) as { security_summary_json: string | null } | undefined;
+  const row = db.prepare('SELECT security_summary_json FROM harness_projects WHERE id = ?').get(projectId) as
+    { security_summary_json: string | null } | undefined;
   if (!row || !row.security_summary_json) return null;
   try {
     return JSON.parse(row.security_summary_json) as SecuritySummary;
@@ -8651,26 +9318,19 @@ export function getSecuritySummaryJson(projectId: string): SecuritySummary | nul
   }
 }
 
-/**
- * Patch do security_summary_json com shallow merge.
- * Objetos aninhados (como bySeverity) sao SUBSTITUIDOS por completo, nao merged.
- * Passe bySeverity sempre com as 4 chaves (critical/high/medium/low) populadas.
- */
-export function patchSecuritySummaryJson(
-  projectId: string,
-  patch: Partial<SecuritySummary>,
-): void {
+export function patchSecuritySummaryJson(projectId: string, patch: Partial<SecuritySummary>): void {
   const existing = getSecuritySummaryJson(projectId) ?? {};
   const merged: SecuritySummary = { ...existing, ...patch };
-  db.prepare(
-    `UPDATE harness_projects SET security_summary_json = ?, updated_at = datetime('now') WHERE id = ?`,
-  ).run(JSON.stringify(merged), projectId);
+  db.prepare(`UPDATE harness_projects SET security_summary_json = ?, updated_at = datetime('now') WHERE id = ?`).run(
+    JSON.stringify(merged),
+    projectId,
+  );
 }
 
-/**
- * Read all persisted messages for a specific pipeline phase.
- */
-export function getPipelinePhaseMessages(projectId: string, phaseNumber: number): Array<{
+export function getPipelinePhaseMessages(
+  projectId: string,
+  phaseNumber: number,
+): Array<{
   role: 'user' | 'assistant';
   content: string;
   toolCalls?: Array<{ tool: string; input: unknown }>;
@@ -8678,26 +9338,32 @@ export function getPipelinePhaseMessages(projectId: string, phaseNumber: number)
   const storedPhaseNumbers = resolveStoredPhaseCandidatesForHistoryRead(projectId, phaseNumber);
   const placeholders = storedPhaseNumbers.map(() => '?').join(', ');
   const includeSprintMessages = isSprintLoopPhaseForProject(projectId, phaseNumber) ? 1 : 0;
-  // Greeting filter (smoke-fix #1): exclude rows tagged with the greeting
-  // sentinel so auto-sent briefings never reach the renderer. The sentinel is a
-  // build-time constant (no user input), inlined as a literal ON PURPOSE: a `?`
-  // placeholder would shift the bound-arg positions, which the db-phase-seam
-  // characterization reads positionally as (projectId, ...phaseNumbers, flag).
-  // getPipelinePhaseMessagesAsChatHistory below is intentionally NOT filtered —
-  // the agent must still see the briefing in priorMessages (behavior-preserving).
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT role, content, tool_calls
     FROM pipeline_messages
     WHERE project_id = ? AND phase_number IN (${placeholders}) AND (? = 1 OR sprint_index IS NULL)
       AND agent_id IS NOT '${PIPELINE_GREETING_AGENT_ID}'
     ORDER BY id ASC
-  `).all(projectId, ...storedPhaseNumbers, includeSprintMessages) as Array<{ role: string; content: string; tool_calls: string | null }>;
+  `,
+    )
+    .all(projectId, ...storedPhaseNumbers, includeSprintMessages) as Array<{
+    role: string;
+    content: string;
+    tool_calls: string | null;
+  }>;
 
-  // Merge consecutive same-role messages (fixes historical fragmented data from GAP-01)
-  const merged: Array<{ role: 'user' | 'assistant'; content: string; toolCalls?: Array<{ tool: string; input: unknown }> }> = [];
+  const merged: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    toolCalls?: Array<{ tool: string; input: unknown }>;
+  }> = [];
   for (const row of rows) {
     const last = merged[merged.length - 1];
-    const toolCalls = row.tool_calls ? (JSON.parse(row.tool_calls) as Array<{ tool: string; input: unknown }>) : undefined;
+    const toolCalls = row.tool_calls
+      ? (JSON.parse(row.tool_calls) as Array<{ tool: string; input: unknown }>)
+      : undefined;
     if (last && last.role === row.role) {
       last.content += row.content;
       if (toolCalls) {
@@ -8714,22 +9380,6 @@ export function getPipelinePhaseMessages(projectId: string, phaseNumber: number)
   return merged;
 }
 
-/**
- * Returns the conversation history of a pipeline phase formatted as OpenAI-compatible
- * chat messages (multi-turn with tool_calls + tool results), for use as priorMessages
- * in stateless external API calls.
- *
- * For each saved row in pipeline_messages:
- *  - role 'user': emits a single { role: 'user', content }
- *  - role 'assistant' with tool_calls JSON containing { tool, input, output? }:
- *      emits { role: 'assistant', content: '', tool_calls: [...] }
- *      followed by N { role: 'tool', tool_call_id, content: output } (when output present)
- *      followed by { role: 'assistant', content } if the saved content is non-empty
- *  - role 'assistant' without tool_calls: emits { role: 'assistant', content }
- *
- * tool_call_ids are deterministically generated from row id + index so they are stable
- * across re-reads of the same conversation.
- */
 export function getPipelinePhaseMessagesAsChatHistory(
   projectId: string,
   phaseNumber: number,
@@ -8742,12 +9392,21 @@ export function getPipelinePhaseMessagesAsChatHistory(
   const storedPhaseNumbers = resolveStoredPhaseCandidatesForHistoryRead(projectId, phaseNumber);
   const placeholders = storedPhaseNumbers.map(() => '?').join(', ');
   const includeSprintMessages = isSprintLoopPhaseForProject(projectId, phaseNumber) ? 1 : 0;
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT id, role, content, tool_calls
     FROM pipeline_messages
     WHERE project_id = ? AND phase_number IN (${placeholders}) AND (? = 1 OR sprint_index IS NULL)
     ORDER BY id ASC
-  `).all(projectId, ...storedPhaseNumbers, includeSprintMessages) as Array<{ id: number; role: string; content: string; tool_calls: string | null }>;
+  `,
+    )
+    .all(projectId, ...storedPhaseNumbers, includeSprintMessages) as Array<{
+    id: number;
+    role: string;
+    content: string;
+    tool_calls: string | null;
+  }>;
 
   const out: Array<{
     role: 'user' | 'assistant' | 'tool';
@@ -8799,9 +9458,6 @@ export function getPipelinePhaseMessagesAsChatHistory(
     }
   }
 
-  // (F8 Trilho A, costura 2-read) Sonda da LEITURA: hash do ultimo content de
-  // assistant nao-vazio (o que vira pendingQuestion em resolvePendingQuestion).
-  // Comparavel com a sonda do write (savePipelineMessage) e as costuras 3-5.
   for (let i = out.length - 1; i >= 0; i--) {
     const m = out[i];
     if (m && m.role === 'assistant' && typeof m.content === 'string' && m.content.trim().length > 0) {
@@ -8816,79 +9472,55 @@ export function getPipelinePhaseMessagesAsChatHistory(
   return out;
 }
 
-/**
- * Read pipeline metrics for a project exclusively from pipeline_phase_metrics.
- * Returns totals, cloud vs local cost breakdown, all phases sorted by phase_number,
- * and sprintPhases (phases with phase_number 13 or 14).
- *
- * This function is intentionally separate from getHarnessProjectMetrics() which
- * reads from harness_rounds and is kept for legacy/harness projects.
- */
 export function getPipelineMetrics(projectId: string): PipelineMetrics {
-  const phases = db.prepare(`
+  const phases = db
+    .prepare(
+      `
     SELECT * FROM pipeline_phase_metrics
     WHERE project_id = ?
     ORDER BY phase_number ASC
-  `).all(projectId) as Record<string, unknown>[];
+  `,
+    )
+    .all(projectId) as Record<string, unknown>[];
 
   const legacyDevelopmentV2PhaseNumbers = isLegacyDevelopmentV2PhaseNumbering(projectId, phases);
   const legacyDevelopmentV2Phase4OpenDesign = hasLegacyDevelopmentV2Phase4OpenDesign(projectId, phases);
   const mappedPhases = phases
     .map(mapPipelinePhaseMetrics)
-    .map((phase) => (
+    .map((phase) =>
       legacyDevelopmentV2PhaseNumbers
         ? remapLegacyDevelopmentV2MetricPhase(phase, legacyDevelopmentV2Phase4OpenDesign)
-        : phase
-    ));
+        : phase,
+    );
 
   const pipelineType = getProjectPipelineType(projectId);
-  // (SPEC spec-sdk-e-bug-pipe.md secao 4.7.2) Linha AGREGADA de fase multi-agente:
-  // ela existe para o rollup e NAO entra no relatorio, senao a duracao da fase e
-  // contada duas vezes (agregada + uma por agente) e nasce uma fase fantasma.
-  //
-  // DISJUNCAO, nao substituicao. O ramo `metadata.aggregateOnly` cobre o dado
-  // NOVO (security a partir do commit a7c78e45, de 2026-07-18, e a linha
-  // `bug-analysis-multi` do Bug Pipe). O ramo LEGADO cobre o dado que JA EXISTE:
-  // no banco real ha 3 linhas agregadas de security e ZERO com a flag, entao
-  // trocar o predicado (em vez de somar) faria TODO projeto security existente
-  // contar a fase 2 duas vezes.
   const isPhaseAggregateWrapper = (phase: PipelinePhaseMetricsRow): boolean =>
-    phase.sprintIndex === -1
-      && phase.metadata['auditAgent'] !== true
-      && (
-        phase.metadata['aggregateOnly'] === true
-        // Ramo LEGADO: linhas gravadas antes de 2026-07-18 nao carregam a flag.
-        || (pipelineType === 'security'
-            && phase.phaseNumber === 2
-            && phase.agentId === 'multi-agent')
-      );
+    phase.sprintIndex === -1 &&
+    phase.metadata['auditAgent'] !== true &&
+    (phase.metadata['aggregateOnly'] === true ||
+      (pipelineType === 'security' && phase.phaseNumber === 2 && phase.agentId === 'multi-agent'));
   const reportablePhases = mappedPhases.filter((phase) => !isPhaseAggregateWrapper(phase));
-  const phaseTotals = reportablePhases.reduce((totals, phase) => ({
-    inputTokens: totals.inputTokens + phase.inputTokens,
-    outputTokens: totals.outputTokens + phase.outputTokens,
-    cacheTokens: totals.cacheTokens + phase.cacheReadTokens + phase.cacheCreationTokens,
-    costUsd: totals.costUsd + phase.costUsd,
-    durationMs: totals.durationMs + phase.durationMs,
-    toolUses: totals.toolUses + phase.toolUses,
-    apiRequests: totals.apiRequests + phase.apiRequests,
-  }), {
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheTokens: 0,
-    costUsd: 0,
-    durationMs: 0,
-    toolUses: 0,
-    apiRequests: 0,
-  });
+  const phaseTotals = reportablePhases.reduce(
+    (totals, phase) => ({
+      inputTokens: totals.inputTokens + phase.inputTokens,
+      outputTokens: totals.outputTokens + phase.outputTokens,
+      cacheTokens: totals.cacheTokens + phase.cacheReadTokens + phase.cacheCreationTokens,
+      costUsd: totals.costUsd + phase.costUsd,
+      durationMs: totals.durationMs + phase.durationMs,
+      toolUses: totals.toolUses + phase.toolUses,
+      apiRequests: totals.apiRequests + phase.apiRequests,
+    }),
+    {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheTokens: 0,
+      costUsd: 0,
+      durationMs: 0,
+      toolUses: 0,
+      apiRequests: 0,
+    },
+  );
 
-  // Sprint phases POR TIPO (D24 / D24-bis item (a)): fases de loop do tipo ∪ o
-  // rabo historico do tipo. A uniao FLAT classificava por NUMERO sem olhar o
-  // tipo, entao qualquer numero que seja fase de loop em ALGUM pipeline
-  // contaminava todos os outros — em `development`/`feature` isso trazia 10
-  // (Spec Enricher) e 11 (Planner), no `development-v2` trazia 10 (Frontend
-  // Tecnico) e 11 (Security), e com o Bug Pipe passaria a trazer 8/9 (Planner e
-  // Sprint Validator em security/architecture-review). Filtro em JS (nao SQL); o
-  // remapLegacyDevelopmentV2MetricPhase ja rodou acima.
   const sprintPhaseSet = new Set<number>([
     ...loopPhasesOf(pipelineType),
     ...(LOOP_HISTORY_BY_TYPE[pipelineType as PipelineType] ?? []),
@@ -8901,10 +9533,7 @@ export function getPipelineMetrics(projectId: string): PipelineMetrics {
   });
   const costByRuntime = { ...subagents.costByRuntime };
   const costStatusByRuntime: Record<string, TaskExecutionFinalize['costStatus']> = {};
-  const mergeRuntimeCostStatus = (
-    runtime: string,
-    status: TaskExecutionFinalize['costStatus'],
-  ): void => {
+  const mergeRuntimeCostStatus = (runtime: string, status: TaskExecutionFinalize['costStatus']): void => {
     const current = costStatusByRuntime[runtime];
     if (!current || COST_QUALITY_RANK[status] > COST_QUALITY_RANK[current]) {
       costStatusByRuntime[runtime] = status;
@@ -8952,15 +9581,13 @@ export function getPipelineMetrics(projectId: string): PipelineMetrics {
     const reason = phase.metadata['costUnknownReason'];
     if (typeof reason === 'string' && reason.length > 0) costUnknownReasons.add(reason);
   }
-  const totalCostStatus = (
+  const totalCostStatus =
     phaseCostStatus === 'unknown' || subagents.costStatus === 'unknown'
       ? 'unknown'
       : phaseCostStatus === 'estimated-partial' || subagents.costStatus === 'estimated-partial'
         ? 'estimated-partial'
-        : 'known'
-  );
+        : 'known';
 
-  // Build agent_id -> display name map for all agents referenced in the metrics
   const agentIds = new Set<string>();
   for (const p of reportablePhases) {
     if (p.agentId) agentIds.add(p.agentId);
@@ -8975,27 +9602,24 @@ export function getPipelineMetrics(projectId: string): PipelineMetrics {
     totals: {
       inputTokens: phaseTotals.inputTokens + subagents.metrics.inputTokens,
       outputTokens: phaseTotals.outputTokens + subagents.metrics.outputTokens,
-      cacheTokens: phaseTotals.cacheTokens
-        + subagents.metrics.cacheReadTokens + subagents.metrics.cacheCreationTokens,
+      cacheTokens: phaseTotals.cacheTokens + subagents.metrics.cacheReadTokens + subagents.metrics.cacheCreationTokens,
       costUsd: phaseTotals.costUsd + subagents.metrics.costUsd,
       durationMs: phaseTotals.durationMs + subagents.metrics.durationMs,
       toolUses: phaseTotals.toolUses + subagents.metrics.toolUses,
       apiRequests: phaseTotals.apiRequests + subagents.metrics.apiRequests,
       costStatus: totalCostStatus,
-      tokenStatus: phaseTokenStatus === 'not_reported' || subagents.tokenStatus === 'not_reported'
-        ? 'not_reported'
-        : 'reported',
+      tokenStatus:
+        phaseTokenStatus === 'not_reported' || subagents.tokenStatus === 'not_reported' ? 'not_reported' : 'reported',
       unknownCostCount: phaseUnknownCostCount + subagents.unknownCostCount,
       costUnknownReasons: [...costUnknownReasons].sort(),
     },
-    cloudCost: reportablePhases
-      .filter((phase) => phase.runtime !== 'local')
-      .reduce((sum, phase) => sum + phase.costUsd, 0)
-      + subagents.metrics.costUsd - (subagents.costByRuntime['local'] ?? 0),
-    localCost: reportablePhases
-      .filter((phase) => phase.runtime === 'local')
-      .reduce((sum, phase) => sum + phase.costUsd, 0)
-      + (subagents.costByRuntime['local'] ?? 0),
+    cloudCost:
+      reportablePhases.filter((phase) => phase.runtime !== 'local').reduce((sum, phase) => sum + phase.costUsd, 0) +
+      subagents.metrics.costUsd -
+      (subagents.costByRuntime['local'] ?? 0),
+    localCost:
+      reportablePhases.filter((phase) => phase.runtime === 'local').reduce((sum, phase) => sum + phase.costUsd, 0) +
+      (subagents.costByRuntime['local'] ?? 0),
     costByRuntime,
     costStatusByRuntime,
     subscriptionEquivalentCost,
@@ -9005,16 +9629,6 @@ export function getPipelineMetrics(projectId: string): PipelineMetrics {
   };
 }
 
-// =============================================================================
-// Codex Windows prep consent (V51) — SPEC-codex-windows-fix.md Camada 2
-// =============================================================================
-
-/**
- * Versao atual da definicao de "preparar projeto pra Codex no Windows".
- * Bumping aqui invalida consents antigos e re-pede autorizacao ao usuario.
- *
- * v1: git config core.autocrlf false + .gitattributes simples + renormalize
- */
 export const CODEX_PREP_VERSION_CURRENT = 1;
 
 export interface CodexWindowsPrepConsent {
@@ -9026,11 +9640,13 @@ export interface CodexWindowsPrepConsent {
 }
 
 export function getCodexWindowsPrepConsent(repoRoot: string): CodexWindowsPrepConsent | null {
-  const row = db.prepare(
-    `SELECT repo_root, prep_version, action, consented_at, last_applied_at
+  const row = db
+    .prepare(
+      `SELECT repo_root, prep_version, action, consented_at, last_applied_at
      FROM codex_windows_prep_consent
-     WHERE repo_root = ?`
-  ).get(repoRoot) as
+     WHERE repo_root = ?`,
+    )
+    .get(repoRoot) as
     | {
         repo_root: string;
         prep_version: number;
@@ -9064,7 +9680,7 @@ export function upsertCodexWindowsPrepConsent(input: {
        prep_version = excluded.prep_version,
        action = excluded.action,
        consented_at = excluded.consented_at,
-       last_applied_at = NULL`
+       last_applied_at = NULL`,
   ).run(input.repoRoot, input.prepVersion, input.action, now);
 }
 
@@ -9072,22 +9688,16 @@ export function markCodexWindowsPrepApplied(repoRoot: string): void {
   db.prepare(
     `UPDATE codex_windows_prep_consent
      SET last_applied_at = ?
-     WHERE repo_root = ?`
+     WHERE repo_root = ?`,
   ).run(Date.now(), repoRoot);
 }
 
-/**
- * Verifica se existe pelo menos 1 agente ativo com runtime='codex' no DB.
- * Usado pra decidir se o dialog de Windows-prep faz sentido pra este projeto.
- */
 export function systemHasActiveCodexAgents(): boolean {
-  const row = db.prepare(
-    `SELECT COUNT(*) as c FROM agents WHERE runtime = 'codex' AND is_active = 1`
-  ).get() as { c: number };
+  const row = db.prepare(`SELECT COUNT(*) as c FROM agents WHERE runtime = 'codex' AND is_active = 1`).get() as {
+    c: number;
+  };
   return row.c > 0;
 }
-
-// ---- Dreaming State ----
 
 export interface DreamingState {
   lastGateRunAt: number | null;
@@ -9098,17 +9708,20 @@ export interface DreamingState {
 }
 
 export function getDreamingState(): DreamingState {
-  const row = db.prepare(
-    'SELECT last_gate_run_at, last_turn_run_at, turn_count, total_turn_runs, total_turn_failsafes FROM dreaming_state WHERE id = 1'
-  ).get() as {
-    last_gate_run_at: number | null;
-    last_turn_run_at: number | null;
-    turn_count: number;
-    total_turn_runs: number;
-    total_turn_failsafes: number;
-  } | undefined;
+  const row = db
+    .prepare(
+      'SELECT last_gate_run_at, last_turn_run_at, turn_count, total_turn_runs, total_turn_failsafes FROM dreaming_state WHERE id = 1',
+    )
+    .get() as
+    | {
+        last_gate_run_at: number | null;
+        last_turn_run_at: number | null;
+        turn_count: number;
+        total_turn_runs: number;
+        total_turn_failsafes: number;
+      }
+    | undefined;
   if (!row) {
-    // defensive: shouldn't happen — migration inserts row. Return defaults.
     return { lastGateRunAt: null, lastTurnRunAt: null, turnCount: 0, totalTurnRuns: 0, totalTurnFailsafes: 0 };
   }
   return {
@@ -9128,7 +9741,6 @@ export function setLastTurnRunAt(ms: number): void {
   db.prepare('UPDATE dreaming_state SET last_turn_run_at = ? WHERE id = 1').run(ms);
 }
 
-/** Atomically increments turn_count by 1. Returns the new value. */
 export function incrementTurnCount(): number {
   db.prepare('UPDATE dreaming_state SET turn_count = turn_count + 1 WHERE id = 1').run();
   const row = db.prepare('SELECT turn_count FROM dreaming_state WHERE id = 1').get() as { turn_count: number };
@@ -9147,32 +9759,12 @@ export function incrementTotalTurnFailsafes(): void {
   db.prepare('UPDATE dreaming_state SET total_turn_failsafes = total_turn_failsafes + 1 WHERE id = 1').run();
 }
 
-/**
- * Le `dreaming_turn_based_interval` da tabela `settings` aplicando clamp:
- *  - int finito, min 10, max 500, default 20 em NaN/lixo/ausente.
- *
- * Defesa em profundidade: clamp na escrita (settings:update) cobre IPC normal,
- * mas se DB tiver valor corrompido, o clamp na leitura garante que turn-based
- * ainda funcione (parseInt('abc') === NaN faria trigger nunca disparar).
- *
- * IMPORTANTE: este helper NAO toca em `dreaming_state`. Ele apenas le um setting
- * key-value. Esta em `db.ts` por conveniencia de import junto com os outros.
- */
 export function getDreamingTurnInterval(): number {
   const raw = getSetting('dreaming_turn_based_interval') || '20';
   const parsed = parseInt(raw, 10);
   if (!Number.isFinite(parsed)) return 20;
   return Math.min(500, Math.max(10, parsed));
 }
-
-// ---------------------------------------------------------------------------
-// Repo Graph (SPEC spec-chat-repo-codegraph.md, secao 7 — migration V82)
-//
-// CRUD das 4 tabelas do repo mode do chat: local_repositories, repo_graph_runs,
-// session_active_repository e repo_graph_turn_usage. TODO SQL do dominio fica
-// AQUI (convencao CLAUDE.md secao 13); o RepoGraphEngine recebe estas funcoes
-// por injecao (testavel sem better-sqlite3, ABI trap).
-// ---------------------------------------------------------------------------
 
 function mapLocalRepository(row: Record<string, unknown>): LocalRepositoryRecord {
   return {
@@ -9195,11 +9787,6 @@ function mapLocalRepository(row: Record<string, unknown>): LocalRepositoryRecord
   };
 }
 
-/**
- * Upsert de repositorio local por canonical_root_path (UNIQUE). Se o canonical
- * ja existe, atualiza name/root_path/git_root e devolve o registro EXISTENTE
- * (id preservado — attaches de sessao continuam validos).
- */
 export function upsertLocalRepository(input: {
   id: string;
   name: string;
@@ -9220,49 +9807,33 @@ export function upsertLocalRepository(input: {
   db.prepare(
     `INSERT INTO local_repositories (id, name, root_path, canonical_root_path, git_root, provider)
      VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(
-    input.id,
-    input.name,
-    input.rootPath,
-    input.canonicalRootPath,
-    input.gitRoot,
-    input.provider ?? 'codegraph',
-  );
+  ).run(input.id, input.name, input.rootPath, input.canonicalRootPath, input.gitRoot, input.provider ?? 'codegraph');
   return getLocalRepository(input.id) as LocalRepositoryRecord;
 }
 
 export function getLocalRepository(id: string): LocalRepositoryRecord | null {
-  const row = db
-    .prepare('SELECT * FROM local_repositories WHERE id = ?')
-    .get(id) as Record<string, unknown> | undefined;
+  const row = db.prepare('SELECT * FROM local_repositories WHERE id = ?').get(id) as
+    Record<string, unknown> | undefined;
   return row ? mapLocalRepository(row) : null;
 }
 
-export function getLocalRepositoryByCanonicalPath(
-  canonicalRootPath: string,
-): LocalRepositoryRecord | null {
-  const row = db
-    .prepare('SELECT * FROM local_repositories WHERE canonical_root_path = ?')
-    .get(canonicalRootPath) as Record<string, unknown> | undefined;
+export function getLocalRepositoryByCanonicalPath(canonicalRootPath: string): LocalRepositoryRecord | null {
+  const row = db.prepare('SELECT * FROM local_repositories WHERE canonical_root_path = ?').get(canonicalRootPath) as
+    Record<string, unknown> | undefined;
   return row ? mapLocalRepository(row) : null;
 }
 
 export function listLocalRepositories(): LocalRepositoryRecord[] {
-  const rows = db
-    .prepare('SELECT * FROM local_repositories ORDER BY created_at DESC')
-    .all() as Array<Record<string, unknown>>;
+  const rows = db.prepare('SELECT * FROM local_repositories ORDER BY created_at DESC').all() as Array<
+    Record<string, unknown>
+  >;
   return rows.map(mapLocalRepository);
 }
 
-/** Remove o repositorio. Attaches/runs/usages caem junto (FK ON DELETE CASCADE/SET NULL). */
 export function removeLocalRepository(id: string): void {
   db.prepare('DELETE FROM local_repositories WHERE id = ?').run(id);
 }
 
-/**
- * Patch das colunas de estado do graph (status, indexed_commit, last_indexed_at,
- * stats_json, graph_path, indexed_worktree_hash). So as chaves presentes mudam.
- */
 export function updateLocalRepositoryGraphState(
   id: string,
   patch: {
@@ -9306,7 +9877,6 @@ export function updateLocalRepositoryGraphState(
   db.prepare(`UPDATE local_repositories SET ${fields.join(', ')} WHERE id = ?`).run(...values);
 }
 
-/** Flag GLOBAL "nao perguntar de novo neste repo" (UX de consentimento, 12.3). */
 export function setRepoGraphPromptSuppressedGlobal(id: string, suppressed: boolean): void {
   db.prepare(
     `UPDATE local_repositories
@@ -9314,8 +9884,6 @@ export function setRepoGraphPromptSuppressedGlobal(id: string, suppressed: boole
      WHERE id = ?`,
   ).run(suppressed ? 1 : 0, id);
 }
-
-// ---- repo_graph_runs ----
 
 function mapRepoGraphRun(row: Record<string, unknown>): RepoGraphRunRecord {
   return {
@@ -9334,7 +9902,6 @@ function mapRepoGraphRun(row: Record<string, unknown>): RepoGraphRunRecord {
   };
 }
 
-/** Cria um run de build/update (status inicial 'running'). session_id NULLABLE (Z3/rev5). */
 export function insertRepoGraphRun(input: {
   id: string;
   repositoryId: string;
@@ -9349,10 +9916,6 @@ export function insertRepoGraphRun(input: {
   return getRepoGraphRun(input.id) as RepoGraphRunRecord;
 }
 
-/**
- * Patch de um run (status/completed_at/duration_ms/output/error/stats_json).
- * Progresso de build persiste AQUI (output), nunca em repo_graph_turn_usage (Z3).
- */
 export function updateRepoGraphRun(
   id: string,
   patch: {
@@ -9396,27 +9959,18 @@ export function updateRepoGraphRun(
 }
 
 export function getRepoGraphRun(id: string): RepoGraphRunRecord | null {
-  const row = db
-    .prepare('SELECT * FROM repo_graph_runs WHERE id = ?')
-    .get(id) as Record<string, unknown> | undefined;
+  const row = db.prepare('SELECT * FROM repo_graph_runs WHERE id = ?').get(id) as Record<string, unknown> | undefined;
   return row ? mapRepoGraphRun(row) : null;
 }
 
-/** Ultimo run do repo (rehidratacao da badge pos-build). */
 export function getLatestRepoGraphRun(repositoryId: string): RepoGraphRunRecord | null {
   const row = db
-    .prepare(
-      'SELECT * FROM repo_graph_runs WHERE repository_id = ? ORDER BY started_at DESC, id DESC LIMIT 1',
-    )
+    .prepare('SELECT * FROM repo_graph_runs WHERE repository_id = ? ORDER BY started_at DESC, id DESC LIMIT 1')
     .get(repositoryId) as Record<string, unknown> | undefined;
   return row ? mapRepoGraphRun(row) : null;
 }
 
-// ---- session_active_repository ----
-
-function mapSessionActiveRepository(
-  row: Record<string, unknown>,
-): SessionActiveRepositoryRecord {
+function mapSessionActiveRepository(row: Record<string, unknown>): SessionActiveRepositoryRecord {
   return {
     sessionId: row['session_id'] as string,
     repositoryId: row['repository_id'] as string,
@@ -9426,7 +9980,6 @@ function mapSessionActiveRepository(
   };
 }
 
-/** Attach (1:1 por sessao): re-attach troca o repo e zera a supressao de sessao. */
 export function attachSessionRepository(sessionId: string, repositoryId: string): void {
   db.prepare(
     `INSERT INTO session_active_repository (session_id, repository_id)
@@ -9442,16 +9995,12 @@ export function detachSessionRepository(sessionId: string): void {
   db.prepare('DELETE FROM session_active_repository WHERE session_id = ?').run(sessionId);
 }
 
-export function getSessionActiveRepository(
-  sessionId: string,
-): SessionActiveRepositoryRecord | null {
-  const row = db
-    .prepare('SELECT * FROM session_active_repository WHERE session_id = ?')
-    .get(sessionId) as Record<string, unknown> | undefined;
+export function getSessionActiveRepository(sessionId: string): SessionActiveRepositoryRecord | null {
+  const row = db.prepare('SELECT * FROM session_active_repository WHERE session_id = ?').get(sessionId) as
+    Record<string, unknown> | undefined;
   return row ? mapSessionActiveRepository(row) : null;
 }
 
-/** Flag de sessao "agora nao" (suprime o CTA de criar graph nesta conversa). */
 export function setSessionGraphPromptSuppressed(sessionId: string, suppressed: boolean): void {
   db.prepare(
     `UPDATE session_active_repository
@@ -9459,8 +10008,6 @@ export function setSessionGraphPromptSuppressed(sessionId: string, suppressed: b
      WHERE session_id = ?`,
   ).run(suppressed ? 1 : 0, sessionId);
 }
-
-// ---- repo_graph_turn_usage ----
 
 function mapRepoGraphTurnUsage(row: Record<string, unknown>): RepoGraphTurnUsageRecord {
   return {
@@ -9480,11 +10027,6 @@ function mapRepoGraphTurnUsage(row: Record<string, unknown>): RepoGraphTurnUsage
   };
 }
 
-/**
- * Registra um uso do graph DENTRO de turno (Z3): tool usada (used=1) ou
- * runtime-limited (used=0 com reason). Progresso de build NUNCA entra aqui
- * (turn_index e NOT NULL; build pode vir da UI fora de turno).
- */
 export function insertRepoGraphTurnUsage(input: {
   id: string;
   sessionId: string;
@@ -9520,11 +10062,7 @@ export function insertRepoGraphTurnUsage(input: {
   );
 }
 
-/** Usos de um turno (fonte de verdade da badge "usado no turno", 12.1). */
-export function getRepoGraphTurnUsage(
-  sessionId: string,
-  turnIndex: number,
-): RepoGraphTurnUsageRecord[] {
+export function getRepoGraphTurnUsage(sessionId: string, turnIndex: number): RepoGraphTurnUsageRecord[] {
   const rows = db
     .prepare(
       `SELECT * FROM repo_graph_turn_usage
@@ -9534,8 +10072,6 @@ export function getRepoGraphTurnUsage(
     .all(sessionId, turnIndex) as Array<Record<string, unknown>>;
   return rows.map(mapRepoGraphTurnUsage);
 }
-
-// ---- Metricas D-5 (formula FIXADA, secao 19) ----
 
 interface RepoGraphTurnAggregateRow {
   tool_calls: number | null;
@@ -9549,24 +10085,6 @@ function mapTurnSample(row: RepoGraphTurnAggregateRow): RepoGraphTurnSample {
   };
 }
 
-/**
- * Metricas D-5 (formula FIXADA): economia = media de (tool calls
- * nao-repo-graph + tokens) por turno em sessoes COM repo e used=1 vs sessoes
- * SEM repo, janela de 50+ turnos cada (REPO_GRAPH_METRICS_MIN_TURNS).
- *
- * Fontes:
- *  - activity_log (V79): kind='tool' por (session_id, turn_index) da o numero
- *    de tool calls do turno; input_tokens+output_tokens dao os tokens. A
- *    exclusao "nao-repo-graph" e por label (repo_graph_* das 7 tools e a
- *    variante mcp__repo-graph__*).
- *  - Grupo COM repo: turnos com >=1 registro used=1 em repo_graph_turn_usage.
- *  - Grupo SEM repo: turnos de sessoes sem attach corrente
- *    (session_active_repository) E sem uso historico do graph (aproximacao
- *    documentada em repo-graph/metrics.ts — detach apaga o attach).
- *
- * O calculo final (medias, percentuais, janela) e delegado ao modulo PURO
- * computeRepoGraphSavings (repo-graph/metrics.ts) — testavel sem better-sqlite3.
- */
 export function getRepoGraphSavingsMetrics(): RepoGraphSavingsMetrics {
   const withRepoRows = db
     .prepare(
@@ -9602,45 +10120,17 @@ export function getRepoGraphSavingsMetrics(): RepoGraphSavingsMetrics {
     )
     .all() as RepoGraphTurnAggregateRow[];
 
-  return computeRepoGraphSavings(
-    withRepoRows.map(mapTurnSample),
-    withoutRepoRows.map(mapTurnSample),
-  );
+  return computeRepoGraphSavings(withRepoRows.map(mapTurnSample), withoutRepoRows.map(mapTurnSample));
 }
 
-// ---------------------------------------------------------------------------
-// Dynamic Workflow Pipe (SPEC-010, secao 12.1 - migration V83)
-//
-// CRUD das 8 tabelas dynamic_workflow_*: definitions, runs, nodes, node_runs,
-// events, messages, artifacts e gate_decisions. TODO SQL do dominio fica AQUI
-// (convencao CLAUDE.md secao 13); runner/host-api/IPC recebem estas funcoes por
-// import ou injecao (testavel sem better-sqlite3, ABI trap).
-//
-// Chaves de auditoria (12.3): definitionId -> runId -> nodeId -> attempt.
-// Contrato anti-coluna-orfa (R3-F2): o create de nodes persiste TODAS as
-// colunas de 12.1 (produces/consumes/gate_config/retry_policy/risk_level);
-// quem mapeia manifest -> input e o workflow-create (S09).
-// ---------------------------------------------------------------------------
-
-// ---- dynamic_workflow_definitions ----
-
-function mapDynamicWorkflowDefinition(
-  row: Record<string, unknown>,
-): DynamicWorkflowDefinition {
+function mapDynamicWorkflowDefinition(row: Record<string, unknown>): DynamicWorkflowDefinition {
   return {
     id: row['id'] as string,
     name: row['name'] as string,
     definitionVersion: (row['definition_version'] as number) ?? 1,
-    // Modo de autoria (coluna crua; 'claude-code' e o UNICO modo suportado
-    // desde a refatoracao 2026-08-27). Default 'claude-code'; uma row legada
-    // 'manifest' ainda surfa o valor cru, mas nada mais ramifica por ele - o
-    // start/resume dessa definition falha no compile com o erro normal.
-    authoringModel:
-      (row['authoring_model'] as DynamicWorkflowDefinition['authoringModel']) ??
-      'claude-code',
+    authoringModel: (row['authoring_model'] as DynamicWorkflowDefinition['authoringModel']) ?? 'claude-code',
     parentDefinitionId: (row['parent_definition_id'] as string | null) ?? null,
-    supersedesDefinitionId:
-      (row['supersedes_definition_id'] as string | null) ?? null,
+    supersedesDefinitionId: (row['supersedes_definition_id'] as string | null) ?? null,
     sourceType: row['source_type'] as string,
     projectPath: row['project_path'] as string,
     specPath: (row['spec_path'] as string | null) ?? null,
@@ -9671,8 +10161,6 @@ export function createDynamicWorkflowDefinition(
     input.id,
     input.name,
     input.definitionVersion ?? 1,
-    // Modo de autoria IMUTAVEL; 'claude-code' e o modo UNICO (refatoracao
-    // 2026-08-27). Nunca alterado por UPDATE (ver updateDynamicWorkflowDefinition).
     'claude-code',
     input.parentDefinitionId ?? null,
     input.supersedesDefinitionId ?? null,
@@ -9685,8 +10173,6 @@ export function createDynamicWorkflowDefinition(
     input.manifestJson,
     input.manifestHash,
     input.contextBundlePath ?? null,
-    // builder_agent_id: coluna preservada (migrations imutaveis); o fluxo vivo
-    // nao a popula mais (builder removido na refatoracao 2026-08-27).
     null,
     input.builderModel ?? null,
     input.status,
@@ -9694,35 +10180,20 @@ export function createDynamicWorkflowDefinition(
   return getDynamicWorkflowDefinition(input.id) as DynamicWorkflowDefinition;
 }
 
-export function getDynamicWorkflowDefinition(
-  id: string,
-): DynamicWorkflowDefinition | null {
-  const row = db
-    .prepare('SELECT * FROM dynamic_workflow_definitions WHERE id = ?')
-    .get(id) as Record<string, unknown> | undefined;
+export function getDynamicWorkflowDefinition(id: string): DynamicWorkflowDefinition | null {
+  const row = db.prepare('SELECT * FROM dynamic_workflow_definitions WHERE id = ?').get(id) as
+    Record<string, unknown> | undefined;
   return row ? mapDynamicWorkflowDefinition(row) : null;
 }
 
 export function listDynamicWorkflowDefinitions(): DynamicWorkflowDefinition[] {
-  const rows = db
-    .prepare('SELECT * FROM dynamic_workflow_definitions ORDER BY created_at DESC')
-    .all() as Array<Record<string, unknown>>;
+  const rows = db.prepare('SELECT * FROM dynamic_workflow_definitions ORDER BY created_at DESC').all() as Array<
+    Record<string, unknown>
+  >;
   return rows.map(mapDynamicWorkflowDefinition);
 }
 
-/**
- * Patch de definition. Cobre a linkagem parent/supersedes do replan e do
- * switch-agent (12.1, decisao 22.7). So as chaves presentes mudam.
- *
- * `authoring_model` e IMUTAVEL por definition (SPEC dynamic-workflow claude-code):
- * NAO ha campo `authoringModel` em `DynamicWorkflowDefinitionPatch` e este UPDATE
- * NUNCA toca a coluna `authoring_model`. Trocar o modo de autoria exige uma nova
- * definition (cadeia parent/supersedes), nao um patch.
- */
-export function updateDynamicWorkflowDefinition(
-  id: string,
-  patch: DynamicWorkflowDefinitionPatch,
-): void {
+export function updateDynamicWorkflowDefinition(id: string, patch: DynamicWorkflowDefinitionPatch): void {
   const fields: string[] = [];
   const values: unknown[] = [];
   if (patch.name !== undefined) {
@@ -9780,12 +10251,8 @@ export function updateDynamicWorkflowDefinition(
   if (fields.length === 0) return;
   fields.push(`updated_at = datetime('now')`);
   values.push(id);
-  db.prepare(
-    `UPDATE dynamic_workflow_definitions SET ${fields.join(', ')} WHERE id = ?`,
-  ).run(...values);
+  db.prepare(`UPDATE dynamic_workflow_definitions SET ${fields.join(', ')} WHERE id = ?`).run(...values);
 }
-
-// ---- dynamic_workflow_runs ----
 
 function mapDynamicWorkflowRun(row: Record<string, unknown>): DynamicWorkflowRun {
   return {
@@ -9795,8 +10262,7 @@ function mapDynamicWorkflowRun(row: Record<string, unknown>): DynamicWorkflowRun
     status: row['status'] as DynamicWorkflowRun['status'],
     currentPhaseId: (row['current_phase_id'] as string | null) ?? null,
     currentNodeId: (row['current_node_id'] as string | null) ?? null,
-    workspaceMode:
-      (row['workspace_mode'] as DynamicWorkflowRun['workspaceMode']) ?? null,
+    workspaceMode: (row['workspace_mode'] as DynamicWorkflowRun['workspaceMode']) ?? null,
     baseBranch: (row['base_branch'] as string | null) ?? null,
     baseCommitSha: (row['base_commit_sha'] as string | null) ?? null,
     baseWorktreeHash: (row['base_worktree_hash'] as string | null) ?? null,
@@ -9805,8 +10271,7 @@ function mapDynamicWorkflowRun(row: Record<string, unknown>): DynamicWorkflowRun
     deliveredAt: (row['delivered_at'] as string | null) ?? null,
     finalizedAt: (row['finalized_at'] as string | null) ?? null,
     closerSessionId: (row['closer_session_id'] as string | null) ?? null,
-    closerStatus:
-      (row['closer_status'] as DynamicWorkflowRun['closerStatus']) ?? null,
+    closerStatus: (row['closer_status'] as DynamicWorkflowRun['closerStatus']) ?? null,
     inputJson: (row['input_json'] as string) ?? '{}',
     outputJson: (row['output_json'] as string | null) ?? null,
     checkpointJson: (row['checkpoint_json'] as string) ?? '{}',
@@ -9820,9 +10285,7 @@ function mapDynamicWorkflowRun(row: Record<string, unknown>): DynamicWorkflowRun
   };
 }
 
-export function createDynamicWorkflowRun(
-  input: DynamicWorkflowRunCreateInput,
-): DynamicWorkflowRun {
+export function createDynamicWorkflowRun(input: DynamicWorkflowRunCreateInput): DynamicWorkflowRun {
   db.prepare(
     `INSERT INTO dynamic_workflow_runs (
        id, definition_id, chat_session_id, status, workspace_mode, base_branch,
@@ -9847,19 +10310,12 @@ export function createDynamicWorkflowRun(
 }
 
 export function getDynamicWorkflowRun(id: string): DynamicWorkflowRun | null {
-  const row = db
-    .prepare('SELECT * FROM dynamic_workflow_runs WHERE id = ?')
-    .get(id) as Record<string, unknown> | undefined;
+  const row = db.prepare('SELECT * FROM dynamic_workflow_runs WHERE id = ?').get(id) as
+    Record<string, unknown> | undefined;
   return row ? mapDynamicWorkflowRun(row) : null;
 }
 
 export function listDynamicWorkflowRuns(): DynamicWorkflowRun[] {
-  // Card da lista (paridade visual com o card do pipeline): enriquece cada run
-  // com agregados de progresso das SUAS sprints. Fonte confiavel = COUNT das
-  // sprints + `merge_status` (o `status` da sprint nao e gravado em runtime, so
-  // o closer toca merge_status) + json_array_length(features_json). Em DB sem a
-  // tabela/coluna ou sem JSON1, o try/catch degrada para a lista crua sem
-  // agregados (a UI trata os campos opcionais ausentes).
   try {
     const rows = db
       .prepare(
@@ -9877,10 +10333,7 @@ export function listDynamicWorkflowRuns(): DynamicWorkflowRun[] {
       const run = mapDynamicWorkflowRun(row);
       const sprintsTotal = (row['x_sprints_total'] as number) ?? 0;
       const sprintsMerged = (row['x_sprints_merged'] as number) ?? 0;
-      // "done" = run terminal-sucesso (todas as sprints) OU as sprints que o
-      // closer ja mergeou/pulou (o `status` por sprint nao reflete progresso).
-      const terminalSuccess =
-        run.status === 'delivered' || run.status === 'completed';
+      const terminalSuccess = run.status === 'delivered' || run.status === 'completed';
       return {
         ...run,
         sprintsTotal,
@@ -9889,44 +10342,25 @@ export function listDynamicWorkflowRuns(): DynamicWorkflowRun[] {
       };
     });
   } catch {
-    const rows = db
-      .prepare('SELECT * FROM dynamic_workflow_runs ORDER BY updated_at DESC')
-      .all() as Array<Record<string, unknown>>;
+    const rows = db.prepare('SELECT * FROM dynamic_workflow_runs ORDER BY updated_at DESC').all() as Array<
+      Record<string, unknown>
+    >;
     return rows.map(mapDynamicWorkflowRun);
   }
 }
 
-/** Runs por status (boot recovery 10.3: running -> interrupted na S11/S15). */
-export function listDynamicWorkflowRunsByStatus(
-  status: DynamicWorkflowRunStatus,
-): DynamicWorkflowRun[] {
+export function listDynamicWorkflowRunsByStatus(status: DynamicWorkflowRunStatus): DynamicWorkflowRun[] {
   const rows = db
-    .prepare(
-      'SELECT * FROM dynamic_workflow_runs WHERE status = ? ORDER BY updated_at DESC',
-    )
+    .prepare('SELECT * FROM dynamic_workflow_runs WHERE status = ? ORDER BY updated_at DESC')
     .all(status) as Array<Record<string, unknown>>;
   return rows.map(mapDynamicWorkflowRun);
 }
 
-/**
- * Transicao PURA de status do run (10.2). Tipada com DynamicWorkflowRunStatus
- * para impedir UI-only values; mudanca composta usa updateDynamicWorkflowRun
- * (licao D3 das convencoes do app).
- */
-export function setDynamicWorkflowRunStatus(
-  id: string,
-  status: DynamicWorkflowRunStatus,
-): void {
-  db.prepare(
-    `UPDATE dynamic_workflow_runs SET status = ?, updated_at = datetime('now') WHERE id = ?`,
-  ).run(status, id);
+export function setDynamicWorkflowRunStatus(id: string, status: DynamicWorkflowRunStatus): void {
+  db.prepare(`UPDATE dynamic_workflow_runs SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, id);
 }
 
-/** Patch COMPOSTO do run (status + campos juntos, atomico). */
-export function updateDynamicWorkflowRun(
-  id: string,
-  patch: DynamicWorkflowRunPatch,
-): void {
+export function updateDynamicWorkflowRun(id: string, patch: DynamicWorkflowRunPatch): void {
   const fields: string[] = [];
   const values: unknown[] = [];
   if (patch.status !== undefined) {
@@ -10020,58 +10454,20 @@ export function updateDynamicWorkflowRun(
   if (fields.length === 0) return;
   fields.push(`updated_at = datetime('now')`);
   values.push(id);
-  db.prepare(
-    `UPDATE dynamic_workflow_runs SET ${fields.join(', ')} WHERE id = ?`,
-  ).run(...values);
+  db.prepare(`UPDATE dynamic_workflow_runs SET ${fields.join(', ')} WHERE id = ?`).run(...values);
 }
 
-/**
- * P0-RECOVERY (SM-22 / REGRA MAXIMA): UNICA porta de saida destrutiva do dominio.
- * Apaga um run e TUDO que e por-run (node_runs, events, messages, artifacts,
- * gate_decisions, sprints, journal) via FK ON DELETE CASCADE (12.1: todas as
- * tabelas por-run referenciam dynamic_workflow_runs(id) ON DELETE CASCADE). NUNCA
- * e chamada por abort/reject/interrupt/restart - SO pelo botao explicito "Deletar
- * workflow" da lista principal (com confirmacao). A `definition` (e seus nodes
- * estaticos, keyed por definition_id) NAO e tocada: e compartilhada pela cadeia
- * de versoes (replan) e pertence ao catalogo, nao ao run.
- *
- * Retorna true se um run foi removido, false se o id nao existia (no-op honesto).
- */
 export function deleteDynamicWorkflowRun(id: string): boolean {
-  const info = db
-    .prepare('DELETE FROM dynamic_workflow_runs WHERE id = ?')
-    .run(id);
+  const info = db.prepare('DELETE FROM dynamic_workflow_runs WHERE id = ?').run(id);
   return info.changes > 0;
 }
 
-/**
- * RE-APONTA o run para uma nova `definition_id` (SPEC-010 F4b: edicao-ao-vivo
- * transacional do Maestro). O `definition_id` NAO esta no patch tipado do run
- * (`DynamicWorkflowRunPatch`) DE PROPOSITO: ele e imutavel pela CRUD comum (o
- * vinculo run->definition nasce no INSERT). O `request-replan` legado por isso
- * NUNCA reaponta o run - so cria a nova versao e fecha a cadeia parent/supersedes.
- *
- * A tool transacional de edicao do Maestro (`dynamic_workflow_edit_coordinator`)
- * SIM reaponta: ela compila+revalida o pacote novo, cria a nova definition version
- * (cadeia 22.7) e troca o ponteiro do run para ela ATOMICAMENTE com esta funcao.
- * No resume seguinte, o runner carrega a nova definition (novo `manifest_hash` =
- * nova `workflowRevision` do journal), entao o prefixo do journal reusa os nodes
- * concluidos cuja revisao bate e re-roda do 1o desvio (F2 sec 3.2/D-8).
- *
- * Funcao DEDICADA (nao um campo no patch) para deixar EXPLICITO e auditavel que
- * trocar a definition de um run e operacao especial (so a edicao transacional a
- * usa), nunca um efeito colateral de um patch composto.
- */
-export function repointDynamicWorkflowRunDefinition(
-  runId: string,
-  definitionId: string,
-): void {
-  db.prepare(
-    `UPDATE dynamic_workflow_runs SET definition_id = ?, updated_at = datetime('now') WHERE id = ?`,
-  ).run(definitionId, runId);
+export function repointDynamicWorkflowRunDefinition(runId: string, definitionId: string): void {
+  db.prepare(`UPDATE dynamic_workflow_runs SET definition_id = ?, updated_at = datetime('now') WHERE id = ?`).run(
+    definitionId,
+    runId,
+  );
 }
-
-// ---- dynamic_workflow_nodes (grafo estatico da definition) ----
 
 function mapDynamicWorkflowNode(row: Record<string, unknown>): DynamicWorkflowNode {
   return {
@@ -10079,14 +10475,8 @@ function mapDynamicWorkflowNode(row: Record<string, unknown>): DynamicWorkflowNo
     definitionId: row['definition_id'] as string,
     nodeId: row['node_id'] as string,
     phaseId: row['phase_id'] as string,
-    // Metadata de sprint (V87): EXPLICITA para a UI agrupar por sprint depois
-    // rodada sem o regex `-rN` fragil (SPEC redesign sec 9.5). NULL para nodes de
-    // planejamento; preenchida por materializeSprintPlan nos nodes de dev.
     sprintId: (row['sprint_id'] as string | null) ?? null,
-    roundIndex:
-      typeof row['round_index'] === 'number'
-        ? (row['round_index'] as number)
-        : null,
+    roundIndex: typeof row['round_index'] === 'number' ? (row['round_index'] as number) : null,
     type: row['type'] as DynamicWorkflowNode['type'],
     agentId: (row['agent_id'] as string | null) ?? null,
     label: (row['label'] as string | null) ?? null,
@@ -10109,16 +10499,7 @@ function mapDynamicWorkflowNode(row: Record<string, unknown>): DynamicWorkflowNo
   };
 }
 
-/**
- * Create de node persistindo TODAS as colunas de 12.1 (contrato anti-coluna-orfa,
- * R3-F2): produces/consumes (OBRIGATORIOS no manifest 6.3), gate_config (node de
- * gate), retry_policy (politica do node ou defaults 10.4) e risk_level
- * (metadata opcional/nullable). NUNCA deixar essas colunas no DEFAULT '[]'/'{}'
- * quando o manifest traz valor.
- */
-export function createDynamicWorkflowNode(
-  input: DynamicWorkflowNodeCreateInput,
-): DynamicWorkflowNode {
+export function createDynamicWorkflowNode(input: DynamicWorkflowNodeCreateInput): DynamicWorkflowNode {
   db.prepare(
     `INSERT INTO dynamic_workflow_nodes (
        id, definition_id, node_id, phase_id, type, agent_id, label, access,
@@ -10152,42 +10533,23 @@ export function createDynamicWorkflowNode(
     JSON.stringify(input.produces),
     JSON.stringify(input.consumes),
   );
-  return getDynamicWorkflowNodeByKey(
-    input.definitionId,
-    input.nodeId,
-  ) as DynamicWorkflowNode;
+  return getDynamicWorkflowNodeByKey(input.definitionId, input.nodeId) as DynamicWorkflowNode;
 }
 
-/** Nodes da definition em ordem de insercao (ordem do grafo no manifest). */
-export function listDynamicWorkflowNodes(
-  definitionId: string,
-): DynamicWorkflowNode[] {
+export function listDynamicWorkflowNodes(definitionId: string): DynamicWorkflowNode[] {
   const rows = db
-    .prepare(
-      'SELECT * FROM dynamic_workflow_nodes WHERE definition_id = ? ORDER BY rowid ASC',
-    )
+    .prepare('SELECT * FROM dynamic_workflow_nodes WHERE definition_id = ? ORDER BY rowid ASC')
     .all(definitionId) as Array<Record<string, unknown>>;
   return rows.map(mapDynamicWorkflowNode);
 }
 
-export function getDynamicWorkflowNodeByKey(
-  definitionId: string,
-  nodeId: string,
-): DynamicWorkflowNode | null {
+export function getDynamicWorkflowNodeByKey(definitionId: string, nodeId: string): DynamicWorkflowNode | null {
   const row = db
-    .prepare(
-      'SELECT * FROM dynamic_workflow_nodes WHERE definition_id = ? AND node_id = ?',
-    )
+    .prepare('SELECT * FROM dynamic_workflow_nodes WHERE definition_id = ? AND node_id = ?')
     .get(definitionId, nodeId) as Record<string, unknown> | undefined;
   return row ? mapDynamicWorkflowNode(row) : null;
 }
 
-/**
- * Patch ADITIVO da metadata de sprint de um node (colunas sprint_id/round_index
- * da V87). Usado por materializeSprintPlan (SPEC-010 sec 5.1) ao expandir os
- * nodes de DEV: a UI agrupa por sprint depois rodada via estas colunas (sem o
- * regex `-rN` fragil, sec 9.5). So as chaves presentes mudam; null limpa.
- */
 export function updateDynamicWorkflowNodeSprintMeta(
   definitionId: string,
   nodeId: string,
@@ -10205,16 +10567,12 @@ export function updateDynamicWorkflowNodeSprintMeta(
   }
   if (fields.length === 0) return;
   values.push(definitionId, nodeId);
-  db.prepare(
-    `UPDATE dynamic_workflow_nodes SET ${fields.join(', ')} WHERE definition_id = ? AND node_id = ?`,
-  ).run(...values);
+  db.prepare(`UPDATE dynamic_workflow_nodes SET ${fields.join(', ')} WHERE definition_id = ? AND node_id = ?`).run(
+    ...values,
+  );
 }
 
-// ---- dynamic_workflow_sprints (plano de sprints materializado, V87) ----
-
-function mapDynamicWorkflowSprint(
-  row: Record<string, unknown>,
-): DynamicWorkflowSprintRow {
+function mapDynamicWorkflowSprint(row: Record<string, unknown>): DynamicWorkflowSprintRow {
   return {
     runId: row['run_id'] as string,
     sprintId: row['sprint_id'] as string,
@@ -10229,37 +10587,17 @@ function mapDynamicWorkflowSprint(
     dependenciesJson: (row['dependencies_json'] as string) ?? '[]',
     maxRounds: (row['max_rounds'] as number | null) ?? null,
     status: row['status'] as DynamicWorkflowSprintRow['status'],
-    // Estado de worktree por sprint (V93). Colunas ausentes em DBs nao-migrados
-    // (defensivo): worktree_path/branch/base_sha/head_sha -> null;
-    // merge_status -> 'pending'.
     worktreePath: (row['worktree_path'] as string | null) ?? null,
     branch: (row['branch'] as string | null) ?? null,
     baseSha: (row['base_sha'] as string | null) ?? null,
     headSha: (row['head_sha'] as string | null) ?? null,
-    mergeStatus:
-      (row['merge_status'] as DynamicWorkflowSprintRow['mergeStatus'] | undefined) ??
-      'pending',
+    mergeStatus: (row['merge_status'] as DynamicWorkflowSprintRow['mergeStatus'] | undefined) ?? 'pending',
     createdAt: row['created_at'] as string,
     updatedAt: row['updated_at'] as string,
   };
 }
 
-/**
- * Upsert de UMA sprint keyed por (run_id, sprint_id) - PK composta da V87.
- * No conflito (resume com a mesma planVersion+planHash, SPEC sec 5.1) atualiza
- * os campos derivados do plano normalizado; o `status` NUNCA e tocado no update
- * (preserva o progresso ja derivado de node_runs - so o insert seta 'pending').
- *
- * Estado de WORKTREE por sprint (V93, F5 sec 3.4): worktree_path/branch/base_sha/
- * head_sha/merge_status sao GRAVADOS no INSERT (defaults NULL / 'pending' quando
- * ausentes) mas NUNCA tocados no UPDATE - igual ao `status`, sao RUNTIME-owned
- * (o writer paralelo amarra a worktree; o closer atualiza head_sha/merge_status
- * via `updateDynamicWorkflowSprint`). Assim a re-materializacao do plano no
- * resume/re-plan nao reverte a worktree ja amarrada a uma sprint em andamento.
- */
-export function upsertDynamicWorkflowSprint(
-  input: DynamicWorkflowSprintUpsertInput,
-): DynamicWorkflowSprintRow {
+export function upsertDynamicWorkflowSprint(input: DynamicWorkflowSprintUpsertInput): DynamicWorkflowSprintRow {
   db.prepare(
     `INSERT INTO dynamic_workflow_sprints (
        run_id, sprint_id, plan_version, plan_hash, sprint_index, name,
@@ -10302,42 +10640,21 @@ export function upsertDynamicWorkflowSprint(
   return getDynamicWorkflowSprint(input.runId, input.sprintId) as DynamicWorkflowSprintRow;
 }
 
-export function getDynamicWorkflowSprint(
-  runId: string,
-  sprintId: string,
-): DynamicWorkflowSprintRow | null {
+export function getDynamicWorkflowSprint(runId: string, sprintId: string): DynamicWorkflowSprintRow | null {
   const row = db
-    .prepare(
-      'SELECT * FROM dynamic_workflow_sprints WHERE run_id = ? AND sprint_id = ?',
-    )
+    .prepare('SELECT * FROM dynamic_workflow_sprints WHERE run_id = ? AND sprint_id = ?')
     .get(runId, sprintId) as Record<string, unknown> | undefined;
   return row ? mapDynamicWorkflowSprint(row) : null;
 }
 
-/** Sprints do run em ordem de index (UI re-hidrata do DB no mount, sec 10). */
-export function listDynamicWorkflowSprints(
-  runId: string,
-): DynamicWorkflowSprintRow[] {
+export function listDynamicWorkflowSprints(runId: string): DynamicWorkflowSprintRow[] {
   const rows = db
-    .prepare(
-      'SELECT * FROM dynamic_workflow_sprints WHERE run_id = ? ORDER BY sprint_index ASC',
-    )
+    .prepare('SELECT * FROM dynamic_workflow_sprints WHERE run_id = ? ORDER BY sprint_index ASC')
     .all(runId) as Array<Record<string, unknown>>;
   return rows.map(mapDynamicWorkflowSprint);
 }
 
-/**
- * Patch parcial de uma sprint (status persistido; rounds derivam de node_runs).
- * Estende-se ao estado de worktree por sprint (V93, F5 sec 3.4 / D-3): o writer
- * paralelo amarra worktree_path/branch/base_sha ao iniciar; o closer atualiza
- * head_sha/merge_status no squash-merge ordenado (8.6.2). So os campos PRESENTES
- * no patch sao escritos (`!== undefined`); null EXPLICITO limpa a coluna.
- */
-export function updateDynamicWorkflowSprint(
-  runId: string,
-  sprintId: string,
-  patch: DynamicWorkflowSprintPatch,
-): void {
+export function updateDynamicWorkflowSprint(runId: string, sprintId: string, patch: DynamicWorkflowSprintPatch): void {
   const fields: string[] = [];
   const values: unknown[] = [];
   if (patch.status !== undefined) {
@@ -10367,67 +10684,32 @@ export function updateDynamicWorkflowSprint(
   if (fields.length === 0) return;
   fields.push(`updated_at = datetime('now')`);
   values.push(runId, sprintId);
-  db.prepare(
-    `UPDATE dynamic_workflow_sprints SET ${fields.join(', ')} WHERE run_id = ? AND sprint_id = ?`,
-  ).run(...values);
+  db.prepare(`UPDATE dynamic_workflow_sprints SET ${fields.join(', ')} WHERE run_id = ? AND sprint_id = ?`).run(
+    ...values,
+  );
 }
 
-/**
- * Materializacao TRANSACIONAL do plano de sprints (SPEC-010 redesign sec 5.1,
- * FIX-F1b). Roda os 4 passos que o `materializeSprintPlan` (host-api) antes
- * delegava SOLTOS (sem transacao) - createNodes -> updateDefinition ->
- * setNodeSprintMeta -> persistSprints - DENTRO de um unico `db.transaction()`
- * (tudo-ou-nada). Antes, uma falha entre passos deixava o DB meio-gravado (ex:
- * nodes inseridos sem a definition atualizada, ou sprints sem os nodes). Agora a
- * transacao garante atomicidade: qualquer throw faz rollback de TUDO.
- *
- * Reusa os acessores existentes (createDynamicWorkflowNode/
- * getDynamicWorkflowNodeByKey/updateDynamicWorkflowDefinition/
- * updateDynamicWorkflowNodeSprintMeta/upsertDynamicWorkflowSprint), so envoltos na
- * transacao. Idempotente no resume (espelha a fabrica antiga buildRunnerCrud):
- * cada node so e inserido quando ainda nao existe por (definitionId, nodeId); o
- * upsert das sprints preserva o `status` (so o insert seta 'pending').
- */
-export function materializeDynamicWorkflowSprintPlan(
-  input: MaterializeDynamicWorkflowSprintPlanInput,
-): void {
+export function materializeDynamicWorkflowSprintPlan(input: MaterializeDynamicWorkflowSprintPlanInput): void {
   const tx = db.transaction((inp: MaterializeDynamicWorkflowSprintPlanInput) => {
-    // (1) nodes de DEV (idempotente: pula os que ja existem por chave).
     for (const node of inp.nodes) {
       if (getDynamicWorkflowNodeByKey(inp.definitionId, node.nodeId)) continue;
       createDynamicWorkflowNode({ ...node, definitionId: inp.definitionId });
     }
-    // (2) definition (manifest expandido + hash).
     updateDynamicWorkflowDefinition(inp.definitionId, inp.definitionPatch);
-    // (3) metadata de sprint nos nodes (sprint_id/round_index da V87).
     for (const meta of inp.nodeSprintMeta) {
       updateDynamicWorkflowNodeSprintMeta(inp.definitionId, meta.nodeId, meta.patch);
     }
-    // (4) linhas de dynamic_workflow_sprints (upsert; status preservado).
     for (const sprint of inp.sprints) upsertDynamicWorkflowSprint(sprint);
   });
   tx(input);
 }
 
-/**
- * Reconstroi o estado DURAVEL da ultima materializacao de um run para hidratar a
- * idempotencia do `materializeSprintPlan` no RESUME (SPEC-010 redesign sec 5.1,
- * FIX-F1a). Carrega plan_version/plan_hash da tabela `dynamic_workflow_sprints` e
- * reconstroi os `sprintNodeIds` agrupando os nodes de DEV (de
- * `dynamic_workflow_nodes`) por `sprint_id`. Sem isto, o Map `materialized` do
- * host-api nasce vazio a cada execucao e o resume re-materializa (duplica nodes).
- *
- * Retorna null quando o run nunca materializou (sem sprints). Quando ha mais de
- * uma plan_version persistida (re-plan apos materializar), usa a MAIOR (a versao
- * corrente do run; o upsert denormaliza a mesma versao por linha).
- */
 export function getDynamicWorkflowPriorMaterialization(
   runId: string,
   definitionId: string,
 ): DynamicWorkflowPriorMaterialization | null {
   const sprints = listDynamicWorkflowSprints(runId);
   if (sprints.length === 0) return null;
-  // Versao corrente = a MAIOR plan_version persistida (re-plan denormaliza por linha).
   let planVersion = 0;
   let planHash = '';
   for (const s of sprints) {
@@ -10436,8 +10718,6 @@ export function getDynamicWorkflowPriorMaterialization(
       planHash = s.planHash;
     }
   }
-  // Reconstroi sprintNodeIds dos nodes de DEV agrupados por sprint_id (ordem de
-  // insercao = ordem do grafo no manifest, igual ao retorno de buildSprintNodes).
   const nodes = listDynamicWorkflowNodes(definitionId);
   const bySprint = new Map<string, string[]>();
   for (const node of nodes) {
@@ -10446,18 +10726,13 @@ export function getDynamicWorkflowPriorMaterialization(
     list.push(node.nodeId);
     bySprint.set(node.sprintId, list);
   }
-  // Ordena as sprints por sprint_index (estavel com o plano normalizado).
   const sprintNodeIds = sprints
     .filter((s) => bySprint.has(s.sprintId))
     .map((s) => ({ sprintId: s.sprintId, nodeIds: bySprint.get(s.sprintId) ?? [] }));
   return { planVersion, planHash, sprintNodeIds };
 }
 
-// ---- dynamic_workflow_journal (resume por journal ordenado, SPEC-010 F2/V91) ----
-
-function mapDynamicWorkflowJournalEntry(
-  row: Record<string, unknown>,
-): DynamicWorkflowJournalEntry {
+function mapDynamicWorkflowJournalEntry(row: Record<string, unknown>): DynamicWorkflowJournalEntry {
   return {
     runId: row['run_id'] as string,
     callIndex: row['call_index'] as number,
@@ -10478,17 +10753,7 @@ function mapDynamicWorkflowJournalEntry(
   };
 }
 
-/**
- * APPEND-ONLY (SPEC-010 F2 sec 3.2/D-8): grava UMA entrada do journal ordenado por
- * (run_id, call_index). Nunca faz UPDATE de linha concluida; INSERT OR REPLACE so
- * para idempotencia do RE-append da MESMA call_index com o MESMO conteudo (ex: o
- * runner re-roda o `.js` do topo no resume e re-grava o prefixo intacto). A
- * invalidacao do sufixo e um DELETE separado (truncateDynamicWorkflowJournalFrom),
- * nunca uma mutacao da linha concluida.
- */
-export function appendDynamicWorkflowJournalEntry(
-  input: DynamicWorkflowJournalAppendInput,
-): void {
+export function appendDynamicWorkflowJournalEntry(input: DynamicWorkflowJournalAppendInput): void {
   db.prepare(
     `INSERT OR REPLACE INTO dynamic_workflow_journal (
        run_id, call_index, call_path, primitive, node_id, arg_hash, schema_ref,
@@ -10514,38 +10779,18 @@ export function appendDynamicWorkflowJournalEntry(
   );
 }
 
-/** Le o journal ORDENADO de um run (ordem do call_index, 1-based crescente). */
-export function listDynamicWorkflowJournalEntries(
-  runId: string,
-): DynamicWorkflowJournalEntry[] {
+export function listDynamicWorkflowJournalEntries(runId: string): DynamicWorkflowJournalEntry[] {
   const rows = db
-    .prepare(
-      'SELECT * FROM dynamic_workflow_journal WHERE run_id = ? ORDER BY call_index ASC',
-    )
+    .prepare('SELECT * FROM dynamic_workflow_journal WHERE run_id = ? ORDER BY call_index ASC')
     .all(runId) as Record<string, unknown>[];
   return rows.map(mapDynamicWorkflowJournalEntry);
 }
 
-/**
- * Invalida o SUFIXO do journal: remove toda entrada com call_index >= `fromIndex`
- * (SPEC-010 F2 sec 3.2: no 1o desvio do prefixo, o sufixo obsoleto e descartado).
- * APPEND-ONLY preservado: nunca muta linha concluida, so descarta o sufixo
- * superado pela edicao ao vivo. fromIndex inclusivo.
- */
-export function truncateDynamicWorkflowJournalFrom(
-  runId: string,
-  fromIndex: number,
-): void {
-  db.prepare(
-    'DELETE FROM dynamic_workflow_journal WHERE run_id = ? AND call_index >= ?',
-  ).run(runId, fromIndex);
+export function truncateDynamicWorkflowJournalFrom(runId: string, fromIndex: number): void {
+  db.prepare('DELETE FROM dynamic_workflow_journal WHERE run_id = ? AND call_index >= ?').run(runId, fromIndex);
 }
 
-// ---- dynamic_workflow_node_runs (attempt por node) ----
-
-function mapDynamicWorkflowNodeRun(
-  row: Record<string, unknown>,
-): DynamicWorkflowNodeRun {
+function mapDynamicWorkflowNodeRun(row: Record<string, unknown>): DynamicWorkflowNodeRun {
   return {
     id: row['id'] as string,
     runId: row['run_id'] as string,
@@ -10562,8 +10807,7 @@ function mapDynamicWorkflowNodeRun(
     outputHash: (row['output_hash'] as string | null) ?? null,
     outputJson: (row['output_json'] as string | null) ?? null,
     error: (row['error'] as string | null) ?? null,
-    failureClass:
-      (row['failure_class'] as DynamicWorkflowNodeRun['failureClass']) ?? null,
+    failureClass: (row['failure_class'] as DynamicWorkflowNodeRun['failureClass']) ?? null,
     inputTokens: (row['input_tokens'] as number) || 0,
     outputTokens: (row['output_tokens'] as number) || 0,
     cacheReadTokens: (row['cache_read_tokens'] as number) || 0,
@@ -10584,14 +10828,7 @@ function mapDynamicWorkflowNodeRun(
   };
 }
 
-/**
- * Upsert de attempt keyed por (run_id, node_id, attempt) - UNIQUE da 12.1.
- * No conflito atualiza status/hashes/policy snapshot/input; o id original e
- * preservado (excluded.id ignorado).
- */
-export function upsertDynamicWorkflowNodeRun(
-  input: DynamicWorkflowNodeRunUpsertInput,
-): DynamicWorkflowNodeRun {
+export function upsertDynamicWorkflowNodeRun(input: DynamicWorkflowNodeRunUpsertInput): DynamicWorkflowNodeRun {
   db.prepare(
     `INSERT INTO dynamic_workflow_node_runs (
        id, run_id, node_id, phase_id, type, agent_id, status, attempt,
@@ -10622,11 +10859,7 @@ export function upsertDynamicWorkflowNodeRun(
     input.inputJson ?? '{}',
     input.startedAt ?? null,
   );
-  return getDynamicWorkflowNodeRunByKey(
-    input.runId,
-    input.nodeId,
-    input.attempt,
-  ) as DynamicWorkflowNodeRun;
+  return getDynamicWorkflowNodeRunByKey(input.runId, input.nodeId, input.attempt) as DynamicWorkflowNodeRun;
 }
 
 export function getDynamicWorkflowNodeRunByKey(
@@ -10635,17 +10868,12 @@ export function getDynamicWorkflowNodeRunByKey(
   attempt: number,
 ): DynamicWorkflowNodeRun | null {
   const row = db
-    .prepare(
-      'SELECT * FROM dynamic_workflow_node_runs WHERE run_id = ? AND node_id = ? AND attempt = ?',
-    )
+    .prepare('SELECT * FROM dynamic_workflow_node_runs WHERE run_id = ? AND node_id = ? AND attempt = ?')
     .get(runId, nodeId, attempt) as Record<string, unknown> | undefined;
   return row ? mapDynamicWorkflowNodeRun(row) : null;
 }
 
-/** Timeline do run: todas as attempts, ordenadas (13.7.6 deriva fase/rodada daqui). */
-export function listDynamicWorkflowNodeRuns(
-  runId: string,
-): DynamicWorkflowNodeRun[] {
+export function listDynamicWorkflowNodeRuns(runId: string): DynamicWorkflowNodeRun[] {
   const rows = db
     .prepare(
       `SELECT * FROM dynamic_workflow_node_runs
@@ -10656,11 +10884,7 @@ export function listDynamicWorkflowNodeRuns(
   return rows.map(mapDynamicWorkflowNodeRun);
 }
 
-/** Attempts de um node especifico (tentativas por node na UI, 13.3). */
-export function listDynamicWorkflowNodeRunAttempts(
-  runId: string,
-  nodeId: string,
-): DynamicWorkflowNodeRun[] {
+export function listDynamicWorkflowNodeRunAttempts(runId: string, nodeId: string): DynamicWorkflowNodeRun[] {
   const rows = db
     .prepare(
       `SELECT * FROM dynamic_workflow_node_runs
@@ -10671,14 +10895,7 @@ export function listDynamicWorkflowNodeRunAttempts(
   return rows.map(mapDynamicWorkflowNodeRun);
 }
 
-/**
- * Ultima attempt por node do run (snapshot/pipezinho 13.7: rodadas e regressao
- * de fase de loop derivam de node_runs + group ids do manifest, nunca de
- * heuristica de nome).
- */
-export function listDynamicWorkflowLatestNodeRuns(
-  runId: string,
-): DynamicWorkflowNodeRun[] {
+export function listDynamicWorkflowLatestNodeRuns(runId: string): DynamicWorkflowNodeRun[] {
   const rows = db
     .prepare(
       `SELECT nr.* FROM dynamic_workflow_node_runs nr
@@ -10695,22 +10912,11 @@ export function listDynamicWorkflowLatestNodeRuns(
   return rows.map(mapDynamicWorkflowNodeRun);
 }
 
-/** Transicao PURA de status da attempt (10.2). */
-export function setDynamicWorkflowNodeRunStatus(
-  id: string,
-  status: DynamicWorkflowNodeStatus,
-): void {
-  db.prepare('UPDATE dynamic_workflow_node_runs SET status = ? WHERE id = ?').run(
-    status,
-    id,
-  );
+export function setDynamicWorkflowNodeRunStatus(id: string, status: DynamicWorkflowNodeStatus): void {
+  db.prepare('UPDATE dynamic_workflow_node_runs SET status = ? WHERE id = ?').run(status, id);
 }
 
-/** Patch composto da attempt (metricas AC-7, failure_class 10.4, output, policy). */
-export function updateDynamicWorkflowNodeRun(
-  id: string,
-  patch: DynamicWorkflowNodeRunPatch,
-): void {
+export function updateDynamicWorkflowNodeRun(id: string, patch: DynamicWorkflowNodeRunPatch): void {
   const fields: string[] = [];
   const values: unknown[] = [];
   if (patch.status !== undefined) {
@@ -10819,12 +11025,8 @@ export function updateDynamicWorkflowNodeRun(
   }
   if (fields.length === 0) return;
   values.push(id);
-  db.prepare(
-    `UPDATE dynamic_workflow_node_runs SET ${fields.join(', ')} WHERE id = ?`,
-  ).run(...values);
+  db.prepare(`UPDATE dynamic_workflow_node_runs SET ${fields.join(', ')} WHERE id = ?`).run(...values);
 }
-
-// ---- dynamic_workflow_events ----
 
 function mapDynamicWorkflowEvent(row: Record<string, unknown>): DynamicWorkflowEvent {
   return {
@@ -10839,65 +11041,32 @@ function mapDynamicWorkflowEvent(row: Record<string, unknown>): DynamicWorkflowE
   };
 }
 
-/**
- * Insert de evento com `seq` MONOTONICO por run (UNIQUE(run_id, seq), 12.1).
- * SELECT MAX(seq)+1 + INSERT rodam numa transaction (better-sqlite3 e sincrono
- * e single-connection: a transaction garante atomicidade do par).
- */
-export function insertDynamicWorkflowEvent(
-  input: DynamicWorkflowEventInsertInput,
-): DynamicWorkflowEvent {
-  const tx = db.transaction(
-    (inp: DynamicWorkflowEventInsertInput): DynamicWorkflowEvent => {
-      const next = db
-        .prepare(
-          'SELECT COALESCE(MAX(seq), 0) + 1 AS next FROM dynamic_workflow_events WHERE run_id = ?',
-        )
-        .get(inp.runId) as { next: number };
-      const result = db
-        .prepare(
-          `INSERT INTO dynamic_workflow_events (run_id, node_id, phase_id, seq, type, payload_json, created_at)
+export function insertDynamicWorkflowEvent(input: DynamicWorkflowEventInsertInput): DynamicWorkflowEvent {
+  const tx = db.transaction((inp: DynamicWorkflowEventInsertInput): DynamicWorkflowEvent => {
+    const next = db
+      .prepare('SELECT COALESCE(MAX(seq), 0) + 1 AS next FROM dynamic_workflow_events WHERE run_id = ?')
+      .get(inp.runId) as { next: number };
+    const result = db
+      .prepare(
+        `INSERT INTO dynamic_workflow_events (run_id, node_id, phase_id, seq, type, payload_json, created_at)
            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
-        )
-        .run(
-          inp.runId,
-          inp.nodeId ?? null,
-          inp.phaseId ?? null,
-          next.next,
-          inp.type,
-          inp.payloadJson ?? '{}',
-        );
-      const row = db
-        .prepare('SELECT * FROM dynamic_workflow_events WHERE id = ?')
-        .get(Number(result.lastInsertRowid)) as Record<string, unknown>;
-      return mapDynamicWorkflowEvent(row);
-    },
-  );
+      )
+      .run(inp.runId, inp.nodeId ?? null, inp.phaseId ?? null, next.next, inp.type, inp.payloadJson ?? '{}');
+    const row = db
+      .prepare('SELECT * FROM dynamic_workflow_events WHERE id = ?')
+      .get(Number(result.lastInsertRowid)) as Record<string, unknown>;
+    return mapDynamicWorkflowEvent(row);
+  });
   return tx(input);
 }
 
-/**
- * Eventos do run em ordem de seq ASC. `afterSeq` permite tail incremental;
- * `beforeSeq` (SPEC orquestrador-driver D23) pagina para TRAS: sem `afterSeq`,
- * devolve os `limit` eventos MAIS RECENTES com `seq < beforeSeq` (re-ordenados
- * ASC), para o cockpit carregar historico sem truncar derivacoes. `types` filtra
- * por IGUALDADE EXATA (`IN (...)`), sem glob nem prefixo.
- */
-export function listDynamicWorkflowEvents(
-  runId: string,
-  opts?: DynamicWorkflowEventsQuery,
-): DynamicWorkflowEvent[] {
-  // Montagem PURA em dynamic-workflows/events-query.ts (testavel sem sqlite).
+export function listDynamicWorkflowEvents(runId: string, opts?: DynamicWorkflowEventsQuery): DynamicWorkflowEvent[] {
   const built = buildDynamicWorkflowEventsQuery(runId, opts);
   const rows = db.prepare(built.sql).all(...built.params) as Array<Record<string, unknown>>;
   return rows.map(mapDynamicWorkflowEvent);
 }
 
-/** Ultimos N eventos em ordem ASC (recentEvents do snapshot 13.3.2). */
-export function listDynamicWorkflowRecentEvents(
-  runId: string,
-  limit: number,
-): DynamicWorkflowEvent[] {
+export function listDynamicWorkflowRecentEvents(runId: string, limit: number): DynamicWorkflowEvent[] {
   const rows = db
     .prepare(
       `SELECT * FROM (
@@ -10908,11 +11077,7 @@ export function listDynamicWorkflowRecentEvents(
   return rows.map(mapDynamicWorkflowEvent);
 }
 
-// ---- dynamic_workflow_messages ----
-
-function mapDynamicWorkflowMessage(
-  row: Record<string, unknown>,
-): DynamicWorkflowMessage {
+function mapDynamicWorkflowMessage(row: Record<string, unknown>): DynamicWorkflowMessage {
   return {
     id: row['id'] as number,
     runId: row['run_id'] as string,
@@ -10924,31 +11089,14 @@ function mapDynamicWorkflowMessage(
     toolCallsJson: (row['tool_calls_json'] as string | null) ?? null,
     agentId: (row['agent_id'] as string | null) ?? null,
     createdAt: row['created_at'] as string,
-    // V149 (SPEC orquestrador-driver D8): consumo do ajuste pelo host.
     appliedNodeId: (row['applied_node_id'] as string | null | undefined) ?? null,
     consumedAt: (row['consumed_at'] as string | null | undefined) ?? null,
   };
 }
 
-/**
- * D8 (SPEC orquestrador-driver, V149): REIVINDICA os ajustes (`kind:'adjustment'`)
- * ainda nao consumidos elegiveis ao node `nodeId` deste run e devolve-os em
- * ordem de `id`. Elegiveis: `node_id = nodeId` (exato) primeiro, depois
- * `node_id = '*'` (proximo node que iniciar). EXATAMENTE-UMA-VEZ: o claim e UM
- * `UPDATE ... WHERE consumed_at IS NULL RETURNING` por grupo, dentro de uma
- * transaction (better-sqlite3 e sincrono e single-connection: em `parallel`, o
- * primeiro node a chamar leva o `'*'` e os irmaos nao recebem nada). Grava
- * `applied_node_id = nodeId` (exato mesmo quando o alvo era `'*'`) e
- * `consumed_at`. Sem elegiveis => [].
- */
-export function claimAdjustmentsForNode(
-  runId: string,
-  nodeId: string,
-): DynamicWorkflowMessage[] {
+export function claimAdjustmentsForNode(runId: string, nodeId: string): DynamicWorkflowMessage[] {
   if (!runId || !nodeId) return [];
   const tx = db.transaction((rid: string, nid: string): DynamicWorkflowMessage[] => {
-    // L1.1: a troca de agente decidida no gate de falha (`kind:'agent-switch'`)
-    // compartilha o claim/replay dos ajustes (mesmas colunas V149).
     const claim = db.prepare(
       `UPDATE dynamic_workflow_messages
           SET applied_node_id = ?, consumed_at = datetime('now')
@@ -10957,22 +11105,12 @@ export function claimAdjustmentsForNode(
     );
     const exact = claim.all(nid, rid, nid) as Array<Record<string, unknown>>;
     const wildcard = claim.all(nid, rid, '*') as Array<Record<string, unknown>>;
-    return [...exact, ...wildcard]
-      .map(mapDynamicWorkflowMessage)
-      .sort((a, b) => a.id - b.id);
+    return [...exact, ...wildcard].map(mapDynamicWorkflowMessage).sort((a, b) => a.id - b.id);
   });
   return tx(runId, nodeId);
 }
 
-/**
- * D8: ajustes JA consumidos por este node (`applied_node_id = nodeId AND
- * consumed_at IS NOT NULL`), em ordem de `id`. E o que o replay rele para
- * recompor o MESMO prompt/hash sem tocar o journal.
- */
-export function getConsumedAdjustmentsForNode(
-  runId: string,
-  nodeId: string,
-): DynamicWorkflowMessage[] {
+export function getConsumedAdjustmentsForNode(runId: string, nodeId: string): DynamicWorkflowMessage[] {
   if (!runId || !nodeId) return [];
   const rows = db
     .prepare(
@@ -10984,9 +11122,7 @@ export function getConsumedAdjustmentsForNode(
   return rows.map(mapDynamicWorkflowMessage);
 }
 
-export function insertDynamicWorkflowMessage(
-  input: DynamicWorkflowMessageInsertInput,
-): DynamicWorkflowMessage {
+export function insertDynamicWorkflowMessage(input: DynamicWorkflowMessageInsertInput): DynamicWorkflowMessage {
   const result = db
     .prepare(
       `INSERT INTO dynamic_workflow_messages (run_id, node_id, role, source, kind, content, tool_calls_json, agent_id, created_at)
@@ -11008,9 +11144,7 @@ export function insertDynamicWorkflowMessage(
   return mapDynamicWorkflowMessage(row);
 }
 
-export function listDynamicWorkflowMessages(
-  runId: string,
-): DynamicWorkflowMessage[] {
+export function listDynamicWorkflowMessages(runId: string): DynamicWorkflowMessage[] {
   const rows = db
     .prepare(
       `SELECT * FROM dynamic_workflow_messages
@@ -11021,11 +11155,7 @@ export function listDynamicWorkflowMessages(
   return rows.map(mapDynamicWorkflowMessage);
 }
 
-// ---- dynamic_workflow_artifacts ----
-
-function mapDynamicWorkflowArtifact(
-  row: Record<string, unknown>,
-): DynamicWorkflowArtifact {
+function mapDynamicWorkflowArtifact(row: Record<string, unknown>): DynamicWorkflowArtifact {
   return {
     id: row['id'] as string,
     runId: row['run_id'] as string,
@@ -11038,31 +11168,19 @@ function mapDynamicWorkflowArtifact(
   };
 }
 
-/** Registro de artefato com hash (AC-11: path, hash, node produtor, metadata). */
-export function insertDynamicWorkflowArtifact(
-  input: DynamicWorkflowArtifactInsertInput,
-): DynamicWorkflowArtifact {
+export function insertDynamicWorkflowArtifact(input: DynamicWorkflowArtifactInsertInput): DynamicWorkflowArtifact {
   db.prepare(
     `INSERT INTO dynamic_workflow_artifacts (id, run_id, node_id, kind, path, sha256, metadata_json, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-  ).run(
-    input.id,
-    input.runId,
-    input.nodeId ?? null,
-    input.kind,
-    input.path,
-    input.sha256,
-    input.metadataJson ?? '{}',
-  );
-  const row = db
-    .prepare('SELECT * FROM dynamic_workflow_artifacts WHERE id = ?')
-    .get(input.id) as Record<string, unknown>;
+  ).run(input.id, input.runId, input.nodeId ?? null, input.kind, input.path, input.sha256, input.metadataJson ?? '{}');
+  const row = db.prepare('SELECT * FROM dynamic_workflow_artifacts WHERE id = ?').get(input.id) as Record<
+    string,
+    unknown
+  >;
   return mapDynamicWorkflowArtifact(row);
 }
 
-export function listDynamicWorkflowArtifacts(
-  runId: string,
-): DynamicWorkflowArtifact[] {
+export function listDynamicWorkflowArtifacts(runId: string): DynamicWorkflowArtifact[] {
   const rows = db
     .prepare(
       `SELECT * FROM dynamic_workflow_artifacts
@@ -11073,11 +11191,7 @@ export function listDynamicWorkflowArtifacts(
   return rows.map(mapDynamicWorkflowArtifact);
 }
 
-// ---- dynamic_workflow_gate_decisions ----
-
-function mapDynamicWorkflowGateDecision(
-  row: Record<string, unknown>,
-): DynamicWorkflowGateDecision {
+function mapDynamicWorkflowGateDecision(row: Record<string, unknown>): DynamicWorkflowGateDecision {
   return {
     id: row['id'] as string,
     runId: row['run_id'] as string,
@@ -11092,11 +11206,6 @@ function mapDynamicWorkflowGateDecision(
   };
 }
 
-/**
- * Persistencia de decisao de gate (AC-17): aprovacoes, rejeicoes e
- * budget-override (gate_id 'budget', mode 'human',
- * decision override-approved/override-rejected - 14.1.1).
- */
 export function insertDynamicWorkflowGateDecision(
   input: DynamicWorkflowGateDecisionInsertInput,
 ): DynamicWorkflowGateDecision {
@@ -11114,15 +11223,14 @@ export function insertDynamicWorkflowGateDecision(
     input.reason ?? null,
     input.payloadJson ?? '{}',
   );
-  const row = db
-    .prepare('SELECT * FROM dynamic_workflow_gate_decisions WHERE id = ?')
-    .get(input.id) as Record<string, unknown>;
+  const row = db.prepare('SELECT * FROM dynamic_workflow_gate_decisions WHERE id = ?').get(input.id) as Record<
+    string,
+    unknown
+  >;
   return mapDynamicWorkflowGateDecision(row);
 }
 
-export function listDynamicWorkflowGateDecisions(
-  runId: string,
-): DynamicWorkflowGateDecision[] {
+export function listDynamicWorkflowGateDecisions(runId: string): DynamicWorkflowGateDecision[] {
   const rows = db
     .prepare(
       `SELECT * FROM dynamic_workflow_gate_decisions
@@ -11132,8 +11240,6 @@ export function listDynamicWorkflowGateDecisions(
     .all(runId) as Array<Record<string, unknown>>;
   return rows.map(mapDynamicWorkflowGateDecision);
 }
-
-// ---- agregadores de custo (derivados de node_runs, 12.3) ----
 
 interface DynamicWorkflowCostAggregateRow {
   total_cost_usd: number | null;
@@ -11146,10 +11252,7 @@ interface DynamicWorkflowCostAggregateRow {
   unknown_cost_node_runs: number | null;
 }
 
-/** Agregado de custo/tokens/duracao do run inteiro (footer de metricas 13.5). */
-export function getDynamicWorkflowRunCostAggregate(
-  runId: string,
-): DynamicWorkflowRunCostAggregate {
+export function getDynamicWorkflowRunCostAggregate(runId: string): DynamicWorkflowRunCostAggregate {
   const row = db
     .prepare(
       `SELECT
@@ -11187,10 +11290,7 @@ interface DynamicWorkflowPhaseAggregateRow {
   node_run_count: number | null;
 }
 
-/** Agregado de custo por fase do run (tooltip do pipezinho 13.7.4). */
-export function listDynamicWorkflowPhaseCostAggregates(
-  runId: string,
-): DynamicWorkflowPhaseCostAggregate[] {
+export function listDynamicWorkflowPhaseCostAggregates(runId: string): DynamicWorkflowPhaseCostAggregate[] {
   const rows = db
     .prepare(
       `SELECT
@@ -11214,16 +11314,6 @@ export function listDynamicWorkflowPhaseCostAggregates(
     nodeRunCount: row.node_run_count ?? 0,
   }));
 }
-
-// ---------------------------------------------------------------------------
-// Kanban nativo (SPEC spec-kanban-nativo-2026-08-31.md — migration V147)
-//
-// CRUD das 4 tabelas kanban_*: kanban_boards, kanban_cards, kanban_card_events
-// e kanban_card_attachments. TODO SQL do dominio fica AQUI (convencao secao 13);
-// o KanbanEngine recebe estas funcoes por injecao (padrao RepoGraphEngine).
-// Card + evento SEMPRE na mesma transacao (secao 4): nunca existe card sem
-// evento de origem nem movimento sem registro.
-// ---------------------------------------------------------------------------
 
 function mapKanbanBoard(row: Record<string, unknown>): KanbanBoard {
   return {
@@ -11274,6 +11364,7 @@ function mapKanbanEvent(row: Record<string, unknown>): KanbanCardEvent {
     toColumn: (row['to_column'] as KanbanCardEvent['toColumn']) ?? null,
     reason: (row['reason'] as string | null) ?? null,
     actor: row['actor'] as KanbanCardEvent['actor'],
+    actorDetail: (row['actor_detail'] as string | null) ?? null,
     createdAt: row['created_at'] as string,
   };
 }
@@ -11290,11 +11381,6 @@ function mapKanbanAttachment(row: Record<string, unknown>): KanbanAttachment {
   };
 }
 
-/**
- * stalled_days (secao 4): dias desde o ultimo evento que ESTABELECEU a coluna
- * atual (created/moved/delivered/reopened com to_column = board_column). Todo
- * card tem esse evento por construcao (mesma transacao do insert/move).
- */
 const KANBAN_STALLED_DAYS_SQL = `
   CAST(julianday('now') - julianday((
     SELECT MAX(e.created_at) FROM kanban_card_events e
@@ -11308,8 +11394,6 @@ const KANBAN_CARD_SELECT = `
     (SELECT COUNT(*) FROM kanban_card_attachments a WHERE a.card_id = c.id) AS attachment_count
   FROM kanban_cards c
   JOIN kanban_boards b ON b.id = c.board_id`;
-
-// ---- kanban_boards ----
 
 export function insertKanbanBoard(input: {
   id: string;
@@ -11325,34 +11409,29 @@ export function insertKanbanBoard(input: {
 }
 
 export function getKanbanBoard(id: string): KanbanBoard | null {
-  const row = db.prepare('SELECT * FROM kanban_boards WHERE id = ?').get(id) as
-    | Record<string, unknown>
-    | undefined;
+  const row = db.prepare('SELECT * FROM kanban_boards WHERE id = ?').get(id) as Record<string, unknown> | undefined;
   return row ? mapKanbanBoard(row) : null;
 }
 
 export function getKanbanBoardByPrefix(prefix: string): KanbanBoard | null {
   const row = db.prepare('SELECT * FROM kanban_boards WHERE prefix = ?').get(prefix) as
-    | Record<string, unknown>
-    | undefined;
+    Record<string, unknown> | undefined;
   return row ? mapKanbanBoard(row) : null;
 }
 
 export function getKanbanBoardByRepositoryId(repositoryId: string): KanbanBoard | null {
-  const row = db
-    .prepare('SELECT * FROM kanban_boards WHERE repository_id = ?')
-    .get(repositoryId) as Record<string, unknown> | undefined;
+  const row = db.prepare('SELECT * FROM kanban_boards WHERE repository_id = ?').get(repositoryId) as
+    Record<string, unknown> | undefined;
   return row ? mapKanbanBoard(row) : null;
 }
 
 export function listKanbanBoards(): KanbanBoard[] {
-  const rows = db
-    .prepare('SELECT * FROM kanban_boards ORDER BY created_at ASC')
-    .all() as Array<Record<string, unknown>>;
+  const rows = db.prepare('SELECT * FROM kanban_boards ORDER BY created_at ASC').all() as Array<
+    Record<string, unknown>
+  >;
   return rows.map(mapKanbanBoard);
 }
 
-/** Contagem de cards ATIVOS (archived=0) por coluna do quadro. */
 export function getKanbanBoardColumnCounts(boardId: string): Record<KanbanColumnId, number> {
   const rows = db
     .prepare(
@@ -11370,12 +11449,9 @@ export function getKanbanBoardColumnCounts(boardId: string): Record<KanbanColumn
   return counts;
 }
 
-/** Delete do quadro. Cards/eventos/anexos caem junto (FK ON DELETE CASCADE). */
 export function deleteKanbanBoard(id: string): void {
   db.prepare('DELETE FROM kanban_boards WHERE id = ?').run(id);
 }
-
-// ---- kanban_cards (composites transacionais) ----
 
 export interface KanbanCardRowInput {
   boardId: string;
@@ -11402,12 +11478,13 @@ export interface KanbanEventInput {
   toColumn?: string | null;
   reason?: string | null;
   actor: KanbanActor;
+  actorDetail?: string | null;
 }
 
 function insertKanbanEventRow(cardId: number, event: KanbanEventInput): void {
   db.prepare(
-    `INSERT INTO kanban_card_events (card_id, event, from_column, to_column, reason, actor)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO kanban_card_events (card_id, event, from_column, to_column, reason, actor, actor_detail)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     cardId,
     event.event,
@@ -11415,27 +11492,17 @@ function insertKanbanEventRow(cardId: number, event: KanbanEventInput): void {
     event.toColumn ?? null,
     event.reason ?? null,
     event.actor,
+    event.actorDetail ?? null,
   );
 }
 
-/**
- * Cria o card consumindo `next_local_id` do quadro (contador que SO cresce,
- * secao 3) e grava o evento de origem na MESMA transacao. Throw se o quadro
- * nao existe ou se qualquer INSERT falhar (nada e gravado pela metade).
- */
-export function insertKanbanCardWithEvent(
-  input: KanbanCardRowInput,
-  event: KanbanEventInput,
-): KanbanCard {
+export function insertKanbanCardWithEvent(input: KanbanCardRowInput, event: KanbanEventInput): KanbanCard {
   const run = db.transaction(() => {
-    const board = db
-      .prepare('SELECT next_local_id FROM kanban_boards WHERE id = ?')
-      .get(input.boardId) as { next_local_id: number } | undefined;
+    const board = db.prepare('SELECT next_local_id FROM kanban_boards WHERE id = ?').get(input.boardId) as
+      { next_local_id: number } | undefined;
     if (!board) throw new Error(`quadro nao encontrado: ${input.boardId}`);
     const localId = board.next_local_id;
-    db.prepare('UPDATE kanban_boards SET next_local_id = next_local_id + 1 WHERE id = ?').run(
-      input.boardId,
-    );
+    db.prepare('UPDATE kanban_boards SET next_local_id = next_local_id + 1 WHERE id = ?').run(input.boardId);
     const result = db
       .prepare(
         `INSERT INTO kanban_cards (
@@ -11508,11 +11575,6 @@ const KANBAN_PATCH_COLUMNS: Array<[keyof KanbanCardRowPatch, string]> = [
   ['body', 'body'],
 ];
 
-/**
- * Patch do card + eventos correspondentes na MESMA transacao (move/deliver/
- * edit/archive/unarchive compartilham este primitivo; quem decide QUAIS
- * eventos gravar e o engine).
- */
 export function updateKanbanCardWithEvents(
   cardId: number,
   patch: KanbanCardRowPatch,
@@ -11533,9 +11595,7 @@ export function updateKanbanCardWithEvents(
     }
     fields.push(`updated_at = datetime('now')`);
     values.push(cardId);
-    const result = db
-      .prepare(`UPDATE kanban_cards SET ${fields.join(', ')} WHERE id = ?`)
-      .run(...values);
+    const result = db.prepare(`UPDATE kanban_cards SET ${fields.join(', ')} WHERE id = ?`).run(...values);
     if (result.changes === 0) throw new Error(`card nao encontrado: ${cardId}`);
     for (const event of events) insertKanbanEventRow(cardId, event);
   });
@@ -11544,20 +11604,16 @@ export function updateKanbanCardWithEvents(
 }
 
 export function getKanbanCardById(id: number): KanbanCard | null {
-  const row = db.prepare(`${KANBAN_CARD_SELECT} WHERE c.id = ?`).get(id) as
-    | Record<string, unknown>
-    | undefined;
+  const row = db.prepare(`${KANBAN_CARD_SELECT} WHERE c.id = ?`).get(id) as Record<string, unknown> | undefined;
   return row ? mapKanbanCard(row) : null;
 }
 
 export function getKanbanCardByLocalId(boardId: string, localId: number): KanbanCard | null {
-  const row = db
-    .prepare(`${KANBAN_CARD_SELECT} WHERE c.board_id = ? AND c.local_id = ?`)
-    .get(boardId, localId) as Record<string, unknown> | undefined;
+  const row = db.prepare(`${KANBAN_CARD_SELECT} WHERE c.board_id = ? AND c.local_id = ?`).get(boardId, localId) as
+    Record<string, unknown> | undefined;
   return row ? mapKanbanCard(row) : null;
 }
 
-/** Hard delete. Eventos/anexos caem junto (FK ON DELETE CASCADE). */
 export function deleteKanbanCard(id: number): void {
   db.prepare('DELETE FROM kanban_cards WHERE id = ?').run(id);
 }
@@ -11569,7 +11625,6 @@ export function listKanbanCardEvents(cardId: number): KanbanCardEvent[] {
   return rows.map(mapKanbanEvent);
 }
 
-/** Filtros JA normalizados pelo engine (valores canonicos de enum). */
 export interface KanbanCardQuery {
   boardId?: string;
   column?: KanbanColumnId;
@@ -11577,18 +11632,12 @@ export interface KanbanCardQuery {
   priority?: string;
   severity?: string;
   text?: string;
-  /** "LC-26" parseado pelo engine: match adicional por prefixo+local_id. */
   textRef?: { prefix: string; localId: number };
   dueBefore?: string;
   stalledDays?: number;
-  /** true = so arquivados; false = so ativos. */
   archived: boolean;
 }
 
-/**
- * Query com ordenacao da secao 4: board_column, depois prioridade
- * (Crítica > Alta > Média > Baixa > NULL), depois created_at asc.
- */
 export function queryKanbanCards(query: KanbanCardQuery): KanbanCard[] {
   const where: string[] = ['c.archived = ?'];
   const values: unknown[] = [query.archived ? 1 : 0];
@@ -11613,11 +11662,7 @@ export function queryKanbanCards(query: KanbanCardQuery): KanbanCard[] {
     values.push(query.severity);
   }
   if (query.text) {
-    const clauses = [
-      `c.title LIKE '%' || ? || '%'`,
-      `c.problem LIKE '%' || ? || '%'`,
-      `c.body LIKE '%' || ? || '%'`,
-    ];
+    const clauses = [`c.title LIKE '%' || ? || '%'`, `c.problem LIKE '%' || ? || '%'`, `c.body LIKE '%' || ? || '%'`];
     values.push(query.text, query.text, query.text);
     if (query.textRef) {
       clauses.push('(b.prefix = ? AND c.local_id = ?)');
@@ -11650,9 +11695,6 @@ export function queryKanbanCards(query: KanbanCardQuery): KanbanCard[] {
   return rows.map(mapKanbanCard);
 }
 
-// ---- kanban_card_attachments ----
-
-/** Linha do anexo + evento na MESMA transacao (atomicidade da secao 6). */
 export function insertKanbanCardAttachmentWithEvent(
   input: {
     id: string;
@@ -11675,11 +11717,7 @@ export function insertKanbanCardAttachmentWithEvent(
   return getKanbanCardAttachment(input.id) as KanbanAttachment;
 }
 
-/** Remove a LINHA primeiro (com evento, mesma transacao); o unlink e do engine. */
-export function deleteKanbanCardAttachmentWithEvent(
-  attachmentId: string,
-  event: KanbanEventInput,
-): void {
+export function deleteKanbanCardAttachmentWithEvent(attachmentId: string, event: KanbanEventInput): void {
   const attachment = getKanbanCardAttachment(attachmentId);
   if (!attachment) return;
   const run = db.transaction(() => {
@@ -11691,8 +11729,7 @@ export function deleteKanbanCardAttachmentWithEvent(
 
 export function getKanbanCardAttachment(id: string): KanbanAttachment | null {
   const row = db.prepare('SELECT * FROM kanban_card_attachments WHERE id = ?').get(id) as
-    | Record<string, unknown>
-    | undefined;
+    Record<string, unknown> | undefined;
   return row ? mapKanbanAttachment(row) : null;
 }
 
@@ -11701,4 +11738,234 @@ export function listKanbanCardAttachments(cardId: number): KanbanAttachment[] {
     .prepare('SELECT * FROM kanban_card_attachments WHERE card_id = ? ORDER BY created_at ASC')
     .all(cardId) as Array<Record<string, unknown>>;
   return rows.map(mapKanbanAttachment);
+}
+
+export function upsertSwarmRunIndex(summary: SwarmRunSummary, dbh: Database.Database = db): void {
+  dbh
+    .prepare(
+      `INSERT INTO swarm_runs (run_id,session_id,revision,created_at,summary_json)
+    VALUES (?,?,?,?,?) ON CONFLICT(run_id) DO UPDATE SET
+      revision=excluded.revision,summary_json=excluded.summary_json
+    WHERE excluded.revision > swarm_runs.revision AND excluded.session_id = swarm_runs.session_id`,
+    )
+    .run(summary.runId, summary.chatSessionId, summary.revision, summary.createdAt, JSON.stringify(summary));
+}
+
+export function listSwarmRunIndex(
+  sessionId: string,
+  cursor?: string,
+  limit = 20,
+  dbh: Database.Database = db,
+): {
+  runs: SwarmRunSummary[];
+  nextCursor: string | null;
+} {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+    throw new Error('Limite Swarm deve ser inteiro entre 1 e 100.');
+  let after: { created_at: string; run_id: string } | undefined;
+  if (cursor) {
+    after = dbh
+      .prepare('SELECT created_at,run_id FROM swarm_runs WHERE session_id=? AND run_id=?')
+      .get(sessionId, cursor) as typeof after;
+    if (!after) throw new Error('Cursor Swarm inválido para esta sessão.');
+  }
+  const rows = (
+    after
+      ? dbh
+          .prepare(
+            `SELECT summary_json FROM swarm_runs WHERE session_id=? AND
+        (created_at < ? OR (created_at = ? AND run_id < ?)) ORDER BY created_at DESC,run_id DESC LIMIT ?`,
+          )
+          .all(sessionId, after.created_at, after.created_at, after.run_id, limit + 1)
+      : dbh
+          .prepare(
+            'SELECT summary_json FROM swarm_runs WHERE session_id=? ORDER BY created_at DESC,run_id DESC LIMIT ?',
+          )
+          .all(sessionId, limit + 1)
+  ) as Array<{ summary_json: string }>;
+  const runs = rows.slice(0, limit).map((row) => JSON.parse(row.summary_json) as SwarmRunSummary);
+  return { runs, nextCursor: rows.length > limit ? runs[runs.length - 1].runId : null };
+}
+
+export interface SwarmDelivery {
+  runId: string;
+  terminalRevision: number;
+  sessionId: string;
+  envelope: string;
+  runStatus: Extract<SwarmRunStatus, 'done' | 'partial' | 'failed' | 'aborted'>;
+  state: 'pending' | 'claimed' | 'delivered' | 'undeliverable';
+  claimId: string | null;
+  error: string | null;
+}
+function mapSwarmDelivery(row: Record<string, unknown>): SwarmDelivery {
+  return {
+    runId: row.run_id as string,
+    terminalRevision: row.terminal_revision as number,
+    sessionId: row.session_id as string,
+    envelope: row.envelope as string,
+    runStatus: row.run_status as SwarmDelivery['runStatus'],
+    state: row.state as SwarmDelivery['state'],
+    claimId: row.claim_id as string | null,
+    error: row.error as string | null,
+  };
+}
+export function getSwarmDelivery(
+  runId: string,
+  terminalRevision: number,
+  dbh: Database.Database = db,
+): SwarmDelivery | undefined {
+  const row = dbh
+    .prepare('SELECT * FROM swarm_delivery_outbox WHERE run_id=? AND terminal_revision=?')
+    .get(runId, terminalRevision) as Record<string, unknown> | undefined;
+  return row ? mapSwarmDelivery(row) : undefined;
+}
+export function enqueueSwarmDelivery(
+  runId: string,
+  terminalRevision: number,
+  sessionId: string,
+  envelope: string,
+  status: SwarmRunStatus,
+  dbh: Database.Database = db,
+): SwarmDelivery {
+  return dbh.transaction(() => {
+    dbh
+      .prepare(
+        `INSERT OR IGNORE INTO swarm_delivery_outbox
+      (run_id,terminal_revision,session_id,envelope,run_status) VALUES (?,?,?,?,?)`,
+      )
+      .run(runId, terminalRevision, sessionId, envelope, status);
+    const delivery = getSwarmDelivery(runId, terminalRevision, dbh);
+    if (
+      !delivery ||
+      delivery.sessionId !== sessionId ||
+      delivery.envelope !== envelope ||
+      delivery.runStatus !== status
+    ) {
+      throw new Error('Conflito na identidade imutável da entrega Swarm.');
+    }
+    return delivery;
+  })();
+}
+export function getPendingSwarmDeliveries(dbh: Database.Database = db): SwarmDelivery[] {
+  return (
+    dbh.prepare("SELECT * FROM swarm_delivery_outbox WHERE state='pending' ORDER BY created_at,run_id").all() as Record<
+      string,
+      unknown
+    >[]
+  ).map(mapSwarmDelivery);
+}
+export function recoverSwarmDeliveryClaims(dbh: Database.Database = db): number {
+  return dbh
+    .prepare(
+      `UPDATE swarm_delivery_outbox SET state='pending',claim_id=NULL,updated_at=CURRENT_TIMESTAMP
+    WHERE state='claimed'`,
+    )
+    .run().changes;
+}
+export function claimSwarmDelivery(
+  runId: string,
+  terminalRevision: number,
+  claimId: string,
+  dbh: Database.Database = db,
+): SwarmDelivery | undefined {
+  if (!claimId) throw new Error('Claim Swarm vazio.');
+  return dbh.transaction(() => {
+    const result = dbh
+      .prepare(
+        `UPDATE swarm_delivery_outbox SET state='claimed',claim_id=?,error=NULL,updated_at=CURRENT_TIMESTAMP
+      WHERE run_id=? AND terminal_revision=? AND state='pending'`,
+      )
+      .run(claimId, runId, terminalRevision);
+    return result.changes ? getSwarmDelivery(runId, terminalRevision, dbh) : undefined;
+  })();
+}
+export function releaseSwarmDelivery(
+  runId: string,
+  terminalRevision: number,
+  claimId: string,
+  error?: string,
+  dbh: Database.Database = db,
+): boolean {
+  return (
+    dbh
+      .prepare(
+        `UPDATE swarm_delivery_outbox SET state='pending',claim_id=NULL,error=?,updated_at=CURRENT_TIMESTAMP
+    WHERE run_id=? AND terminal_revision=? AND state='claimed' AND claim_id=?`,
+      )
+      .run(error ?? null, runId, terminalRevision, claimId).changes === 1
+  );
+}
+export function completeSwarmDelivery(
+  runId: string,
+  terminalRevision: number,
+  claimId: string,
+  status: 'delivered' | 'undeliverable',
+  reason?: string,
+  dbh: Database.Database = db,
+): boolean {
+  if (status === 'delivered') {
+    const delivery = getSwarmDelivery(runId, terminalRevision, dbh);
+    const kind = delivery?.runStatus === 'aborted' ? 'event' : 'response';
+    if (
+      !dbh
+        .prepare('SELECT 1 FROM swarm_chat_receipts WHERE run_id=? AND terminal_revision=? AND kind=?')
+        .get(runId, terminalRevision, kind)
+    )
+      throw new Error('Entrega Swarm sem mensagem final persistida.');
+  }
+  return (
+    dbh
+      .prepare(
+        `UPDATE swarm_delivery_outbox SET state=?,claim_id=NULL,error=?,updated_at=CURRENT_TIMESTAMP
+    WHERE run_id=? AND terminal_revision=? AND state='claimed' AND claim_id=?`,
+      )
+      .run(status, reason ?? null, runId, terminalRevision, claimId).changes === 1
+  );
+}
+
+export function persistSwarmChatMessageOnce(
+  input: {
+    sessionId: string;
+    runId: string;
+    terminalRevision: number;
+    kind: 'event' | 'response';
+    content: string;
+    claimId?: string;
+    metadata?: string;
+  },
+  dbh: Database.Database = db,
+): { messageId: number; inserted: boolean } {
+  return dbh.transaction(() => {
+    const delivery = getSwarmDelivery(input.runId, input.terminalRevision, dbh);
+    if (!delivery || delivery.sessionId !== input.sessionId) throw new Error('Entrega Swarm não pertence à sessão.');
+    const prior = dbh
+      .prepare('SELECT message_id FROM swarm_chat_receipts WHERE run_id=? AND terminal_revision=? AND kind=?')
+      .get(input.runId, input.terminalRevision, input.kind) as { message_id: number } | undefined;
+    if (prior) return { messageId: prior.message_id, inserted: false };
+    if (delivery.state !== 'claimed' || !input.claimId || delivery.claimId !== input.claimId) {
+      throw new Error('Claim Swarm ausente ou expirado.');
+    }
+    const session = dbh.prepare('SELECT status FROM sessions WHERE id=?').get(input.sessionId) as
+      { status: string } | undefined;
+    if (!session || session.status === 'trashed') throw new Error('Sessão Swarm removida.');
+    const role = input.kind === 'event' ? 'system' : 'assistant';
+    const metadata = JSON.stringify({
+      ...(input.metadata ? (JSON.parse(input.metadata) as Record<string, unknown>) : {}),
+      swarm: { runId: input.runId, terminalRevision: input.terminalRevision, kind: input.kind },
+    });
+    const result = dbh
+      .prepare('INSERT INTO messages (session_id,role,content,metadata) VALUES (?,?,?,?)')
+      .run(input.sessionId, role, input.content, metadata);
+    const messageId = Number(result.lastInsertRowid);
+    dbh
+      .prepare(
+        'INSERT INTO swarm_chat_receipts (run_id,terminal_revision,kind,session_id,message_id) VALUES (?,?,?,?,?)',
+      )
+      .run(input.runId, input.terminalRevision, input.kind, input.sessionId, messageId);
+    dbh.prepare('UPDATE sessions SET updated_at=CURRENT_TIMESTAMP WHERE id=?').run(input.sessionId);
+    if (input.kind === 'response' || delivery.runStatus === 'aborted') {
+      completeSwarmDelivery(input.runId, input.terminalRevision, input.claimId, 'delivered', undefined, dbh);
+    }
+    return { messageId, inserted: true };
+  })();
 }

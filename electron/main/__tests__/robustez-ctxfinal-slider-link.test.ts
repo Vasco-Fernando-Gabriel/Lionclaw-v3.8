@@ -7,7 +7,11 @@ const h = vi.hoisted(() => ({
   getSettingMock: vi.fn((_key: string): string | undefined => undefined),
   setSessionCompactionStateMock: vi.fn(),
   setSessionActiveContextTokensMock: vi.fn(),
-  transactionMock: vi.fn((fn: (...a: unknown[]) => unknown) => (...a: unknown[]) => fn(...a)),
+  transactionMock: vi.fn(
+    (fn: (...a: unknown[]) => unknown) =>
+      (...a: unknown[]) =>
+        fn(...a),
+  ),
   summarizeLightweightMock: vi.fn(),
   getContextWindowMock: vi.fn((_m: string, _p?: string): number | undefined => undefined),
 }));
@@ -66,8 +70,7 @@ function installSlider(percent: number | undefined): void {
     if (key === 'orchestrator_provider') return 'zai';
     return undefined;
   });
-  h.getContextWindowMock.mockImplementation((model: string) =>
-    model === 'glm-5.2' ? GLM52_WINDOW : undefined);
+  h.getContextWindowMock.mockImplementation((model: string) => (model === 'glm-5.2' ? GLM52_WINDOW : undefined));
 }
 
 beforeEach(() => {
@@ -79,7 +82,6 @@ beforeEach(() => {
   ]);
   h.summarizeLightweightMock.mockResolvedValue({ executiveSummary: 'resumo novo' });
 });
-
 
 describe('slider — barrinha e gatilho leem a MESMA fonte (% identico)', () => {
   for (const pct of [50, 55, 70, 80, 95]) {
@@ -106,7 +108,6 @@ describe('slider — barrinha e gatilho leem a MESMA fonte (% identico)', () => 
   });
 });
 
-
 describe('slider — o threshold em tokens = window * pct/100', () => {
   it('55% de 1M = 550k; 80% de 1M = 800k', () => {
     installSlider(55);
@@ -116,9 +117,8 @@ describe('slider — o threshold em tokens = window * pct/100', () => {
   });
 });
 
-
 describe('slider — dispara quando o contexto real passa o threshold', () => {
-  const REAL_CONTEXT = 600_000; // contexto vivo REAL (GLM), nao a estimativa furada
+  const REAL_CONTEXT = 600_000;
 
   it('slider 55% (550k): contexto real 600k >= 550k -> DISPARA a compactacao', async () => {
     installSlider(55);

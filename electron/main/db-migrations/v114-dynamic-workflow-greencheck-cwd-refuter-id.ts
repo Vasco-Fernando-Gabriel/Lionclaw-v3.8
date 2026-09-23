@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const BUILDER_CWD_OLD = `- Posicao EXATA no loop: rode greenCheck DEPOIS dos validadores e ANTES de decidir a convergencia. Build caro (monorepo) NAO roda toda rodada: passe arg.final===true SO na rodada candidata a convergencia (quando os validadores read-only ja zeraram bloqueio), senao arg.final fica false (so typecheck+test).`;
 const BUILDER_CWD_NEW = `- Posicao EXATA no loop: rode greenCheck DEPOIS dos validadores e ANTES de decidir a convergencia. Build caro (monorepo) NAO roda toda rodada: passe arg.final===true SO na rodada candidata a convergencia (quando os validadores read-only ja zeraram bloqueio), senao arg.final fica false (so typecheck+test). SEMPRE passe o sprintIndex da sprint atual no arg (greenCheck({ final, sprintIndex })): em batch PARALELO o coder escreve numa worktree DEDICADA da sprint e o green-check TEM que rodar NESSE cwd (resolveSprintCwd) - sem o sprintIndex ele roda no repoRoot e valida o codigo ERRADO.`;
 const BUILDER_CWD_MARKER = 'sem o sprintIndex ele roda no repoRoot e valida o codigo ERRADO';

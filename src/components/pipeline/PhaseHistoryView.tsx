@@ -7,12 +7,10 @@ import type { HarnessSprint } from '@/types';
 import { SprintsFormattedView } from './SprintsFormattedView';
 import { ArchitectureReviewArtifactView } from './ArchitectureReviewArtifactView';
 
-
 interface PhaseHistoryViewProps {
   phase: number;
   projectId: string;
 }
-
 
 export function PhaseHistoryView({ phase, projectId }: PhaseHistoryViewProps) {
   const { artifactCache, loadPhaseArtifact } = usePipelineStore();

@@ -1,12 +1,8 @@
-
 import crypto from 'crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import {
-  LocalIpcClient,
-  assertEndpointPresentOrExit,
-} from '../../_shared/local-ipc-client.js';
+import { LocalIpcClient, assertEndpointPresentOrExit, readEnvTurnBinding } from '../../_shared/local-ipc-client.js';
 import { gatewayToolArgsSchema } from './tool-args.js';
 
 assertEndpointPresentOrExit();
@@ -25,19 +21,27 @@ const LANE: string | undefined = (() => {
   return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined;
 })();
 
-const SESSION_ID = `gateway-${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
+const ENV_BINDING = readEnvTurnBinding();
+
+const SESSION_ID = ENV_BINDING.sessionId ?? `gateway-${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
 
 const TURN_RESET_IDLE_MS = 120_000;
 let turnCounter = 1;
 let lastInvokeAt = 0;
 
-function currentTurnId(): string {
+function syntheticTurnId(): string {
   const now = Date.now();
   if (lastInvokeAt > 0 && now - lastInvokeAt > TURN_RESET_IDLE_MS) {
     turnCounter += 1;
   }
   lastInvokeAt = now;
   return String(turnCounter);
+}
+
+function currentTurnId(): string | undefined {
+  if (ENV_BINDING.turnId) return ENV_BINDING.turnId;
+  if (ENV_BINDING.sessionId) return undefined;
+  return syntheticTurnId();
 }
 
 const server = new McpServer({ name: 'gateway', version: '1.0.0' });
@@ -49,8 +53,7 @@ type ToolResult = {
 
 function toToolResult(raw: unknown): ToolResult {
   const r = (raw ?? {}) as { content?: unknown; isError?: unknown };
-  const text =
-    typeof r.content === 'string' ? r.content : JSON.stringify(raw ?? null);
+  const text = typeof r.content === 'string' ? r.content : JSON.stringify(raw ?? null);
   return {
     content: [{ type: 'text' as const, text }],
     ...(r.isError === true ? { isError: true } : {}),
@@ -70,12 +73,11 @@ server.tool(
   {
     server: z.string().describe('ID do servidor MCP (cabecalho do catalogo no system prompt).'),
     tool: z.string().describe('Nome exato da tool como listada no catalogo.'),
-    args: gatewayToolArgsSchema
-      .optional()
-      .describe('Argumentos da tool (objeto JSON conforme o schema da tool).'),
+    args: gatewayToolArgsSchema.optional().describe('Argumentos da tool (objeto JSON conforme o schema da tool).'),
   },
   async ({ server: serverId, tool, args }) => {
     try {
+      const turnId = currentTurnId();
       const result = await client.callMethod(
         'mcp_invoke',
         {
@@ -84,7 +86,7 @@ server.tool(
           args: args ?? {},
           surface: SURFACE,
           sessionId: SESSION_ID,
-          turnId: currentTurnId(),
+          ...(turnId !== undefined ? { turnId } : {}),
           ...(LANE !== undefined ? { lane: LANE } : {}),
         },
         { idempotent: false },

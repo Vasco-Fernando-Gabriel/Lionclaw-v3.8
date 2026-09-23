@@ -26,18 +26,17 @@ import { generatePipelineReport } from '../pipeline-report';
 function createProject(id: string, pipelineType = 'development'): void {
   const projectPath = path.join(state.root, id);
   fs.mkdirSync(projectPath, { recursive: true });
-  getDb().prepare(`
+  getDb()
+    .prepare(
+      `
     INSERT INTO harness_projects (id, name, project_path, spec_path, status, config, pipeline_type)
     VALUES (?, ?, ?, ?, 'running', '{}', ?)
-  `).run(id, id, projectPath, path.join(projectPath, 'SPEC.md'), pipelineType);
+  `,
+    )
+    .run(id, id, projectPath, path.join(projectPath, 'SPEC.md'), pipelineType);
 }
 
-function addPhase(
-  projectId: string,
-  phaseNumber: number,
-  runtime: 'cloud' | 'grok',
-  costUsd: number,
-): void {
+function addPhase(projectId: string, phaseNumber: number, runtime: 'cloud' | 'grok', costUsd: number): void {
   savePipelinePhaseMetrics({
     projectId,
     phaseNumber,
@@ -46,13 +45,14 @@ function addPhase(
     model: runtime === 'grok' ? 'grok-4.5' : 'claude-sonnet-4-6',
     runtime,
     costUsd,
-    metadata: runtime === 'grok'
-      ? {
-          provider: 'grok',
-          costStatus: 'known',
-          costEstimationKind: 'subscription-equivalent-payg',
-        }
-      : { provider: 'anthropic', costStatus: 'known' },
+    metadata:
+      runtime === 'grok'
+        ? {
+            provider: 'grok',
+            costStatus: 'known',
+            costEstimationKind: 'subscription-equivalent-payg',
+          }
+        : { provider: 'anthropic', costStatus: 'known' },
   });
 }
 
@@ -292,7 +292,6 @@ describe('pipeline report runtime breakdown for Grok', () => {
       },
     });
 
-    expect(generatePipelineReport('report-grok-round-known'))
-      .toContain('| 1 | OK | 0 | 0 | 0 | ~$0.2500 |');
+    expect(generatePipelineReport('report-grok-round-known')).toContain('| 1 | OK | 0 | 0 | 0 | ~$0.2500 |');
   });
 });

@@ -1,6 +1,4 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-
 
 const h = vi.hoisted(() => ({
   queryMock: vi.fn<(args: { prompt: string; options: Record<string, unknown> }) => unknown>(),
@@ -17,7 +15,6 @@ const h = vi.hoisted(() => ({
   finalizeRunningTaskExecutionTreeMock: vi.fn(),
   updateSessionTokensMock: vi.fn(),
 }));
-
 
 vi.mock('../logger', () => ({
   createLogger: () => ({
@@ -79,6 +76,8 @@ vi.mock('../lion-sdk', () => ({
 }));
 
 vi.mock('../db', () => ({
+  threadIdOf: (s: { id: string; sdkSessionId?: string | null }) => s.sdkSessionId ?? s.id,
+  getSessionOrchestrator: () => null,
   getAllAgents: () => [],
   getAgent: () => undefined,
   insertMessage: (...args: unknown[]) => h.insertMessageMock(...(args as [])),
@@ -165,7 +164,6 @@ vi.mock('../prompt-builder-repo-graph', () => ({
   buildRepoGraphSubagentSection: () => '',
 }));
 
-
 import {
   executeClaudeSdkQuery,
   executeTelegramLaneQuery,
@@ -194,8 +192,7 @@ function legacySessionRow(id: string, type: 'chat' | 'telegram' = 'chat'): Recor
 
 function okQueryResult() {
   return {
-    async *[Symbol.asyncIterator]() {
-    },
+    async *[Symbol.asyncIterator]() {},
     toggleMcpServer: async () => {},
   };
 }
@@ -238,7 +235,6 @@ beforeEach(() => {
   resetCronSessionState();
 });
 
-
 describe('AC-12: sessao com sdk_session_id/pending_seed NULL e byte-identica (SPEC 4.2)', () => {
   it('espelha Task nativa no ledger V138 e preserva o insert legado', async () => {
     h.queryMock.mockImplementation(() => ({
@@ -267,16 +263,18 @@ describe('AC-12: sessao com sdk_session_id/pending_seed NULL e byte-identica (SP
 
     expect(h.startTaskExecutionMock).toHaveBeenCalledTimes(2);
     const child = h.startTaskExecutionMock.mock.calls[1][0] as Record<string, unknown>;
-    expect(child).toEqual(expect.objectContaining({
-      executionKind: 'native-task',
-      ownerKind: 'chat',
-      ownerId: 'd-native',
-      sessionId: 'd-native',
-      toolUseId: 'tool-native-1',
-      taskId: 'task-native-1',
-      runtime: 'cloud',
-      provider: 'anthropic',
-    }));
+    expect(child).toEqual(
+      expect.objectContaining({
+        executionKind: 'native-task',
+        ownerKind: 'chat',
+        ownerId: 'd-native',
+        sessionId: 'd-native',
+        toolUseId: 'tool-native-1',
+        taskId: 'task-native-1',
+        runtime: 'cloud',
+        provider: 'anthropic',
+      }),
+    );
     expect(h.finalizeTaskExecutionOnceMock).toHaveBeenCalledWith(
       child.executionId,
       expect.objectContaining({
@@ -381,17 +379,11 @@ describe('AC-12: sessao com sdk_session_id/pending_seed NULL e byte-identica (SP
 
     await executeClaudeSdkQuery('oi', { sessionId: 'd-native-usage', silent: true }, fakeGetWindow);
 
-    expect(h.updateSessionTokensMock).toHaveBeenCalledWith(
-      'd-native-usage',
-      10,
-      5,
-      0,
-      {
-        costStatus: 'known',
-        runtime: 'cloud',
-        tokenStatus: 'reported',
-      },
-    );
+    expect(h.updateSessionTokensMock).toHaveBeenCalledWith('d-native-usage', 10, 5, 0, {
+      costStatus: 'known',
+      runtime: 'cloud',
+      tokenStatus: 'reported',
+    });
     const child = h.startTaskExecutionMock.mock.calls[1][0] as Record<string, unknown>;
     expect(h.finalizeTaskExecutionOnceMock).toHaveBeenCalledWith(
       child.executionId,
@@ -412,24 +404,32 @@ describe('AC-12: sessao com sdk_session_id/pending_seed NULL e byte-identica (SP
 
   it('estado 2 — lane FRIA com mensagens: { resume: sessionId } puro', async () => {
     h.getSessionMock.mockImplementation((id: string) => legacySessionRow(id));
-    h.getSessionMessagesMock.mockImplementation((id: string) =>
-      id === 'd-hist' ? [{ id: 1 }] : [],
-    );
+    h.getSessionMessagesMock.mockImplementation((id: string) => (id === 'd-hist' ? [{ id: 1 }] : []));
     await executeClaudeSdkQuery('oi', { sessionId: 'd-hist', silent: true }, fakeGetWindow);
 
     expect(threadDecisionOf(0)).toEqual({ resume: 'd-hist' });
   });
 
-  it('estado 3 — lane VIVA: { continue: true } puro (fast-path preservado)', async () => {
+  it('estado 3 — lane VIVA no desktop: NUNCA continue:true, sempre { resume } (lanes 8.5 / V5, AC-20)', async () => {
     h.getSessionMock.mockImplementation((id: string) => legacySessionRow(id));
-    h.getSessionMessagesMock.mockImplementation((id: string) =>
-      id === 'd-hist' ? [{ id: 1 }] : [],
-    );
+    h.getSessionMessagesMock.mockImplementation((id: string) => (id === 'd-hist' ? [{ id: 1 }] : []));
     await executeClaudeSdkQuery('a', { sessionId: 'd-hist', silent: true }, fakeGetWindow);
     await executeClaudeSdkQuery('b', { sessionId: 'd-hist', silent: true }, fakeGetWindow);
 
     expect(threadDecisionOf(0)).toEqual({ resume: 'd-hist' });
+    expect(threadDecisionOf(1)).toEqual({ resume: 'd-hist' });
+  });
+
+  it('estado 3 — lane VIVA no telegram: { continue: true } puro (fast-path preservado fora do desktop)', async () => {
+    h.getSessionMock.mockImplementation((id: string) => legacySessionRow(id));
+    h.getSessionMessagesMock.mockImplementation((id: string) => (id === 't-hist' ? [{ id: 1 }] : []));
+    resetTelegramSessionState();
+    await executeTelegramLaneQuery('a', { sessionId: 't-hist', silent: true }, fakeGetWindow);
+    await executeTelegramLaneQuery('b', { sessionId: 't-hist', silent: true }, fakeGetWindow);
+
+    expect(threadDecisionOf(0)).toEqual({ resume: 't-hist' });
     expect(threadDecisionOf(1)).toEqual({ continue: true });
+    resetTelegramSessionState();
   });
 
   it('sessao inexistente no DB (getSession undefined) tambem segue o caminho legado', async () => {
@@ -438,15 +438,12 @@ describe('AC-12: sessao com sdk_session_id/pending_seed NULL e byte-identica (SP
   });
 });
 
-
 describe('resolver sdkThreadId (SPEC 4.1)', () => {
   it('lane fria com mensagens: resume usa o sdkThreadId, nao o sessionId do DB', async () => {
     h.getSessionMock.mockImplementation((id: string) =>
       id === 't-comp' ? { ...legacySessionRow(id, 'telegram'), sdkSessionId: 'thread-uuid-1' } : undefined,
     );
-    h.getSessionMessagesMock.mockImplementation((id: string) =>
-      id === 't-comp' ? [{ id: 1 }] : [],
-    );
+    h.getSessionMessagesMock.mockImplementation((id: string) => (id === 't-comp' ? [{ id: 1 }] : []));
 
     await executeTelegramLaneQuery('oi', { sessionId: 't-comp', silent: true }, fakeGetWindow);
 
@@ -458,9 +455,7 @@ describe('resolver sdkThreadId (SPEC 4.1)', () => {
     h.getSessionMock.mockImplementation((id: string) =>
       id === 't-comp' ? { ...legacySessionRow(id, 'telegram'), sdkSessionId: 'thread-uuid-2' } : undefined,
     );
-    h.getSessionMessagesMock.mockImplementation((id: string) =>
-      id === 't-comp' ? [{ id: 1 }] : [],
-    );
+    h.getSessionMessagesMock.mockImplementation((id: string) => (id === 't-comp' ? [{ id: 1 }] : []));
 
     await executeTelegramLaneQuery('a', { sessionId: 't-comp', silent: true }, fakeGetWindow);
     await executeTelegramLaneQuery('b', { sessionId: 't-comp', silent: true }, fakeGetWindow);
@@ -473,9 +468,7 @@ describe('resolver sdkThreadId (SPEC 4.1)', () => {
     h.getSessionMock.mockImplementation((id: string) =>
       id === 't-comp' ? { ...legacySessionRow(id, 'telegram'), sdkSessionId: 'thread-uuid-3' } : undefined,
     );
-    h.getSessionMessagesMock.mockImplementation((id: string) =>
-      id === 't-comp' ? [{ id: 1 }] : [],
-    );
+    h.getSessionMessagesMock.mockImplementation((id: string) => (id === 't-comp' ? [{ id: 1 }] : []));
     h.queryMock
       .mockImplementationOnce(() => {
         throw new Error('EPIPE simulada');
@@ -489,19 +482,14 @@ describe('resolver sdkThreadId (SPEC 4.1)', () => {
   });
 });
 
-
 describe('pending_seed (SPEC 4.3)', () => {
   const SEED = '[Resumo da conversa ate aqui]\nfatos importantes\n\n[Turnos recentes]\n...';
 
   function seedSession(pendingSeed: string | undefined) {
     h.getSessionMock.mockImplementation((id: string) =>
-      id === 't-seed'
-        ? { ...legacySessionRow(id, 'telegram'), sdkSessionId: 'thread-new', pendingSeed }
-        : undefined,
+      id === 't-seed' ? { ...legacySessionRow(id, 'telegram'), sdkSessionId: 'thread-new', pendingSeed } : undefined,
     );
-    h.getSessionMessagesMock.mockImplementation((id: string) =>
-      id === 't-seed' ? [{ id: 1 }, { id: 2 }] : [],
-    );
+    h.getSessionMessagesMock.mockImplementation((id: string) => (id === 't-seed' ? [{ id: 1 }, { id: 2 }] : []));
   }
 
   it('forca thread NOVA ({ sessionId: sdkThreadId }) mesmo com historico, injeta o seed como preambulo e persiste a user message SEM o seed', async () => {
@@ -542,9 +530,9 @@ describe('pending_seed (SPEC 4.3)', () => {
       throw new Error('turno quebrou');
     });
 
-    await expect(
-      executeTelegramLaneQuery('a', { sessionId: 't-seed', silent: true }, fakeGetWindow),
-    ).rejects.toThrow('turno quebrou');
+    await expect(executeTelegramLaneQuery('a', { sessionId: 't-seed', silent: true }, fakeGetWindow)).rejects.toThrow(
+      'turno quebrou',
+    );
 
     expect(h.clearSessionPendingSeedMock).not.toHaveBeenCalled();
   });

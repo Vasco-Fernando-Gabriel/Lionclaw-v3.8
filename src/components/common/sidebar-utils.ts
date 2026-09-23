@@ -1,9 +1,6 @@
 import type { PhaseDefinition } from '@/types/pipeline';
 
-export function isActiveSidebarEntry(ps: {
-  isStreaming: boolean;
-  phaseStatus: string;
-}): boolean {
+export function isActiveSidebarEntry(ps: { isStreaming: boolean; phaseStatus: string }): boolean {
   return ps.isStreaming || ps.phaseStatus === 'running';
 }
 

@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const OLD_BLOCK = `5. ESCOPO FECHADO
    - Sprints cobrem TODA a SPEC; nada que a SPEC pede pode ficar de fora
    - Nenhuma sprint inventa trabalho que a SPEC nao pediu`;

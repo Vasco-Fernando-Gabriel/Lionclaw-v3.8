@@ -59,16 +59,14 @@ export function VisionModelSelector({ settings, onUpdate }: Props) {
           Vision (imagens)
         </h2>
         <p className="text-xs text-zinc-500 mt-1">
-          Transcreve toda imagem recebida (chat e Telegram) antes de mandar ao orquestrador.
-          Independente do SDK escolhido. Usa a chave do provider no Vault.
+          Transcreve toda imagem recebida (chat e Telegram) antes de mandar ao orquestrador. Independente do SDK
+          escolhido. Usa a chave do provider no Vault.
         </p>
       </div>
 
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 px-4 py-3 space-y-4">
         <div className="space-y-1.5">
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-            Provider
-          </label>
+          <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Provider</label>
           <div className="flex gap-2">
             {(Object.keys(PROVIDER_LABEL) as VisionProvider[]).map((p) => {
               const isSelected = provider === p;
@@ -91,9 +89,7 @@ export function VisionModelSelector({ settings, onUpdate }: Props) {
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-            Modelo
-          </label>
+          <label className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Modelo</label>
           <div className="space-y-2">
             {modelsForProvider.map((model) => {
               const isSelected = selectedModel === model.id;
@@ -118,8 +114,8 @@ export function VisionModelSelector({ settings, onUpdate }: Props) {
 
         {keyPresent === false && (
           <p className="text-xs text-amber-400 leading-relaxed">
-            Chave {VAULT_KEY_BY_PROVIDER[provider]} ausente no Vault. Sem ela o vision fica
-            indisponivel e o turno segue so com o texto. Adicione a chave em Provedores externos.
+            Chave {VAULT_KEY_BY_PROVIDER[provider]} ausente no Vault. Sem ela o vision fica indisponivel e o turno segue
+            so com o texto. Adicione a chave em Provedores externos.
           </p>
         )}
         {keyPresent === true && (

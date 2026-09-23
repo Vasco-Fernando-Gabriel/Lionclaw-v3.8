@@ -43,9 +43,7 @@ describe('extractPdfText', () => {
   });
 
   it('rejeita um shape desconhecido com erro explicito', async () => {
-    await expect(extractPdfText(Buffer.from('pdf'), {})).rejects.toThrow(
-      'pdf-parse export is not supported',
-    );
+    await expect(extractPdfText(Buffer.from('pdf'), {})).rejects.toThrow('pdf-parse export is not supported');
   });
 });
 

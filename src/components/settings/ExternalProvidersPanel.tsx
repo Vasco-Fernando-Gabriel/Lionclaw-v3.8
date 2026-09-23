@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, XCircle, RefreshCw, Plug, KeyRound, Server, AlertTriangle } from 'lucide-react';
 import { ClaudeCodeSection } from '@/components/settings/ClaudeCodeSection';
@@ -17,20 +16,12 @@ import type {
   AppSettings,
 } from '@/types';
 
-
 interface DisconnectImpactState {
   agentNames: Array<{ name: string; runtime: string; provider?: string }>;
   onConfirm: () => Promise<void>;
 }
 
-
-function DisconnectImpactDialog({
-  state,
-  onCancel,
-}: {
-  state: DisconnectImpactState;
-  onCancel: () => void;
-}) {
+function DisconnectImpactDialog({ state, onCancel }: { state: DisconnectImpactState; onCancel: () => void }) {
   const [busy, setBusy] = useState(false);
 
   const handleConfirm = async () => {
@@ -158,9 +149,8 @@ export function ExternalProvidersPanel() {
       </div>
 
       <p className="text-xs text-zinc-500">
-        Configure os runtimes via CLI e os provedores que requerem credenciais ou URL local.
-        A auth do Claude (Anthropic) continua no Vault; a secao abaixo e diagnostico e config
-        do binario do Claude Code CLI.
+        Configure os runtimes via CLI e os provedores que requerem credenciais ou URL local. A auth do Claude
+        (Anthropic) continua no Vault; a secao abaixo e diagnostico e config do binario do Claude Code CLI.
       </p>
 
       <div className="space-y-4">
@@ -176,10 +166,7 @@ export function ExternalProvidersPanel() {
         <GrokSection />
 
         {/* Cursor (@cursor/sdk, User API key): SPEC cursor-runtime F1 item 6. */}
-        <CursorSection
-          status={findStatus(statuses, 'cursor-sdk', 'cursor')}
-          onChanged={refresh}
-        />
+        <CursorSection status={findStatus(statuses, 'cursor-sdk', 'cursor')} onChanged={refresh} />
 
         <ClaudeCompatSection
           provider="zai"
@@ -200,11 +187,7 @@ export function ExternalProvidersPanel() {
           onChanged={refresh}
         />
 
-        <OllamaSection
-          status={findStatus(statuses, 'lion-sdk', 'ollama')}
-          settings={settings}
-          onChanged={refresh}
-        />
+        <OllamaSection status={findStatus(statuses, 'lion-sdk', 'ollama')} settings={settings} onChanged={refresh} />
 
         <LmStudioSection
           status={findStatus(statuses, 'lion-sdk', 'lmstudio')}
@@ -227,7 +210,6 @@ export function ExternalProvidersPanel() {
     </section>
   );
 }
-
 
 function ClaudeCompatSection({
   provider,
@@ -286,7 +268,7 @@ function ClaudeCompatSection({
       } else {
         setTestMsg({
           ok: res.connected,
-          text: res.connected ? 'Conectado.' : res.reason ?? 'Nao conectado.',
+          text: res.connected ? 'Conectado.' : (res.reason ?? 'Nao conectado.'),
         });
       }
       await onChanged();
@@ -331,12 +313,7 @@ function ClaudeCompatSection({
 
   return (
     <>
-      {impactDialog !== null && (
-        <DisconnectImpactDialog
-          state={impactDialog}
-          onCancel={() => setImpactDialog(null)}
-        />
-      )}
+      {impactDialog !== null && <DisconnectImpactDialog state={impactDialog} onCancel={() => setImpactDialog(null)} />}
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-zinc-200" title={tooltip}>
@@ -346,9 +323,7 @@ function ClaudeCompatSection({
           <StatusBadge status={status} />
         </div>
 
-        {tooltip && (
-          <p className="text-[11px] text-zinc-500 leading-relaxed">{tooltip}</p>
-        )}
+        {tooltip && <p className="text-[11px] text-zinc-500 leading-relaxed">{tooltip}</p>}
 
         <div className="space-y-1">
           <label className="block text-xs text-zinc-400">API Key</label>
@@ -387,24 +362,13 @@ function ClaudeCompatSection({
           )}
         </div>
 
-        {testMsg && (
-          <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
-            {testMsg.text}
-          </p>
-        )}
+        {testMsg && <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{testMsg.text}</p>}
       </div>
     </>
   );
 }
 
-
-function CursorSection({
-  status,
-  onChanged,
-}: {
-  status?: ProviderStatusEntry;
-  onChanged: () => Promise<void> | void;
-}) {
+function CursorSection({ status, onChanged }: { status?: ProviderStatusEntry; onChanged: () => Promise<void> | void }) {
   const [apiKey, setApiKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [testMsg, setTestMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -445,7 +409,7 @@ function CursorSection({
       } else {
         setTestMsg({
           ok: res.connected,
-          text: res.connected ? 'Conectado.' : res.reason ?? 'Nao conectado.',
+          text: res.connected ? 'Conectado.' : (res.reason ?? 'Nao conectado.'),
         });
       }
       await onChanged();
@@ -485,12 +449,7 @@ function CursorSection({
 
   return (
     <>
-      {impactDialog !== null && (
-        <DisconnectImpactDialog
-          state={impactDialog}
-          onCancel={() => setImpactDialog(null)}
-        />
-      )}
+      {impactDialog !== null && <DisconnectImpactDialog state={impactDialog} onCancel={() => setImpactDialog(null)} />}
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-zinc-200">
@@ -501,9 +460,8 @@ function CursorSection({
         </div>
 
         <p className="text-[11px] text-zinc-500 leading-relaxed">
-          Gere a User API key em cursor.com/dashboard (aba API). A cobranca real e o plano
-          de assinatura do Cursor (limites por multiplicador de agent); o custo em USD
-          exibido pelo LionClaw e uma estimativa equivalente-API.
+          Gere a User API key em cursor.com/dashboard (aba API). A cobranca real e o plano de assinatura do Cursor
+          (limites por multiplicador de agent); o custo em USD exibido pelo LionClaw e uma estimativa equivalente-API.
         </p>
 
         <div className="space-y-1">
@@ -543,16 +501,11 @@ function CursorSection({
           )}
         </div>
 
-        {testMsg && (
-          <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
-            {testMsg.text}
-          </p>
-        )}
+        {testMsg && <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{testMsg.text}</p>}
       </div>
     </>
   );
 }
-
 
 function VertexGeminiSection({
   status,
@@ -608,10 +561,7 @@ function VertexGeminiSection({
       } else {
         setTestMsg({
           ok: true,
-          text:
-            typeof res.models === 'number'
-              ? `Conectado (${res.models} modelos).`
-              : 'Conectado.',
+          text: typeof res.models === 'number' ? `Conectado (${res.models} modelos).` : 'Conectado.',
         });
       }
       await onChanged();
@@ -652,20 +602,14 @@ function VertexGeminiSection({
 
   const busyOrTesting = busy || testing;
 
-
   return (
     <>
-      {impactDialog !== null && (
-        <DisconnectImpactDialog
-          state={impactDialog}
-          onCancel={() => setImpactDialog(null)}
-        />
-      )}
+      {impactDialog !== null && <DisconnectImpactDialog state={impactDialog} onCancel={() => setImpactDialog(null)} />}
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-zinc-200">
             <KeyRound size={14} className="text-amber-500" />
-              Gemini Agent Platform (API key)
+            Gemini Agent Platform (API key)
           </div>
           <StatusBadge status={status} />
         </div>
@@ -674,8 +618,8 @@ function VertexGeminiSection({
         <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-950/40 border border-amber-900/60">
           <AlertTriangle size={13} className="text-amber-400 mt-0.5 shrink-0" />
           <p className="text-[11px] text-amber-200/90 leading-relaxed">
-            API keys can use project quota and can create billable usage. Add Google API key
-            restrictions in Google Cloud.
+            API keys can use project quota and can create billable usage. Add Google API key restrictions in Google
+            Cloud.
           </p>
         </div>
 
@@ -740,16 +684,11 @@ function VertexGeminiSection({
           )}
         </div>
 
-        {testMsg && (
-          <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
-            {testMsg.text}
-          </p>
-        )}
+        {testMsg && <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{testMsg.text}</p>}
       </div>
     </>
   );
 }
-
 
 function OllamaSection({
   status,
@@ -803,9 +742,7 @@ function OllamaSection({
       } else {
         setTestMsg({
           ok: res.connected,
-          text: res.connected
-            ? `Ping OK (${res.models?.length ?? 0} modelos).`
-            : res.reason ?? 'Ping falhou.',
+          text: res.connected ? `Ping OK (${res.models?.length ?? 0} modelos).` : (res.reason ?? 'Ping falhou.'),
         });
       }
       await onChanged();
@@ -852,15 +789,10 @@ function OllamaSection({
         </button>
       </div>
 
-      {testMsg && (
-        <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
-          {testMsg.text}
-        </p>
-      )}
+      {testMsg && <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{testMsg.text}</p>}
     </div>
   );
 }
-
 
 function LmStudioSection({
   status,
@@ -914,9 +846,7 @@ function LmStudioSection({
       } else {
         setTestMsg({
           ok: res.connected,
-          text: res.connected
-            ? `Ping OK (${res.models?.length ?? 0} modelos).`
-            : res.reason ?? 'Ping falhou.',
+          text: res.connected ? `Ping OK (${res.models?.length ?? 0} modelos).` : (res.reason ?? 'Ping falhou.'),
         });
       }
       await onChanged();
@@ -963,15 +893,10 @@ function LmStudioSection({
         </button>
       </div>
 
-      {testMsg && (
-        <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
-          {testMsg.text}
-        </p>
-      )}
+      {testMsg && <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{testMsg.text}</p>}
     </div>
   );
 }
-
 
 function OpenAiCompatSection({
   status,
@@ -995,11 +920,8 @@ function OpenAiCompatSection({
     const persistedPreset = settings.orchestratorOpenAiCompatPreset;
     const persistedBaseUrl = settings.orchestratorOpenAiCompatBaseUrl;
     const isLegacyKimiCnDefault =
-      (persistedPreset === undefined || persistedPreset === 'kimi') &&
-      persistedBaseUrl?.includes('api.moonshot.cn');
-    const nextPreset: OpenAiCompatiblePreset = isLegacyKimiCnDefault
-      ? 'kimi'
-      : persistedPreset ?? 'kimi';
+      (persistedPreset === undefined || persistedPreset === 'kimi') && persistedBaseUrl?.includes('api.moonshot.cn');
+    const nextPreset: OpenAiCompatiblePreset = isLegacyKimiCnDefault ? 'kimi' : (persistedPreset ?? 'kimi');
     setPreset(nextPreset);
     if (persistedBaseUrl && !isLegacyKimiCnDefault) {
       setBaseUrl(persistedBaseUrl);
@@ -1007,11 +929,7 @@ function OpenAiCompatSection({
       const entry = OPENAI_COMPATIBLE_PRESETS.find((p) => p.id === nextPreset);
       setBaseUrl(entry?.baseUrl ?? '');
     }
-  }, [
-    settings?.orchestratorOpenAiCompatPreset,
-    settings?.orchestratorOpenAiCompatBaseUrl,
-    settings,
-  ]);
+  }, [settings?.orchestratorOpenAiCompatPreset, settings?.orchestratorOpenAiCompatBaseUrl, settings]);
 
   const handlePresetChange = (nextPreset: OpenAiCompatiblePreset) => {
     setPreset(nextPreset);
@@ -1078,9 +996,7 @@ function OpenAiCompatSection({
         } else {
           setTestMsg({
             ok: res.connected,
-            text: res.connected
-              ? `Conectado (${res.models?.length ?? 0} modelos).`
-              : res.reason ?? 'Nao conectado.',
+            text: res.connected ? `Conectado (${res.models?.length ?? 0} modelos).` : (res.reason ?? 'Nao conectado.'),
           });
         }
         await onChanged();
@@ -1110,8 +1026,7 @@ function OpenAiCompatSection({
   };
 
   const disconnect = async () => {
-    const vaultKey =
-      settings?.orchestratorOpenAiCompatApiKeyRef ?? 'ORCHESTRATOR_OPENAI_COMPAT_API_KEY';
+    const vaultKey = settings?.orchestratorOpenAiCompatApiKeyRef ?? 'ORCHESTRATOR_OPENAI_COMPAT_API_KEY';
 
     const usage = await getAgentsUsingVaultKey(vaultKey);
     if (usage.agentsReferencing.length > 0) {
@@ -1126,12 +1041,7 @@ function OpenAiCompatSection({
 
   return (
     <>
-      {impactDialog !== null && (
-        <DisconnectImpactDialog
-          state={impactDialog}
-          onCancel={() => setImpactDialog(null)}
-        />
-      )}
+      {impactDialog !== null && <DisconnectImpactDialog state={impactDialog} onCancel={() => setImpactDialog(null)} />}
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-zinc-200">
@@ -1165,9 +1075,7 @@ function OpenAiCompatSection({
             placeholder="https://..."
             className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-600"
           />
-          <p className="text-[10px] text-zinc-600">
-            O adapter normaliza /v1 final automaticamente.
-          </p>
+          <p className="text-[10px] text-zinc-600">O adapter normaliza /v1 final automaticamente.</p>
         </div>
 
         <div className="space-y-1">
@@ -1207,11 +1115,7 @@ function OpenAiCompatSection({
           )}
         </div>
 
-        {testMsg && (
-          <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
-            {testMsg.text}
-          </p>
-        )}
+        {testMsg && <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{testMsg.text}</p>}
       </div>
     </>
   );

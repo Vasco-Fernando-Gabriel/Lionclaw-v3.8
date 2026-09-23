@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -19,8 +18,7 @@ afterEach(() => {
   if (SAVED_CODEX_HOME !== undefined) process.env.CODEX_HOME = SAVED_CODEX_HOME;
   try {
     fs.rmSync(SANDBOX, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
   vi.resetModules();
   loggerSpies.error.mockClear();
   loggerSpies.warn.mockClear();
@@ -189,11 +187,7 @@ describe('colisao do id lionclaw-gateway (P4, skip ruidoso)', () => {
   it('colisao dupla (usuario + DB ativo) nao duplica a tabela em lugar nenhum', async () => {
     const codexDir = path.join(SANDBOX, '.codex');
     fs.mkdirSync(codexDir, { recursive: true });
-    fs.writeFileSync(
-      tomlPath(),
-      '[mcp_servers.lionclaw-gateway]\ncommand = "/home/user/gw"\nargs = []\n',
-      'utf8',
-    );
+    fs.writeFileSync(tomlPath(), '[mcp_servers.lionclaw-gateway]\ncommand = "/home/user/gw"\nargs = []\n', 'utf8');
     mcpServers.push(server('lionclaw-gateway'), server('google-gmail'));
     const toml = await sync();
 

@@ -7,10 +7,7 @@ import type { ChatFeatureToggles, MCPServerConfig, OrchestratorRuntime } from '.
 import { Readable } from 'stream';
 import { getAppVersion } from './app-version';
 import { DETACH_FOR_TREE_KILL, killProcessTree } from './kill-process-tree';
-import {
-  isDirectMcpHelper,
-  isChatTurnScopedMcpHelper,
-} from './mcp-risk-patterns';
+import { isDirectMcpHelper, isChatTurnScopedMcpHelper } from './mcp-risk-patterns';
 import { CODEX_GATEWAY_SERVER_ID, MCP_GATEWAY_SERVER_ID } from './mcp-display';
 import {
   mintHelperToken,
@@ -26,6 +23,8 @@ import {
   minimalInternalRuntimeEnv,
   resolveInternalNodeBinary,
 } from './distribution-runtime';
+import { checkMcpDistEntryStaleness, MCP_DIST_REBUILD_COMMAND } from './mcp-dist-staleness';
+import { isSessionDirRemoteMcpWrapperEntry, REMOTE_MCP_SESSION_DIR_DISCOVERY_TIMEOUT_MS } from './remote-mcp-wrapper';
 
 const logger = createLogger('mcp');
 
@@ -36,8 +35,7 @@ function isInternalNodeCommand(command: string): boolean {
   const packaged = isPackagedDistributionRuntime();
   if (command === 'node' && !packaged) return false;
   const normalized = path.resolve(command);
-  const looksInternal = command === 'node' ||
-    normalized.includes(`${path.sep}runtime${path.sep}node${path.sep}`);
+  const looksInternal = command === 'node' || normalized.includes(`${path.sep}runtime${path.sep}node${path.sep}`);
   try {
     return normalized === path.resolve(resolveInternalNodeBinary());
   } catch (error) {
@@ -66,11 +64,8 @@ function resolveMcpRuntimeCommand(command: string): string {
 }
 
 function mcpProcessEnv(command: string, base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return isInternalNodeCommand(command)
-    ? minimalInternalRuntimeEnv(command, base)
-    : base;
+  return isInternalNodeCommand(command) ? minimalInternalRuntimeEnv(command, base) : base;
 }
-
 
 export interface McpServerErrorState {
   status: 'error';
@@ -87,9 +82,7 @@ export type McpStatusChangedPayload = {
 
 let statusChangedEmitter: ((payload: McpStatusChangedPayload) => void) | null = null;
 
-export function registerMcpStatusChangedEmitter(
-  emit: ((payload: McpStatusChangedPayload) => void) | null,
-): void {
+export function registerMcpStatusChangedEmitter(emit: ((payload: McpStatusChangedPayload) => void) | null): void {
   statusChangedEmitter = emit;
 }
 
@@ -121,6 +114,89 @@ function clearServerErrorState(id: string): void {
 
 export function getServerErrorState(id: string): McpServerErrorState | undefined {
   return serverErrorStates.get(id);
+}
+
+export type McpDistStalePayload = {
+  servers: string[];
+  command: string;
+};
+
+let distStaleEmitter: ((payload: McpDistStalePayload) => void) | null = null;
+const distStaleByEntry = new Map<string, boolean>();
+const distStaleServers = new Set<string>();
+let distStaleEmitted = false;
+
+export function registerMcpDistStaleEmitter(emit: ((payload: McpDistStalePayload) => void) | null): void {
+  distStaleEmitter = emit;
+}
+
+export function getMcpDistStaleState(): McpDistStalePayload | null {
+  if (distStaleServers.size === 0) return null;
+  return { servers: [...distStaleServers].sort(), command: MCP_DIST_REBUILD_COMMAND };
+}
+
+function evaluateMcpDistEntry(entryPath: string): boolean {
+  const cached = distStaleByEntry.get(entryPath);
+  if (cached !== undefined) return cached;
+  let stale = false;
+  try {
+    const result = checkMcpDistEntryStaleness(entryPath);
+    if (result?.stale) {
+      stale = true;
+      distStaleServers.add(result.serverId);
+      logger.error(
+        {
+          serverId: result.serverId,
+          entryPath,
+          distMtimeMs: result.distMtimeMs,
+          sourceMtimeMs: result.sourceMtimeMs,
+          code: 'MCP-DIST-STALE',
+        },
+        `Dist do helper MCP "${result.serverId}" e mais antigo que o src; rode ${MCP_DIST_REBUILD_COMMAND} e reinicie o app`,
+      );
+    }
+  } catch (error) {
+    logger.warn({ entryPath, error }, 'Verificacao de dist do helper MCP falhou (segue sem veredito)');
+  }
+  distStaleByEntry.set(entryPath, stale);
+  return stale;
+}
+
+function scanAllMcpDistEntries(): void {
+  let servers: MCPServerConfig[] = [];
+  try {
+    servers = getAllMCPServers();
+  } catch (error) {
+    logger.warn({ error }, 'Varredura de dist dos MCPs registrados falhou');
+  }
+  for (const server of servers) {
+    const entry = server.args[0];
+    if (entry) evaluateMcpDistEntry(entry);
+  }
+  try {
+    evaluateMcpDistEntry(resolveGatewayScriptPath());
+  } catch (error) {
+    logger.warn({ error }, 'Varredura de dist do gateway falhou');
+  }
+}
+
+function noteMcpDistLaunch(entryPath: string | undefined): void {
+  if (!entryPath || !evaluateMcpDistEntry(entryPath) || distStaleEmitted) return;
+  distStaleEmitted = true;
+  scanAllMcpDistEntries();
+  const payload = getMcpDistStaleState();
+  if (!payload || !distStaleEmitter) return;
+  try {
+    distStaleEmitter(payload);
+  } catch (error) {
+    logger.warn({ error }, 'mcp:dist-stale emit failed');
+  }
+}
+
+export function _resetMcpDistStaleForTests(): void {
+  distStaleByEntry.clear();
+  distStaleServers.clear();
+  distStaleEmitted = false;
 }
 
 export async function startActiveMCPServers(): Promise<void> {
@@ -187,6 +263,7 @@ export async function startServer(id: string, readSecret: SecretReader = getSecr
 
   const runtimeCommand = resolveMcpRuntimeCommand(config.command);
   const needsShell = process.platform === 'win32' && /^(npx|npm|pnpm|yarn)$/i.test(runtimeCommand);
+  noteMcpDistLaunch(config.args[0]);
   const proc = spawn(runtimeCommand, config.args, {
     env: mcpProcessEnv(runtimeCommand, env),
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -259,7 +336,7 @@ export async function testServer(id: string): Promise<{ success: boolean; error?
       });
       const timeout = setTimeout(() => {
         killProcessTree(proc);
-        resolve({ success: true }); // If it didn't crash in 3s, consider it working
+        resolve({ success: true });
       }, 3000);
 
       proc.on('error', (err) => {
@@ -285,26 +362,75 @@ export function getServerStatus(id: string): 'running' | 'stopped' | 'error' {
   return 'stopped';
 }
 
+export type McpCallerLane = 'desktop' | 'telegram' | 'cron';
+
+export const LIONCLAW_MCP_LANE_ENV = 'LIONCLAW_MCP_LANE';
+
+export const LIONCLAW_MCP_SESSION_ID_ENV = 'LIONCLAW_MCP_SESSION_ID';
+
+export const LIONCLAW_MCP_TURN_ID_ENV = 'LIONCLAW_MCP_TURN_ID';
+
+export interface McpTurnBinding {
+  sessionId: string;
+  turnId: string;
+}
+
+export function buildMcpTurnBindingEnv(
+  lane: McpCallerLane | undefined,
+  turn: McpTurnBinding | undefined,
+): Record<string, string> {
+  return {
+    ...(lane ? { [LIONCLAW_MCP_LANE_ENV]: lane } : {}),
+    ...(turn
+      ? {
+          [LIONCLAW_MCP_SESSION_ID_ENV]: turn.sessionId,
+          [LIONCLAW_MCP_TURN_ID_ENV]: turn.turnId,
+        }
+      : {}),
+  };
+}
+
+function withMcpLaneEnv(
+  config: Record<string, { command: string; args: string[]; env?: Record<string, string> }>,
+  lane: McpCallerLane | undefined,
+  turn: McpTurnBinding | undefined,
+): Record<string, { command: string; args: string[]; env?: Record<string, string> }> {
+  const bindingEnv = buildMcpTurnBindingEnv(lane, turn);
+  if (Object.keys(bindingEnv).length === 0) return config;
+  const out: Record<string, { command: string; args: string[]; env?: Record<string, string> }> = {};
+  for (const [id, entry] of Object.entries(config)) {
+    out[id] = { ...entry, env: { ...entry.env, ...bindingEnv } };
+  }
+  return out;
+}
+
 export async function getMCPConfigForAgent(
   agentId?: string,
-  opts?: { surface?: OrchestratorRuntime; fullCatalog?: boolean; capabilities?: ChatFeatureToggles },
+  opts?: {
+    surface?: OrchestratorRuntime;
+    fullCatalog?: boolean;
+    capabilities?: ChatFeatureToggles;
+    lane?: McpCallerLane;
+    turn?: McpTurnBinding;
+  },
 ): Promise<Record<string, { command: string; args: string[]; env?: Record<string, string> }> | undefined> {
   const db = getDb();
 
   const surface = opts?.surface;
   const includeCodexLionOnly =
-    surface === 'codex-sdk'
-    || surface === 'lion-sdk'
-    || surface === 'kimi-sdk'
-    || surface === 'grok-sdk'
-    || surface === 'cursor-sdk';
+    surface === 'codex-sdk' ||
+    surface === 'lion-sdk' ||
+    surface === 'kimi-sdk' ||
+    surface === 'grok-sdk' ||
+    surface === 'cursor-sdk';
   const allowedVisibility: Array<'all' | 'codex-lion-only'> = includeCodexLionOnly
     ? ['all', 'codex-lion-only']
     : ['all'];
 
   let serverIds: string[] = [];
   if (agentId) {
-    const agent = db.prepare('SELECT mcp_servers FROM agents WHERE id = ?').get(agentId) as { mcp_servers: string } | undefined;
+    const agent = db.prepare('SELECT mcp_servers FROM agents WHERE id = ?').get(agentId) as
+      { mcp_servers: string } | undefined;
     if (agent) {
       serverIds = JSON.parse(agent.mcp_servers);
     }
@@ -332,11 +458,7 @@ export async function getMCPConfigForAgent(
       }
     }
 
-    if (
-      isChatTurnScopedMcpHelper(id) &&
-      opts?.capabilities === undefined &&
-      opts?.fullCatalog !== true
-    ) {
+    if (isChatTurnScopedMcpHelper(id) && opts?.capabilities === undefined && opts?.fullCatalog !== true) {
       continue;
     }
 
@@ -367,10 +489,12 @@ export async function getMCPConfigForAgent(
       }) as Record<string, string>;
     }
 
+    noteMcpDistLaunch(entry.args[0]);
     config[id] = entry;
   }
 
   if (
+    opts?.fullCatalog === true ||
     surface === 'claude-sdk' ||
     surface === 'claude-compat-sdk' ||
     surface === 'kimi-sdk' ||
@@ -379,7 +503,8 @@ export async function getMCPConfigForAgent(
     surface === 'lion-sdk'
   ) {
     for (const [id, entry] of Object.entries(config)) {
-      if (ALWAYS_IDENTITY_HELPER_IDS.has(id.toLowerCase())) {
+      const identityHelpers = opts?.fullCatalog === true ? PROCESS_IDENTITY_HELPER_IDS : ALWAYS_IDENTITY_HELPER_IDS;
+      if (identityHelpers.has(id.toLowerCase())) {
         config[id] = {
           ...entry,
           env: { ...entry.env, [LIONCLAW_HELPER_TOKEN_ENV]: mintHelperToken(id) },
@@ -394,13 +519,10 @@ export async function getMCPConfigForAgent(
     (surface === 'claude-sdk' || surface === 'claude-compat-sdk') &&
     readMcpPromptModeSafe() === 'index'
   ) {
-    return buildIndexModeConfig(config, surface);
+    return withMcpLaneEnv(buildIndexModeConfig(config, surface), opts?.lane, opts?.turn);
   }
 
-  if (
-    opts?.fullCatalog !== true &&
-    (surface === 'claude-sdk' || surface === 'claude-compat-sdk')
-  ) {
+  if (opts?.fullCatalog !== true && (surface === 'claude-sdk' || surface === 'claude-compat-sdk')) {
     for (const [id, entry] of Object.entries(config)) {
       if (CHAT_GATED_HELPER_IDS.has(id.toLowerCase())) {
         config[id] = {
@@ -411,7 +533,7 @@ export async function getMCPConfigForAgent(
     }
   }
 
-  return Object.keys(config).length > 0 ? config : undefined;
+  return Object.keys(config).length > 0 ? withMcpLaneEnv(config, opts?.lane, opts?.turn) : undefined;
 }
 
 function readMcpPromptModeSafe(): 'index' | 'full' {
@@ -430,18 +552,14 @@ export function resolveGatewayScriptPath(): string {
     if (electron?.app?.getAppPath) {
       appPath = electron.app.getAppPath();
     }
-  } catch {
-  }
+  } catch {}
   const { entryPath, candidates } = resolveMcpServerEntry(
     MCP_GATEWAY_SERVER_ID,
     `dist/${MCP_GATEWAY_SERVER_ID}/src/index.js`,
     { appPath, cwd: process.cwd() },
   );
   if (!entryPath) {
-    logger.warn(
-      { candidates },
-      'Gateway MCP dist nao encontrado (rode o build dos MCPs); usando o primeiro candidato',
-    );
+    logger.warn({ candidates }, 'Gateway MCP dist nao encontrado (rode o build dos MCPs); usando o primeiro candidato');
     return candidates[0];
   }
   return entryPath;
@@ -461,9 +579,11 @@ function buildIndexModeConfig(
   }
 
   const gatewayNode = internalNodeOrDevelopmentNode();
+  const gatewayScriptPath = resolveGatewayScriptPath();
+  noteMcpDistLaunch(gatewayScriptPath);
   indexConfig[MCP_GATEWAY_SERVER_ID] = {
     command: gatewayNode,
-    args: [resolveGatewayScriptPath()],
+    args: [gatewayScriptPath],
     env: {
       ...minimalInternalRuntimeEnv(gatewayNode),
       ELECTRON_RUN_AS_NODE: '1',
@@ -486,10 +606,15 @@ function buildIndexModeConfig(
   return indexConfig;
 }
 
-
-export function buildMCPSpecForAgent(serverIds: string[]): Array<Record<string, { type?: 'stdio'; command: string; args?: string[]; env?: Record<string, string> }>> | undefined {
+export function buildMCPSpecForAgent(
+  serverIds: string[],
+):
+  | Array<Record<string, { type?: 'stdio'; command: string; args?: string[]; env?: Record<string, string> }>>
+  | undefined {
   if (serverIds.length === 0) return undefined;
-  const specs: Array<Record<string, { type?: 'stdio'; command: string; args?: string[]; env?: Record<string, string> }>> = [];
+  const specs: Array<
+    Record<string, { type?: 'stdio'; command: string; args?: string[]; env?: Record<string, string> }>
+  > = [];
   for (const id of serverIds) {
     const server = getMCPServer(id);
     if (server) {
@@ -506,7 +631,6 @@ export function buildMCPSpecForAgent(serverIds: string[]): Array<Record<string, 
   }
   return specs.length > 0 ? specs : undefined;
 }
-
 
 export interface MCPDiscoveredTool {
   name: string;
@@ -542,8 +666,10 @@ export function saveMCPToolsToRegistry(mcpId: string, tools: Array<string | MCPD
       return;
     }
     const placeholders = entries.map(() => '?').join(', ');
-    db.prepare(`DELETE FROM mcp_tool_registry WHERE mcp_id = ? AND tool_name NOT IN (${placeholders})`)
-      .run(mcpId, ...entries.map((e) => e.name));
+    db.prepare(`DELETE FROM mcp_tool_registry WHERE mcp_id = ? AND tool_name NOT IN (${placeholders})`).run(
+      mcpId,
+      ...entries.map((e) => e.name),
+    );
     for (const entry of entries) {
       upsert.run(
         mcpId,
@@ -571,8 +697,7 @@ export function getMCPToolsFromRegistry(serverIds: string[]): string[] {
 
 export function getMcpToolRegistryEntries(mcpId?: string): MCPToolRegistryEntry[] {
   const db = getDb();
-  const baseSql =
-    'SELECT mcp_id, tool_name, description, input_schema, last_discovered_at FROM mcp_tool_registry';
+  const baseSql = 'SELECT mcp_id, tool_name, description, input_schema, last_discovered_at FROM mcp_tool_registry';
   const rows = (
     mcpId !== undefined
       ? db.prepare(`${baseSql} WHERE mcp_id = ? ORDER BY mcp_id, tool_name`).all(mcpId)
@@ -613,13 +738,16 @@ export async function discoverAndSaveMCPTools(
 
   return new Promise<string[]>((resolve, reject) => {
     const runtimeCommand = resolveMcpRuntimeCommand(config.command);
+    noteMcpDistLaunch(config.args[0]);
     const proc = spawn(runtimeCommand, config.args, {
       env: mcpProcessEnv(runtimeCommand, env),
       stdio: ['pipe', 'pipe', 'pipe'],
       detached: DETACH_FOR_TREE_KILL,
     });
 
-    const TIMEOUT_MS = 8000;
+    const TIMEOUT_MS = isSessionDirRemoteMcpWrapperEntry(config.args[0])
+      ? REMOTE_MCP_SESSION_DIR_DISCOVERY_TIMEOUT_MS
+      : 8000;
     let settled = false;
     let stdoutBuf = '';
 
@@ -663,7 +791,7 @@ export async function discoverAndSaveMCPTools(
         try {
           msg = JSON.parse(trimmed);
         } catch {
-          continue; // Not JSON — ignore (e.g. debug output)
+          continue;
         }
 
         if (!initializeDone && (msg['id'] as number) === 1 && msg['result'] !== undefined) {
@@ -686,8 +814,7 @@ export async function discoverAndSaveMCPTools(
                   const tool = t as Record<string, unknown>;
                   return {
                     name: (tool['name'] as string) ?? '',
-                    description:
-                      typeof tool['description'] === 'string' ? tool['description'] : undefined,
+                    description: typeof tool['description'] === 'string' ? tool['description'] : undefined,
                     inputSchema: tool['inputSchema'],
                   };
                 })
@@ -736,7 +863,6 @@ export async function discoverAllActiveMCPTools(readSecret: SecretReader = getSe
   }
 }
 
-
 export function getAllMCPServers(): MCPServerConfig[] {
   const db = getDb();
   const rows = db.prepare('SELECT * FROM mcp_servers').all() as Array<Record<string, unknown>>;
@@ -751,17 +877,17 @@ function getMCPServer(id: string): MCPServerConfig | undefined {
 
 export function createMCPServer(config: Omit<MCPServerConfig, 'status'>): MCPServerConfig {
   if (config.id === CODEX_GATEWAY_SERVER_ID) {
-    throw new Error(
-      `id de MCP server reservado pelo LionClaw: ${CODEX_GATEWAY_SERVER_ID}`,
-    );
+    throw new Error(`id de MCP server reservado pelo LionClaw: ${CODEX_GATEWAY_SERVER_ID}`);
   }
   const db = getDb();
   const visibleTo = config.visibleTo ?? 'all';
   const indexMode = config.indexMode ?? 'tools';
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO mcp_servers (id, name, command, args, env_keys, is_active, visible_to, index_mode)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
+  ).run(
     config.id,
     config.name,
     config.command,
@@ -779,13 +905,34 @@ export function updateMCPServer(id: string, updates: Partial<MCPServerConfig>): 
   const fields: string[] = [];
   const values: unknown[] = [];
 
-  if (updates.name !== undefined) { fields.push('name = ?'); values.push(updates.name); }
-  if (updates.command !== undefined) { fields.push('command = ?'); values.push(updates.command); }
-  if (updates.args !== undefined) { fields.push('args = ?'); values.push(JSON.stringify(updates.args)); }
-  if (updates.envKeys !== undefined) { fields.push('env_keys = ?'); values.push(JSON.stringify(updates.envKeys)); }
-  if (updates.isActive !== undefined) { fields.push('is_active = ?'); values.push(updates.isActive ? 1 : 0); }
-  if (updates.visibleTo !== undefined) { fields.push('visible_to = ?'); values.push(updates.visibleTo); }
-  if (updates.indexMode !== undefined) { fields.push('index_mode = ?'); values.push(updates.indexMode); }
+  if (updates.name !== undefined) {
+    fields.push('name = ?');
+    values.push(updates.name);
+  }
+  if (updates.command !== undefined) {
+    fields.push('command = ?');
+    values.push(updates.command);
+  }
+  if (updates.args !== undefined) {
+    fields.push('args = ?');
+    values.push(JSON.stringify(updates.args));
+  }
+  if (updates.envKeys !== undefined) {
+    fields.push('env_keys = ?');
+    values.push(JSON.stringify(updates.envKeys));
+  }
+  if (updates.isActive !== undefined) {
+    fields.push('is_active = ?');
+    values.push(updates.isActive ? 1 : 0);
+  }
+  if (updates.visibleTo !== undefined) {
+    fields.push('visible_to = ?');
+    values.push(updates.visibleTo);
+  }
+  if (updates.indexMode !== undefined) {
+    fields.push('index_mode = ?');
+    values.push(updates.indexMode);
+  }
 
   if (fields.length > 0) {
     values.push(id);
@@ -806,8 +953,7 @@ export function deleteMCPServer(id: string): void {
 function mapServer(row: Record<string, unknown>): MCPServerConfig {
   const id = row['id'] as string;
   const rawVisibility = row['visible_to'];
-  const visibleTo: 'all' | 'codex-lion-only' =
-    rawVisibility === 'codex-lion-only' ? 'codex-lion-only' : 'all';
+  const visibleTo: 'all' | 'codex-lion-only' = rawVisibility === 'codex-lion-only' ? 'codex-lion-only' : 'all';
   const rawIndexMode = row['index_mode'];
   const indexMode: 'tools' | 'server' = rawIndexMode === 'server' ? 'server' : 'tools';
   return {

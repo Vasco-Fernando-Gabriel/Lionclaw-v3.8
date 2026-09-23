@@ -1,35 +1,34 @@
-// PRIMEIRO import DE PROPOSITO (SPEC terminal-chat DN-5): captura o snapshot
-// do process.env ANTES de qualquer mutacao interna (CLAUDE_CODE_SHELL, PATH do
-// Node interno, credenciais do Vault). O terminal do usuario usa este snapshot.
 import './boot-env-snapshot';
+import { getSwarmService } from './swarm';
+import { startSwarmDeliveryPump } from './swarm/delivery';
 import { app, BrowserWindow, Menu, shell, powerMonitor, ipcMain, protocol, net, dialog } from 'electron';
 import { pathToFileURL } from 'url';
 import fs from 'fs';
 import path from 'path';
 import { autoUpdater } from 'electron-updater';
 import { initDatabase, seedToolDefaults, getSetting, setSetting, getDatabaseFilePath } from './db';
-// SPEC robustez-chat SB-7 (AC-B17): builder puro da caixa de erro DB-MIGRATION.
 import { buildDbMigrationErrorBox } from './db-init-error';
 import { ensureAllSeedAgents } from './seed-agents/ensure';
 import { registerIPCHandlers } from './ipc-handlers';
+import { rebuildClearingSessionsOnBoot } from './chat-clear';
 import { startScheduler, stopScheduler } from './scheduler';
 import { startTelegramBot, stopTelegramBot } from './telegram-bridge';
-// SPEC telegram-cron-compaction 1.3: o shutdown aborta as queries em voo das
-// lanes telegram/cron para um turno longo nao travar o encerramento do app.
-import { stopTelegramQuery, stopCronQuery } from './orchestrator';
+import { stopTelegramQuery, stopCronQuery, stopCurrentQuery } from './orchestrator';
 import { killAllTerminalSessions } from './terminal-pty';
-// SPEC telegram-cron-compaction 10: migracao de upgrade dos .jsonl das sessoes
-// Telegram ativas (background CWD -> ~/.lionclaw), idempotente, IO-only.
 import { migrateTelegramJsonlOnBoot } from './telegram-jsonl-migration';
-import { startActiveMCPServers, stopAllMCPServers, getAllMCPServers, createMCPServer, updateMCPServer } from './mcp-manager';
-// SPEC mcp-index-invoke 4: wrapper central de invoke via meta-tool. Recebe o
-// supplier de janela no boot para o permission guard (AC-13).
+import {
+  startActiveMCPServers,
+  stopAllMCPServers,
+  getAllMCPServers,
+  createMCPServer,
+  updateMCPServer,
+} from './mcp-manager';
 import { initMcpInvoke } from './mcp-invoke';
 import { discoverSDKMcpServers } from './mcp-discovery';
 import { getExcalidrawView } from './excalidraw-views';
-// (SPEC kanban-nativo 6.1) resolucao id->path dos anexos servidos pelo
-// protocolo lionclaw-kanban:// (validacao anti path-traversal no engine).
+import { HTML_ARTIFACT_PROTOCOL_PREFIX, serveHtmlArtifact } from './html-artifact';
 import { getKanbanEngine } from './kanban-engine';
+import { resolveMcpServerEntry } from './mcp-path-resolver';
 import { logout } from './auth';
 import { createLogger } from './logger';
 import { getLionClawHome } from './paths';
@@ -40,18 +39,16 @@ import { PipelineEngine } from './pipeline-engine';
 import { registerPipelineEngineRef } from './pipeline-engine-ref';
 import { initPipelineDriveCoordinator } from './pipeline-drive-coordinator';
 import { startPipelineControlPhaseCache } from './pipeline-control-core';
-// (SPEC-010 10.3/AC-25) wire do boot recovery do dynamic-workflow. Garante o
-// runner construido e recupera runs interrompidos (running -> interrupted) apos
-// crash. Chamado UMA vez no boot, apos registerIPCHandlers, em try/catch proprio
-// (falha NUNCA derruba o boot). Espelha o padrao startActiveMCPServers.
 import { recoverWorkflowRunsOnBoot } from './dynamic-workflows/workflow-control-core';
 import { startIngestQueueWatcher, stopIngestQueueWatcher } from './graph-ingest';
 import { formatAppVersionLabel, getAppVersion } from './app-version';
 import { getOpenDesignConfig } from './open-design/config';
-import { startLocalIpcServer, stopLocalIpcServer, registerWindowProvider } from './local-ipc';
-// (Fase B, S4 — B.8/AC-B10/AC-B12) decisao de registro do Tool Script no boot:
-// python3 detectado E setting tool_script_enabled. Qualquer um ausente =>
-// helper nao registrado => tool ausente em TODOS os runtimes, razao no log.
+import {
+  startLocalIpcServer,
+  stopLocalIpcServer,
+  registerWindowProvider,
+  publishExternalClientServers,
+} from './local-ipc';
 import { resolveToolScriptRegistration } from './tool-script/tool-script-availability';
 import { syncCodexMcpConfig } from './codex-sdk/mcp-config-sync';
 import { restoreHiggsfieldSessionFromVault, watchHiggsfieldSession } from './higgsfield-auth';
@@ -59,10 +56,6 @@ import { getRemoteSeedMcps } from './seed-mcps';
 
 const logger = createLogger('main');
 
-// DB safety (port do build v4.0.7): snapshot + migrations formam um lote
-// exclusivo. Sem o lock de instancia, dois processos poderiam abrir o mesmo
-// SQLite e commitar entre o VACUUM INTO e a primeira DDL. A segunda instancia
-// encerra antes do boot/DB.
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   app.quit();
@@ -73,36 +66,13 @@ if (process.platform === 'linux' && process.env.LIONCLAW_ENABLE_HARDWARE_ACCELER
   app.commandLine.appendSwitch('disable-gpu');
 }
 
-// Shell dos agentes por OS: nenhum subprocesso Claude Code (chat, pipeline,
-// harness, workflows, oneshots, compat) pode carregar o init do shell
-// INTERATIVO do usuario. Sem isso o engine Claude Code resolve $SHELL (zsh no Linux/mac),
-// gera snapshot do zshrc interativo (p10k/gitstatus/alias ls=eza) e a Bash
-// tool trava sem TTY ("stalled 3min").
-// - Linux/macOS: CLAUDE_CODE_SHELL (knob oficial, checado antes de $SHELL)
-//   pina bash nao-interativo; o snapshot vira "Claude Code defaults" pois
-//   ~/.bashrc guarda contra shell nao-interativo (e no mac nem costuma existir).
-// - Windows: nada a pinar. A Bash tool do engine usa SEMPRE git-bash (provider
-//   "bash" hardcoded; $PROFILE/oh-my-posh nunca carregam) e o tool PowerShell
-//   ja spawna com -NoProfile -NonInteractive por construcao.
-// Runtime env de processo-filho (mesma classe do PATH em sdk-bootstrap),
-// nao config de usuario. Respeita override externo se ja vier setado.
 if (process.platform !== 'win32' && !process.env.CLAUDE_CODE_SHELL) {
   const agentBash = ['/bin/bash', '/usr/bin/bash'].find((p) => fs.existsSync(p));
   if (agentBash) process.env.CLAUDE_CODE_SHELL = agentBash;
 }
 
-// Lista de tarefas (Task tools) para TODOS os modelos e TODOS os callers, como
-// no engine 2.1.74 (SPEC agent-sdk-0.3 D7/F10). Desde o 2.1.233 o engine
-// DESLIGA TodoWrite/TaskCreate/TaskUpdate/TaskGet/TaskList por default em Opus
-// 4.8+, Sonnet 5, Fable 5 e Mythos 5; no 2.1.74 esse gating por modelo NAO
-// existia, entao hoje todo agente ve a lista (tenha ou nao TodoWrite em
-// allowedTools). A flag PRESERVA esse comportamento. Setada ANTES de qualquer
-// query(): todo spawn do engine herda process.env (SDK default e os builders
-// compat copiam process.env). Runtime env de processo-filho, nao config de
-// usuario; fica DEPOIS do boot-env-snapshot para o terminal nao herdar.
 process.env.CLAUDE_CODE_ENABLE_TODO_TOOLS = '1';
 
-// Prevent EPIPE and other uncaught errors from crashing the app with a dialog
 process.on('uncaughtException', (err) => {
   if (err.message?.includes('EPIPE')) {
     logger.warn({ err }, 'EPIPE error (subprocess pipe closed) - ignoring');
@@ -125,26 +95,50 @@ async function shutdownKimiRuntime(): Promise<void> {
   await runtime.shutdownKimiRuntime();
 }
 
-// Graceful shutdown on SIGTERM/SIGINT (electron-vite dev sends SIGTERM on hot-reload)
-// Without this, the Telegram long-polling connection isn't released and causes 409 Conflict
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, async () => {
     logger.info({ signal }, 'Received signal, cleaning up');
-    // SPEC terminal-chat DN-6: mesmo wiring do before-quit.
-    try { killAllTerminalSessions(); } catch { /* ignore */ }
-    // SPEC telegram-cron-compaction 1.3: aborta queries em voo das lanes
-    // telegram/cron (mesmo wiring do before-quit).
-    try { stopTelegramQuery(); } catch { /* ignore */ }
-    try { stopCronQuery(); } catch { /* ignore */ }
-    try { await stopTelegramBot(); } catch { /* ignore */ }
-    try { await shutdownGrokRuntime(); } catch { /* ignore */ }
-    try { await shutdownKimiRuntime(); } catch { /* ignore */ }
-    // Sidecars do runtime Cursor (SPEC cursor-runtime E3): mesmo wiring do
-    // before-quit — nada de Node orfao no hot-reload do dev.
+    try {
+      killAllTerminalSessions();
+    } catch {
+      /* ignore */
+    }
+    try {
+      stopCurrentQuery();
+    } catch {
+      /* ignore */
+    }
+    try {
+      stopTelegramQuery();
+    } catch {
+      /* ignore */
+    }
+    try {
+      stopCronQuery();
+    } catch {
+      /* ignore */
+    }
+    try {
+      await stopTelegramBot();
+    } catch {
+      /* ignore */
+    }
+    try {
+      await shutdownGrokRuntime();
+    } catch {
+      /* ignore */
+    }
+    try {
+      await shutdownKimiRuntime();
+    } catch {
+      /* ignore */
+    }
     try {
       const { shutdownCursorSidecars } = await import('./agent-runtime/cursor-sidecar/sidecar-manager');
       await shutdownCursorSidecars(signal);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     stopScheduler();
     stopAllMCPServers();
     stopKnowledgeBridge();
@@ -191,20 +185,12 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
-  // Link no chat/pipeline navegava a JANELA DO APP para fora (o markdown
-  // renderiza <a href> sem target, e setWindowOpenHandler so intercepta
-  // window.open/target=_blank). Alem de perder o app sem botao de voltar, a
-  // navegacao mantem o preload anexado: o site passaria a enxergar
-  // window.lionclaw inteiro. Aqui so navegacao INTERNA passa; todo o resto vai
-  // para o browser do sistema. Cobre TODAS as superficies que renderizam
-  // markdown (chat, pipeline, harness, enrich), nao so a bolha do chat.
   const isInternalNavigation = (target: string): boolean => {
     const current = mainWindow?.webContents.getURL() ?? '';
     if (!current) return false;
     try {
       const to = new URL(target);
       const from = new URL(current);
-      // Producao: app carregado de file://. Dev: origem do servidor do Vite.
       if (to.protocol === 'file:' && from.protocol === 'file:') return true;
       return to.origin !== 'null' && to.origin === from.origin;
     } catch {
@@ -221,7 +207,6 @@ function createWindow(): void {
   mainWindow.webContents.on('will-navigate', guardNavigation);
   mainWindow.webContents.on('will-redirect', guardNavigation);
 
-  // Log renderer console messages to terminal for debugging
   mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
     const levelStr = ['VERBOSE', 'INFO', 'WARNING', 'ERROR'][level] || 'LOG';
     logger.info({ levelStr, line, sourceId }, `[RENDERER] ${message}`);
@@ -236,7 +221,6 @@ function createWindow(): void {
     if (rendererUrl) {
       mainWindow.loadURL(rendererUrl);
     }
-    // Cmd+Shift+I (Mac) / Ctrl+Shift+I (Linux/Win) to toggle DevTools
     mainWindow.webContents.on('before-input-event', (_event, input) => {
       if (input.type === 'keyDown' && input.key === 'I' && input.shift && (input.meta || input.control)) {
         mainWindow?.webContents.toggleDevTools();
@@ -250,7 +234,6 @@ function createWindow(): void {
     mainWindow = null;
   });
 
-  // Recover from GPU/renderer crashes by reloading the page
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     logger.error({ reason: details.reason, exitCode: details.exitCode }, 'Render process gone, reloading window');
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -476,8 +459,17 @@ LEMBRETE FINAL: Este bloco e INVISIVEL para o usuario (comentario HTML). Voce DE
 function ensureLionClawFiles(): void {
   const lionclawPath = getLionClawHome();
 
-  // Garantir que os subdiretorios existam
-  const dirs = ['data', 'data/sessions', 'agents', 'skills', 'conversations', 'background', 'cron'];
+  const dirs = [
+    'data',
+    'data/sessions',
+    'agents',
+    'skills',
+    'conversations',
+    'background',
+    'cron',
+    'artifacts',
+    'artifacts/state',
+  ];
   for (const dir of dirs) {
     fs.mkdirSync(path.join(lionclawPath, dir), { recursive: true });
   }
@@ -499,8 +491,6 @@ function ensureLionClawFiles(): void {
     }
   }
 
-  // Criar .claude/settings.json vazio para evitar que o SDK suba procurando configs
-  // de parent directories (ex: ~/.claude/ do Claude CLI pessoal)
   const claudeSettingsDir = path.join(lionclawPath, '.claude');
   fs.mkdirSync(claudeSettingsDir, { recursive: true });
   const claudeSettingsPath = path.join(claudeSettingsDir, 'settings.json');
@@ -509,25 +499,28 @@ function ensureLionClawFiles(): void {
     logger.info('Created empty .claude/settings.json to isolate SDK settings');
   }
 
-  // Criar background/CLAUDE.md e background/.claude/settings.json para isolamento do subprocess
   const bgClaudeMd = path.join(lionclawPath, 'background', 'CLAUDE.md');
   if (!fs.existsSync(bgClaudeMd)) {
-    fs.writeFileSync(bgClaudeMd, [
-      '# LionClaw Background Agent',
-      '',
-      '> Sessao isolada para tarefas agendadas (crons) e Telegram.',
-      '',
-      '## Identidade',
-      'Voce e Alfred, executando uma tarefa agendada em background.',
-      'Responda sempre em portugues brasileiro.',
-      'Execute a tarefa silenciosamente e reporte o resultado.',
-      '',
-      '## Regras',
-      '- Execute a tarefa do prompt e encerre',
-      '- Nao inicie conversas',
-      '- Nao modifique arquivos de sistema sem confirmacao',
-      '- Nao faca git push',
-    ].join('\n'), 'utf-8');
+    fs.writeFileSync(
+      bgClaudeMd,
+      [
+        '# LionClaw Background Agent',
+        '',
+        '> Sessao isolada para tarefas agendadas (crons) e Telegram.',
+        '',
+        '## Identidade',
+        'Voce e Alfred, executando uma tarefa agendada em background.',
+        'Responda sempre em portugues brasileiro.',
+        'Execute a tarefa silenciosamente e reporte o resultado.',
+        '',
+        '## Regras',
+        '- Execute a tarefa do prompt e encerre',
+        '- Nao inicie conversas',
+        '- Nao modifique arquivos de sistema sem confirmacao',
+        '- Nao faca git push',
+      ].join('\n'),
+      'utf-8',
+    );
     logger.info('Created background/CLAUDE.md for isolated cron/telegram subprocess');
   }
   const bgClaudeDir = path.join(lionclawPath, 'background', '.claude');
@@ -537,23 +530,22 @@ function ensureLionClawFiles(): void {
     fs.writeFileSync(bgSettingsPath, JSON.stringify({}, null, 2), 'utf-8');
   }
 
-  // SPEC telegram-cron-compaction 2.2: persona de worker da cronLane em
-  // ~/.lionclaw/cron. Seed INSERT-only (so cria se nao existe, nunca
-  // sobrescreve customizacao do usuario). O subprocess de cron tolera CWD sem
-  // CLAUDE.md no primeiro run pos-upgrade (este seed roda no boot antes do
-  // scheduler iniciar).
   const cronClaudeMd = path.join(lionclawPath, 'cron', 'CLAUDE.md');
   if (!fs.existsSync(cronClaudeMd)) {
-    fs.writeFileSync(cronClaudeMd, [
-      '# LionClaw Cron Worker',
-      '',
-      'Voce e um worker de tarefa agendada. Execute a tarefa do prompt e encerre.',
-      'Voce nao tem continuidade, nao conhece conversas anteriores, nao tem acesso ao Telegram nem ao chat do usuario.',
-      'Reporte o resultado e pare.',
-      'Responda em portugues brasileiro.',
-      'Nao faca git push.',
-      'Nao modifique arquivos de sistema sem que a tarefa mande.',
-    ].join('\n'), 'utf-8');
+    fs.writeFileSync(
+      cronClaudeMd,
+      [
+        '# LionClaw Cron Worker',
+        '',
+        'Voce e um worker de tarefa agendada. Execute a tarefa do prompt e encerre.',
+        'Voce nao tem continuidade, nao conhece conversas anteriores, nao tem acesso ao Telegram nem ao chat do usuario.',
+        'Reporte o resultado e pare.',
+        'Responda em portugues brasileiro.',
+        'Nao faca git push.',
+        'Nao modifique arquivos de sistema sem que a tarefa mande.',
+      ].join('\n'),
+      'utf-8',
+    );
     logger.info('Created cron/CLAUDE.md (persona de worker da cronLane)');
   }
   const cronClaudeDir = path.join(lionclawPath, 'cron', '.claude');
@@ -564,21 +556,15 @@ function ensureLionClawFiles(): void {
   }
 }
 
-/**
- * Copy default skills from the project's .lionclaw/skills/ template directory
- * to ~/.lionclaw/skills/. Never overwrites existing skills.
- * Pattern: any folder in project's .lionclaw/skills/ gets auto-copied.
- */
 function copyDefaultSkills(): void {
   const destSkills = path.join(getLionClawHome(), 'skills');
 
-  // Look for templates bundled with the app
   const templateDirs = [
-    path.join(__dirname, '../../.lionclaw/skills'),       // dev mode
-    path.join(app.getAppPath(), '.lionclaw/skills'),      // packaged
+    path.join(__dirname, '../../.lionclaw/skills'), // dev mode
+    path.join(app.getAppPath(), '.lionclaw/skills'), // packaged
   ];
 
-  const templateDir = templateDirs.find(d => fs.existsSync(d));
+  const templateDir = templateDirs.find((d) => fs.existsSync(d));
   if (!templateDir) {
     logger.info('No default skills template dir found');
     return;
@@ -599,9 +585,6 @@ function copyDefaultSkills(): void {
   }
 }
 
-/**
- * Recursively copy a directory.
- */
 function copyDirectorySync(src: string, dest: string): void {
   fs.mkdirSync(dest, { recursive: true });
   const entries = fs.readdirSync(src, { withFileTypes: true });
@@ -616,17 +599,6 @@ function copyDirectorySync(src: string, dest: string): void {
   }
 }
 
-/**
- * One-shot migration: inject YAML frontmatter into ~/.lionclaw/skills/dreaming/SKILL.md
- * for machines that already had the skill installed without frontmatter.
- *
- * NON-FATAL by design — any IO failure is logged as a warning and boot continues.
- * The setting flag is only set AFTER a successful write (or when no action is needed).
- * Idempotent: if flag 'dreaming_frontmatter_migrated' is already 'true', returns early.
- *
- * MUST be called AFTER initDatabase() + seedToolDefaults() + ensureAllSeedAgents()
- * because it relies on getSetting/setSetting (which require an initialized DB).
- */
 function ensureDreamingSkillFrontmatter(): void {
   try {
     if (getSetting('dreaming_frontmatter_migrated') === 'true') return;
@@ -634,8 +606,6 @@ function ensureDreamingSkillFrontmatter(): void {
     const userSkillPath = path.join(getLionClawHome(), 'skills', 'dreaming', 'SKILL.md');
 
     if (!fs.existsSync(userSkillPath)) {
-      // Skill does not exist yet; nothing to migrate. Fresh installs get the
-      // bundled version (with frontmatter) via copyDefaultSkills() on first boot.
       setSetting('dreaming_frontmatter_migrated', 'true');
       return;
     }
@@ -643,7 +613,6 @@ function ensureDreamingSkillFrontmatter(): void {
     const content = fs.readFileSync(userSkillPath, 'utf-8');
 
     if (content.startsWith('---')) {
-      // Frontmatter already present (recent installs or already migrated).
       setSetting('dreaming_frontmatter_migrated', 'true');
       return;
     }
@@ -657,23 +626,14 @@ function ensureDreamingSkillFrontmatter(): void {
       '',
     ].join('\n');
 
-    // Flag is set ONLY after a successful write. If writeFileSync throws,
-    // the flag stays unset and the next boot will retry.
     fs.writeFileSync(userSkillPath, frontmatter + content, 'utf-8');
     setSetting('dreaming_frontmatter_migrated', 'true');
     logger.info({ skill: 'dreaming' }, 'Injected frontmatter into existing skill');
   } catch (err) {
-    // NON-FATAL: log and move on. Flag not set — next boot will retry.
-    // Boot MUST NOT break because of this migration.
     logger.warn({ err }, 'ensureDreamingSkillFrontmatter failed; will retry on next boot');
   }
 }
 
-/**
- * Generate CLAUDE.md dynamically from SOUL, RULES, USER, MEMORY.
- * This file is read automatically by the Claude Code SDK from the CWD.
- * Regenerated on every boot with current data.
- */
 function generateClaudeMd(): void {
   const lionclawPath = getLionClawHome();
 
@@ -697,7 +657,6 @@ function generateClaudeMd(): void {
     }
   }
 
-  // Notas operacionais — genericas, sem dados de usuario
   content += `## OPERATIONAL NOTES\n\n`;
   content += `### Estrutura de arquivos do LionClaw\n`;
   content += `Este agente opera a partir da pasta ~/.lionclaw/ que contem:\n`;
@@ -721,11 +680,6 @@ function generateClaudeMd(): void {
 
 const WATCHED_FILES = ['SOUL.md', 'RULES.md', 'USER.md', 'MEMORY.md'];
 
-/**
- * Watch source files for changes and regenerate CLAUDE.md automatically.
- * Uses fs.watchFile (polling) instead of fs.watch because it works even
- * if the file doesn't exist yet (important for first-run/onboarding).
- */
 function watchMemoryFiles(): void {
   const home = getLionClawHome();
   let regenerateTimeout: NodeJS.Timeout | null = null;
@@ -735,7 +689,6 @@ function watchMemoryFiles(): void {
 
     fs.watchFile(filePath, { interval: 2000 }, (curr, prev) => {
       if (curr.mtimeMs !== prev.mtimeMs) {
-        // Debounce 500ms — multiple files may change at once (e.g. onboarding)
         if (regenerateTimeout) clearTimeout(regenerateTimeout);
         regenerateTimeout = setTimeout(() => {
           logger.info({ file }, 'Source file changed, regenerating CLAUDE.md');
@@ -748,9 +701,6 @@ function watchMemoryFiles(): void {
   logger.info({ files: WATCHED_FILES }, 'Watching memory files for changes');
 }
 
-/**
- * Stop watching memory files. Call on app quit.
- */
 function stopWatchingMemoryFiles(): void {
   const home = getLionClawHome();
   for (const file of WATCHED_FILES) {
@@ -761,7 +711,6 @@ function stopWatchingMemoryFiles(): void {
 function ensureBuiltinMCPServers(): void {
   const existing = getAllMCPServers();
 
-  // Registry of all built-in MCP servers
   const builtinServers = [
     {
       id: 'memory-search',
@@ -798,8 +747,6 @@ function ensureBuiltinMCPServers(): void {
       envKeys: ['SHOPIFY_STORE_URL', 'SHOPIFY_CLIENT_ID', 'SHOPIFY_CLIENT_SECRET'],
       isActive: false,
     },
-    // Google Calendar: usando o MCP built-in do Agent SDK (ja funciona)
-    // Nossos custom MCPs: apenas Gmail e Drive
     {
       id: 'google-gmail',
       name: 'Gmail',
@@ -867,7 +814,6 @@ function ensureBuiltinMCPServers(): void {
   ];
 
   for (const srv of builtinServers) {
-    // Registro condicional: so registra se a setting correspondente estiver habilitada
     if ('conditional' in srv && srv.conditional) {
       const settingVal = getSetting(srv.conditional as string);
       if (settingVal !== 'true') {
@@ -888,8 +834,6 @@ function ensureBuiltinMCPServers(): void {
 
     const existingEntry = existing.find((s) => s.id === srv.id);
     if (existingEntry) {
-      // Update path and env keys. For servers that start inactive (e.g. Google MCPs
-      // that need OAuth first), preserve current isActive state instead of forcing true.
       const shouldBeActive = srv.isActive === false ? existingEntry.isActive : true;
       updateMCPServer(srv.id, {
         command: 'node',
@@ -911,10 +855,6 @@ function ensureBuiltinMCPServers(): void {
     }
   }
 
-  // Remote MCPs: HTTP/SSE servers proxied via `mcp-remote` (stdio<->HTTP bridge
-  // with OAuth handling). The bridge stores tokens in ~/.mcp-auth/, opens a
-  // browser on first activation, then runs silently on subsequent boots.
-  // Definicoes vivem em seed-mcps.ts (registry declarativo, fonte unica).
   const remoteServers = getRemoteSeedMcps();
 
   for (const srv of remoteServers) {
@@ -939,52 +879,19 @@ function ensureBuiltinMCPServers(): void {
     }
   }
 
-  // SPEC-001 §11.6 helper MCPs. Default visibleTo 'codex-lion-only' (Codex SDK +
-  // Lion SDK surfaces); lionclaw-pipeline-control e a excecao visibleTo 'all'
-  // (seam unico de pipeline-control para todos os runtimes, I6).
-  // Dist layout differs from the standard built-ins: dist/<id>/src/index.js.
   const helperServers: Array<{ id: string; name: string; visibleTo?: 'all' | 'codex-lion-only' }> = [
     { id: 'lionclaw-agents', name: 'LionClaw Agents' },
     { id: 'lionclaw-skills', name: 'LionClaw Skills' },
     { id: 'lionclaw-user-question', name: 'LionClaw User Question' },
-    // Helpers de efeito colateral com handshake de identidade (helper-identity.ts).
-    // visibleTo 'all': subprocess e o seam unico para todos os runtimes; o gate de
-    // caller (assertOrchestratorCaller) + arm-state (telegram) vive no dispatch
-    // (jsonrpc-methods.ts).
     { id: 'lionclaw-preview', name: 'LionClaw Preview', visibleTo: 'all' },
     { id: 'lionclaw-telegram', name: 'LionClaw Telegram', visibleTo: 'all' },
-    // tools pipeline_* do drive do orquestrador. visibleTo 'all': o tool-search do
-    // Claude SO indexa MCP de SUBPROCESS (nao in-process via createSdkMcpServer),
-    // entao este subprocess e o seam UNICO de pipeline para TODOS os runtimes
-    // (Claude/Compat/Codex/Lion) - findavel via tool-search/MCP em todos. Gate de
-    // WRITE/caller no dispatch (jsonrpc-methods.ts) protege contra subagentes.
     { id: 'lionclaw-pipeline-control', name: 'LionClaw Pipeline Control', visibleTo: 'all' },
-    // (SPEC-010 14.1) tools dynamic_workflow_* do orquestrador. visibleTo 'all':
-    // subprocess e o seam UNICO de dynamic-workflow-control para TODOS os runtimes
-    // (Claude/Compat/Codex/Lion), findavel via tool-search/MCP. Gate de WRITE/caller
-    // no dispatch (jsonrpc-methods.ts) protege contra subagentes. Anuncio condicional
-    // ao modelo via buildDynamicWorkflowSection() (prompt-builder.ts).
+    { id: 'lionclaw-swarm', name: 'LionClaw Swarm', visibleTo: 'all' },
     { id: 'lionclaw-dynamic-workflows', name: 'LionClaw Dynamic Workflows', visibleTo: 'all' },
-    // (SPEC kanban-nativo secao 4) tools board_*/card_* do Kanban nativo.
-    // visibleTo 'all': subprocess e o seam unico para todos os runtimes; SEM
-    // gate de caller no dispatch (D6: scheduler usa a mesma superficie; actor
-    // resolvido por chamada em jsonrpc-methods.ts via kanban-actor.ts).
     { id: 'lionclaw-kanban', name: 'LionClaw Kanban', visibleTo: 'all' },
-    // (A2) tools repo_graph_* (reader-only) do repo mode do chat. visibleTo
-    // 'all' (F10): subprocess e o seam unico para todos os runtimes; o anuncio
-    // condicional ao modelo vem de buildRepoGraphSection()
-    // (prompt-builder-repo-graph.ts), SO com repo ativo + graph ready/stale.
-    // Escrita (build/update) NAO existe no dispatch agent-facing (5.2).
     { id: 'repo-graph', name: 'Repo Graph', visibleTo: 'all' },
   ];
 
-  // (Fase B, SPEC chat-context-reduction B.1/B.8) runner do Tool Script:
-  // helper stdio REAL, always-on, visibleTo 'all' (mesmo seam unico dos demais
-  // helpers — os 5 runtimes o recebem pela composicao, sem codigo por
-  // runtime). Registro CONDICIONADO (S4) a python3 presente E ao setting
-  // tool_script_enabled (V128). Qualquer um ausente -> nao registra E desativa
-  // um registro de boot anterior (senao o updateMCPServer do loop abaixo /
-  // startActiveMCPServers ressuscitariam o server) — rollback AC-B10/AC-B12.
   const toolScriptDecision = resolveToolScriptRegistration();
   if (toolScriptDecision.register) {
     helperServers.push({ id: 'lionclaw-toolscript', name: 'LionClaw Tool Script', visibleTo: 'all' });
@@ -996,9 +903,7 @@ function ensureBuiltinMCPServers(): void {
     const staleToolScript = existing.find((s) => s.id === 'lionclaw-toolscript');
     if (staleToolScript !== undefined && staleToolScript.isActive) {
       updateMCPServer('lionclaw-toolscript', { isActive: false });
-      logger.info(
-        'helper lionclaw-toolscript de boot anterior DESATIVADO (rollback por disponibilidade/setting)',
-      );
+      logger.info('helper lionclaw-toolscript de boot anterior DESATIVADO (rollback por disponibilidade/setting)');
     }
   }
 
@@ -1037,17 +942,15 @@ function ensureBuiltinMCPServers(): void {
       logger.info({ id: helper.id, serverPath }, 'Helper MCP server registered');
     }
   }
+
+  publishKanbanEntryForExternalClients();
 }
 
-// Register custom protocol for serving local assets (must be before app.ready)
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'lionclaw-asset',
     privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
   },
-  // (SPEC kanban-nativo 6.1) anexos do Kanban no viewer in-app (img/PDF). SEM
-  // supportFetchAPI de proposito: fetch de protocolo custom cai no default-src
-  // da CSP; markdown/texto vao pelo IPC kanban:read-attachment.
   {
     scheme: 'lionclaw-kanban',
     privileges: { standard: true, secure: true },
@@ -1057,13 +960,10 @@ protocol.registerSchemesAsPrivileged([
 app.whenReady().then(async () => {
   logger.info('LionClaw starting...');
 
-  // Hide GTK menubar on Linux (default Electron menu is noisy and unused on this app).
-  // macOS keeps its native menu; Windows menubar is hidden via BrowserWindow's titleBarStyle.
   if (process.platform === 'linux') {
     Menu.setApplicationMenu(null);
   }
 
-  // Set dock icon on macOS (needed for dev mode)
   if (process.platform === 'darwin' && app.dock) {
     const iconPath = path.join(__dirname, '../../resources/icon.png');
     if (fs.existsSync(iconPath)) {
@@ -1071,12 +971,10 @@ app.whenReady().then(async () => {
     }
   }
 
-  // 0a. Register protocol handler for local assets + excalidraw views
   protocol.handle('lionclaw-asset', (request) => {
     const url = new URL(request.url);
     const pathname = url.pathname;
 
-    // Serve Excalidraw view HTML: lionclaw-asset://host/excalidraw-view/{viewId}
     if (pathname.startsWith('/excalidraw-view/')) {
       const viewId = pathname.replace('/excalidraw-view/', '');
       const view = getExcalidrawView(viewId);
@@ -1146,12 +1044,6 @@ html,body,#root{width:100%;height:100%;overflow:hidden;background:#191919}
       return new Response(html, { headers: { 'Content-Type': 'text/html' } });
     }
 
-    // Serve locked design HTML: lionclaw-asset://host/locked-design/{projectId}
-    // O HTML do design pode importar Google Fonts, Three.js do CDN, etc. — a
-    // CSP do app inteira (index.html) restringe a `'self' lionclaw-asset:`, o
-    // que quebra esses recursos quando o iframe usa `srcdoc` (herda o CSP do
-    // parent). Servindo via protocolo dedicado, podemos emitir um CSP proprio
-    // permissivo APENAS para o iframe sandboxed do LockedDesignViewer.
     if (pathname.startsWith('/locked-design/')) {
       try {
         const projectId = decodeURIComponent(pathname.replace('/locked-design/', ''));
@@ -1159,10 +1051,9 @@ html,body,#root{width:100%;height:100%;overflow:hidden;background:#191919}
         if (!cfg?.runDir) {
           return new Response('Design nao travado', { status: 404, headers: { 'Content-Type': 'text/plain' } });
         }
-        const htmlPath = cfg.artifactHtmlPath
-          ?? path.join(cfg.runDir, 'open-design', 'snapshots', 'latest', 'artifact', 'index.html');
-        const snapshotDir = cfg.snapshotDir
-          ?? path.join(cfg.runDir, 'open-design', 'snapshots', 'latest');
+        const htmlPath =
+          cfg.artifactHtmlPath ?? path.join(cfg.runDir, 'open-design', 'snapshots', 'latest', 'artifact', 'index.html');
+        const snapshotDir = cfg.snapshotDir ?? path.join(cfg.runDir, 'open-design', 'snapshots', 'latest');
         const resolvedHtml = path.resolve(htmlPath);
         const resolvedDir = path.resolve(snapshotDir);
         if (!resolvedHtml.startsWith(resolvedDir + path.sep) && resolvedHtml !== resolvedDir) {
@@ -1172,16 +1063,13 @@ html,body,#root{width:100%;height:100%;overflow:hidden;background:#191919}
           return new Response('Arquivo nao encontrado', { status: 404, headers: { 'Content-Type': 'text/plain' } });
         }
         const html = fs.readFileSync(resolvedHtml, 'utf-8');
-        // CSP permissiva apenas para esse documento — runs em iframe sandboxed
-        // pelo LockedDesignViewer (sem allow-same-origin), entao mesmo com
-        // permissoes amplas o iframe nao acessa o DOM/cookies do app host.
         const previewCsp = [
           "default-src * data: blob: 'unsafe-inline' 'unsafe-eval'",
           "script-src * data: blob: 'unsafe-inline' 'unsafe-eval'",
           "style-src * data: blob: 'unsafe-inline'",
-          "font-src * data: blob:",
-          "img-src * data: blob:",
-          "connect-src * data: blob:",
+          'font-src * data: blob:',
+          'img-src * data: blob:',
+          'connect-src * data: blob:',
         ].join('; ');
         return new Response(html, {
           headers: {
@@ -1197,33 +1085,33 @@ html,body,#root{width:100%;height:100%;overflow:hidden;background:#191919}
       }
     }
 
-    // Serve imagem local arbitraria referenciada pelo agente no chat:
-    //   lionclaw-asset://host/local-image/<absPath via encodeURIComponent>
-    // App single-user/single-machine: o agente ja tem acesso ao FS; aqui apenas
-    // exibimos uma imagem que ele gerou/referenciou, sem expor file:// (bloqueado
-    // pela CSP) nem descartar o caminho local. Escopo: apenas extensoes de imagem.
+    if (pathname.startsWith(HTML_ARTIFACT_PROTOCOL_PREFIX)) {
+      return serveHtmlArtifact(pathname);
+    }
+
     if (pathname.startsWith('/local-image/')) {
       try {
         const abs = path.resolve(decodeURIComponent(pathname.replace('/local-image/', '')));
         const ext = path.extname(abs).toLowerCase();
         const allowed = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.bmp', '.avif'];
         if (!allowed.includes(ext)) {
-          return new Response('Tipo de arquivo nao permitido', { status: 403, headers: { 'Content-Type': 'text/plain' } });
+          return new Response('Tipo de arquivo nao permitido', {
+            status: 403,
+            headers: { 'Content-Type': 'text/plain' },
+          });
         }
         if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
           return new Response('Imagem nao encontrada', { status: 404, headers: { 'Content-Type': 'text/plain' } });
         }
         return net.fetch(pathToFileURL(abs).href);
       } catch (err) {
-        return new Response(`Erro ao servir imagem: ${(err as Error).message}`, { status: 500, headers: { 'Content-Type': 'text/plain' } });
+        return new Response(`Erro ao servir imagem: ${(err as Error).message}`, {
+          status: 500,
+          headers: { 'Content-Type': 'text/plain' },
+        });
       }
     }
 
-    // Serve a REMOTE image referenced by the agent in chat (image-gen MCPs like Higgsfield return
-    // https URLs). The chat img-src CSP blocks remote http(s), so the main process fetches the
-    // bytes here (no CSP) and serves them back via lionclaw-asset:. Single-user/single-machine: the
-    // agent already has network access, so proxying an image URL it produced adds no new capability.
-    //   lionclaw-asset://host/remote-image/<https URL via encodeURIComponent>
     if (pathname.startsWith('/remote-image/')) {
       const remoteUrl = decodeURIComponent(pathname.replace('/remote-image/', ''));
       if (!/^https?:\/\//i.test(remoteUrl)) {
@@ -1232,7 +1120,6 @@ html,body,#root{width:100%;height:100%;overflow:hidden;background:#191919}
       return net.fetch(remoteUrl);
     }
 
-    // Serve static files from resources/ directory
     const candidates = [
       path.join(__dirname, '../../resources', pathname),
       path.join(app.getAppPath(), 'resources', pathname),
@@ -1244,17 +1131,9 @@ html,body,#root{width:100%;height:100%;overflow:hidden;background:#191919}
     return new Response('Not found', { status: 404 });
   });
 
-  // 0a2. (SPEC kanban-nativo 6.1) lionclaw-kanban://<attachment_id> — serve o
-  // arquivo fisico de um anexo do Kanban para o viewer in-app (img inline e
-  // PDF via iframe; a CSP do index.html ganhou lionclaw-kanban: em
-  // img-src/frame-src, e NADA alem). O id e resolvido na tabela
-  // kanban_card_attachments e o engine valida que o path resolvido fica SOB
-  // ~/.lionclaw/kanban/ (sem path traversal). Precedente: lionclaw-asset.
   protocol.handle('lionclaw-kanban', (request) => {
     try {
       const url = new URL(request.url);
-      // Scheme standard: o id (uuid lowercase) chega como host; fallback no
-      // pathname cobre forma com barra.
       const attachmentId = decodeURIComponent(url.hostname || url.pathname.replace(/^\/+/, ''));
       const resolved = getKanbanEngine().resolveAttachment(attachmentId);
       if ('error' in resolved) {
@@ -1272,22 +1151,14 @@ html,body,#root{width:100%;height:100%;overflow:hidden;background:#191919}
     }
   });
 
-  // 0b. Ensure .lionclaw files exist
   ensureLionClawFiles();
 
-  // 0b2. Copy default skills (e.g. skill-creator) if not present
   copyDefaultSkills();
 
-  // 0c. Generate CLAUDE.md from source files (SOUL, RULES, USER, MEMORY)
   generateClaudeMd();
 
-  // 0d. Watch source files for changes and regenerate CLAUDE.md automatically
   watchMemoryFiles();
 
-  // 1. Initialize SQLite database
-  // SPEC robustez-chat SB-7 (P7, AC-B17): migration que lanca no boot mostra
-  // dialog.showErrorBox (DB-MIGRATION + path do banco) ANTES de createWindow e
-  // encerra o app — nunca janela em branco muda com o banco quebrado.
   try {
     initDatabase();
   } catch (error) {
@@ -1302,11 +1173,6 @@ html,body,#root{width:100%;height:100%;overflow:hidden;background:#191919}
   ensureDreamingSkillFrontmatter();
   logger.info('Database initialized');
 
-  // 1.1 SPEC telegram-cron-compaction 10: migracao de upgrade (primeiro boot) —
-  // move os .jsonl das sessoes Telegram ativas do diretorio de projeto do
-  // antigo background CWD para o de ~/.lionclaw, para a conversa em andamento
-  // retomar com o contexto vivo intacto. Idempotente; apos initDatabase e antes
-  // de startTelegramBot; falha NUNCA derruba o boot.
   try {
     const { moved } = migrateTelegramJsonlOnBoot();
     if (moved > 0) {
@@ -1316,45 +1182,39 @@ html,body,#root{width:100%;height:100%;overflow:hidden;background:#191919}
     logger.warn({ error }, 'Telegram: migracao de jsonl no boot falhou (boot continua)');
   }
 
-  // Register external provider vault entries (OpenRouter, OpenAI) so they appear in the Vault UI
   registerExternalProviderVaultEntries();
 
-  // 1.5 Start Knowledge Base IPC bridge (UDS for MCP subprocess)
-  // Await to guarantee socket exists before MCPs try to connect
   await startKnowledgeBridge();
   logger.info('Knowledge bridge started');
 
-  // 1.6 Start ingest queue watcher (monitors .ingest-queue for MCP graph_ingest jobs)
   if (getSetting('mgraph_mode') === 'true') {
     startIngestQueueWatcher();
     logger.info('Ingest queue watcher started');
   }
 
-  // 2. Register all IPC handlers
   harnessEngine = new HarnessEngine(() => mainWindow);
   pipelineEngine = new PipelineEngine(() => mainWindow, harnessEngine);
-  // SPEC pipe-control S4: expoe o MESMO getter do engine para as tools
-  // pipeline-control (in-process MCP do orquestrador, sem ctx).
   registerPipelineEngineRef(() => pipelineEngine);
-  // SPEC pipe-control S6: coordenador de drive (event-driven). Assina o
-  // pipeline-event-bus, espelha config.drive em RAM e roda o recovery de boot
-  // (drives 'driving' -> 'awaiting-human', NAO retoma sozinho; AC-20). ADITIVO:
-  // so escuta o bus e chama metodos publicos do PipelineEngine.
+  try {
+    rebuildClearingSessionsOnBoot();
+  } catch (error) {
+    logger.error({ err: error }, 'Reconstrucao de Clear interrompido falhou (boot continua)');
+  }
   initPipelineDriveCoordinator(getMainWindow);
-  // (F4 - SPEC estrada-fixes) cache de pipeline:phase-changed das tools
-  // pipeline_*: o estado awaiting-dev-confirmation (gate pre-codigo) so transita
-  // no bus; pipelineApproveCore consulta este cache para mapear o approve em
-  // confirmStartDevelopment. Assinado AQUI (antes de qualquer pipeline rodar),
-  // mesmo padrao do coordinator.
   startPipelineControlPhaseCache();
-  registerIPCHandlers(getMainWindow, () => harnessEngine, () => pipelineEngine);
+  registerIPCHandlers(
+    getMainWindow,
+    () => harnessEngine,
+    () => pipelineEngine,
+  );
   logger.info('IPC handlers registered');
+  try {
+    await getSwarmService().recover();
+  } catch (error) {
+    logger.error({ error }, 'Swarm indisponível após falha de recuperação');
+  }
+  stopSwarmDeliveryPump = startSwarmDeliveryPump(getMainWindow);
 
-  // 2.4 (SPEC-010 10.3/AC-25) Boot recovery do dynamic-workflow: garante o runner
-  //     construido com deps reais e recupera runs que ficaram `running` apos um
-  //     crash (running -> interrupted; aguardam Retomar - nenhuma morte silenciosa,
-  //     13.8). try/catch proprio: falha de recovery NUNCA derruba o boot (mesmo
-  //     padrao de startActiveMCPServers). Unico ponto de chamada do recovery.
   try {
     const { recovered } = await recoverWorkflowRunsOnBoot();
     logger.info({ recovered }, 'Dynamic workflow boot recovery complete');
@@ -1362,16 +1222,10 @@ html,body,#root{width:100%;height:100%;overflow:hidden;background:#191919}
     logger.error({ error }, 'Dynamic workflow boot recovery failed (boot continues)');
   }
 
-  // 2.5 Ensure built-in MCP servers exist
   ensureBuiltinMCPServers();
 
-  // 2.6 Start local IPC server BEFORE spawning helper MCPs so they can read
-  //     ipc-endpoint.json at startup (SPEC §15 boot order; SPEC §11.6).
   await startLocalIpcServer();
 
-  // 2.7 Restore remote MCP OAuth sessions materialized from Vault before any
-  //     SDK or MCP subprocess starts. Higgsfield uses mcp-remote's OAuth store,
-  //     with the Vault as the encrypted source of truth.
   try {
     await restoreHiggsfieldSessionFromVault();
     watchHiggsfieldSession();
@@ -1379,76 +1233,49 @@ html,body,#root{width:100%;height:100%;overflow:hidden;background:#191919}
     logger.warn({ error }, 'Failed to restore Higgsfield MCP session from Vault');
   }
 
-  // 3. Start MCP servers
   try {
     await startActiveMCPServers();
   } catch (error) {
     logger.error({ error }, 'Failed to start some MCP servers');
   }
 
-  // 3.1 Sync Codex MCP config (LIONCLAW_MANAGED block in ~/.codex/config.toml).
-  //     Stub in Sprint 8; real body lands in Sprint 9 (SPEC §11.3).
   await syncCodexMcpConfig();
 
-  // 3.5 Discover SDK MCP servers in background
   discoverSDKMcpServers().catch((err) => {
     logger.warn({ err }, 'Background MCP discovery failed - will retry on page load');
   });
 
-  // 4. Start scheduler
   startScheduler(getMainWindow);
   logger.info('Scheduler started');
 
-  // 5. Start Telegram bot in background (fire-and-forget). Telegram startup
-  //    awaits getSecret() which can hang silently on keytar/keychain reads,
-  //    so it MUST NOT block window creation. Boot order anchor preserved per
-  //    SPEC-001 §16 #47: startTelegramBot still appears before createWindow.
   void startTelegramBot(getMainWindow).catch((error) => {
     logger.error({ error }, 'Failed to start Telegram bot');
   });
 
-  // 6. Create the window
   createWindow();
 
-  // 6.1 Expose the main window to the local-ipc server so the
-  //     ask_user_question RPC can reach the renderer (SPEC §11.6).
   registerWindowProvider(getMainWindow);
 
-  // 6.2 Wrapper central de invoke MCP (SPEC mcp-index-invoke 4): injeta o
-  //     supplier de janela e instancia o permission guard das meta-tools
-  //     (AC-13) — mesmo desenho do gatePipelineWrite/registerWindowProvider.
   initMcpInvoke({ getWindow: getMainWindow });
 
-  // 6.5 Kick off Open Design vendor install in background (SPEC L457-462).
-  // Idempotente: no-op se sentinela + node_modules ja presentes; senao
-  // dispara `pnpm install --frozen-lockfile`. UI observa via IPC.
   void import('./open-design/boot-installer')
     .then((m) => m.ensureVendorReady())
     .catch((err) => {
       logger.error({ err }, 'open-design: ensureVendorReady kickoff failed');
     });
 
-  // 6.6 Checagem do Node do sidecar Cursor (SPEC cursor-runtime E3): valida
-  //     Node >=22.13 (dev: sistema; empacotado: interno) em background, com
-  //     erro claro no log. Nao bloqueia o boot; status consultavel pelo
-  //     executor via getCursorSidecarNodeStatus.
   void import('./agent-runtime/cursor-sidecar/node-resolver')
     .then((m) => m.checkCursorSidecarNodeAtBoot())
     .catch((err) => {
       logger.error({ err }, 'cursor-sidecar: checagem de Node no boot falhou');
     });
 
-  // 6.7 Cleanup dos workspaces de chat cursor (SPEC cursor-runtime E9, secao
-  //     "Rules materializadas"): remove residuos de crash/reset/troca de
-  //     agente — as rules materializadas carregam SOUL/USER/MEMORY e cada
-  //     turno re-materializa o proprio workspace.
   void import('./cursor-sdk/workspace')
     .then((m) => m.cleanupCursorChatWorkspaces())
     .catch((err) => {
       logger.error({ err }, 'cursor-sdk: cleanup de workspaces de chat no boot falhou');
     });
 
-  // 6. Initialize auto-updater (production only)
   if (process.env.NODE_ENV !== 'development') {
     const updaterLogger = createLogger('auto-updater');
 
@@ -1467,7 +1294,7 @@ html,body,#root{width:100%;height:100%;overflow:hidden;background:#191919}
     autoUpdater.on('download-progress', (progress) => {
       updaterLogger.info(
         { percent: Math.floor(progress.percent), bytesPerSecond: Math.floor(progress.bytesPerSecond) },
-        'Update download progress'
+        'Update download progress',
       );
     });
 
@@ -1484,7 +1311,6 @@ html,body,#root{width:100%;height:100%;overflow:hidden;background:#191919}
     });
   }
 
-  // 7. Register power monitor events for auto-lock on sleep or lid close
   powerMonitor.on('suspend', () => {
     lockSession('suspend');
   });
@@ -1520,59 +1346,110 @@ ipcMain.handle('app:get-version', () => {
   };
 });
 
+let stopSwarmDeliveryPump: (() => void) | undefined;
 let isQuitting = false;
 app.on('before-quit', async (e) => {
-  if (isQuitting) return; // Already cleaning up, let it proceed
+  if (isQuitting) return;
   isQuitting = true;
   e.preventDefault();
-  // SPEC terminal-chat DN-6: mata os shells do terminal integrado PRIMEIRO
-  // (sincrono e barato) — este handler tem awaits de rede no meio e termina em
-  // app.exit(0), que NAO emite will-quit; um await pendurado nao pode deixar
-  // shells vivos.
-  try { killAllTerminalSessions(); } catch { /* ignore */ }
+  stopSwarmDeliveryPump?.();
+  try {
+    killAllTerminalSessions();
+  } catch {
+    /* ignore */
+  }
+  await getSwarmService().shutdown();
   stopWatchingMemoryFiles();
   stopIngestQueueWatcher();
-  // SPEC telegram-cron-compaction 1.3: aborta queries em voo das lanes
-  // telegram/cron para um cron ou turno de Telegram longo nao travar o
-  // encerramento. Toca APENAS as lanes proprias (desktop intocado).
-  try { stopTelegramQuery(); } catch { /* ignore */ }
-  try { stopCronQuery(); } catch { /* ignore */ }
-  try { await stopTelegramBot(); } catch { /* ignore */ }
+  try {
+    stopCurrentQuery();
+  } catch {
+    /* ignore */
+  }
+  try {
+    stopTelegramQuery();
+  } catch {
+    /* ignore */
+  }
+  try {
+    stopCronQuery();
+  } catch {
+    /* ignore */
+  }
+  try {
+    await stopTelegramBot();
+  } catch {
+    /* ignore */
+  }
   stopScheduler();
   stopAllMCPServers();
-  try { await stopLocalIpcServer(); } catch { /* ignore */ }
+  try {
+    await stopLocalIpcServer();
+  } catch {
+    /* ignore */
+  }
   stopKnowledgeBridge();
-  // F-3 (gate codex-chat-persistent): fecha as threads persistentes do chat
-  // Codex oficial (processos app-server imunes ao idle-reaper). Sem laneName =
-  // todas (o braco de shutdown do helper).
   try {
     const { closeAllCachedChatCodexSessions } = await import('./codex-sdk');
     closeAllCachedChatCodexSessions('app-shutdown');
-  } catch { /* ignore */ }
-  // Drivers Codex oficiais dos pipelines/agentes (app-servers fora do cache do
-  // chat) — sem isso, quit deixa processo codex app-server orfao.
+  } catch {
+    /* ignore */
+  }
   try {
     const { shutdownOfficialCodexDrivers } = await import('./agent-runtime/codex-session-factory');
     await shutdownOfficialCodexDrivers('app-shutdown');
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   try {
     const { stopAll } = await import('./open-design/manager');
     await stopAll();
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   try {
     const { getKimiBridgeRegistry } = await import('./kimi-acp/mcp-bridge-registry');
     await getKimiBridgeRegistry().stopAll();
-  } catch { /* ignore */ }
-  try { await shutdownKimiRuntime(); } catch { /* ignore */ }
-  try { await shutdownGrokRuntime(); } catch { /* ignore */ }
-  // Sidecars Node do runtime Cursor (SPEC cursor-runtime E3): kill no
-  // shutdown do app — sem isso, quit deixa processo Node orfao com run vivo.
+  } catch {
+    /* ignore */
+  }
+  try {
+    await shutdownKimiRuntime();
+  } catch {
+    /* ignore */
+  }
+  try {
+    await shutdownGrokRuntime();
+  } catch {
+    /* ignore */
+  }
   try {
     const { shutdownCursorSidecars } = await import('./agent-runtime/cursor-sidecar/sidecar-manager');
     await shutdownCursorSidecars('app-shutdown');
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   logger.info('Cleanup complete, quitting');
   app.exit(0);
 });
 
 export { getMainWindow };
+
+function publishKanbanEntryForExternalClients(): void {
+  const id = 'lionclaw-kanban';
+  try {
+    const { entryPath, candidates } = resolveMcpServerEntry(id, `dist/${id}/src/index.js`, {
+      appPath: app.getAppPath(),
+      cwd: process.cwd(),
+    });
+    if (!entryPath) {
+      logger.warn({ id, candidates }, 'entrypoint do MCP do kanban nao encontrado; clientes externos nao o descobrem');
+      return;
+    }
+    publishExternalClientServers({ [id]: entryPath }).catch((err) => {
+      logger.warn({ err, id }, 'falha ao publicar o entrypoint do MCP para clientes externos');
+    });
+  } catch (err) {
+    logger.warn({ err, id }, 'falha ao resolver o entrypoint do MCP do kanban para clientes externos');
+  }
+}

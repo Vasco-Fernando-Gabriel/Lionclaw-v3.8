@@ -3,9 +3,7 @@ import { securitySpecValidator } from '../seed-agents/security-spec-validator';
 
 export function applyMigrationV122(db: Database.Database): void {
   const seed = securitySpecValidator;
-  const maxOrder = db
-    .prepare('SELECT COALESCE(MAX(sort_order), 0) AS m FROM agents')
-    .get() as { m: number };
+  const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), 0) AS m FROM agents').get() as { m: number };
 
   db.prepare(
     `INSERT OR IGNORE INTO agents (
@@ -42,7 +40,5 @@ export function applyMigrationV122(db: Database.Database): void {
     seed.allowNetwork ? 1 : 0,
   );
 
-  db.prepare(
-    `UPDATE agents SET access = 'workspace-write' WHERE id = ? AND access = 'read-only'`,
-  ).run(seed.id);
+  db.prepare(`UPDATE agents SET access = 'workspace-write' WHERE id = ? AND access = 'read-only'`).run(seed.id);
 }

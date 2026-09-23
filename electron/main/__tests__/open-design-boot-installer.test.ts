@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
 import path from 'path';
 
-
 vi.mock('../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
@@ -18,7 +17,11 @@ vi.mock('electron', () => ({
     getAppPath: () => APPROOT,
     getPath: () => USERDATA,
   },
-  BrowserWindow: class { static getAllWindows() { return []; } },
+  BrowserWindow: class {
+    static getAllWindows() {
+      return [];
+    }
+  },
   ipcMain: { on: vi.fn(), handle: vi.fn() },
 }));
 
@@ -33,8 +36,18 @@ vi.mock('child_process', () => ({
 
 import fs from 'fs';
 
-function makeFakeProcess(): EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; exitCode: number | null; kill: () => boolean } {
-  const proc = new EventEmitter() as EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; exitCode: number | null; kill: () => boolean };
+function makeFakeProcess(): EventEmitter & {
+  stdout: EventEmitter;
+  stderr: EventEmitter;
+  exitCode: number | null;
+  kill: () => boolean;
+} {
+  const proc = new EventEmitter() as EventEmitter & {
+    stdout: EventEmitter;
+    stderr: EventEmitter;
+    exitCode: number | null;
+    kill: () => boolean;
+  };
   proc.stdout = new EventEmitter();
   proc.stderr = new EventEmitter();
   (proc.stdout as unknown as { setEncoding: (e: string) => void }).setEncoding = () => undefined;
@@ -73,7 +86,10 @@ describe('open-design/boot-installer', () => {
       if (content !== undefined) fileContents.set(String(to), content);
     });
     const realReadFileSync = fs.readFileSync;
-    vi.spyOn(fs, 'readFileSync').mockImplementation(((p: fs.PathOrFileDescriptor, opts?: { encoding?: BufferEncoding } | BufferEncoding) => {
+    vi.spyOn(fs, 'readFileSync').mockImplementation(((
+      p: fs.PathOrFileDescriptor,
+      opts?: { encoding?: BufferEncoding } | BufferEncoding,
+    ) => {
       const key = String(p);
       const isInterceptedPath = key === SENTINEL || key.endsWith('/pnpm-lock.yaml');
       if (!isInterceptedPath) {
@@ -83,7 +99,10 @@ describe('open-design/boot-installer', () => {
       if (content === undefined) {
         throw Object.assign(new Error(`ENOENT: ${key}`), { code: 'ENOENT' });
       }
-      const wantsString = opts === 'utf-8' || opts === 'utf8' || (typeof opts === 'object' && opts !== null && (opts.encoding === 'utf-8' || opts.encoding === 'utf8'));
+      const wantsString =
+        opts === 'utf-8' ||
+        opts === 'utf8' ||
+        (typeof opts === 'object' && opts !== null && (opts.encoding === 'utf-8' || opts.encoding === 'utf8'));
       return wantsString ? content : Buffer.from(content);
     }) as typeof fs.readFileSync);
     vi.spyOn(fs, 'rmSync').mockImplementation((p) => {
@@ -131,11 +150,14 @@ describe('open-design/boot-installer', () => {
     existsMap.set(SENTINEL, true);
     existsMap.set(NODE_MODULES, true);
     const staleAbi = String(Number(process.versions.modules) + 1);
-    fileContents.set(SENTINEL, JSON.stringify({
-      ts: '2025-01-01T00:00:00.000Z',
-      lockfileHash: '',
-      nodeModuleVersion: staleAbi,  // != current runtime ABI -> reinstall
-    }));
+    fileContents.set(
+      SENTINEL,
+      JSON.stringify({
+        ts: '2025-01-01T00:00:00.000Z',
+        lockfileHash: '',
+        nodeModuleVersion: staleAbi, // != current runtime ABI -> reinstall
+      }),
+    );
 
     const proc = makeFakeProcess();
     mockSpawn.mockReturnValue(proc);
@@ -158,11 +180,14 @@ describe('open-design/boot-installer', () => {
     existsMap.set(NODE_MODULES, true);
     existsMap.set(LOCKFILE, true);
     fileContents.set(LOCKFILE, 'lockfile-v2-content');
-    fileContents.set(SENTINEL, JSON.stringify({
-      ts: '2025-01-01T00:00:00.000Z',
-      lockfileHash: 'deadbeef'.repeat(8),  // wrong hash — will not match real sha256
-      nodeModuleVersion: process.versions.modules,
-    }));
+    fileContents.set(
+      SENTINEL,
+      JSON.stringify({
+        ts: '2025-01-01T00:00:00.000Z',
+        lockfileHash: 'deadbeef'.repeat(8), // wrong hash — will not match real sha256
+        nodeModuleVersion: process.versions.modules,
+      }),
+    );
 
     const proc = makeFakeProcess();
     mockSpawn.mockReturnValue(proc);
@@ -200,10 +225,13 @@ describe('open-design/boot-installer', () => {
   it('reinstalls when sentinel is from legacy version without nodeModuleVersion field', async () => {
     existsMap.set(SENTINEL, true);
     existsMap.set(NODE_MODULES, true);
-    fileContents.set(SENTINEL, JSON.stringify({
-      ts: '2025-01-01T00:00:00.000Z',
-      lockfileHash: '',
-    }));
+    fileContents.set(
+      SENTINEL,
+      JSON.stringify({
+        ts: '2025-01-01T00:00:00.000Z',
+        lockfileHash: '',
+      }),
+    );
 
     const proc = makeFakeProcess();
     mockSpawn.mockReturnValue(proc);

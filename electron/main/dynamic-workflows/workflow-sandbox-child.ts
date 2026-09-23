@@ -1,4 +1,3 @@
-
 import vm from 'node:vm';
 import {
   PROXIED_PRIMITIVES,
@@ -10,7 +9,6 @@ import {
 } from './sandbox-protocol';
 
 const CHILD_PARALLEL_HARD_CAP = 64;
-
 
 interface ChildTransport {
   send(msg: SandboxChildMessage): void;
@@ -43,16 +41,12 @@ function resolveTransport(): ChildTransport | null {
   return null;
 }
 
-
 const HEARTBEAT_INTERVAL_MS = 1_000;
-const startedAt = Date.now(); // relogio do MODULO (fora do vm); ok para uptime
+const startedAt = Date.now();
 
 let transport: ChildTransport | null = null;
 let nextCallId = 1;
-const pendingCalls = new Map<
-  number,
-  { resolve: (value: unknown) => void; reject: (err: Error) => void }
->();
+const pendingCalls = new Map<number, { resolve: (value: unknown) => void; reject: (err: Error) => void }>();
 
 function sendToParent(msg: SandboxChildMessage): void {
   if (transport) transport.send(msg);
@@ -92,7 +86,6 @@ export function normalizeAgentArgs(args: unknown[]): unknown {
   return arg0;
 }
 
-
 const DETERMINISM_BOOTSTRAP = `
 (() => {
   'use strict';
@@ -126,9 +119,7 @@ export function createSandboxVmContext(sandbox: Record<string, unknown>): vm.Con
     name: 'dynamic-workflow-coordinator',
     codeGeneration: { strings: false, wasm: false }, // bloqueia eval/new Function dentro do vm
   });
-  new vm.Script(DETERMINISM_BOOTSTRAP, { filename: 'determinism-bootstrap.js' }).runInContext(
-    context,
-  );
+  new vm.Script(DETERMINISM_BOOTSTRAP, { filename: 'determinism-bootstrap.js' }).runInContext(context);
   return context;
 }
 
@@ -141,10 +132,7 @@ interface ChildParallelOptions {
 type ChildThunk = () => Promise<unknown> | unknown;
 type ChildStage = (prevResult: unknown, originalItem: unknown, index: number) => Promise<unknown> | unknown;
 
-async function runParallelLocal(
-  thunksArg: unknown,
-  optionsArg: unknown,
-): Promise<unknown[]> {
+async function runParallelLocal(thunksArg: unknown, optionsArg: unknown): Promise<unknown[]> {
   const thunks: ChildThunk[] = Array.isArray(thunksArg)
     ? (thunksArg.filter((t) => typeof t === 'function') as ChildThunk[])
     : [];
@@ -176,7 +164,7 @@ async function runParallelLocal(
         }
         results[idx] = null;
         if (failFast) {
-          cancelled = true; // cancela os thunks ainda NAO iniciados
+          cancelled = true;
           return;
         }
       }
@@ -190,10 +178,7 @@ async function runParallelLocal(
   return results;
 }
 
-async function runPipelineLocal(
-  itemsArg: unknown,
-  stagesArg: unknown,
-): Promise<unknown[]> {
+async function runPipelineLocal(itemsArg: unknown, stagesArg: unknown): Promise<unknown[]> {
   const items: unknown[] = Array.isArray(itemsArg) ? itemsArg : [];
   const stages: ChildStage[] = Array.isArray(stagesArg)
     ? (stagesArg.filter((s) => typeof s === 'function') as ChildStage[])
@@ -248,8 +233,7 @@ export function buildSandboxGlobals(ctxState: SandboxCtxState): Record<string, u
   const globals: Record<string, unknown> = {};
   for (const primitive of PROXIED_PRIMITIVES) {
     if (primitive === 'agent') {
-      globals[primitive] = (...args: unknown[]) =>
-        callPrimitive(primitive, normalizeAgentArgs(args));
+      globals[primitive] = (...args: unknown[]) => callPrimitive(primitive, normalizeAgentArgs(args));
       continue;
     }
     globals[primitive] = (arg: unknown) => callPrimitive(primitive, arg);
@@ -283,7 +267,6 @@ function joinArgs(args: unknown[]): string {
     })
     .join(' ');
 }
-
 
 async function runWorkflow(payload: SandboxParentRun): Promise<void> {
   const sandbox = buildSandboxGlobals({
@@ -341,10 +324,9 @@ function errStack(err: unknown): string | undefined {
   return err instanceof Error ? err.stack : undefined;
 }
 
-
 function handleParentMessage(raw: unknown): void {
   const msg: SandboxParentMessage | null = parseParentMessage(raw);
-  if (!msg) return; // mensagem desconhecida do pai: ignora (defensivo)
+  if (!msg) return;
   switch (msg.t) {
     case 'run':
       void runWorkflow(msg);

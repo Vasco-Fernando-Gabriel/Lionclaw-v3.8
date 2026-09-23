@@ -1,4 +1,3 @@
-
 export const CRITICAL_RULES_BLOCK = `## Regras criticas
 
 - Leia o arquivo REAL antes de afirmar qualquer coisa sobre o codigo

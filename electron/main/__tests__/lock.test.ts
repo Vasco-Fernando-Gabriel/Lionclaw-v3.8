@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach } from 'vitest';
 
 import {
@@ -13,7 +12,6 @@ describe('pipeline-shared/lock', () => {
   beforeEach(() => {
     _resetLocksForTesting();
   });
-
 
   describe('acquireProjectLock', () => {
     it('adquire lock pra projeto novo', () => {
@@ -58,7 +56,6 @@ describe('pipeline-shared/lock', () => {
     });
   });
 
-
   describe('ensureProjectLock', () => {
     it('adquire lock pra projeto novo', () => {
       const result = ensureProjectLock('proj_a');
@@ -89,7 +86,6 @@ describe('pipeline-shared/lock', () => {
       }
     });
   });
-
 
   describe('releaseProjectLock', () => {
     it('remove o lock', () => {
@@ -131,7 +127,6 @@ describe('pipeline-shared/lock', () => {
     });
   });
 
-
   describe('cenarios integrados', () => {
     it('R7: 2 pipelines em projetos DIFERENTES rodam paralelo', () => {
       const a = acquireProjectLock('proj_a');
@@ -162,7 +157,6 @@ describe('pipeline-shared/lock', () => {
     it('ciclo terminal: acquire -> release -> acquire de novo', () => {
       const start = acquireProjectLock('proj_a');
       expect(start.ok).toBe(true);
-
 
       releaseProjectLock('proj_a');
       expect(isProjectLocked('proj_a')).toBe(false);

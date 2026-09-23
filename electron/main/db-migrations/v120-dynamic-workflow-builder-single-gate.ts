@@ -2,15 +2,15 @@ import type Database from 'better-sqlite3';
 
 export function applyMigrationV120(db: Database.Database): void {
   const gateCallOld =
-    "        // DOIS ids de plan-review predeclarados (espelho do delivery); o modo e fonte\n" +
-    "        // do MANIFEST e o .js escolhe pela autonomia ATUAL (tabela de autonomia): so\n" +
+    '        // DOIS ids de plan-review predeclarados (espelho do delivery); o modo e fonte\n' +
+    '        // do MANIFEST e o .js escolhe pela autonomia ATUAL (tabela de autonomia): so\n' +
     "        // 'auto-drive' vira orquestrador; 'semi'/'full' mantem o humano-estrito.\n" +
     "        const planGateId = ctx.autonomy === 'auto-drive' ? PLAN_REVIEW_ORCHESTRATOR_GATE_ID : PLAN_REVIEW_HUMAN_GATE_ID;\n" +
     "        const planGateMode = ctx.autonomy === 'auto-drive' ? 'orchestrator' : 'human';\n" +
     "        const review = await gate({ id: planGateId, mode: planGateMode, kind: 'plan-review' });";
   const gateCallNew =
     "        // UM gate de plan-review, modo SEMPRE 'orchestrator' (modo unico full-auto):\n" +
-    "        // o orquestrador conduz o plan-review sozinho, nunca bloqueia esperando humano.\n" +
+    '        // o orquestrador conduz o plan-review sozinho, nunca bloqueia esperando humano.\n' +
     "        const review = await gate({ id: 'gate-plan-review', mode: 'orchestrator', kind: 'plan-review' });";
   db.prepare(
     `UPDATE agents

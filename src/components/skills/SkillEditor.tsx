@@ -66,7 +66,8 @@ export function SkillEditor({ skillName, initialContent, onSave, onClose }: Prop
             <span className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Preview</span>
           </div>
           <div className="flex-1 overflow-y-auto p-4 bg-zinc-950 min-h-0">
-            <div className="prose prose-invert prose-sm max-w-none
+            <div
+              className="prose prose-invert prose-sm max-w-none
               prose-headings:text-zinc-100 prose-headings:font-semibold
               prose-p:text-zinc-300 prose-p:leading-relaxed
               prose-a:text-amber-400 prose-a:no-underline hover:prose-a:underline
@@ -80,10 +81,9 @@ export function SkillEditor({ skillName, initialContent, onSave, onClose }: Prop
               prose-table:text-zinc-300
               prose-th:text-zinc-200 prose-th:border-zinc-700
               prose-td:border-zinc-800
-            ">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {content || '*Sem conteudo para exibir*'}
-              </ReactMarkdown>
+            "
+            >
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || '*Sem conteudo para exibir*'}</ReactMarkdown>
             </div>
           </div>
         </div>

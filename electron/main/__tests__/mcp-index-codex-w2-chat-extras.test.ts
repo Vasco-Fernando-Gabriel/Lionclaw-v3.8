@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -32,7 +31,6 @@ import {
   type ChatCodexMcpComposition,
 } from '../codex-chat-spawn-extras';
 import { CODEX_GATEWAY_SERVER_ID } from '../mcp-display';
-
 
 let codexHome: string;
 const prevCodexHome = process.env.CODEX_HOME;
@@ -89,29 +87,26 @@ afterEach(() => {
   fs.rmSync(codexHome, { recursive: true, force: true });
 });
 
-
 describe('resolveChatCodexMcpComposition - modo index efetivo', () => {
   it('index ON + oficial ON + entry presente => enabled=false por server de negocio + gateway enabled=true', () => {
     const c = resolveChatCodexMcpComposition();
     expect(c.mode).toBe('index');
     expect(c.extraArgs).toEqual([
-      '-c', 'mcp_servers.google-drive.enabled=false',
-      '-c', 'mcp_servers.shopify.enabled=false',
-      '-c', `mcp_servers.${CODEX_GATEWAY_SERVER_ID}.enabled=true`,
+      '-c',
+      'mcp_servers.google-drive.enabled=false',
+      '-c',
+      'mcp_servers.shopify.enabled=false',
+      '-c',
+      `mcp_servers.${CODEX_GATEWAY_SERVER_ID}.enabled=true`,
     ]);
     expect(c.extraArgs.join(' ')).not.toContain('lionclaw-agents');
     expect(c.extraArgs.join(' ')).not.toContain('lionclaw-user-question');
     expect(c.extraArgs.join(' ')).not.toContain(`${CODEX_GATEWAY_SERVER_ID}.enabled=false`);
-    expect(c.fingerprint).toBe(
-      JSON.stringify({ servers: ['google-drive', 'shopify'], gatewayEntry: true }),
-    );
+    expect(c.fingerprint).toBe(JSON.stringify({ servers: ['google-drive', 'shopify'], gatewayEntry: true }));
   });
 
   it('id nao-bare quotado identico ao header (contrato de quoting) e id patologico pulado', () => {
-    state.servers.push(
-      { id: 'meu server', isActive: true },
-      { id: 'pato"logico', isActive: true },
-    );
+    state.servers.push({ id: 'meu server', isActive: true }, { id: 'pato"logico', isActive: true });
     writeConfig(
       `${MANAGED_WITH_GATEWAY.replace(
         '# <<< LIONCLAW_MANAGED',
@@ -135,10 +130,19 @@ describe('resolveChatCodexMcpComposition - modo index efetivo', () => {
     for (const lane of ['desktop', 'telegram', 'cron'] as const) {
       const c = resolveChatCodexMcpComposition({ lane });
       expect(c.mode).toBe('index');
-      expect(c.extraArgs).toContain(
-        `mcp_servers.${CODEX_GATEWAY_SERVER_ID}.env.LIONCLAW_MCP_LANE="${lane}"`,
-      );
+      expect(c.extraArgs).toContain(`mcp_servers.${CODEX_GATEWAY_SERVER_ID}.env.LIONCLAW_MCP_LANE="${lane}"`);
     }
+  });
+
+  it('9.2 (codex): sessionId da thread vira env.LIONCLAW_MCP_SESSION_ID na entry do gateway; id invalido e omitido', () => {
+    const c = resolveChatCodexMcpComposition({ lane: 'desktop', sessionId: 'sess-abc_1.2' });
+    expect(c.mode).toBe('index');
+    expect(c.extraArgs).toContain(`mcp_servers.${CODEX_GATEWAY_SERVER_ID}.env.LIONCLAW_MCP_SESSION_ID="sess-abc_1.2"`);
+    const invalido = resolveChatCodexMcpComposition({ lane: 'desktop', sessionId: 'sess "x"' });
+    expect(invalido.extraArgs.join(' ')).not.toContain('LIONCLAW_MCP_SESSION_ID');
+    expect(resolveChatCodexMcpComposition({ lane: 'desktop' }).extraArgs.join(' ')).not.toContain(
+      'LIONCLAW_MCP_SESSION_ID',
+    );
   });
 
   it('lane fora da allowlist ou ausente => extra de lane OMITIDO (fallback desktop no dispatch)', () => {
@@ -235,7 +239,6 @@ describe('resolveChatCodexMcpComposition - gates => full COMPLETO (nunca metade)
   });
 });
 
-
 describe('buildChatThreadConfigSignature', () => {
   const base = {
     pipelineControl: null,
@@ -290,9 +293,7 @@ describe('buildChatThreadConfigSignature', () => {
   it('guard reprovado => assinatura full (prompt e spawn degradam JUNTOS)', () => {
     writeConfig('# sem managed block\n');
     const sig = buildChatThreadConfigSignature(base, resolveChatCodexMcpComposition());
-    expect(sig).toBe(
-      JSON.stringify({ pipelineControl: null, dynamicWorkflows: null, onboarding: false }),
-    );
+    expect(sig).toBe(JSON.stringify({ pipelineControl: null, dynamicWorkflows: null, onboarding: false }));
   });
 
   it('repo: fingerprint deterministico inclui identidade, root, status e stats', () => {
@@ -328,28 +329,20 @@ describe('buildChatThreadConfigSignature', () => {
     });
 
     const index = resolveChatCodexMcpComposition();
-    expect(
-      buildChatThreadConfigSignature({ ...base, repoContextFingerprint: ready }, index),
-    ).not.toBe(
+    expect(buildChatThreadConfigSignature({ ...base, repoContextFingerprint: ready }, index)).not.toBe(
       buildChatThreadConfigSignature({ ...base, repoContextFingerprint: stale }, index),
     );
 
     state.settings.set('mcp_prompt_mode', 'full');
     const full = resolveChatCodexMcpComposition();
-    expect(
-      buildChatThreadConfigSignature({ ...base, repoContextFingerprint: ready }, full),
-    ).not.toBe(
+    expect(buildChatThreadConfigSignature({ ...base, repoContextFingerprint: ready }, full)).not.toBe(
       buildChatThreadConfigSignature({ ...base, repoContextFingerprint: stale }, full),
     );
   });
 });
 
-
 describe('wiring do turno codex (fonte unica da composicao, P7)', () => {
-  const source = fs.readFileSync(
-    path.join(__dirname, '..', 'codex-sdk', 'index.ts'),
-    'utf-8',
-  );
+  const source = fs.readFileSync(path.join(__dirname, '..', 'codex-sdk', 'index.ts'), 'utf-8');
 
   it('executeCodexSdkQuery computa a composicao UMA vez e a passa a assinatura', () => {
     expect(source.match(/resolveChatCodexMcpComposition\(/g)?.length).toBe(1);

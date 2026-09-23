@@ -1,20 +1,12 @@
-
 export interface CredentialUsage {
   agentsReferencing: Array<{ id: string; name: string; runtime: string; provider?: string }>;
 }
 
-function matchesVaultKey(
-  vaultKey: string,
-  apiKeyRef: string | undefined,
-  provider: string | undefined,
-): boolean {
+function matchesVaultKey(vaultKey: string, apiKeyRef: string | undefined, provider: string | undefined): boolean {
   if (apiKeyRef === vaultKey) return true;
   if (provider !== 'gemini-agent-platform') return false;
 
-  const geminiRefs = new Set([
-    'ORCHESTRATOR_VERTEX_API_KEY',
-    'orchestrator_vertex_api_key_ref',
-  ]);
+  const geminiRefs = new Set(['ORCHESTRATOR_VERTEX_API_KEY', 'orchestrator_vertex_api_key_ref']);
   return geminiRefs.has(vaultKey) && apiKeyRef !== undefined && geminiRefs.has(apiKeyRef);
 }
 

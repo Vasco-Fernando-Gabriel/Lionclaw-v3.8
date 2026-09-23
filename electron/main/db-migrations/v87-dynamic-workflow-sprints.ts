@@ -1,7 +1,6 @@
 import type Database from 'better-sqlite3';
 import { DYNAMIC_WORKFLOW_SPRINT_STATUSES } from '../../../src/types/dynamic-workflow';
 
-
 function checkIn(column: string, values: readonly string[]): string {
   return `CHECK (${column} IN (${values.map((v) => `'${v}'`).join(', ')}))`;
 }
@@ -36,14 +35,10 @@ export function applyMigrationV87(db: Database.Database): void {
 
   try {
     db.exec('ALTER TABLE dynamic_workflow_nodes ADD COLUMN sprint_id TEXT');
-  } catch {
-  }
+  } catch {}
   try {
-    db.exec(
-      'ALTER TABLE dynamic_workflow_nodes ADD COLUMN round_index INTEGER',
-    );
-  } catch {
-  }
+    db.exec('ALTER TABLE dynamic_workflow_nodes ADD COLUMN round_index INTEGER');
+  } catch {}
 }
 
 export const __V87_INTERNAL = {

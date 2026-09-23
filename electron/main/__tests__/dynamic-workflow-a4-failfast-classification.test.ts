@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   classifyFailure,
@@ -23,10 +22,7 @@ describe('A4 fail-fast: CodexUnavailableError PERMANENTE -> bloqueio', () => {
   it('binario ausente ("codex binary not found ...") -> provider-auth + blockImmediately', () => {
     const { failureClass, decision } = classifyAndDecide({
       runtime: 'codex',
-      error: namedError(
-        'CodexUnavailableError',
-        'codex binary not found on PATH; install Codex CLI',
-      ),
+      error: namedError('CodexUnavailableError', 'codex binary not found on PATH; install Codex CLI'),
     });
     expect(failureClass).toBe('provider-auth');
     expect(decision.blockImmediately).toBe(true);
@@ -36,10 +32,7 @@ describe('A4 fail-fast: CodexUnavailableError PERMANENTE -> bloqueio', () => {
   it('resolveCodexBinary null ("resolveCodexBinary returned null") -> provider-auth (bloqueio)', () => {
     const { failureClass, decision } = classifyAndDecide({
       runtime: 'codex',
-      error: namedError(
-        'CodexUnavailableError',
-        'resolveCodexBinary returned null',
-      ),
+      error: namedError('CodexUnavailableError', 'resolveCodexBinary returned null'),
     });
     expect(failureClass).toBe('provider-auth');
     expect(decision.blockImmediately).toBe(true);
@@ -49,10 +42,7 @@ describe('A4 fail-fast: CodexUnavailableError PERMANENTE -> bloqueio', () => {
   it('handshake sem threadId ("thread/start returned no threadId") -> provider-auth (bloqueio)', () => {
     const { failureClass, decision } = classifyAndDecide({
       runtime: 'codex',
-      error: namedError(
-        'CodexUnavailableError',
-        'app-server thread/start returned no threadId',
-      ),
+      error: namedError('CodexUnavailableError', 'app-server thread/start returned no threadId'),
     });
     expect(failureClass).toBe('provider-auth');
     expect(decision.blockImmediately).toBe(true);
@@ -106,10 +96,7 @@ describe('A4 fail-fast: handshake GENERICO -> retryavel (escolha conservadora)',
   it('"codex app-server handshake failed: ..." -> provider-limit + shouldRetry', () => {
     const { failureClass, decision } = classifyAndDecide({
       runtime: 'codex',
-      error: namedError(
-        'CodexUnavailableError',
-        'codex app-server handshake failed: protocol mismatch',
-      ),
+      error: namedError('CodexUnavailableError', 'codex app-server handshake failed: protocol mismatch'),
     });
     expect(failureClass).toBe('provider-limit');
     expect(decision.shouldRetry).toBe(true);

@@ -61,8 +61,18 @@ function generateCalendarGrid(fromDate: string): CalendarDay[] {
 function formatMonthYear(fromDate: string): string {
   const d = new Date(fromDate + 'T00:00:00');
   const months = [
-    'Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+    'Janeiro',
+    'Fevereiro',
+    'Marco',
+    'Abril',
+    'Maio',
+    'Junho',
+    'Julho',
+    'Agosto',
+    'Setembro',
+    'Outubro',
+    'Novembro',
+    'Dezembro',
   ];
   return `${months[d.getMonth()]} ${d.getFullYear()}`;
 }
@@ -118,21 +128,23 @@ export function CalendarView({ activities, period, onPeriodChange, onViewSession
 
         {/* Weekday headers */}
         <div className="grid grid-cols-7 gap-px mb-1">
-          {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'].map(d => (
-            <div key={d} className="text-center text-[10px] text-zinc-500 py-1">{d}</div>
+          {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'].map((d) => (
+            <div key={d} className="text-center text-[10px] text-zinc-500 py-1">
+              {d}
+            </div>
           ))}
         </div>
 
         {/* Day cells */}
         <div className="grid grid-cols-7 gap-px flex-1">
-          {calendarDays.map(day => {
+          {calendarDays.map((day) => {
             const items = byDay.get(day.date) || [];
             const isToday = day.date === todayStr;
             const isSelected = selectedDay === day.date;
-            const successCount = items.filter(i => i.status === 'success').length;
-            const errorCount = items.filter(i => i.status === 'error').length;
-            const scheduledCount = items.filter(i => i.status === 'scheduled').length;
-            const runningCount = items.filter(i => i.status === 'running').length;
+            const successCount = items.filter((i) => i.status === 'success').length;
+            const errorCount = items.filter((i) => i.status === 'error').length;
+            const scheduledCount = items.filter((i) => i.status === 'scheduled').length;
+            const runningCount = items.filter((i) => i.status === 'running').length;
 
             return (
               <button
@@ -183,20 +195,13 @@ export function CalendarView({ activities, period, onPeriodChange, onViewSession
       {/* Day detail panel */}
       {selectedDay && (
         <div className="w-80 border-l border-zinc-800 pl-4 overflow-y-auto shrink-0">
-          <h3 className="text-sm font-medium text-zinc-200 mb-3 capitalize">
-            {formatDayHeader(selectedDay)}
-          </h3>
+          <h3 className="text-sm font-medium text-zinc-200 mb-3 capitalize">{formatDayHeader(selectedDay)}</h3>
           <div className="space-y-2">
             {(byDay.get(selectedDay) || []).length === 0 ? (
               <p className="text-xs text-zinc-600 py-4 text-center">Nenhuma atividade neste dia</p>
             ) : (
-              (byDay.get(selectedDay) || []).map(item => (
-                <ActivityCard
-                  key={`${item.taskId}-${item.runId}`}
-                  item={item}
-                  onViewSession={onViewSession}
-                  compact
-                />
+              (byDay.get(selectedDay) || []).map((item) => (
+                <ActivityCard key={`${item.taskId}-${item.runId}`} item={item} onViewSession={onViewSession} compact />
               ))
             )}
           </div>

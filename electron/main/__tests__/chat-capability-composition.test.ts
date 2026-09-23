@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 interface ServerRow {
   id: string;
@@ -14,10 +12,7 @@ interface ServerRow {
   index_mode: 'tools' | 'server';
 }
 
-function serverRow(
-  id: string,
-  visibleTo: 'all' | 'codex-lion-only' = 'all',
-): ServerRow {
+function serverRow(id: string, visibleTo: 'all' | 'codex-lion-only' = 'all'): ServerRow {
   return {
     id,
     name: `Server ${id}`,
@@ -57,7 +52,10 @@ vi.mock('../db', () => ({
       },
       run: () => undefined,
     }),
-    transaction: (fn: (...a: unknown[]) => unknown) => (...a: unknown[]) => fn(...a),
+    transaction:
+      (fn: (...a: unknown[]) => unknown) =>
+      (...a: unknown[]) =>
+        fn(...a),
   }),
   getSetting: (key: string) => state.settings.get(key),
 }));
@@ -105,10 +103,7 @@ function stripTokens(config: McpConfig): McpConfig {
   for (const [id, entry] of Object.entries(config)) {
     if (entry.env && 'LIONCLAW_HELPER_TOKEN' in entry.env) {
       const { LIONCLAW_HELPER_TOKEN: _token, ...rest } = entry.env;
-      out[id] =
-        Object.keys(rest).length > 0
-          ? { ...entry, env: rest }
-          : { command: entry.command, args: entry.args };
+      out[id] = Object.keys(rest).length > 0 ? { ...entry, env: rest } : { command: entry.command, args: entry.args };
     } else {
       out[id] = entry;
     }
@@ -132,7 +127,6 @@ beforeEach(() => {
   ] as unknown as Array<Record<string, unknown>>;
 });
 
-
 describe('default sem capabilities — byte-identico ao comportamento atual', () => {
   it('caminho default (sem surface): formula legada intacta, gated presentes', async () => {
     const config = await getMCPConfigForAgent();
@@ -141,12 +135,7 @@ describe('default sem capabilities — byte-identico ao comportamento atual', ()
 
   it('claude-sdk modo index: gateway + TODOS os helpers DIRECT (gated inclusos)', async () => {
     const config = await getMCPConfigForAgent(undefined, { surface: 'claude-sdk' });
-    expect(Object.keys(config!)).toEqual([
-      MCP_GATEWAY_SERVER_ID,
-      PIPELINE_ID,
-      WORKFLOWS_ID,
-      'repo-graph',
-    ]);
+    expect(Object.keys(config!)).toEqual([MCP_GATEWAY_SERVER_ID, PIPELINE_ID, WORKFLOWS_ID, 'repo-graph']);
   });
 
   it('fullCatalog: true sem capabilities: composicao legada com os gated', async () => {
@@ -170,9 +159,7 @@ describe('default sem capabilities — byte-identico ao comportamento atual', ()
         ...(base ?? {}),
         capabilities: { ...CHAT_CAPABILITIES_LEGACY_ON },
       });
-      expect(JSON.stringify(stripTokens(withLegacy ?? {}))).toBe(
-        JSON.stringify(stripTokens(without ?? {})),
-      );
+      expect(JSON.stringify(stripTokens(withLegacy ?? {}))).toBe(JSON.stringify(stripTokens(without ?? {})));
     }
     state.settings.set('mcp_prompt_mode', 'full');
     const without = await getMCPConfigForAgent(undefined, { surface: 'claude-sdk' });
@@ -183,7 +170,6 @@ describe('default sem capabilities — byte-identico ao comportamento atual', ()
     expect(JSON.stringify(stripTokens(withLegacy!))).toBe(JSON.stringify(stripTokens(without!)));
   });
 });
-
 
 describe('pipelineControl=false — filtro em config, index, allowedServerIds e gateway-scope', () => {
   it('helpers independentes de Pipeline continuam compostos no Fable', async () => {
@@ -219,12 +205,7 @@ describe('pipelineControl=false — filtro em config, index, allowedServerIds e 
       capabilities: PIPELINE_OFF,
     });
     expect(config![PIPELINE_ID]).toBeUndefined();
-    expect(Object.keys(config!)).toEqual([
-      'google-gmail',
-      'shopify',
-      WORKFLOWS_ID,
-      'repo-graph',
-    ]);
+    expect(Object.keys(config!)).toEqual(['google-gmail', 'shopify', WORKFLOWS_ID, 'repo-graph']);
   });
 
   it('fullCatalog: true (a chamada do gateway resolveGatewayAllowedServerIds e do wrapper mcp-invoke): pipeline-control FORA do escopo e do spec de spawn/schema', async () => {
@@ -249,7 +230,6 @@ describe('pipelineControl=false — filtro em config, index, allowedServerIds e 
     }
   });
 });
-
 
 describe('dynamicWorkflows=false — filtro simetrico', () => {
   it('modo index (claude-sdk): dynamic-workflows FORA; pipeline-control fica (com token)', async () => {
@@ -293,7 +273,6 @@ describe('dynamicWorkflows=false — filtro simetrico', () => {
     expect(Object.keys(withBothOn!)).toContain(WORKFLOWS_ID);
   });
 });
-
 
 describe('decisao 8 — config explicita de agente nao fura o filtro', () => {
   it('agente com gated explicito + capability off: so o resto sobrevive', async () => {

@@ -4,9 +4,7 @@ import { dynamicWorkflowMaestro } from '../seed-agents/dynamic-workflow-builder'
 export function applyMigrationV92(db: Database.Database): void {
   const seed = dynamicWorkflowMaestro;
 
-  const maxOrder = db
-    .prepare('SELECT COALESCE(MAX(sort_order), 0) AS m FROM agents')
-    .get() as { m: number };
+  const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), 0) AS m FROM agents').get() as { m: number };
 
   db.prepare(
     `INSERT OR IGNORE INTO agents (
@@ -40,11 +38,9 @@ export function applyMigrationV92(db: Database.Database): void {
     seed.squad ?? null,
   );
 
-  const leanTools = JSON.stringify(seed.allowedTools); // ['Read','Glob','Grep']
+  const leanTools = JSON.stringify(seed.allowedTools);
 
-  db.prepare(
-    `UPDATE agents SET kb_enabled = 0 WHERE id = ? AND kb_enabled = 1`,
-  ).run(seed.id);
+  db.prepare(`UPDATE agents SET kb_enabled = 0 WHERE id = ? AND kb_enabled = 1`).run(seed.id);
 
   db.prepare(
     `UPDATE agents SET skills = '[]'

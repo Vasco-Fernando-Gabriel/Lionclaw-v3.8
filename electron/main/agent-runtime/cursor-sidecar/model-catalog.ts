@@ -1,13 +1,8 @@
-
 import { spawn } from 'child_process';
 import os from 'os';
 import { createLogger } from '../../logger';
 import { CURSOR_MODELS } from '../../../../src/constants/cursor-models';
-import {
-  createSidecarLineDecoder,
-  encodeSidecarLine,
-  type CursorSidecarModelEntry,
-} from './protocol';
+import { createSidecarLineDecoder, encodeSidecarLine, type CursorSidecarModelEntry } from './protocol';
 import { resolveCursorSidecarEntry, resolveCursorSidecarNode } from './node-resolver';
 
 const logger = createLogger('cursor-model-catalog');
@@ -62,12 +57,10 @@ async function fetchLiveCatalog(opts: ListCursorModelsOptions): Promise<CursorSi
       clearTimeout(timer);
       try {
         child.stdin?.write(encodeSidecarLine({ type: 'shutdown' }));
-      } catch {
-      }
+      } catch {}
       try {
         child.kill();
-      } catch {
-      }
+      } catch {}
       fn();
     };
 
@@ -76,15 +69,12 @@ async function fetchLiveCatalog(opts: ListCursorModelsOptions): Promise<CursorSi
     }, timeoutMs);
     timer.unref?.();
 
-    child.stdin?.on('error', () => {
-    });
+    child.stdin?.on('error', () => {});
 
     const decoder = createSidecarLineDecoder((raw) => {
       const type = typeof raw['type'] === 'string' ? (raw['type'] as string) : '';
       if (type === 'ready') {
-        child.stdin?.write(
-          encodeSidecarLine({ type: 'list-models', id: requestId, apiKey: opts.apiKey }),
-        );
+        child.stdin?.write(encodeSidecarLine({ type: 'list-models', id: requestId, apiKey: opts.apiKey }));
         return;
       }
       if (type === 'models-result' && raw['id'] === requestId) {
@@ -98,11 +88,12 @@ async function fetchLiveCatalog(opts: ListCursorModelsOptions): Promise<CursorSi
               if (!entry || typeof entry !== 'object') return [];
               const rec = entry as Record<string, unknown>;
               if (typeof rec['id'] !== 'string') return [];
-              return [{
-                id: rec['id'],
-                displayName:
-                  typeof rec['displayName'] === 'string' ? rec['displayName'] : rec['id'],
-              }];
+              return [
+                {
+                  id: rec['id'],
+                  displayName: typeof rec['displayName'] === 'string' ? rec['displayName'] : rec['id'],
+                },
+              ];
             })
           : [];
         finish(() => resolve(models));
@@ -123,11 +114,7 @@ async function fetchLiveCatalog(opts: ListCursorModelsOptions): Promise<CursorSi
 }
 
 export async function listCursorModels(opts: ListCursorModelsOptions): Promise<CursorModelCatalog> {
-  if (
-    !opts.forceRefresh
-    && cachedCatalog
-    && Date.now() - cachedCatalog.fetchedAt < CATALOG_TTL_MS
-  ) {
+  if (!opts.forceRefresh && cachedCatalog && Date.now() - cachedCatalog.fetchedAt < CATALOG_TTL_MS) {
     return cachedCatalog;
   }
   if (inflight) return inflight;

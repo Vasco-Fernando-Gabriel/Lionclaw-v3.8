@@ -1,4 +1,3 @@
-
 import type {
   DynamicWorkflowNodeStatus,
   DynamicWorkflowRunStatus,
@@ -126,7 +125,6 @@ export const DYNAMIC_WORKFLOW_AGENT_DENYLIST = [
   'dynamic-workflow-maestro',
 ] as const;
 
-
 export interface DynamicWorkflowDefinitionCreateInput {
   id: string;
   name: string;
@@ -161,7 +159,6 @@ export interface DynamicWorkflowDefinitionPatch {
   builderModel?: string | null;
   status?: string;
 }
-
 
 export interface DynamicWorkflowRunCreateInput {
   id: string;
@@ -203,7 +200,6 @@ export interface DynamicWorkflowRunPatch {
   completedAt?: string | null;
 }
 
-
 export interface DynamicWorkflowNodeMcpGrants {
   servers: string[];
   tools: string[];
@@ -239,7 +235,6 @@ export interface DynamicWorkflowNodeSprintPatch {
   sprintId?: string | null;
   roundIndex?: number | null;
 }
-
 
 export interface DynamicWorkflowSprintUpsertInput {
   runId: string;
@@ -287,13 +282,7 @@ export interface DynamicWorkflowPriorMaterialization {
   sprintNodeIds: Array<{ sprintId: string; nodeIds: string[] }>;
 }
 
-
-export type DynamicWorkflowJournalPrimitive =
-  | 'agent'
-  | 'gate'
-  | 'artifact'
-  | 'checkpoint'
-  | 'materializeSprintPlan';
+export type DynamicWorkflowJournalPrimitive = 'agent' | 'gate' | 'artifact' | 'checkpoint' | 'materializeSprintPlan';
 
 export interface DynamicWorkflowJournalCallKey {
   callPath: string;
@@ -347,7 +336,6 @@ export interface DynamicWorkflowSprintRow {
   updatedAt: string;
 }
 
-
 export interface DynamicWorkflowNodeRunUpsertInput {
   id: string;
   runId: string;
@@ -393,7 +381,6 @@ export interface DynamicWorkflowNodeRunPatch {
   completedAt?: string | null;
 }
 
-
 export interface DynamicWorkflowEventInsertInput {
   runId: string;
   nodeId?: string | null;
@@ -434,7 +421,6 @@ export interface DynamicWorkflowGateDecisionInsertInput {
   reason?: string | null;
   payloadJson?: string;
 }
-
 
 export interface DynamicWorkflowRunCostAggregate {
   runId: string;

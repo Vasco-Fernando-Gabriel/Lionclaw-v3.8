@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const HARNESS_PLANNER_ID = 'harness-planner';
@@ -8,7 +7,7 @@ export const harnessPlanner: Omit<AgentConfig, 'sortOrder'> = {
   name: 'Harness Planner',
   description:
     'Decompoe especificacoes de projeto em sprints executaveis para o Agent Harness. Gera sprints estruturados com features, criterios de aceite e alocacao de agentes.',
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-5-5',
   effort: 'max' as const,
   thinking: 'enabled' as const,
   thinkingBudget: 16000,

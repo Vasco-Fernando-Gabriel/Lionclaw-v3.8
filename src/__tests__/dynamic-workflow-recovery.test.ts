@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 
-
 import {
   appendMaestroNarratorDelta,
   sealMaestroStreamingBubble,
@@ -17,10 +16,7 @@ import {
 } from '@/stores/dynamic-workflow-store';
 import type { DynamicWorkflowMessage, DynamicWorkflowEvent } from '@/types';
 
-function msg(
-  id: number,
-  partial: Partial<DynamicWorkflowMessage>,
-): DynamicWorkflowMessage {
+function msg(id: number, partial: Partial<DynamicWorkflowMessage>): DynamicWorkflowMessage {
   return {
     id,
     runId: 'run-1',
@@ -81,9 +77,7 @@ describe('timeline cronologica persistida por node', () => {
         kind: 'node-output',
         agentId: 'harness-coder',
         content: 'antesdepois',
-        toolCallsJson: JSON.stringify([
-          { tool: 'Read', input: '/repo/a.ts', textOffset: 5, sequence: 0 },
-        ]),
+        toolCallsJson: JSON.stringify([{ tool: 'Read', input: '/repo/a.ts', textOffset: 5, sequence: 0 }]),
       }),
     ]);
 
@@ -126,7 +120,12 @@ describe('SM-10/SM-22: deriveMaestroThreadFromMessages (re-hidratacao do DB)', (
   it('mapeia eco humano (kind maestro-chat) e resposta (kind maestro-reply)', () => {
     const messages = [
       msg(1, { role: 'user', source: 'human', kind: 'maestro-chat', content: 'como ta?' }),
-      msg(2, { role: 'assistant', source: 'workflow-orchestrator-agent', kind: 'maestro-reply', content: 'rodando bem.' }),
+      msg(2, {
+        role: 'assistant',
+        source: 'workflow-orchestrator-agent',
+        kind: 'maestro-reply',
+        content: 'rodando bem.',
+      }),
     ];
     const out = deriveMaestroThreadFromMessages(messages);
     expect(out).toEqual([
@@ -159,9 +158,7 @@ describe('SM-10/SM-22: deriveCloserThreadFromMessages (re-hidratacao do DB)', ()
   });
 
   it('NAO captura o eco do Maestro (kind maestro-chat) como humano do closer', () => {
-    const messages = [
-      msg(1, { role: 'user', source: 'human', kind: 'maestro-chat', content: 'fala com o maestro' }),
-    ];
+    const messages = [msg(1, { role: 'user', source: 'human', kind: 'maestro-chat', content: 'fala com o maestro' })];
     expect(deriveCloserThreadFromMessages(messages)).toEqual([]);
   });
 });
@@ -195,9 +192,7 @@ describe('SM-22: reconcileMaestroThread (revisita vs reload ao vivo)', () => {
       { id: 'db-1', role: 'maestro', content: 'resposta antiga' },
       { id: 'opt', role: 'user', content: 'pergunta nova' },
     ];
-    const fromDb: MaestroThreadMessage[] = [
-      { id: 'db-1', role: 'maestro', content: 'resposta antiga' },
-    ];
+    const fromDb: MaestroThreadMessage[] = [{ id: 'db-1', role: 'maestro', content: 'resposta antiga' }];
     const out = reconcileMaestroThread(current, fromDb);
     expect(out.map((m) => m.content)).toEqual(['resposta antiga', 'pergunta nova']);
   });
@@ -221,9 +216,7 @@ describe('SM-22: reconcileCloserThread', () => {
       { id: 'db-1', role: 'closer', content: 'walkthrough' },
       { id: 'opt', role: 'human', content: 'muda isto' },
     ];
-    const fromDb: CloserThreadMessage[] = [
-      { id: 'db-1', role: 'closer', content: 'walkthrough' },
-    ];
+    const fromDb: CloserThreadMessage[] = [{ id: 'db-1', role: 'closer', content: 'walkthrough' }];
     const out = reconcileCloserThread(current, fromDb);
     expect(out.map((m) => m.content)).toEqual(['walkthrough', 'muda isto']);
   });
@@ -240,7 +233,6 @@ describe('SM-22: reconcileCloserThread', () => {
     expect(reconcileCloserThread(current, fromDb)).toEqual(fromDb);
   });
 });
-
 
 describe('E6.1/T11: deriveNarrationLinesFromMessages (cockpit re-hidrata do DB)', () => {
   it('extrai as bolhas de narracao do Maestro (marco + reply) como linhas do feed', () => {
@@ -259,10 +251,7 @@ describe('E6.1/T11: deriveNarrationLinesFromMessages (cockpit re-hidrata do DB)'
         content: 'aprovei o plano.',
       }),
     ];
-    expect(deriveNarrationLinesFromMessages(messages)).toEqual([
-      'coder terminou a sprint 1.',
-      'aprovei o plano.',
-    ]);
+    expect(deriveNarrationLinesFromMessages(messages)).toEqual(['coder terminou a sprint 1.', 'aprovei o plano.']);
   });
 
   it('um run REABERTO com narracao persistida NAO fica em branco (T11)', () => {
@@ -309,12 +298,7 @@ describe('E6.1/T11: deriveNarrationLinesFromMessages (cockpit re-hidrata do DB)'
   });
 });
 
-
-function evt(
-  seq: number,
-  type: string,
-  payload: Record<string, unknown>,
-): DynamicWorkflowEvent {
+function evt(seq: number, type: string, payload: Record<string, unknown>): DynamicWorkflowEvent {
   return {
     id: seq,
     runId: 'run-1',
@@ -372,9 +356,7 @@ describe('E6.1: deriveGateDecisionsFromEvents (deliberacao do driver no cockpit)
   });
 
   it('o driver aparece (decidedBy) sem o usuario ir ao chat principal', () => {
-    const out = deriveGateDecisionsFromEvents([
-      evt(1, 'gate-approved', { gateId: 'g1', approvedBy: 'orchestrator' }),
-    ]);
+    const out = deriveGateDecisionsFromEvents([evt(1, 'gate-approved', { gateId: 'g1', approvedBy: 'orchestrator' })]);
     expect(out[0].decidedBy).toBe('orchestrator');
   });
 
@@ -391,7 +373,7 @@ describe('E6.1: deriveGateDecisionsFromEvents (deliberacao do driver no cockpit)
     };
     const out = deriveGateDecisionsFromEvents([broken]);
     expect(out).toHaveLength(1);
-    expect(out[0].gateId).toBe('gate'); // fallback
+    expect(out[0].gateId).toBe('gate');
     expect(out[0].decision).toBe('approved');
   });
 

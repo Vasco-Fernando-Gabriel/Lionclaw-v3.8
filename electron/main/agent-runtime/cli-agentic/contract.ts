@@ -1,4 +1,3 @@
-
 export interface CliStreamCallbacks {
   onText?: (chunk: string) => void;
   onThinking?: (chunk: string) => void;

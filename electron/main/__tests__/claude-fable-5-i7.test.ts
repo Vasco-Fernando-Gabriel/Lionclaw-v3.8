@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -17,7 +16,6 @@ import { buildClaudeQueryOptions } from '../agent-runtime/cloud-executor';
 import { PERM_BYPASS_NO_GUARD } from '../agent-runtime/permission-profiles';
 import type { AgentExecutionRequest, AgentPermissionProfile } from '../agent-runtime/types';
 import type { AgentQueryConfig } from '../agent-config-resolver';
-
 
 function makeReq(
   permission: AgentPermissionProfile = PERM_BYPASS_NO_GUARD,
@@ -52,7 +50,6 @@ function buildOpts(config: AgentQueryConfig): Record<string, unknown> {
   return buildClaudeQueryOptions(makeReq(), config, '/path/to/cli.js', new AbortController());
 }
 
-
 describe('I7 — catalogo CLAUDE_MODELS', () => {
   it('contem claude-fable-5-1 com displayName "Claude Fable 5.1" (campo displayName, nao label — W2)', () => {
     const fable = CLAUDE_MODELS.find((m) => m.id === 'claude-fable-5-1');
@@ -70,7 +67,7 @@ describe('I7 — catalogo CLAUDE_MODELS', () => {
   });
 
   it('CLAUDE_DEFAULT_MODEL e o Opus atual (bump deliberado 2026-07-24; I7 segue aditivo)', () => {
-    expect(CLAUDE_DEFAULT_MODEL).toBe('claude-opus-5');
+    expect(CLAUDE_DEFAULT_MODEL).toBe('claude-opus-5-5');
   });
 
   it('regressao: modelos existentes continuam no catalogo', () => {
@@ -81,7 +78,6 @@ describe('I7 — catalogo CLAUDE_MODELS', () => {
     expect(ids).toContain('claude-haiku-4-5-20251001');
   });
 });
-
 
 describe('I7 — formatModelLabel reconhece fable', () => {
   it('claude-fable-5-1 -> "Fable 5.1" (nunca o id cru)', () => {
@@ -102,7 +98,6 @@ describe('I7 — formatModelLabel reconhece fable', () => {
   });
 });
 
-
 describe('I7 — pricing explicito do claude-fable-5', () => {
   it('MODEL_PRICING tem a entrada explicita 10/50/1/12.50 (V1)', () => {
     expect(MODEL_PRICING['claude-fable-5']).toEqual({
@@ -118,9 +113,7 @@ describe('I7 — pricing explicito do claude-fable-5', () => {
   });
 
   it('calculateCost com cache: 1M puro + 1M cacheRead + 1M cacheCreation + 1M out = $73.50', () => {
-    expect(
-      calculateCost('claude-fable-5', 3_000_000, 1_000_000, 1_000_000, 1_000_000),
-    ).toBe(73.5);
+    expect(calculateCost('claude-fable-5', 3_000_000, 1_000_000, 1_000_000, 1_000_000)).toBe(73.5);
   });
 
   it('custo nunca e $0 silencioso: hasKnownPricing true e custo > 0 (I7-AC2)', () => {
@@ -142,7 +135,6 @@ describe('I7 — pricing explicito do claude-fable-5', () => {
   });
 });
 
-
 describe('I7 — guard de thinking para claude-fable-* no cloud-executor', () => {
   it('thinking ENABLED + claude-fable-5 -> request SEM a chave thinking', () => {
     const opts = buildOpts(
@@ -152,9 +144,7 @@ describe('I7 — guard de thinking para claude-fable-* no cloud-executor', () =>
   });
 
   it('thinking DISABLED + claude-fable-5 -> request SEM a chave thinking', () => {
-    const opts = buildOpts(
-      makeConfig({ model: 'claude-fable-5', thinking: 'disabled' } as Partial<AgentQueryConfig>),
-    );
+    const opts = buildOpts(makeConfig({ model: 'claude-fable-5', thinking: 'disabled' } as Partial<AgentQueryConfig>));
     expect('thinking' in opts).toBe(false);
   });
 
@@ -189,9 +179,7 @@ describe('I7 — guard de thinking para claude-fable-* no cloud-executor', () =>
   });
 
   it('regressao: modelo nao-fable sem thinking configurado segue sem a chave', () => {
-    const opts = buildOpts(
-      makeConfig({ model: 'claude-opus-4-8', thinking: undefined } as Partial<AgentQueryConfig>),
-    );
+    const opts = buildOpts(makeConfig({ model: 'claude-opus-4-8', thinking: undefined } as Partial<AgentQueryConfig>));
     expect('thinking' in opts).toBe(false);
   });
 });

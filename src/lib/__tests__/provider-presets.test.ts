@@ -1,9 +1,7 @@
-
 import { describe, it, expect } from 'vitest';
 import { PROVIDER_PRESETS, MODEL_CATALOG } from '../provider-presets';
 import { VERTEX_DEFAULT_MODEL, VERTEX_MODEL_CATALOG } from '../../constants/vertex-gemini-models';
 import type { CatalogedModel } from '../provider-presets';
-
 
 describe('PROVIDER_PRESETS: openrouter', () => {
   it('tem entry para openrouter', () => {
@@ -67,7 +65,7 @@ describe('PROVIDER_PRESETS: openai', () => {
   });
 
   it('openai.defaultModel = "gpt-5.5"', () => {
-    expect(PROVIDER_PRESETS['openai'].defaultModel).toBe('gpt-5.5');
+    expect(PROVIDER_PRESETS['openai'].defaultModel).toBe('gpt-6-sol');
   });
 
   it('openai.protocol = "openai-compatible"', () => {
@@ -83,11 +81,21 @@ describe('PROVIDER_PRESETS: Custom (openai-compatible) NAO esta no preset', () =
 
 describe('PROVIDER_PRESETS: novos providers (SPEC-005)', () => {
   const NEW_PROVIDERS = [
-    { key: 'kimi',                   label: 'Kimi (Moonshot)',            vaultKey: 'HARNESS_KIMI_KEY',          protocol: 'openai-compatible' },
-    { key: 'deepseek',               label: 'DeepSeek',                   vaultKey: 'HARNESS_DEEPSEEK_KEY',      protocol: 'openai-compatible' },
-    { key: 'qwen',                   label: 'Qwen (Alibaba DashScope)',   vaultKey: 'HARNESS_QWEN_KEY',          protocol: 'openai-compatible' },
-    { key: 'minimax-payg',           label: 'MiniMax (Pay-as-you-go)',    vaultKey: 'HARNESS_MINIMAX_PAYG_KEY',  protocol: 'openai-compatible' },
-    { key: 'gemini-agent-platform',  label: 'Gemini Agent Platform',      vaultKey: 'ORCHESTRATOR_VERTEX_API_KEY', protocol: 'google-genai' },
+    { key: 'kimi', label: 'Kimi (Moonshot)', vaultKey: 'HARNESS_KIMI_KEY', protocol: 'openai-compatible' },
+    { key: 'deepseek', label: 'DeepSeek', vaultKey: 'HARNESS_DEEPSEEK_KEY', protocol: 'openai-compatible' },
+    { key: 'qwen', label: 'Qwen (Alibaba DashScope)', vaultKey: 'HARNESS_QWEN_KEY', protocol: 'openai-compatible' },
+    {
+      key: 'minimax-payg',
+      label: 'MiniMax (Pay-as-you-go)',
+      vaultKey: 'HARNESS_MINIMAX_PAYG_KEY',
+      protocol: 'openai-compatible',
+    },
+    {
+      key: 'gemini-agent-platform',
+      label: 'Gemini Agent Platform',
+      vaultKey: 'ORCHESTRATOR_VERTEX_API_KEY',
+      protocol: 'google-genai',
+    },
   ] as const;
 
   for (const p of NEW_PROVIDERS) {
@@ -133,10 +141,9 @@ describe('PROVIDER_PRESETS: novos providers (SPEC-005)', () => {
   });
 });
 
-
 describe('MODEL_CATALOG: openai', () => {
-  it('tem 2 modelos OpenAI curados', () => {
-    expect(MODEL_CATALOG['openai']).toHaveLength(2);
+  it('tem 4 modelos OpenAI curados (GPT-6 Sol/Luna + GPT-5.5/Pro)', () => {
+    expect(MODEL_CATALOG['openai']).toHaveLength(4);
   });
 
   it('contem gpt-5.5', () => {
@@ -170,24 +177,23 @@ describe('MODEL_CATALOG: openai', () => {
   });
 });
 
-
 describe('MODEL_CATALOG: openrouter', () => {
-  it('tem 12 modelos OpenRouter curados', () => {
-    expect(MODEL_CATALOG['openrouter']).toHaveLength(12);
+  it('tem 15 modelos OpenRouter curados', () => {
+    expect(MODEL_CATALOG['openrouter']).toHaveLength(15);
   });
 
   const OPENROUTER_MODELS: Array<{ id: string; contextWindow: number; pricingKey: string }> = [
-    { id: 'deepseek/deepseek-v4-pro',    contextWindow: 1_000_000, pricingKey: 'or:deepseek/deepseek-v4-pro' },
-    { id: 'deepseek/deepseek-v4-flash',  contextWindow: 1_000_000, pricingKey: 'or:deepseek/deepseek-v4-flash' },
-    { id: 'moonshotai/kimi-k2.6',        contextWindow: 256_000,   pricingKey: 'or:moonshotai/kimi-k2.6' },
-    { id: 'moonshotai/kimi-k2-thinking', contextWindow: 256_000,   pricingKey: 'or:moonshotai/kimi-k2-thinking' },
-    { id: 'qwen/qwen3.6-max-preview',    contextWindow: 262_000,   pricingKey: 'or:qwen/qwen3.6-max-preview' },
-    { id: 'qwen/qwen3.6-plus',           contextWindow: 262_000,   pricingKey: 'or:qwen/qwen3.6-plus' },
-    { id: 'minimax/minimax-m2.7',        contextWindow: 196_608,   pricingKey: 'or:minimax/minimax-m2.7' },
-    { id: 'minimax/minimax-m2.5',        contextWindow: 196_608,   pricingKey: 'or:minimax/minimax-m2.5' },
-    { id: 'minimax/minimax-m1',          contextWindow: 1_000_000, pricingKey: 'or:minimax/minimax-m1' },
-    { id: 'z-ai/glm-4.7',               contextWindow: 202_752,   pricingKey: 'or:z-ai/glm-4.7' },
-    { id: 'z-ai/glm-4.7-flash',         contextWindow: 202_752,   pricingKey: 'or:z-ai/glm-4.7-flash' },
+    { id: 'deepseek/deepseek-v4-pro', contextWindow: 1_000_000, pricingKey: 'or:deepseek/deepseek-v4-pro' },
+    { id: 'deepseek/deepseek-v4-flash', contextWindow: 1_000_000, pricingKey: 'or:deepseek/deepseek-v4-flash' },
+    { id: 'moonshotai/kimi-k2.6', contextWindow: 256_000, pricingKey: 'or:moonshotai/kimi-k2.6' },
+    { id: 'moonshotai/kimi-k2-thinking', contextWindow: 256_000, pricingKey: 'or:moonshotai/kimi-k2-thinking' },
+    { id: 'qwen/qwen3.6-max-preview', contextWindow: 262_000, pricingKey: 'or:qwen/qwen3.6-max-preview' },
+    { id: 'qwen/qwen3.6-plus', contextWindow: 262_000, pricingKey: 'or:qwen/qwen3.6-plus' },
+    { id: 'minimax/minimax-m2.7', contextWindow: 196_608, pricingKey: 'or:minimax/minimax-m2.7' },
+    { id: 'minimax/minimax-m2.5', contextWindow: 196_608, pricingKey: 'or:minimax/minimax-m2.5' },
+    { id: 'minimax/minimax-m1', contextWindow: 1_000_000, pricingKey: 'or:minimax/minimax-m1' },
+    { id: 'z-ai/glm-4.7', contextWindow: 202_752, pricingKey: 'or:z-ai/glm-4.7' },
+    { id: 'z-ai/glm-4.7-flash', contextWindow: 202_752, pricingKey: 'or:z-ai/glm-4.7-flash' },
   ];
 
   for (const expected of OPENROUTER_MODELS) {
@@ -212,7 +218,6 @@ describe('MODEL_CATALOG: openrouter', () => {
     });
   }
 });
-
 
 describe('MODEL_CATALOG: novos providers (SPEC-005)', () => {
   it('tem entry para kimi', () => {
@@ -241,9 +246,7 @@ describe('MODEL_CATALOG: novos providers (SPEC-005)', () => {
   });
 
   it('gemini-agent-platform espelha o catalogo Vertex Gemini do orquestrador', () => {
-    expect(MODEL_CATALOG['gemini-agent-platform'].map((m) => m.id)).toEqual(
-      VERTEX_MODEL_CATALOG.map((m) => m.id),
-    );
+    expect(MODEL_CATALOG['gemini-agent-platform'].map((m) => m.id)).toEqual(VERTEX_MODEL_CATALOG.map((m) => m.id));
   });
 
   it('deepseek-chat tem pricingKey nao-null', () => {
@@ -283,19 +286,15 @@ describe('MODEL_CATALOG: novos providers (SPEC-005)', () => {
   });
 });
 
-
 describe('MODEL_CATALOG: integridade geral', () => {
-  it('total de modelos OpenAI + OpenRouter = 14 (2 OpenAI + 12 OpenRouter)', () => {
+  it('total de modelos OpenAI + OpenRouter = 19 (4 OpenAI + 15 OpenRouter)', () => {
     const openaiCount = MODEL_CATALOG['openai']?.length ?? 0;
     const openrouterCount = MODEL_CATALOG['openrouter']?.length ?? 0;
-    expect(openaiCount + openrouterCount).toBe(14);
+    expect(openaiCount + openrouterCount).toBe(19);
   });
 
   it('todos os modelos openai/openrouter tem id, label, pricingKey nao-null, supportsTools, contextWindow', () => {
-    const allModels = [
-      ...(MODEL_CATALOG['openai'] ?? []),
-      ...(MODEL_CATALOG['openrouter'] ?? []),
-    ];
+    const allModels = [...(MODEL_CATALOG['openai'] ?? []), ...(MODEL_CATALOG['openrouter'] ?? [])];
 
     for (const model of allModels) {
       expect(model.id).toBeTruthy();

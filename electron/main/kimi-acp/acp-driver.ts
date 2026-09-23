@@ -1,4 +1,3 @@
-
 import {
   KimiAuthError,
   KimiUnavailableError,
@@ -34,10 +33,7 @@ import {
   stopReasonToOutcome,
   type KimiTurnOutcome,
 } from './acp-translator';
-import {
-  KimiAcpLifecycleRegistry,
-  KIMI_ACP_IDLE_SWEEP_MS,
-} from './acp-lifecycle-registry';
+import { KimiAcpLifecycleRegistry, KIMI_ACP_IDLE_SWEEP_MS } from './acp-lifecycle-registry';
 import { getKimiBridgeRegistry } from './mcp-bridge-registry';
 import type {
   KimiAcpRunOptions,
@@ -58,14 +54,16 @@ function kimiAuthErrorFrom(error: unknown, context: string): KimiAuthError | nul
   if (!(error instanceof KimiAcpJsonRpcError)) return null;
   const text = [error.message, String(error.code ?? ''), JSON.stringify(error.data ?? '')].join(' ');
   return ['401', '403', '-32001'].includes(String(error.code ?? '')) ||
-    /unauthenticated|unauthorized|auth(?:entication)?[_ -]?required|token[_ -]?(?:expired|invalid)|login[_ -]?required/i.test(text)
+    /unauthenticated|unauthorized|auth(?:entication)?[_ -]?required|token[_ -]?(?:expired|invalid)|login[_ -]?required/i.test(
+      text,
+    )
     ? new KimiAuthError(`Kimi authentication failed during ${context}.`)
     : null;
 }
 
-export const DEFAULT_IDLE_TIMEOUT_MS = 1_200_000; // 20 min
+export const DEFAULT_IDLE_TIMEOUT_MS = 1_200_000;
 
-const DEFAULT_HARD_TIMEOUT_MS = 7_200_000; // 2h
+const DEFAULT_HARD_TIMEOUT_MS = 7_200_000;
 const DEFAULT_HANDSHAKE_TIMEOUT_MS = 15_000;
 export const DEFAULT_CANCEL_GRACE_MS = 2_000;
 
@@ -81,17 +79,13 @@ function isDeniedKimiNativeTool(title: string): boolean {
 }
 
 function rejectPermissionOption(params: Record<string, unknown>): string | undefined {
-  const options = Array.isArray(params['options'])
-    ? (params['options'] as Array<Record<string, unknown>>)
-    : [];
+  const options = Array.isArray(params['options']) ? (params['options'] as Array<Record<string, unknown>>) : [];
   const option = options.find((item) => /reject|deny/i.test(String(item['kind'] ?? item['optionId'] ?? '')));
   return typeof option?.['optionId'] === 'string' ? option['optionId'] : undefined;
 }
 
 function allowPermissionOption(params: Record<string, unknown>, always: boolean): string | undefined {
-  const options = Array.isArray(params['options'])
-    ? (params['options'] as Array<Record<string, unknown>>)
-    : [];
+  const options = Array.isArray(params['options']) ? (params['options'] as Array<Record<string, unknown>>) : [];
   const wanted = always ? /allow_always|approve_always/i : /allow_once|approve_once/i;
   const option = options.find((item) => wanted.test(String(item['kind'] ?? item['optionId'] ?? '')));
   return typeof option?.['optionId'] === 'string' ? option['optionId'] : undefined;
@@ -138,11 +132,9 @@ function permissionToolInput(params: Record<string, unknown>): {
   if ((name === 'Read' || name === 'Write' || name === 'Edit') && !nonEmpty(pathValue)) return null;
   if (name === 'Write' && typeof input['content'] !== 'string') return null;
   if (name === 'Edit') {
-    const hasReplacement = (
-      typeof input['old_string'] === 'string' && typeof input['new_string'] === 'string'
-    ) || (
-      typeof input['oldText'] === 'string' && typeof input['newText'] === 'string'
-    );
+    const hasReplacement =
+      (typeof input['old_string'] === 'string' && typeof input['new_string'] === 'string') ||
+      (typeof input['oldText'] === 'string' && typeof input['newText'] === 'string');
     if (!hasReplacement) return null;
   }
   if (name === 'Bash' && !nonEmpty(input['command'])) return null;
@@ -307,15 +299,13 @@ export class KimiAcpRunHandle implements CliRunHandle {
     const thinkingOption = sessionConfigOption(result, 'thinking');
     const thinkingValues = sessionConfigValues(thinkingOption);
     const thinkingCurrent =
-      typeof thinkingOption['currentValue'] === 'string'
-        ? (thinkingOption['currentValue'] as string)
-        : undefined;
+      typeof thinkingOption['currentValue'] === 'string' ? (thinkingOption['currentValue'] as string) : undefined;
     const tieredDesired = this.opts.effectiveThinking?.envEffort;
     const desiredThinking = thinkingValues.includes('on')
-      ? 'on' // esquema legado (toggle)
+      ? 'on'
       : tieredDesired && thinkingValues.includes(tieredDesired)
-        ? tieredDesired // esquema novo: o esforco configurado (ex: 'max')
-        : ['max', 'high', 'low'].find((v) => thinkingValues.includes(v)); // melhor tier anunciado
+        ? tieredDesired
+        : ['max', 'high', 'low'].find((v) => thinkingValues.includes(v));
     if (!desiredThinking) {
       throw new KimiUnavailableError(
         `kimi acp session/new nao anunciou nenhum valor de thinking utilizavel para o modelo managed (valores: ${thinkingValues.join(', ') || 'nenhum'}).`,
@@ -332,9 +322,7 @@ export class KimiAcpRunHandle implements CliRunHandle {
       } catch (err) {
         const authError = kimiAuthErrorFrom(err, 'session/set_config_option');
         if (authError) throw authError;
-        throw new KimiUnavailableError(
-          `kimi acp nao aplicou thinking=${desiredThinking}: ${(err as Error).message}`,
-        );
+        throw new KimiUnavailableError(`kimi acp nao aplicou thinking=${desiredThinking}: ${(err as Error).message}`);
       }
       const confirmedThinking = configuredCurrentValue(thinkingConfigured, 'thinking');
       if (confirmedThinking !== desiredThinking) {
@@ -345,8 +333,7 @@ export class KimiAcpRunHandle implements CliRunHandle {
         );
       }
     }
-    const bypass = this.permission.dangerouslySkipPermissions === true ||
-      this.permission.mode === 'bypassPermissions';
+    const bypass = this.permission.dangerouslySkipPermissions === true || this.permission.mode === 'bypassPermissions';
     const requiredMode = bypass ? 'yolo' : 'default';
     if (!sessionConfigValues(sessionConfigOption(result, 'mode')).includes(requiredMode)) {
       throw new KimiUnavailableError(`kimi acp session/new nao anunciou o permission mode ${requiredMode}.`);
@@ -386,31 +373,19 @@ export class KimiAcpRunHandle implements CliRunHandle {
     }
   }
 
-  async send(
-    prompt: string,
-    cb?: CliStreamCallbacks,
-    abortSignal?: AbortSignal,
-  ): Promise<CliAgenticResponse> {
+  async send(prompt: string, cb?: CliStreamCallbacks, abortSignal?: AbortSignal): Promise<CliAgenticResponse> {
     await this.ensureSession();
     return this.runTurn(prompt, cb, abortSignal);
   }
 
-  async reply(
-    message: string,
-    cb?: CliStreamCallbacks,
-    abortSignal?: AbortSignal,
-  ): Promise<CliAgenticResponse> {
+  async reply(message: string, cb?: CliStreamCallbacks, abortSignal?: AbortSignal): Promise<CliAgenticResponse> {
     if (this.sessionId === null) {
       throw new KimiUnavailableError('kimi acp reply() called before a session exists');
     }
     return this.runTurn(message, cb, abortSignal);
   }
 
-  private runTurn(
-    input: string,
-    cb?: CliStreamCallbacks,
-    abortSignal?: AbortSignal,
-  ): Promise<CliAgenticResponse> {
+  private runTurn(input: string, cb?: CliStreamCallbacks, abortSignal?: AbortSignal): Promise<CliAgenticResponse> {
     const gen = this.generation;
     const acc = createAccumulator(this.sessionId);
     this.status = 'running';
@@ -478,6 +453,7 @@ export class KimiAcpRunHandle implements CliRunHandle {
 
       const armIdle = (): void => {
         if (idleTimer) clearTimeout(idleTimer);
+        if (this.opts.swarmSupervised) return;
         idleTimer = setTimeout(() => {
           if (this.sessionId) this.transport.notify('session/cancel', { sessionId: this.sessionId });
           logger.warn(
@@ -489,15 +465,13 @@ export class KimiAcpRunHandle implements CliRunHandle {
         if (typeof idleTimer.unref === 'function') idleTimer.unref();
       };
 
-      hardTimer = setTimeout(() => {
-        if (this.sessionId) this.transport.notify('session/cancel', { sessionId: this.sessionId });
-        logger.warn(
-          { runId: this.key.runId, reason: 'hard-timeout', hardMs },
-          'kimi acp turn hard-timeout',
-        );
-        fail(new KimiUnavailableError(`kimi acp turn hard-timeout (${hardMs}ms)`));
-      }, hardMs);
-      if (typeof hardTimer.unref === 'function') hardTimer.unref();
+      if (!this.opts.swarmSupervised)
+        hardTimer = setTimeout(() => {
+          if (this.sessionId) this.transport.notify('session/cancel', { sessionId: this.sessionId });
+          logger.warn({ runId: this.key.runId, reason: 'hard-timeout', hardMs }, 'kimi acp turn hard-timeout');
+          fail(new KimiUnavailableError(`kimi acp turn hard-timeout (${hardMs}ms)`));
+        }, hardMs);
+      if (hardTimer && typeof hardTimer.unref === 'function') hardTimer.unref();
       armIdle();
 
       const onError = (err: Error): void => {
@@ -522,9 +496,7 @@ export class KimiAcpRunHandle implements CliRunHandle {
         hardTimer = null;
         cancelTimer = setTimeout(() => {
           this.transport.kill('cancel-grace-timeout');
-          fail(new KimiUnavailableError(
-            `kimi acp turn did not stop within cancel grace (${cancelGraceMs}ms)`,
-          ));
+          fail(new KimiUnavailableError(`kimi acp turn did not stop within cancel grace (${cancelGraceMs}ms)`));
         }, cancelGraceMs);
         cancelTimer.unref?.();
       };
@@ -540,8 +512,7 @@ export class KimiAcpRunHandle implements CliRunHandle {
           if (update) {
             translateSessionUpdate(update, acc, {
               callbacks: cb,
-              onUnknownUpdate: (u) =>
-                logger.debug({ sessionUpdate: u.sessionUpdate }, 'unknown acp update (audited)'),
+              onUnknownUpdate: (u) => logger.debug({ sessionUpdate: u.sessionUpdate }, 'unknown acp update (audited)'),
             });
           }
           return;
@@ -597,9 +568,7 @@ export class KimiAcpRunHandle implements CliRunHandle {
           const outcome = stopReasonToOutcome(stop);
           if (cancelRequested && outcome !== 'cancelled') {
             this.transport.kill('cancel-terminal-mismatch');
-            fail(new KimiUnavailableError(
-              `kimi acp cancel was not confirmed: stopReason=${String(stop)}`,
-            ));
+            fail(new KimiUnavailableError(`kimi acp cancel was not confirmed: stopReason=${String(stop)}`));
             return;
           }
           if (outcome === 'failed') {
@@ -612,7 +581,11 @@ export class KimiAcpRunHandle implements CliRunHandle {
         })
         .catch((err: Error) => {
           if (this.lastTransportError) onError(this.lastTransportError);
-          else fail(kimiAuthErrorFrom(err, 'session/prompt') ?? new KimiUnavailableError(`session/prompt failed: ${err.message}`));
+          else
+            fail(
+              kimiAuthErrorFrom(err, 'session/prompt') ??
+                new KimiUnavailableError(`session/prompt failed: ${err.message}`),
+            );
         });
     });
   }
@@ -664,60 +637,70 @@ export class KimiAcpRunHandle implements CliRunHandle {
         const toolCallId = toolCall['toolCallId'];
         if (typeof toolCallId !== 'string' || toolCallId.length === 0) {
           const reject = rejectPermissionOption(params);
-          this.transport.respond(id, reject
-            ? { outcome: { outcome: 'selected', optionId: reject } }
-            : { outcome: { outcome: 'cancelled' } });
+          this.transport.respond(
+            id,
+            reject ? { outcome: { outcome: 'selected', optionId: reject } } : { outcome: { outcome: 'cancelled' } },
+          );
           return;
         }
-        const bypass = this.permission.dangerouslySkipPermissions === true ||
-          this.permission.mode === 'bypassPermissions';
+        const bypass =
+          this.permission.dangerouslySkipPermissions === true || this.permission.mode === 'bypassPermissions';
         if (bypass) {
           const allow = allowPermissionOption(params, true);
-          this.transport.respond(id, allow
-            ? { outcome: { outcome: 'selected', optionId: allow } }
-            : { outcome: { outcome: 'cancelled' } });
+          this.transport.respond(
+            id,
+            allow ? { outcome: { outcome: 'selected', optionId: allow } } : { outcome: { outcome: 'cancelled' } },
+          );
           return;
         }
         const translated = permissionToolInput(params);
         if (!translated) {
           const reject = rejectPermissionOption(params);
-          this.transport.respond(id, reject
-            ? { outcome: { outcome: 'selected', optionId: reject } }
-            : { outcome: { outcome: 'cancelled' } });
+          this.transport.respond(
+            id,
+            reject ? { outcome: { outcome: 'selected', optionId: reject } } : { outcome: { outcome: 'cancelled' } },
+          );
           return;
         }
         if (!this.permission.canUseTool) {
           const reject = rejectPermissionOption(params);
-          this.transport.respond(id, reject
-            ? { outcome: { outcome: 'selected', optionId: reject } }
-            : { outcome: { outcome: 'cancelled' } });
+          this.transport.respond(
+            id,
+            reject ? { outcome: { outcome: 'selected', optionId: reject } } : { outcome: { outcome: 'cancelled' } },
+          );
           return;
         }
         const signal = this.opts.abortSignal ?? new AbortController().signal;
-        void this.permission.canUseTool(translated.name, translated.input, {
-          signal,
-          toolUseID: translated.toolUseID,
-          requestId: randomUUID(),
-        }).then((decision) => {
-          if (decision === null) {
-            logger.warn(
-              { toolName: translated.name, toolUseID: translated.toolUseID },
-              'kimi acp permission guard sem decisao (null); negado fail-closed',
+        void this.permission
+          .canUseTool(translated.name, translated.input, {
+            signal,
+            toolUseID: translated.toolUseID,
+            requestId: randomUUID(),
+          })
+          .then((decision) => {
+            if (decision === null) {
+              logger.warn(
+                { toolName: translated.name, toolUseID: translated.toolUseID },
+                'kimi acp permission guard sem decisao (null); negado fail-closed',
+              );
+            }
+            const optionId =
+              decision?.behavior === 'allow'
+                ? (allowPermissionOption(params, false) ?? rejectPermissionOption(params))
+                : rejectPermissionOption(params);
+            this.transport.respond(
+              id,
+              optionId ? { outcome: { outcome: 'selected', optionId } } : { outcome: { outcome: 'cancelled' } },
             );
-          }
-          const optionId = decision?.behavior === 'allow'
-            ? allowPermissionOption(params, false) ?? rejectPermissionOption(params)
-            : rejectPermissionOption(params);
-          this.transport.respond(id, optionId
-            ? { outcome: { outcome: 'selected', optionId } }
-            : { outcome: { outcome: 'cancelled' } });
-        }).catch((err) => {
-          logger.warn({ err: (err as Error).message }, 'kimi acp permission guard failed closed');
-          const reject = rejectPermissionOption(params);
-          this.transport.respond(id, reject
-            ? { outcome: { outcome: 'selected', optionId: reject } }
-            : { outcome: { outcome: 'cancelled' } });
-        });
+          })
+          .catch((err) => {
+            logger.warn({ err: (err as Error).message }, 'kimi acp permission guard failed closed');
+            const reject = rejectPermissionOption(params);
+            this.transport.respond(
+              id,
+              reject ? { outcome: { outcome: 'selected', optionId: reject } } : { outcome: { outcome: 'cancelled' } },
+            );
+          });
         return;
       }
       case 'fs/read_text_file':
@@ -754,6 +737,9 @@ export class KimiAcpRunHandle implements CliRunHandle {
         this.generation += 1;
         this.transport.kill('scope-close');
         const exited = await this.transport.waitClosed(2000);
+        if (this.opts.swarmSupervised) {
+          while (!(await this.transport.waitClosed(60_000))) this.transport.kill('swarm-await-exit');
+        }
         if (!exited) await this.forceKillFallback('process-did-not-exit');
       } finally {
         this.detachError();
@@ -779,9 +765,7 @@ export class KimiAcpDriver implements CliAgenticRuntime {
   private shutdownPromise: Promise<void> | null = null;
   private shuttingDown = false;
 
-  constructor(
-    private readonly transportFactory: AcpTransportFactory = defaultAcpTransportFactory,
-  ) {}
+  constructor(private readonly transportFactory: AcpTransportFactory = defaultAcpTransportFactory) {}
 
   async isAvailable(): Promise<{
     installed: boolean;
@@ -841,13 +825,16 @@ export class KimiAcpDriver implements CliAgenticRuntime {
       ...opts,
       effectiveThinking,
     };
-    const binary = opts.executable ?? await resolveKimiBinary();
+    const binary = opts.executable ?? (await resolveKimiBinary());
     if (!binary) {
       throw new KimiUnavailableError('kimi binary not found');
     }
+    if (opts.swarmSupervised) opts.abortSignal?.throwIfAborted();
     const transport = await this.transportFactory({
       binary,
       cwd: opts.workDir,
+      swarmSupervised: opts.swarmSupervised,
+      swarmOwnerDirectory: opts.swarmOwnerDirectory,
       env: buildKimiChildEnv({
         overrides: opts.env,
         effort: effectiveThinking.envEffort,
@@ -880,14 +867,10 @@ export class KimiAcpDriver implements CliAgenticRuntime {
     }
   }
 
-  private reapHandles(
-    handles: ReadonlyArray<{ close(): Promise<void> }>,
-    reason: string,
-  ): void {
+  private reapHandles(handles: ReadonlyArray<{ close(): Promise<void> }>, reason: string): void {
     for (const handle of handles) {
       logger.warn({ reason }, 'KI-2: reaping kimi acp handle');
-      void handle.close().catch(() => {
-      });
+      void handle.close().catch(() => {});
     }
   }
 
@@ -929,7 +912,6 @@ export class KimiAcpDriver implements CliAgenticRuntime {
   }
 }
 
-
 let cachedDriver: KimiAcpDriver | null = null;
 let runtimeShutdownPromise: Promise<void> | null = null;
 let runtimeShuttingDown = false;
@@ -947,10 +929,9 @@ export async function shutdownKimiRuntime(): Promise<void> {
   runtimeShuttingDown = true;
   const driver = cachedDriver;
   cachedDriver = null;
-  runtimeShutdownPromise = (driver ? driver.shutdown() : getKimiBridgeRegistry().stopAll())
-    .finally(() => {
-      runtimeShuttingDown = false;
-      runtimeShutdownPromise = null;
-    });
+  runtimeShutdownPromise = (driver ? driver.shutdown() : getKimiBridgeRegistry().stopAll()).finally(() => {
+    runtimeShuttingDown = false;
+    runtimeShutdownPromise = null;
+  });
   return runtimeShutdownPromise;
 }

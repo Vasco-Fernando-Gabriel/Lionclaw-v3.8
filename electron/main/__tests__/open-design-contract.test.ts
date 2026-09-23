@@ -14,7 +14,6 @@ vi.mock('../logger', () => ({
 
 import { extractContractFromHtml } from '../open-design/contract';
 
-
 const VALID_CONTRACT_JSON = JSON.stringify({
   version: '1.0',
   source: { artifactPath: 'artifact/index.html' },
@@ -29,9 +28,7 @@ const VALID_CONTRACT_JSON = JSON.stringify({
     },
   },
   navigation: {
-    primary: [
-      { id: 'nav-home', label: 'Home', targetScreenId: 'screen-home', userStoryIds: ['US-1'] },
-    ],
+    primary: [{ id: 'nav-home', label: 'Home', targetScreenId: 'screen-home', userStoryIds: ['US-1'] }],
   },
   screens: [
     {
@@ -45,9 +42,7 @@ const VALID_CONTRACT_JSON = JSON.stringify({
       dataRequirementIds: [],
     },
   ],
-  components: [
-    { id: 'comp-header', name: 'Header', type: 'navigation', usedInScreenIds: ['screen-home'] },
-  ],
+  components: [{ id: 'comp-header', name: 'Header', type: 'navigation', usedInScreenIds: ['screen-home'] }],
   dataRequirements: [],
   apiExpectations: [],
   deltas: [],
@@ -66,7 +61,6 @@ ${contractJson}
 </html>`;
 }
 
-
 let tmpDir: string;
 
 beforeEach(() => {
@@ -82,7 +76,6 @@ function writeTmp(name: string, content: string): string {
   fs.writeFileSync(p, content, 'utf-8');
   return p;
 }
-
 
 describe('extractContractFromHtml', () => {
   it('returns a valid DesignContract for correct HTML', async () => {

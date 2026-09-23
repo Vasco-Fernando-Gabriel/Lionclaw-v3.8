@@ -132,9 +132,7 @@ export function OllamaSubPanel({ onComplete }: OllamaSubPanelProps) {
             autoComplete="off"
           />
         )}
-        <p className="text-xs text-zinc-600 mt-1">
-          Nome exato do modelo instalado no Ollama.
-        </p>
+        <p className="text-xs text-zinc-600 mt-1">Nome exato do modelo instalado no Ollama.</p>
       </div>
 
       {/* Acoes secundarias */}

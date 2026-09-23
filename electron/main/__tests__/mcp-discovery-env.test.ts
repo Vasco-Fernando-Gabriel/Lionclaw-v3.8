@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const queryMock = vi.fn();
@@ -39,8 +38,7 @@ type DiscoverFn = typeof import('../mcp-discovery').discoverSDKMcpServers;
 let discoverSDKMcpServers: DiscoverFn;
 
 function makeFakeQuery(statuses: unknown[]) {
-  const iter = (async function* () {
-  })();
+  const iter = (async function* () {})();
   return Object.assign(iter, {
     mcpServerStatus: vi.fn(async () => statuses),
   });

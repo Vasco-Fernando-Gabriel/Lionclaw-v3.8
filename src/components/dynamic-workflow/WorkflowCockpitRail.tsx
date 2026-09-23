@@ -23,9 +23,7 @@ import type {
 } from '@/types';
 import type { CockpitNodeRun } from '@/types/dynamic-workflow-cockpit';
 
-function isRunDeliveredTerminal(
-  runStatus: DynamicWorkflowRunStatus | null | undefined,
-): boolean {
+function isRunDeliveredTerminal(runStatus: DynamicWorkflowRunStatus | null | undefined): boolean {
   return runStatus === 'delivered' || runStatus === 'completed';
 }
 import { useStreamTimer } from '@/components/chat/useStreamTimer';
@@ -34,9 +32,7 @@ import type { WorkflowNodeStreamState } from './WorkflowStreamView';
 
 const WRITE_TOOL_NAMES = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 
-export function deriveTouchedFiles(
-  nodeStreams: Record<string, WorkflowNodeStreamState>,
-): string[] {
+export function deriveTouchedFiles(nodeStreams: Record<string, WorkflowNodeStreamState>): string[] {
   const set = new Set<string>();
   for (const ns of Object.values(nodeStreams)) {
     for (const tc of ns.toolCalls) {
@@ -46,7 +42,6 @@ export function deriveTouchedFiles(
   }
   return Array.from(set).sort();
 }
-
 
 export interface RailNodeMetrics {
   status: DynamicWorkflowNodeStatus | 'pending';
@@ -63,10 +58,7 @@ function parseNodeStartedAt(startedAt: string | null): number | null {
   return Number.isNaN(ms) ? null : ms;
 }
 
-export function aggregateNodeMetrics(
-  nodeId: string,
-  nodeRuns: DynamicWorkflowNodeRun[],
-): RailNodeMetrics {
+export function aggregateNodeMetrics(nodeId: string, nodeRuns: DynamicWorkflowNodeRun[]): RailNodeMetrics {
   const runs = nodeRuns.filter((nr) => nr.nodeId === nodeId);
   if (runs.length === 0) {
     return {
@@ -95,18 +87,14 @@ export function aggregateNodeMetrics(
     acc.costUsd += nr.costUsd;
   }
   acc.status = latest.status;
-  acc.liveStartedAtMs =
-    latest.status === 'running' ? parseNodeStartedAt(latest.startedAt) : null;
+  acc.liveStartedAtMs = latest.status === 'running' ? parseNodeStartedAt(latest.startedAt) : null;
   return acc;
 }
 
-export function estimateLiveTokensFromStream(
-  stream: WorkflowNodeStreamState | undefined,
-): number {
+export function estimateLiveTokensFromStream(stream: WorkflowNodeStreamState | undefined): number {
   if (!stream) return 0;
   return Math.floor(stream.text.length / 4);
 }
-
 
 export interface RailGroupNode {
   nodeId: string;
@@ -131,18 +119,14 @@ function combineGroupStatus(
   if (statuses.includes('failed') || statuses.includes('blocked')) return 'failed';
   if (statuses.includes('interrupted')) return 'running';
   if (statuses.some((s) => s === 'pending')) {
-    const anyDone = statuses.some(
-      (s) => s === 'completed' || s === 'skipped' || s === 'cancelled',
-    );
+    const anyDone = statuses.some((s) => s === 'completed' || s === 'skipped' || s === 'cancelled');
     return anyDone ? 'running' : 'pending';
   }
   if (statuses.every((s) => s === 'skipped' || s === 'cancelled')) return 'skipped';
   return 'completed';
 }
 
-function deliveredGroupStatus(
-  base: DynamicWorkflowNodeStatus | 'pending',
-): DynamicWorkflowNodeStatus | 'pending' {
+function deliveredGroupStatus(base: DynamicWorkflowNodeStatus | 'pending'): DynamicWorkflowNodeStatus | 'pending' {
   if (base === 'failed' || base === 'blocked' || base === 'running') return base;
   return 'completed';
 }
@@ -151,9 +135,7 @@ function effectiveGroupStatuses(
   statuses: (DynamicWorkflowNodeStatus | 'pending')[],
   forceSkip = false,
 ): (DynamicWorkflowNodeStatus | 'pending')[] {
-  const anyFinished =
-    forceSkip ||
-    statuses.some((s) => s === 'completed' || s === 'skipped' || s === 'cancelled');
+  const anyFinished = forceSkip || statuses.some((s) => s === 'completed' || s === 'skipped' || s === 'cancelled');
   if (!anyFinished) return statuses;
   return statuses.map((s) => (s === 'pending' ? 'skipped' : s));
 }
@@ -223,21 +205,12 @@ export function deriveRailGroups(
     if (!phaseOrder.includes(pid)) phaseOrder.push(pid);
   }
 
-  const metricsFor = (nodeId: string): RailNodeMetrics =>
-    aggregateNodeMetrics(nodeId, nodeRuns);
-  const toGroupNode = (
-    n: DynamicWorkflowNode,
-    collapsePending = false,
-  ): RailGroupNode => {
+  const metricsFor = (nodeId: string): RailNodeMetrics => aggregateNodeMetrics(nodeId, nodeRuns);
+  const toGroupNode = (n: DynamicWorkflowNode, collapsePending = false): RailGroupNode => {
     const rawMetrics = metricsFor(n.nodeId);
     const metrics: RailNodeMetrics =
-      collapsePending && rawMetrics.status === 'pending'
-        ? { ...rawMetrics, status: 'skipped' }
-        : rawMetrics;
-    const liveTokens =
-      metrics.status === 'running'
-        ? estimateLiveTokensFromStream(nodeStreams[n.nodeId])
-        : 0;
+      collapsePending && rawMetrics.status === 'pending' ? { ...rawMetrics, status: 'skipped' } : rawMetrics;
+    const liveTokens = metrics.status === 'running' ? estimateLiveTokensFromStream(nodeStreams[n.nodeId]) : 0;
     return {
       nodeId: n.nodeId,
       label: n.agentId ?? n.label ?? n.nodeId,
@@ -248,9 +221,7 @@ export function deriveRailGroups(
 
   const finalPhaseId = phaseOrder.length > 0 ? phaseOrder[phaseOrder.length - 1] : null;
 
-  const shownNodes = nodes.filter(
-    (n) => n.type === 'gate' || metricsFor(n.nodeId).status !== 'pending',
-  );
+  const shownNodes = nodes.filter((n) => n.type === 'gate' || metricsFor(n.nodeId).status !== 'pending');
 
   const groups: RailGroup[] = [];
   for (const pid of phaseOrder) {
@@ -277,9 +248,7 @@ export function deriveRailGroups(
     if (noSprint.length > 0) {
       const gnodes = noSprint.map((n) => toGroupNode(n, collapseDelivered));
       const rawStatuses = gnodes.map((g) => g.metrics.status);
-      const baseStatus = combineGroupStatus(
-        effectiveGroupStatuses(rawStatuses, collapseDelivered),
-      );
+      const baseStatus = combineGroupStatus(effectiveGroupStatuses(rawStatuses, collapseDelivered));
       groups.push({
         id: `phase:${pid}`,
         label: pname,
@@ -289,13 +258,9 @@ export function deriveRailGroups(
       });
     }
     for (const sid of sprintIds) {
-      const gnodes = (bySprint.get(sid) ?? []).map((n) =>
-        toGroupNode(n, collapseDelivered),
-      );
+      const gnodes = (bySprint.get(sid) ?? []).map((n) => toGroupNode(n, collapseDelivered));
       const rawStatuses = gnodes.map((g) => g.metrics.status);
-      const baseStatus = combineGroupStatus(
-        effectiveGroupStatuses(rawStatuses, collapseDelivered),
-      );
+      const baseStatus = combineGroupStatus(effectiveGroupStatuses(rawStatuses, collapseDelivered));
       groups.push({
         id: `phase:${pid}:sprint:${sid}`,
         label: `${pname} / ${sid}`,
@@ -350,11 +315,7 @@ function formatDuration(ms: number): string {
   return `${Math.floor(ms / 60000)}m`;
 }
 
-function RailStatusIcon({
-  status,
-}: {
-  status: DynamicWorkflowNodeStatus | 'pending';
-}) {
+function RailStatusIcon({ status }: { status: DynamicWorkflowNodeStatus | 'pending' }) {
   switch (status) {
     case 'completed':
       return <Check size={11} strokeWidth={3} className="text-green-400 shrink-0" />;
@@ -369,12 +330,7 @@ function RailStatusIcon({
     case 'cancelled':
       return <Minus size={11} className="text-zinc-500 shrink-0" />;
     default:
-      return (
-        <span
-          className="inline-block h-2 w-2 shrink-0 rounded-full"
-          style={{ border: '1.5px dashed #52525b' }}
-        />
-      );
+      return <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ border: '1.5px dashed #52525b' }} />;
   }
 }
 
@@ -420,8 +376,7 @@ export function WorkflowCockpitRail({
   );
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const toggle = (id: string): void =>
-    setCollapsed((c) => ({ ...c, [id]: !c[id] }));
+  const toggle = (id: string): void => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
 
   return (
     <aside className="flex h-full w-full min-h-0 flex-col overflow-y-auto bg-zinc-950/40">
@@ -438,9 +393,7 @@ export function WorkflowCockpitRail({
       <div className="grid grid-cols-2 gap-px border-b border-zinc-800 bg-zinc-800/40">
         <div className="bg-zinc-950/60 px-3 py-2">
           <div className="text-[10px] uppercase tracking-wide text-zinc-500">Custo</div>
-          <div className="mt-0.5 font-mono text-xs text-amber-300">
-            {formatCost(totalCost)}
-          </div>
+          <div className="mt-0.5 font-mono text-xs text-amber-300">{formatCost(totalCost)}</div>
         </div>
         <div className="bg-zinc-950/60 px-3 py-2">
           <div className="text-[10px] uppercase tracking-wide text-zinc-500">Tempo</div>
@@ -462,9 +415,7 @@ export function WorkflowCockpitRail({
       {/* Narrador IA: "o que esta acontecendo" */}
       {narration !== undefined && (
         <div className="border-b border-zinc-800 px-3 py-2.5">
-          <div className="mb-1 text-[10px] uppercase tracking-wide text-zinc-500">
-            O que esta acontecendo
-          </div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-zinc-500">O que esta acontecendo</div>
           <div className="text-[11px] leading-relaxed text-zinc-300">{narration}</div>
         </div>
       )}
@@ -472,10 +423,7 @@ export function WorkflowCockpitRail({
       {/* E6.1: deliberacao do driver - decisao por gate (orchestrator/human),
           espelhada do DB. O usuario ve quem decidiu o que sem ir ao chat principal. */}
       {gateDecisions.length > 0 && (
-        <div
-          className="border-b border-zinc-800 px-3 py-2.5"
-          data-testid="cockpit-gate-decisions"
-        >
+        <div className="border-b border-zinc-800 px-3 py-2.5" data-testid="cockpit-gate-decisions">
           <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-zinc-500">
             <Gavel size={11} className="text-zinc-500" />
             Decisoes de gate
@@ -490,9 +438,7 @@ export function WorkflowCockpitRail({
 
       {/* Agentes AGRUPADOS POR FASE (sec 5.3), colapsavel. */}
       <div className="px-2 py-2">
-        <div className="mb-1 px-1 text-[10px] uppercase tracking-wide text-zinc-500">
-          Agentes ({agentCount})
-        </div>
+        <div className="mb-1 px-1 text-[10px] uppercase tracking-wide text-zinc-500">Agentes ({agentCount})</div>
         {groups.length === 0 ? (
           <p className="px-1 text-[12px] text-zinc-400" data-testid="rail-agents-empty">
             Sem agentes ainda.
@@ -518,21 +464,15 @@ export function WorkflowCockpitRail({
                       <ChevronDown size={12} className="shrink-0 text-zinc-500" />
                     )}
                     <RailStatusIcon status={group.status} />
-                    <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-zinc-300">
-                      {group.label}
-                    </span>
-                    <span className="shrink-0 font-mono text-[10px] text-zinc-500">
-                      {group.nodes.length}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-zinc-300">{group.label}</span>
+                    <span className="shrink-0 font-mono text-[10px] text-zinc-500">{group.nodes.length}</span>
                   </button>
 
                   {!isCollapsed && (
                     <div className="border-t border-zinc-800/60 px-1.5 py-1">
                       {/* Estado por sprint (branch + merge) dentro do grupo. */}
                       {group.sprintId && (
-                        <SprintStateLine
-                          state={deriveSprintState(run, group.sprintId, group.status)}
-                        />
+                        <SprintStateLine state={deriveSprintState(run, group.sprintId, group.status)} />
                       )}
                       <div className="flex flex-col gap-0.5">
                         {group.nodes.map((node) => (
@@ -574,7 +514,6 @@ export function WorkflowCockpitRail({
   );
 }
 
-
 function useLiveElapsedMs(startedAtMs: number | null): number {
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -601,9 +540,7 @@ function RailAgentLine({ node }: { node: RailGroupNode }) {
       <RailStatusIcon status={m.status} />
       {/* SM-15: o NOME do agente vai na fonte de escrita do app (sans); mono fica
           so para numero/ID/path/hash (os contadores a direita). */}
-      <span className="min-w-0 flex-1 truncate text-zinc-300">
-        {node.label}
-      </span>
+      <span className="min-w-0 flex-1 truncate text-zinc-300">{node.label}</span>
       <div className="flex shrink-0 items-center gap-1.5 font-mono text-[10px] text-zinc-600">
         {/* SM-14: tokens AO VIVO. Real (concluido) > estimativa viva (rodando). */}
         {m.tokens > 0 ? (
@@ -644,15 +581,9 @@ function RailAgentLine({ node }: { node: RailGroupNode }) {
 }
 
 function GateDecisionLine({ decision }: { decision: GateDecisionSummary }) {
-  const approved =
-    decision.decision === 'approved' || decision.decision === 'approve';
-  const rejected =
-    decision.decision === 'rejected' || decision.decision === 'reject';
-  const decisionColor = approved
-    ? 'text-green-400'
-    : rejected
-      ? 'text-red-400'
-      : 'text-zinc-300';
+  const approved = decision.decision === 'approved' || decision.decision === 'approve';
+  const rejected = decision.decision === 'rejected' || decision.decision === 'reject';
+  const decisionColor = approved ? 'text-green-400' : rejected ? 'text-red-400' : 'text-zinc-300';
   return (
     <div
       className="flex items-center gap-1.5 rounded px-1 py-0.5 text-[10px] hover:bg-zinc-900"
@@ -666,15 +597,9 @@ function GateDecisionLine({ decision }: { decision: GateDecisionSummary }) {
       ) : (
         <Gavel size={10} className="shrink-0 text-zinc-500" />
       )}
-      <span className="min-w-0 flex-1 truncate font-mono text-zinc-400">
-        {decision.gateId}
-      </span>
+      <span className="min-w-0 flex-1 truncate font-mono text-zinc-400">{decision.gateId}</span>
       <span className={`shrink-0 ${decisionColor}`}>{decision.decision}</span>
-      {decision.decidedBy && (
-        <span className="shrink-0 font-mono text-[10px] text-zinc-600">
-          {decision.decidedBy}
-        </span>
-      )}
+      {decision.decidedBy && <span className="shrink-0 font-mono text-[10px] text-zinc-600">{decision.decidedBy}</span>}
     </div>
   );
 }

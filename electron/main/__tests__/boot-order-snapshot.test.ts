@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
@@ -57,10 +56,7 @@ describe('SPEC-001 §15/§16 #47: index.ts boot order snapshot', () => {
     for (let i = 1; i < offsets.length; i++) {
       const prev = offsets[i - 1]!;
       const cur = offsets[i]!;
-      expect(
-        cur.offset > prev.offset,
-        `${cur.needle} appears BEFORE ${prev.needle} (expected after)`,
-      ).toBe(true);
+      expect(cur.offset > prev.offset, `${cur.needle} appears BEFORE ${prev.needle} (expected after)`).toBe(true);
     }
   });
 

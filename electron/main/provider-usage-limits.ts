@@ -7,21 +7,14 @@ import { createLogger } from './logger';
 import { getSetting } from './db';
 import { getSecret } from './secrets-vault';
 import { resolveKimiHome } from './agent-runtime/kimi-availability';
-import type {
-  ProviderUsageLimits,
-  ProviderUsageWindow,
-  UsageLimitsResponse,
-} from '../../src/types';
+import type { ProviderUsageLimits, ProviderUsageWindow, UsageLimitsResponse } from '../../src/types';
 
 const logger = createLogger('provider-usage-limits');
 const execFileAsync = promisify(execFile);
 
 const USAGE_FETCH_TIMEOUT_MS = 10_000;
 
-async function fetchWithTimeout(
-  url: string,
-  headers: Record<string, string>,
-): Promise<Response> {
+async function fetchWithTimeout(url: string, headers: Record<string, string>): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), USAGE_FETCH_TIMEOUT_MS);
   try {
@@ -65,7 +58,6 @@ function epochToIso(value: unknown): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-
 async function newestCodexSession(root: string): Promise<string | null> {
   let newest: { path: string; mtime: number } | null = null;
   const walk = async (dir: string, depth: number): Promise<void> => {
@@ -85,8 +77,7 @@ async function newestCodexSession(root: string): Promise<string | null> {
           if (!newest || info.mtimeMs > newest.mtime) {
             newest = { path: full, mtime: info.mtimeMs };
           }
-        } catch {
-        }
+        } catch {}
       }
     }
   };
@@ -106,8 +97,7 @@ export function codexWindow(
   raw: CodexRateLimitWindow | undefined,
 ): ProviderUsageWindow | null {
   if (!raw || typeof raw.used_percent !== 'number') return null;
-  const minutes =
-    typeof raw.window_minutes === 'number' ? raw.window_minutes : null;
+  const minutes = typeof raw.window_minutes === 'number' ? raw.window_minutes : null;
   return {
     id,
     label: windowLabel(minutes, fallbackLabel),
@@ -137,8 +127,7 @@ export async function codexLimits(options?: {
   sessionsRoot?: string;
   tailBytes?: number;
 }): Promise<ProviderUsageLimits> {
-  const sessionsRoot =
-    options?.sessionsRoot ?? join(homedir(), '.codex', 'sessions');
+  const sessionsRoot = options?.sessionsRoot ?? join(homedir(), '.codex', 'sessions');
   const file = await newestCodexSession(sessionsRoot);
   if (!file) {
     return {
@@ -148,10 +137,7 @@ export async function codexLimits(options?: {
       windows: [],
     };
   }
-  const content = await readFileTail(
-    file,
-    options?.tailBytes ?? CODEX_TAIL_BYTES,
-  );
+  const content = await readFileTail(file, options?.tailBytes ?? CODEX_TAIL_BYTES);
   const lines = content.split('\n');
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     const line = lines[i]!;
@@ -164,11 +150,7 @@ export async function codexLimits(options?: {
       if (!limits) continue;
       const windows = [
         codexWindow('primary', '5 horas', limits.primary as CodexRateLimitWindow),
-        codexWindow(
-          'secondary',
-          'Semanal',
-          limits.secondary as CodexRateLimitWindow,
-        ),
+        codexWindow('secondary', 'Semanal', limits.secondary as CodexRateLimitWindow),
       ].filter((w): w is ProviderUsageWindow => w !== null);
       if (windows.length === 0) continue;
       return {
@@ -177,8 +159,7 @@ export async function codexLimits(options?: {
         planType: typeof limits.plan_type === 'string' ? limits.plan_type : null,
         windows,
       };
-    } catch {
-    }
+    } catch {}
   }
   return {
     provider: 'codex',
@@ -187,7 +168,6 @@ export async function codexLimits(options?: {
     windows: [],
   };
 }
-
 
 interface ClaudeOauthCreds {
   accessToken?: string;
@@ -211,10 +191,7 @@ async function readClaudeCreds(): Promise<ClaudeOauthCreds | null> {
   }
   if (!raw) {
     try {
-      raw = await readFile(
-        join(homedir(), '.claude', '.credentials.json'),
-        'utf8',
-      );
+      raw = await readFile(join(homedir(), '.claude', '.credentials.json'), 'utf8');
     } catch {
       return null;
     }
@@ -242,20 +219,16 @@ async function claudeLimits(creds: ClaudeOauthCreds): Promise<ProviderUsageLimit
     return {
       provider: 'claude',
       status: 'unavailable',
-      reason:
-        'Token do Claude expirado — rode um turno com o Claude para renova-lo.',
+      reason: 'Token do Claude expirado — rode um turno com o Claude para renova-lo.',
       planType: creds.subscriptionType ?? null,
       windows: [],
     };
   }
   try {
-    const response = await fetchWithTimeout(
-      'https://api.anthropic.com/api/oauth/usage',
-      {
-        Authorization: `Bearer ${creds.accessToken}`,
-        'anthropic-beta': 'oauth-2025-04-20',
-      },
-    );
+    const response = await fetchWithTimeout('https://api.anthropic.com/api/oauth/usage', {
+      Authorization: `Bearer ${creds.accessToken}`,
+      'anthropic-beta': 'oauth-2025-04-20',
+    });
     if (!response.ok) {
       return {
         provider: 'claude',
@@ -280,9 +253,7 @@ async function claudeLimits(creds: ClaudeOauthCreds): Promise<ProviderUsageLimit
         if (typeof record.percent !== 'number') continue;
         const kind = typeof record.kind === 'string' ? record.kind : 'limite';
         const scopeName =
-          typeof record.scope?.model?.display_name === 'string'
-            ? record.scope.model.display_name
-            : null;
+          typeof record.scope?.model?.display_name === 'string' ? record.scope.model.display_name : null;
         const label =
           kind === 'session'
             ? '5 horas'
@@ -295,10 +266,7 @@ async function claudeLimits(creds: ClaudeOauthCreds): Promise<ProviderUsageLimit
           id: scopeName ? `${kind}:${scopeName}` : kind,
           label,
           usedPercent: clampPercent(record.percent),
-          resetsAt:
-            typeof record.resets_at === 'string'
-              ? record.resets_at
-              : epochToIso(record.resets_at),
+          resetsAt: typeof record.resets_at === 'string' ? record.resets_at : epochToIso(record.resets_at),
         });
       }
     }
@@ -312,10 +280,7 @@ async function claudeLimits(creds: ClaudeOauthCreds): Promise<ProviderUsageLimit
           id: key,
           label: claudeWindowLabel(key),
           usedPercent: clampPercent(record.utilization),
-          resetsAt:
-            typeof record.resets_at === 'string'
-              ? record.resets_at
-              : epochToIso(record.resets_at),
+          resetsAt: typeof record.resets_at === 'string' ? record.resets_at : epochToIso(record.resets_at),
         });
       }
     }
@@ -348,7 +313,6 @@ async function claudeLimits(creds: ClaudeOauthCreds): Promise<ProviderUsageLimit
   }
 }
 
-
 interface GlmLimitEntry {
   type?: unknown;
   unit?: unknown;
@@ -374,14 +338,11 @@ export function glmWindow(entry: GlmLimitEntry): ProviderUsageWindow | null {
 
 async function glmLimits(apiKey: string): Promise<ProviderUsageLimits> {
   try {
-    const response = await fetchWithTimeout(
-      'https://api.z.ai/api/monitor/usage/quota/limit',
-      {
-        Authorization: apiKey,
-        'Accept-Language': 'en-US,en',
-        'Content-Type': 'application/json',
-      },
-    );
+    const response = await fetchWithTimeout('https://api.z.ai/api/monitor/usage/quota/limit', {
+      Authorization: apiKey,
+      'Accept-Language': 'en-US,en',
+      'Content-Type': 'application/json',
+    });
     if (!response.ok) {
       return {
         provider: 'glm',
@@ -399,16 +360,9 @@ async function glmLimits(apiKey: string): Promise<ProviderUsageLimits> {
         windows: [],
       };
     }
-    const payload =
-      json.data !== null && typeof json.data === 'object'
-        ? (json.data as Record<string, unknown>)
-        : json;
-    const entries = Array.isArray(payload.limits)
-      ? (payload.limits as GlmLimitEntry[])
-      : [];
-    const windows = entries
-      .map(glmWindow)
-      .filter((w): w is ProviderUsageWindow => w !== null);
+    const payload = json.data !== null && typeof json.data === 'object' ? (json.data as Record<string, unknown>) : json;
+    const entries = Array.isArray(payload.limits) ? (payload.limits as GlmLimitEntry[]) : [];
+    const windows = entries.map(glmWindow).filter((w): w is ProviderUsageWindow => w !== null);
     if (windows.length === 0) {
       return {
         provider: 'glm',
@@ -431,7 +385,6 @@ async function glmLimits(apiKey: string): Promise<ProviderUsageLimits> {
   }
 }
 
-
 interface MinimaxModelRemains {
   model_name?: unknown;
   current_interval_total_count?: unknown;
@@ -442,9 +395,7 @@ interface MinimaxModelRemains {
 
 export function minimaxUsedPercent(
   entries: MinimaxModelRemains[],
-  remainingKey:
-    | 'current_interval_remaining_percent'
-    | 'current_weekly_remaining_percent',
+  remainingKey: 'current_interval_remaining_percent' | 'current_weekly_remaining_percent',
   totalKey: 'current_interval_total_count' | 'current_weekly_total_count',
 ): number | null {
   const used = (entry: MinimaxModelRemains): number | null => {
@@ -456,21 +407,16 @@ export function minimaxUsedPercent(
     return typeof total === 'number' && total > 0;
   });
   const pool = provisioned.length > 0 ? provisioned : entries;
-  const values = pool
-    .map(used)
-    .filter((v): v is number => v !== null);
+  const values = pool.map(used).filter((v): v is number => v !== null);
   return values.length > 0 ? Math.max(...values) : null;
 }
 
 async function minimaxLimits(apiKey: string): Promise<ProviderUsageLimits> {
   try {
-    const response = await fetchWithTimeout(
-      'https://www.minimax.io/v1/token_plan/remains',
-      {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-    );
+    const response = await fetchWithTimeout('https://www.minimax.io/v1/token_plan/remains', {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    });
     if (!response.ok) {
       return {
         provider: 'minimax',
@@ -480,36 +426,19 @@ async function minimaxLimits(apiKey: string): Promise<ProviderUsageLimits> {
       };
     }
     const json = (await response.json()) as Record<string, unknown>;
-    const baseResp = json.base_resp as
-      | { status_code?: unknown; status_msg?: unknown }
-      | undefined;
-    if (
-      baseResp &&
-      typeof baseResp.status_code === 'number' &&
-      baseResp.status_code !== 0
-    ) {
+    const baseResp = json.base_resp as { status_code?: unknown; status_msg?: unknown } | undefined;
+    if (baseResp && typeof baseResp.status_code === 'number' && baseResp.status_code !== 0) {
       return {
         provider: 'minimax',
         status: 'unavailable',
-        reason: `Consulta de uso do MiniMax recusada (${String(
-          baseResp.status_msg ?? baseResp.status_code,
-        )}).`,
+        reason: `Consulta de uso do MiniMax recusada (${String(baseResp.status_msg ?? baseResp.status_code)}).`,
         windows: [],
       };
     }
-    const payload =
-      json.data !== null && typeof json.data === 'object'
-        ? (json.data as Record<string, unknown>)
-        : json;
-    const entries = Array.isArray(payload.model_remains)
-      ? (payload.model_remains as MinimaxModelRemains[])
-      : [];
+    const payload = json.data !== null && typeof json.data === 'object' ? (json.data as Record<string, unknown>) : json;
+    const entries = Array.isArray(payload.model_remains) ? (payload.model_remains as MinimaxModelRemains[]) : [];
     const windows: ProviderUsageWindow[] = [];
-    const fiveHour = minimaxUsedPercent(
-      entries,
-      'current_interval_remaining_percent',
-      'current_interval_total_count',
-    );
+    const fiveHour = minimaxUsedPercent(entries, 'current_interval_remaining_percent', 'current_interval_total_count');
     if (fiveHour !== null) {
       windows.push({
         id: 'five_hour',
@@ -518,11 +447,7 @@ async function minimaxLimits(apiKey: string): Promise<ProviderUsageLimits> {
         resetsAt: null,
       });
     }
-    const weekly = minimaxUsedPercent(
-      entries,
-      'current_weekly_remaining_percent',
-      'current_weekly_total_count',
-    );
+    const weekly = minimaxUsedPercent(entries, 'current_weekly_remaining_percent', 'current_weekly_total_count');
     if (weekly !== null) {
       windows.push({
         id: 'seven_day',
@@ -553,7 +478,6 @@ async function minimaxLimits(apiKey: string): Promise<ProviderUsageLimits> {
   }
 }
 
-
 interface KimiUsageDetail {
   limit?: unknown;
   used?: unknown;
@@ -561,16 +485,11 @@ interface KimiUsageDetail {
 }
 
 function kimiCounter(value: unknown): number | null {
-  const parsed =
-    typeof value === 'string' ? Number(value) : typeof value === 'number' ? value : NaN;
+  const parsed = typeof value === 'string' ? Number(value) : typeof value === 'number' ? value : NaN;
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
-function kimiWindow(
-  id: string,
-  label: string,
-  detail: KimiUsageDetail | null | undefined,
-): ProviderUsageWindow | null {
+function kimiWindow(id: string, label: string, detail: KimiUsageDetail | null | undefined): ProviderUsageWindow | null {
   if (!detail) return null;
   const limit = kimiCounter(detail.limit);
   const used = kimiCounter(detail.used);
@@ -599,11 +518,7 @@ export function parseKimiUsages(json: Record<string, unknown>): {
   planType: string | null;
 } {
   const windows: ProviderUsageWindow[] = [];
-  const weekly = kimiWindow(
-    'subscription',
-    'Semanal',
-    json.usage as KimiUsageDetail | null,
-  );
+  const weekly = kimiWindow('subscription', 'Semanal', json.usage as KimiUsageDetail | null);
   if (weekly) windows.push(weekly);
   if (Array.isArray(json.limits)) {
     for (const entry of json.limits) {
@@ -612,27 +527,16 @@ export function parseKimiUsages(json: Record<string, unknown>): {
         window?: { duration?: unknown; timeUnit?: unknown } | null;
         detail?: KimiUsageDetail | null;
       };
-      const duration =
-        typeof record.window?.duration === 'number' ? record.window.duration : null;
-      const timeUnit =
-        typeof record.window?.timeUnit === 'string'
-          ? record.window.timeUnit
-          : 'TIME_UNIT_MINUTE';
+      const duration = typeof record.window?.duration === 'number' ? record.window.duration : null;
+      const timeUnit = typeof record.window?.timeUnit === 'string' ? record.window.timeUnit : 'TIME_UNIT_MINUTE';
       if (duration === null) continue;
-      const window = kimiWindow(
-        `window_${duration}_${timeUnit}`,
-        kimiDurationLabel(duration, timeUnit),
-        record.detail,
-      );
+      const window = kimiWindow(`window_${duration}_${timeUnit}`, kimiDurationLabel(duration, timeUnit), record.detail);
       if (window) windows.push(window);
     }
   }
   const user = json.user as { membership?: { level?: unknown } | null } | null;
-  const level =
-    typeof user?.membership?.level === 'string' ? user.membership.level : null;
-  const planType = level
-    ? level.replace(/^LEVEL_/, '').toLowerCase()
-    : null;
+  const level = typeof user?.membership?.level === 'string' ? user.membership.level : null;
+  const planType = level ? level.replace(/^LEVEL_/, '').toLowerCase() : null;
   return { windows, planType };
 }
 
@@ -641,18 +545,14 @@ async function readKimiCreds(): Promise<{
   expiresAtMs: number | null;
 } | null> {
   try {
-    const raw = await readFile(
-      join(resolveKimiHome(), 'credentials', 'kimi-code.json'),
-      'utf8',
-    );
+    const raw = await readFile(join(resolveKimiHome(), 'credentials', 'kimi-code.json'), 'utf8');
     const json = JSON.parse(raw) as Record<string, unknown>;
     if (typeof json.access_token !== 'string' || json.access_token.length === 0) {
       return null;
     }
     return {
       accessToken: json.access_token,
-      expiresAtMs:
-        typeof json.expires_at === 'number' ? json.expires_at * 1000 : null,
+      expiresAtMs: typeof json.expires_at === 'number' ? json.expires_at * 1000 : null,
     };
   } catch {
     return null;
@@ -673,16 +573,14 @@ async function kimiLimits(): Promise<ProviderUsageLimits> {
     return {
       provider: 'kimi',
       status: 'unavailable',
-      reason:
-        'Token do Kimi expirado — rode um turno com o Kimi (ou use o CLI) para renova-lo.',
+      reason: 'Token do Kimi expirado — rode um turno com o Kimi (ou use o CLI) para renova-lo.',
       windows: [],
     };
   }
   try {
-    const response = await fetchWithTimeout(
-      'https://api.kimi.com/coding/v1/usages',
-      { Authorization: `Bearer ${creds.accessToken}` },
-    );
+    const response = await fetchWithTimeout('https://api.kimi.com/coding/v1/usages', {
+      Authorization: `Bearer ${creds.accessToken}`,
+    });
     if (!response.ok) {
       return {
         provider: 'kimi',
@@ -713,20 +611,13 @@ async function kimiLimits(): Promise<ProviderUsageLimits> {
   }
 }
 
-
 const LIMITS_CACHE_TTL_MS = 4 * 60_000;
 const LIMITS_STALE_MAX_MS = 30 * 60_000;
 
 let cachedResponse: { body: UsageLimitsResponse; at: number } | null = null;
-const lastOkByProvider = new Map<
-  ProviderUsageLimits['provider'],
-  { data: ProviderUsageLimits; at: number }
->();
+const lastOkByProvider = new Map<ProviderUsageLimits['provider'], { data: ProviderUsageLimits; at: number }>();
 
-export function withStaleFallback(
-  result: ProviderUsageLimits,
-  now: number,
-): ProviderUsageLimits {
+export function withStaleFallback(result: ProviderUsageLimits, now: number): ProviderUsageLimits {
   if (result.status === 'ok') {
     lastOkByProvider.set(result.provider, { data: result, at: now });
     return result;
@@ -745,10 +636,7 @@ export function resetUsageLimitsCache(): void {
 
 async function codexConfigured(): Promise<boolean> {
   const root = join(homedir(), '.codex');
-  return (
-    (await pathExists(join(root, 'auth.json'))) ||
-    (await pathExists(join(root, 'sessions')))
-  );
+  return (await pathExists(join(root, 'auth.json'))) || (await pathExists(join(root, 'sessions')));
 }
 
 async function vaultKeyFromRef(settingKey: string): Promise<string> {
@@ -762,10 +650,7 @@ async function vaultKeyFromRef(settingKey: string): Promise<string> {
   }
 }
 
-function unexpectedFailure(
-  provider: ProviderUsageLimits['provider'],
-  name: string,
-): () => ProviderUsageLimits {
+function unexpectedFailure(provider: ProviderUsageLimits['provider'], name: string): () => ProviderUsageLimits {
   return () => ({
     provider,
     status: 'unavailable',
@@ -797,9 +682,7 @@ export async function getProviderUsageLimits(): Promise<UsageLimitsResponse> {
     tasks.push(glmLimits(glmKey).catch(unexpectedFailure('glm', 'GLM')));
   }
   if (minimaxKey.length > 0) {
-    tasks.push(
-      minimaxLimits(minimaxKey).catch(unexpectedFailure('minimax', 'MiniMax')),
-    );
+    tasks.push(minimaxLimits(minimaxKey).catch(unexpectedFailure('minimax', 'MiniMax')));
   }
   if (kimiCreds) {
     tasks.push(kimiLimits().catch(unexpectedFailure('kimi', 'Kimi')));

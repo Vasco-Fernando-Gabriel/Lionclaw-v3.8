@@ -1,9 +1,5 @@
 import { create } from 'zustand';
-import {
-  initTerminalSessionsState,
-  terminalSessionsReducer,
-  type TerminalTab,
-} from '@/lib/terminal-sessions-reducer';
+import { initTerminalSessionsState, terminalSessionsReducer, type TerminalTab } from '@/lib/terminal-sessions-reducer';
 
 export const TERMINAL_MIN_HEIGHT = 72;
 export const TERMINAL_DEFAULT_HEIGHT = 220;

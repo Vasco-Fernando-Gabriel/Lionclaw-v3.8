@@ -1,11 +1,9 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { applyMigrationV97 } from '../db-migrations/v97-dynamic-workflow-maestro-reassert';
 import { dynamicWorkflowMaestro } from '../seed-agents/dynamic-workflow-builder';
-
 
 interface PreparedCall {
   sql: string;
@@ -27,7 +25,6 @@ function runWithMockDb(): PreparedCall[] {
   applyMigrationV97(mockDb);
   return calls;
 }
-
 
 describe('applyMigrationV97 - estrutural', () => {
   it('exporta applyMigrationV97 como funcao', () => {
@@ -58,23 +55,22 @@ describe('applyMigrationV97 - SQL e leanness', () => {
     expect(args[5]).toBe(JSON.stringify(['Read', 'Glob', 'Grep']));
     expect(args[6]).toBe(JSON.stringify([]));
     expect(args[13]).toBe(JSON.stringify([]));
-    expect(args[14]).toBe(0); // kb_enabled = 0
+    expect(args[14]).toBe(0);
     expect(args[21]).toBe('dynamic-workflow');
   });
 
   it('usa model/effort/thinking/max_turns do seed (linha editavel depois)', () => {
     const args = insert!.args;
-    expect(args[4]).toBe(dynamicWorkflowMaestro.model); // model
-    expect(args[9]).toBe(dynamicWorkflowMaestro.effort); // effort
-    expect(args[10]).toBe(dynamicWorkflowMaestro.thinking); // thinking
-    expect(args[12]).toBe(dynamicWorkflowMaestro.maxTurns); // max_turns
+    expect(args[4]).toBe(dynamicWorkflowMaestro.model);
+    expect(args[9]).toBe(dynamicWorkflowMaestro.effort);
+    expect(args[10]).toBe(dynamicWorkflowMaestro.thinking);
+    expect(args[12]).toBe(dynamicWorkflowMaestro.maxTurns);
   });
 
   it('NAO faz UPDATE de registro existente (so INSERT OR IGNORE: nunca sobrescreve user)', () => {
     expect(calls.some((c) => /^\s*UPDATE agents/.test(c.sql))).toBe(false);
   });
 });
-
 
 const MAIN_DIR = join(__dirname, '..');
 
@@ -96,9 +92,7 @@ describe('applyMigrationV97 - integracao no runner de db.ts (F7, guardrail estat
     expect(start).toBeGreaterThan(-1);
     const block = dbSrc.slice(start, start + 500);
     expect(block).toContain('applyMigrationV97(db)');
-    expect(block).toContain(
-      "db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(97)",
-    );
+    expect(block).toContain("db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(97)");
     expect(block).toMatch(/Applied migration v97/);
   });
 });

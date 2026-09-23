@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -83,7 +82,9 @@ describe('resolvePackagedClaudeCliEntry', () => {
     ).toThrow();
     expect(probed).toHaveLength(1);
     expect(path.basename(probed[0])).toBe('claude');
-    expect(probed[0]).toContain(path.join('claude-agent-sdk', 'node_modules', '@anthropic-ai', 'claude-agent-sdk-linux-x64'));
+    expect(probed[0]).toContain(
+      path.join('claude-agent-sdk', 'node_modules', '@anthropic-ai', 'claude-agent-sdk-linux-x64'),
+    );
   });
 
   it('com payload fisico e manifesto validos devolve o path do binario nativo', () => {

@@ -1,5 +1,5 @@
-
 import { insertMessage } from './db';
+import { notifyLaneSessionUpdated } from './lane-session-events';
 import type { ChatAttachmentMeta } from '../../src/types';
 
 interface AttachmentLike {
@@ -12,9 +12,7 @@ interface AttachmentLike {
 
 const MAX_PREVIEW_LENGTH = 300_000;
 
-export function buildUserAttachmentsMeta(
-  attachments?: AttachmentLike[],
-): ChatAttachmentMeta[] | undefined {
+export function buildUserAttachmentsMeta(attachments?: AttachmentLike[]): ChatAttachmentMeta[] | undefined {
   const metas: ChatAttachmentMeta[] = [];
   for (const att of attachments ?? []) {
     if (att.type !== 'image') continue;
@@ -37,14 +35,10 @@ export function persistUserChatMessage(
   content: string,
   attachmentsMeta?: ChatAttachmentMeta[],
 ): number {
-  if (!attachmentsMeta || attachmentsMeta.length === 0) {
-    return insertMessage(sessionId, 'user', content);
-  }
-  return insertMessage(
-    sessionId,
-    'user',
-    content,
-    undefined,
-    JSON.stringify({ attachmentsMeta }),
-  );
+  const messageId =
+    !attachmentsMeta || attachmentsMeta.length === 0
+      ? insertMessage(sessionId, 'user', content)
+      : insertMessage(sessionId, 'user', content, undefined, JSON.stringify({ attachmentsMeta }));
+  notifyLaneSessionUpdated(sessionId);
+  return messageId;
 }

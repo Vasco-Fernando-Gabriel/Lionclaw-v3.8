@@ -2,7 +2,7 @@ import { BrowserWindow } from 'electron';
 import crypto from 'crypto';
 import path from 'path';
 import { createLogger } from './logger';
-import { insertAuditEntry, getPermissionBypass } from './db';
+import { insertAuditEntry, getPermissionBypass, getSession, getOpenLaneSessionById } from './db';
 import { sendAskQuestion } from './ask-question';
 import type { ConfirmAction } from '../../src/types';
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
@@ -23,10 +23,8 @@ interface PendingConfirmation {
 
 const pendingConfirmations = new Map<string, PendingConfirmation>();
 
-
 const activeEnrichAllowedPaths: Set<string> = new Set();
 let activeEnrichSpecPath: string | null = null;
-
 
 let activeSecurityAuditPhase = false;
 
@@ -86,16 +84,64 @@ const SENSITIVE_WRITE_PATTERNS = [/\.(env|pem|key|crt|p12)$/];
 
 export const GUARD_GATED_TOOLS: string[] = ['Bash', 'Write', 'Edit'];
 
-export function createPermissionGuard(getWindow: () => BrowserWindow | null, options?: { isOnboarding?: boolean }) {
+export interface PermissionGuardOptions {
+  isOnboarding?: boolean;
+  sessionId?: string;
+}
+
+export interface GuardTurnContext {
+  sessionId?: string;
+  title?: string;
+  laneBadge?: number | null;
+}
+
+export function resolveGuardTurnContext(sessionId: string | undefined): GuardTurnContext {
+  if (!sessionId) return {};
+  let title: string | undefined;
+  try {
+    title = getSession(sessionId)?.title ?? '';
+  } catch {
+    title = undefined;
+  }
+  let laneBadge: number | null | undefined;
+  try {
+    laneBadge = getOpenLaneSessionById(sessionId)?.laneBadge ?? null;
+  } catch {
+    laneBadge = undefined;
+  }
+  return {
+    sessionId,
+    ...(title !== undefined ? { title } : {}),
+    ...(laneBadge !== undefined ? { laneBadge } : {}),
+  };
+}
+
+export function createPermissionGuard(getWindow: () => BrowserWindow | null, options?: PermissionGuardOptions) {
+  const turnContext = resolveGuardTurnContext(options?.sessionId);
   return async (toolName: string, toolInput: Record<string, unknown>): Promise<ToolDecision> => {
     if (options?.isOnboarding) {
       const blockedDuringOnboarding = new Set([
-        'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash',
-        'WebSearch', 'WebFetch', 'Agent', 'TodoWrite',
-        'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList',
+        'Read',
+        'Write',
+        'Edit',
+        'Glob',
+        'Grep',
+        'Bash',
+        'WebSearch',
+        'WebFetch',
+        'Agent',
+        'TodoWrite',
+        'TaskCreate',
+        'TaskUpdate',
+        'TaskGet',
+        'TaskList',
       ]);
       if (blockedDuringOnboarding.has(toolName) || toolName.startsWith('mcp__')) {
-        return { behavior: 'deny', message: 'Durante o onboarding, apenas converse com o usuario. Nao use ferramentas. Siga as instrucoes do BOOTSTRAP.md.' };
+        return {
+          behavior: 'deny',
+          message:
+            'Durante o onboarding, apenas converse com o usuario. Nao use ferramentas. Siga as instrucoes do BOOTSTRAP.md.',
+        };
       }
     }
 
@@ -106,7 +152,7 @@ export function createPermissionGuard(getWindow: () => BrowserWindow | null, opt
           return { behavior: 'deny', message: 'AskUserQuestion: nenhuma pergunta fornecida.' };
         }
 
-        const response = await sendAskQuestion(getWindow, questions, undefined, 1_800_000);
+        const response = await sendAskQuestion(getWindow, questions, undefined, 1_800_000, turnContext);
         logger.info({ id: response.id, answers: response.answers }, 'AskUserQuestion answered by user');
 
         const lines: string[] = [
@@ -138,7 +184,7 @@ export function createPermissionGuard(getWindow: () => BrowserWindow | null, opt
         return {
           behavior: 'deny',
           message:
-            'Read em .env* proibido durante auditoria. Para verificar exposicao, leia .gitignore e use Bash para \'git log -- <path>\'.',
+            "Read em .env* proibido durante auditoria. Para verificar exposicao, leia .gitignore e use Bash para 'git log -- <path>'.",
         };
       }
     }
@@ -158,6 +204,7 @@ export function createPermissionGuard(getWindow: () => BrowserWindow | null, opt
       for (const { pattern, risk } of DESTRUCTIVE_BASH_PATTERNS) {
         if (pattern.test(command)) {
           return confirmUnlessBypass(getWindow, {
+            ...turnContext,
             tool: toolName,
             description: `Executar comando: ${command.substring(0, 100)}`,
             input: toolInput,
@@ -179,6 +226,7 @@ export function createPermissionGuard(getWindow: () => BrowserWindow | null, opt
       for (const pattern of SENSITIVE_WRITE_PATTERNS) {
         if (pattern.test(filePath)) {
           return confirmUnlessBypass(getWindow, {
+            ...turnContext,
             tool: toolName,
             description: `Escrever em arquivo sensivel: ${filePath}`,
             input: toolInput,
@@ -193,6 +241,7 @@ export function createPermissionGuard(getWindow: () => BrowserWindow | null, opt
       const action = toolName.slice('mcp__pipeline-control__'.length);
       if (isPipelineWriteAction(action)) {
         return confirmUnlessBypass(getWindow, {
+          ...turnContext,
           tool: toolName,
           description: `Drive do orquestrador (pipeline-control): ${action}`,
           input: toolInput,
@@ -213,6 +262,7 @@ export function createPermissionGuard(getWindow: () => BrowserWindow | null, opt
       for (const pattern of DESTRUCTIVE_MCP_PATTERNS) {
         if (pattern.test(actualToolName)) {
           return confirmUnlessBypass(getWindow, {
+            ...turnContext,
             tool: toolName,
             description: `Acao MCP destrutiva: ${actualToolName}`,
             input: toolInput,
@@ -224,6 +274,7 @@ export function createPermissionGuard(getWindow: () => BrowserWindow | null, opt
       for (const pattern of MEDIUM_RISK_MCP_PATTERNS) {
         if (pattern.test(actualToolName)) {
           return confirmUnlessBypass(getWindow, {
+            ...turnContext,
             tool: toolName,
             description: `Acao MCP: ${actualToolName}`,
             input: toolInput,
@@ -315,10 +366,8 @@ export function resolveConfirmation(id: string, approved: boolean): void {
   }
 }
 
-export function createEnrichPermissionGuard(
-  getWindow: () => BrowserWindow | null,
-): CanUseTool {
-  const fallbackGuard = createPermissionGuard(getWindow);
+export function createEnrichPermissionGuard(getWindow: () => BrowserWindow | null, sessionId: string): CanUseTool {
+  const fallbackGuard = createPermissionGuard(getWindow, { sessionId });
 
   return (async (toolName: string, toolInput: Record<string, unknown>) => {
     if (toolName === 'Write' || toolName === 'Edit') {

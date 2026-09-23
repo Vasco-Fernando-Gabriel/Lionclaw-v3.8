@@ -1,34 +1,28 @@
-
 import { getSetting } from './db';
 import { getSecret } from './secrets-vault';
 import { isCodexAvailable } from './codex-runtime/binary';
 import { createCodexDriver } from './codex-runtime/factory';
 import { createLogger } from './logger';
-import { setProbedContextWindows } from './agent-runtime/model-context-windows';
-import { CLAUDE_MODELS } from '../../src/constants/claude-models';
-import { CODEX_MODELS } from '../../src/constants/codex-models';
+import { getContextWindow, setProbedContextWindows } from './agent-runtime/model-context-windows';
 import { getCodexModelCapabilities } from './codex-runtime/model-capabilities';
-import { KIMI_MODELS } from '../../src/constants/kimi-models';
-import { GROK_MODELS } from '../../src/constants/grok-models';
-import { CURSOR_MODELS } from '../../src/constants/cursor-models';
 import { CLAUDE_COMPAT_PRESETS } from '../../src/constants/claude-compat-presets';
 import { OPENAI_COMPATIBLE_PRESETS } from '../../src/constants/openai-compatible-presets';
-import { VERTEX_MODEL_CATALOG } from '../../src/constants/vertex-gemini-models';
+import { isProviderUsable } from '../../src/lib/provider-status';
+import { findCatalogEntry, type ProviderCatalogModel } from './provider-models-catalog';
+import { describeClaudeCliUnavailable, detectClaudeCliStatus } from './claude-cli-status';
 export { isProviderUsable } from '../../src/lib/provider-status';
-import type {
-  OrchestratorProvider,
-  OrchestratorRuntime,
-  OpenAiCompatiblePreset,
-} from '../../src/types';
+import type { OrchestratorProvider, OrchestratorRuntime, OpenAiCompatiblePreset } from '../../src/types';
 
 const log = createLogger('provider-availability');
 
 const CURSOR_VAULT_KEY = 'CURSOR_API_KEY';
 
-
 export interface ModelInfo {
   id: string;
   displayName: string;
+  label: string;
+  reasoningOptions: string[];
+  defaultReasoning: string | null;
   contextWindow?: number;
 }
 
@@ -36,6 +30,7 @@ export interface ProviderStatus {
   runtime: OrchestratorRuntime;
   provider: OrchestratorProvider;
   connected: boolean;
+  available: boolean;
   authenticated?: boolean;
   subscriptionRouteVerified?: boolean;
   isolationVerified?: boolean;
@@ -46,11 +41,49 @@ export interface ProviderStatus {
   models?: ModelInfo[];
 }
 
-
 export function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/v1\/?$/, '');
 }
 
+type ProviderProbe = Omit<ProviderStatus, 'available'>;
+
+function finalizeStatus(probe: ProviderProbe): ProviderStatus {
+  return { ...probe, available: isProviderUsable(probe) };
+}
+
+function catalogModelInfo(model: ProviderCatalogModel): ModelInfo {
+  return {
+    id: model.id,
+    displayName: model.label,
+    label: model.label,
+    reasoningOptions: [...model.reasoningOptions],
+    defaultReasoning: model.defaultReasoning,
+    ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
+  };
+}
+
+function catalogModelsFor(runtime: OrchestratorRuntime, provider: OrchestratorProvider): ModelInfo[] {
+  return (findCatalogEntry(runtime, provider)?.models ?? []).map(catalogModelInfo);
+}
+
+function dynamicModelInfo(id: string, displayName: string, contextWindow?: number): ModelInfo {
+  return {
+    id,
+    displayName,
+    label: displayName,
+    reasoningOptions: [],
+    defaultReasoning: null,
+    ...(contextWindow ? { contextWindow } : {}),
+  };
+}
+
+function withKnownContextWindows(models: ModelInfo[], provider: OrchestratorProvider): ModelInfo[] {
+  return models.map((m) => {
+    if (m.contextWindow) return m;
+    const known = getContextWindow(m.id, provider);
+    return known ? { ...m, contextWindow: known } : m;
+  });
+}
 
 const DEFAULT_PROBE_TIMEOUT_MS = 4000;
 
@@ -91,18 +124,22 @@ async function probeJsonGet(
   }
 }
 
-
-interface OllamaTagsModel { name?: string; model?: string }
-interface OllamaTagsResponse { models?: OllamaTagsModel[] }
+interface OllamaTagsModel {
+  name?: string;
+  model?: string;
+}
+interface OllamaTagsResponse {
+  models?: OllamaTagsModel[];
+}
 
 function parseOllamaTags(body: string): ModelInfo[] {
   try {
     const data = JSON.parse(body) as OllamaTagsResponse;
     if (!data || !Array.isArray(data.models)) return [];
     return data.models
-      .map(m => m.name ?? m.model ?? '')
-      .filter(id => id.length > 0)
-      .map(id => ({ id, displayName: id }));
+      .map((m) => m.name ?? m.model ?? '')
+      .filter((id) => id.length > 0)
+      .map((id) => dynamicModelInfo(id, id));
   } catch (err) {
     log.warn({ err }, 'failed to parse Ollama /api/tags response');
     return [];
@@ -115,7 +152,9 @@ interface OpenAiModelsModel {
   context_window?: number;
   max_context_length?: number;
 }
-interface OpenAiModelsResponse { data?: OpenAiModelsModel[] }
+interface OpenAiModelsResponse {
+  data?: OpenAiModelsModel[];
+}
 
 function positiveInteger(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
@@ -135,7 +174,7 @@ function parseOpenAiStyleModels(body: string): ModelInfo[] {
           positiveInteger(m.context_length) ??
           positiveInteger(m.context_window) ??
           positiveInteger(m.max_context_length);
-        return { id, displayName: id, ...(contextWindow ? { contextWindow } : {}) };
+        return dynamicModelInfo(id, id, contextWindow);
       })
       .filter((m): m is ModelInfo => m !== null);
   } catch (err) {
@@ -149,11 +188,7 @@ function compactBodySnippet(body: string | undefined, maxLength = 260): string {
   return body.replace(/\s+/g, ' ').trim().slice(0, maxLength);
 }
 
-function formatOpenAiCompatibleProbeFailure(
-  probe: ProbeResult,
-  url: string,
-  preset?: OpenAiCompatiblePreset,
-): string {
+function formatOpenAiCompatibleProbeFailure(probe: ProbeResult, url: string, preset?: OpenAiCompatiblePreset): string {
   if (probe.error) return `OpenAI-compatible probe failed: ${probe.error}`;
 
   const status = probe.status ?? 'unknown';
@@ -229,24 +264,15 @@ function parseLmStudioNativeModels(body: string): ModelInfo[] {
         for (const instance of instances) {
           const id = instance.id ?? m.selected_variant ?? m.key ?? '';
           if (!id) continue;
-          const contextWindow =
-            positiveInteger(instance.config?.context_length) ?? fallbackContextWindow;
-          models.push({
-            id,
-            displayName: baseDisplayName || id,
-            ...(contextWindow ? { contextWindow } : {}),
-          });
+          const contextWindow = positiveInteger(instance.config?.context_length) ?? fallbackContextWindow;
+          models.push(dynamicModelInfo(id, baseDisplayName || id, contextWindow));
         }
         continue;
       }
 
       const id = m.selected_variant ?? m.key ?? '';
       if (!id) continue;
-      models.push({
-        id,
-        displayName: baseDisplayName || id,
-        ...(fallbackContextWindow ? { contextWindow: fallbackContextWindow } : {}),
-      });
+      models.push(dynamicModelInfo(id, baseDisplayName || id, fallbackContextWindow));
     }
 
     return models;
@@ -262,36 +288,39 @@ function enrichModelsWithContext(primary: ModelInfo[], metadata: ModelInfo[]): M
   return primary.map((m) => {
     const meta = byId.get(m.id);
     if (!meta) return m;
+    const displayName = m.displayName || meta.displayName;
     return {
       ...m,
-      displayName: m.displayName || meta.displayName,
+      displayName,
+      label: displayName,
       contextWindow: m.contextWindow ?? meta.contextWindow,
     };
   });
 }
 
+function compatFallback(id: string, displayName: string): ModelInfo {
+  return dynamicModelInfo(id, displayName);
+}
 
 const KIMI_FALLBACK_MODELS: ModelInfo[] = [
-  { id: 'moonshot-v1-8k',   displayName: 'Moonshot v1 8k' },
-  { id: 'moonshot-v1-32k',  displayName: 'Moonshot v1 32k' },
-  { id: 'moonshot-v1-128k', displayName: 'Moonshot v1 128k' },
+  compatFallback('moonshot-v1-8k', 'Moonshot v1 8k'),
+  compatFallback('moonshot-v1-32k', 'Moonshot v1 32k'),
+  compatFallback('moonshot-v1-128k', 'Moonshot v1 128k'),
 ];
 
 const OPENAI_COMPAT_FALLBACK_MODELS: Record<OpenAiCompatiblePreset, ModelInfo[]> = {
   kimi: KIMI_FALLBACK_MODELS,
   'kimi-cn': KIMI_FALLBACK_MODELS,
   qwen: [
-    { id: 'qwen-plus',  displayName: 'Qwen Plus' },
-    { id: 'qwen-max',   displayName: 'Qwen Max' },
-    { id: 'qwen-turbo', displayName: 'Qwen Turbo' },
+    compatFallback('qwen-plus', 'Qwen Plus'),
+    compatFallback('qwen-max', 'Qwen Max'),
+    compatFallback('qwen-turbo', 'Qwen Turbo'),
   ],
   deepseek: [
-    { id: 'deepseek-chat',     displayName: 'DeepSeek Chat' },
-    { id: 'deepseek-reasoner', displayName: 'DeepSeek Reasoner' },
+    compatFallback('deepseek-chat', 'DeepSeek Chat'),
+    compatFallback('deepseek-reasoner', 'DeepSeek Reasoner'),
   ],
-  minimax: [
-    { id: 'abab6.5s-chat', displayName: 'ABAB 6.5s Chat' },
-  ],
+  minimax: [compatFallback('abab6.5s-chat', 'ABAB 6.5s Chat')],
   custom: [],
 };
 
@@ -300,20 +329,33 @@ function fallbackForPreset(preset: OpenAiCompatiblePreset | undefined): ModelInf
   return OPENAI_COMPAT_FALLBACK_MODELS[preset] ?? [];
 }
 
-
-async function checkClaudeSdkAnthropic(): Promise<ProviderStatus> {
-  return {
-    runtime: 'claude-sdk',
-    provider: 'anthropic',
-    connected: true,
-    models: CLAUDE_MODELS.map(m => ({ id: m.id, displayName: m.displayName })),
-  };
+async function checkClaudeSdkAnthropic(): Promise<ProviderProbe> {
+  const models = catalogModelsFor('claude-sdk', 'anthropic');
+  try {
+    const cli = await detectClaudeCliStatus();
+    const reason = describeClaudeCliUnavailable(cli);
+    return {
+      runtime: 'claude-sdk',
+      provider: 'anthropic',
+      connected: reason === null,
+      authenticated: cli.authenticated,
+      ...(reason ? { reason } : {}),
+      models,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      runtime: 'claude-sdk',
+      provider: 'anthropic',
+      connected: false,
+      reason: `Claude Code status check failed: ${message}`,
+      models,
+    };
+  }
 }
 
-async function checkClaudeCompatPreset(
-  provider: OrchestratorProvider,
-): Promise<ProviderStatus> {
-  const preset = CLAUDE_COMPAT_PRESETS.find(p => p.id === provider);
+async function checkClaudeCompatPreset(provider: OrchestratorProvider): Promise<ProviderProbe> {
+  const preset = CLAUDE_COMPAT_PRESETS.find((p) => p.id === provider);
   if (!preset) {
     return {
       runtime: 'claude-compat-sdk',
@@ -324,7 +366,7 @@ async function checkClaudeCompatPreset(
   }
   const settingKey = `orchestrator_${provider}_api_key_ref`;
   const vaultRef = getSetting(settingKey);
-  const models = preset.models.map(m => ({ id: m.id, displayName: m.displayName }));
+  const models = catalogModelsFor('claude-compat-sdk', provider);
   if (!vaultRef) {
     return {
       runtime: 'claude-compat-sdk',
@@ -352,7 +394,7 @@ async function checkClaudeCompatPreset(
   };
 }
 
-async function checkCodexSdk(): Promise<ProviderStatus> {
+async function checkCodexSdk(): Promise<ProviderProbe> {
   try {
     const status = await isCodexAvailable();
     if (!status.installed) {
@@ -396,21 +438,30 @@ async function checkCodexSdk(): Promise<ProviderStatus> {
   }
 }
 
-async function codexModelsWithDiscovered(): Promise<Array<{ id: string; displayName: string }>> {
-  const models = CODEX_MODELS.map(m => ({ id: m.slug, displayName: m.label }));
+async function codexModelsWithDiscovered(): Promise<ModelInfo[]> {
+  const models = catalogModelsFor('codex-sdk', 'codex');
   try {
     const discovered = await getCodexModelCapabilities();
     for (const cap of discovered ?? []) {
       if (cap.hidden) continue;
-      if (models.some(m => m.id.toLowerCase() === cap.id.toLowerCase())) continue;
-      models.push({ id: cap.id, displayName: cap.displayName || cap.id });
+      const existing = models.find((m) => m.id.toLowerCase() === cap.id.toLowerCase());
+      if (existing) {
+        existing.reasoningOptions = [...cap.supportedEfforts];
+        existing.defaultReasoning = cap.defaultEffort;
+        continue;
+      }
+      const displayName = cap.displayName || cap.id;
+      models.push({
+        ...dynamicModelInfo(cap.id, displayName),
+        reasoningOptions: [...cap.supportedEfforts],
+        defaultReasoning: cap.defaultEffort,
+      });
     }
-  } catch {
-  }
+  } catch {}
   return models;
 }
 
-async function checkCodexAppServer(): Promise<ProviderStatus> {
+async function checkCodexAppServer(): Promise<ProviderProbe> {
   try {
     const availability = await createCodexDriver().isAvailable();
     if (!availability.installed) {
@@ -454,7 +505,7 @@ async function checkCodexAppServer(): Promise<ProviderStatus> {
   }
 }
 
-async function checkKimiSdk(): Promise<ProviderStatus> {
+async function checkKimiSdk(): Promise<ProviderProbe> {
   try {
     const { isKimiAvailable } = await import('./agent-runtime/kimi-availability');
     const availability = await isKimiAvailable();
@@ -471,8 +522,7 @@ async function checkKimiSdk(): Promise<ProviderStatus> {
         runtime: 'kimi-sdk',
         provider: 'kimi',
         connected: false,
-        reason:
-          'Kimi instalado mas nao autenticado (faca login no CLI por assinatura).',
+        reason: 'Kimi instalado mas nao autenticado (faca login no CLI por assinatura).',
       };
     }
     const authenticated = availability.authenticated === true;
@@ -490,11 +540,11 @@ async function checkKimiSdk(): Promise<ProviderStatus> {
       reason: usable ? undefined : availability.reason,
       models: (availability.availableModels?.length
         ? availability.availableModels
-        : KIMI_MODELS.map((model) => model.slug)
-      ).map((id) => ({
-        id,
-        displayName: KIMI_MODELS.find((model) => model.slug === id)?.label ?? id,
-      })),
+        : catalogModelsFor('kimi-sdk', 'kimi').map((model) => model.id)
+      ).map((id) => {
+        const curated = catalogModelsFor('kimi-sdk', 'kimi').find((model) => model.id === id);
+        return curated ?? dynamicModelInfo(id, id);
+      }),
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -507,7 +557,7 @@ async function checkKimiSdk(): Promise<ProviderStatus> {
   }
 }
 
-async function checkGrokSdk(): Promise<ProviderStatus> {
+async function checkGrokSdk(): Promise<ProviderProbe> {
   try {
     const { isGrokAvailable } = await import('./agent-runtime/grok-availability');
     const availability = await isGrokAvailable();
@@ -530,11 +580,7 @@ async function checkGrokSdk(): Promise<ProviderStatus> {
       modelAvailable,
       usable,
       reason: usable ? undefined : availability.reason,
-      models: GROK_MODELS.map((model) => ({
-        id: model.slug,
-        displayName: model.label,
-        contextWindow: model.contextWindow,
-      })),
+      models: catalogModelsFor('grok-sdk', 'grok'),
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -549,21 +595,13 @@ async function checkGrokSdk(): Promise<ProviderStatus> {
       modelAvailable: null,
       usable: false,
       reason: `Grok availability check failed: ${message}`,
-      models: GROK_MODELS.map((model) => ({
-        id: model.slug,
-        displayName: model.label,
-        contextWindow: model.contextWindow,
-      })),
+      models: catalogModelsFor('grok-sdk', 'grok'),
     };
   }
 }
 
-async function checkCursorSdk(): Promise<ProviderStatus> {
-  const models = CURSOR_MODELS.map((model) => ({
-    id: model.slug,
-    displayName: model.label,
-    contextWindow: model.contextWindow,
-  }));
+async function checkCursorSdk(): Promise<ProviderProbe> {
+  const models = catalogModelsFor('cursor-sdk', 'cursor');
   const apiKey = await getSecret(CURSOR_VAULT_KEY);
   if (!apiKey) {
     return {
@@ -582,7 +620,7 @@ async function checkCursorSdk(): Promise<ProviderStatus> {
   };
 }
 
-async function checkLionOllama(): Promise<ProviderStatus> {
+async function checkLionOllama(): Promise<ProviderProbe> {
   const baseRaw = getSetting('orchestrator_ollama_base_url');
   if (!baseRaw) {
     return {
@@ -611,11 +649,11 @@ async function checkLionOllama(): Promise<ProviderStatus> {
     runtime: 'lion-sdk',
     provider: 'ollama',
     connected: true,
-    models: ollamaModels,
+    models: withKnownContextWindows(ollamaModels, 'ollama'),
   };
 }
 
-async function checkLionLmStudio(): Promise<ProviderStatus> {
+async function checkLionLmStudio(): Promise<ProviderProbe> {
   const baseRaw = getSetting('orchestrator_lmstudio_base_url');
   if (!baseRaw) {
     return {
@@ -640,27 +678,23 @@ async function checkLionLmStudio(): Promise<ProviderStatus> {
   }
   const nativeProbe = await probeJsonGet(`${base}/api/v1/models`);
   const openAiModels = parseOpenAiStyleModels(probe.body ?? '');
-  const nativeModels = nativeProbe.ok
-    ? parseLmStudioNativeModels(nativeProbe.body ?? '')
-    : [];
+  const nativeModels = nativeProbe.ok ? parseLmStudioNativeModels(nativeProbe.body ?? '') : [];
   const lmStudioModels = enrichModelsWithContext(openAiModels, nativeModels);
   setProbedContextWindows('lmstudio', lmStudioModels);
   return {
     runtime: 'lion-sdk',
     provider: 'lmstudio',
     connected: true,
-    models: lmStudioModels,
+    models: withKnownContextWindows(lmStudioModels, 'lmstudio'),
   };
 }
 
-async function checkLionOpenAiCompatible(): Promise<ProviderStatus> {
+async function checkLionOpenAiCompatible(): Promise<ProviderProbe> {
   const baseRaw = getSetting('orchestrator_openai_compat_base_url');
   const vaultRef = getSetting('orchestrator_openai_compat_api_key_ref');
   const presetRaw = getSetting('orchestrator_openai_compat_preset');
   const preset = (presetRaw as OpenAiCompatiblePreset | undefined) ?? undefined;
-  const isKnownPreset = preset
-    ? OPENAI_COMPATIBLE_PRESETS.some(p => p.id === preset)
-    : false;
+  const isKnownPreset = preset ? OPENAI_COMPATIBLE_PRESETS.some((p) => p.id === preset) : false;
   const presetSafe: OpenAiCompatiblePreset | undefined = isKnownPreset ? preset : undefined;
 
   if (!vaultRef) {
@@ -703,11 +737,11 @@ async function checkLionOpenAiCompatible(): Promise<ProviderStatus> {
     runtime: 'lion-sdk',
     provider: 'openai-compatible',
     connected: true,
-    models,
+    models: withKnownContextWindows(models, 'openai-compatible'),
   };
 }
 
-async function checkLionVertexAi(): Promise<ProviderStatus> {
+async function checkLionVertexAi(): Promise<ProviderProbe> {
   const vaultRef = getSetting('orchestrator_vertex_api_key_ref');
   if (!vaultRef) {
     return {
@@ -730,19 +764,18 @@ async function checkLionVertexAi(): Promise<ProviderStatus> {
     runtime: 'lion-sdk',
     provider: 'vertex-ai',
     connected: true,
-    models: VERTEX_MODEL_CATALOG.map(m => ({
-      id: m.id,
-      displayName: m.displayName,
-      contextWindow: m.contextWindow,
-    })),
+    models: catalogModelsFor('lion-sdk', 'vertex-ai'),
   };
 }
-
 
 export async function checkProvider(
   runtime: OrchestratorRuntime,
   provider: OrchestratorProvider,
 ): Promise<ProviderStatus> {
+  return finalizeStatus(await probeProvider(runtime, provider));
+}
+
+async function probeProvider(runtime: OrchestratorRuntime, provider: OrchestratorProvider): Promise<ProviderProbe> {
   if (runtime === 'claude-sdk' && provider === 'anthropic') return checkClaudeSdkAnthropic();
   if (runtime === 'claude-compat-sdk') return checkClaudeCompatPreset(provider);
   if (runtime === 'codex-sdk' && provider === 'codex') return checkCodexSdk();
@@ -762,7 +795,6 @@ export async function checkProvider(
   };
 }
 
-
 interface CacheEntry {
   expiresAt: number;
   promise: Promise<ProviderStatus[]>;
@@ -771,26 +803,28 @@ interface CacheEntry {
 const CACHE_TTL_MS = 60_000;
 let cacheEntry: CacheEntry | null = null;
 
-export async function listProviderStatuses(): Promise<ProviderStatus[]> {
+export interface ListProviderStatusesOptions {
+  refresh?: boolean;
+}
+
+export async function listProviderStatuses(opts: ListProviderStatusesOptions = {}): Promise<ProviderStatus[]> {
   const now = Date.now();
-  if (cacheEntry && cacheEntry.expiresAt > now) {
+  if (!opts.refresh && cacheEntry && cacheEntry.expiresAt > now) {
     return cacheEntry.promise;
   }
   const promise = (async () => {
-    const compatResults = await Promise.all(
-      CLAUDE_COMPAT_PRESETS.map(p => checkClaudeCompatPreset(p.id)),
-    );
+    const compatResults = await Promise.all(CLAUDE_COMPAT_PRESETS.map((p) => checkProvider('claude-compat-sdk', p.id)));
     const results = await Promise.all([
-      checkProvider('claude-sdk',        'anthropic'),
-      checkProvider('codex-sdk',         'codex'),
-      checkProvider('lion-sdk',          'ollama'),
-      checkProvider('lion-sdk',          'lmstudio'),
-      checkProvider('lion-sdk',          'openai-compatible'),
-      checkProvider('lion-sdk',          'vertex-ai'),
-      checkProvider('kimi-sdk',          'kimi'),
-      checkProvider('grok-sdk',          'grok'),
-      checkProvider('codex-sdk',         'codex-official'),
-      checkProvider('cursor-sdk',        'cursor'),
+      checkProvider('claude-sdk', 'anthropic'),
+      checkProvider('codex-sdk', 'codex'),
+      checkProvider('lion-sdk', 'ollama'),
+      checkProvider('lion-sdk', 'lmstudio'),
+      checkProvider('lion-sdk', 'openai-compatible'),
+      checkProvider('lion-sdk', 'vertex-ai'),
+      checkProvider('kimi-sdk', 'kimi'),
+      checkProvider('grok-sdk', 'grok'),
+      checkProvider('codex-sdk', 'codex-official'),
+      checkProvider('cursor-sdk', 'cursor'),
     ]);
     return [results[0], ...compatResults, ...results.slice(1)];
   })();
@@ -809,7 +843,6 @@ export async function listProviderStatuses(): Promise<ProviderStatus[]> {
 export function invalidateProviderStatusCache(): void {
   cacheEntry = null;
 }
-
 
 export const __internal = {
   parseOllamaTags,

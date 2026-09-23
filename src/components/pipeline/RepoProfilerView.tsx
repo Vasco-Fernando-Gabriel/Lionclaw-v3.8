@@ -3,7 +3,6 @@ import { Loader2, ChevronDown, ChevronRight, FolderOpen } from 'lucide-react';
 import type { RepoManifest } from '@/types/pipeline';
 import { ROLE_METADATA } from '@/types/pipeline';
 
-
 const ROLE_ORDER = [
   'route',
   'auth',
@@ -17,13 +16,11 @@ const ROLE_ORDER = [
   'error-handling',
 ] as const;
 
-
 function formatSize(bytes: number): string {
   if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`;
   if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${bytes} B`;
 }
-
 
 interface RepoProfilerViewProps {
   manifest: RepoManifest | null;
@@ -31,7 +28,6 @@ interface RepoProfilerViewProps {
   streamContent: string;
   projectId: string;
 }
-
 
 function PhaseRunningBadge() {
   return (
@@ -45,7 +41,6 @@ function PhaseRunningBadge() {
     </div>
   );
 }
-
 
 interface RoleTooltipProps {
   role: string;
@@ -70,7 +65,6 @@ function RoleTooltip({ role }: RoleTooltipProps) {
     </div>
   );
 }
-
 
 interface RoleRowProps {
   role: string;
@@ -126,10 +120,7 @@ function RoleRow({ role, files, maxCount, projectId }: RoleRowProps) {
           className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden hover:opacity-80 transition-opacity"
           tabIndex={-1}
         >
-          <div
-            className="h-2 bg-amber-500 rounded-full transition-all duration-300"
-            style={{ width: `${pct}%` }}
-          />
+          <div className="h-2 bg-amber-500 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
         </button>
 
         {/* Count */}
@@ -160,7 +151,6 @@ function RoleRow({ role, files, maxCount, projectId }: RoleRowProps) {
     </div>
   );
 }
-
 
 export function RepoProfilerView({ manifest, isStreaming, streamContent, projectId }: RepoProfilerViewProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -194,9 +184,7 @@ export function RepoProfilerView({ manifest, isStreaming, streamContent, project
     <div className="flex flex-col flex-1 min-h-0 bg-zinc-950">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/60 shrink-0">
-        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
-          Stream da fase
-        </span>
+        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Stream da fase</span>
         {isStreaming ? (
           <PhaseRunningBadge />
         ) : (
@@ -206,7 +194,6 @@ export function RepoProfilerView({ manifest, isStreaming, streamContent, project
 
       {/* Content area */}
       <div className="flex-1 overflow-y-auto px-4 py-3 min-h-0">
-
         {/* Streaming state: raw progress text */}
         {isStreaming && (
           <>
@@ -216,9 +203,7 @@ export function RepoProfilerView({ manifest, isStreaming, streamContent, project
                 <span className="repo-profiler-cursor" />
               </pre>
             ) : (
-              <p className="text-xs text-zinc-600 italic mt-4 text-center">
-                Aguardando saida do agente...
-              </p>
+              <p className="text-xs text-zinc-600 italic mt-4 text-center">Aguardando saida do agente...</p>
             )}
             <div ref={bottomRef} />
           </>
@@ -239,8 +224,7 @@ export function RepoProfilerView({ manifest, isStreaming, streamContent, project
                 </span>
               </p>
               <p className="text-xs text-zinc-500 mt-1">
-                {manifest.totalFiles} arquivos encontrados{' '}
-                <span className="text-zinc-400">|</span>{' '}
+                {manifest.totalFiles} arquivos encontrados <span className="text-zinc-400">|</span>{' '}
                 {manifest.classifiedFiles} classificados
               </p>
             </div>
@@ -253,13 +237,7 @@ export function RepoProfilerView({ manifest, isStreaming, streamContent, project
                 </p>
                 <div className="space-y-2">
                   {roleEntries.map(({ role, files }) => (
-                    <RoleRow
-                      key={role}
-                      role={role}
-                      files={files}
-                      maxCount={maxCount}
-                      projectId={projectId}
-                    />
+                    <RoleRow key={role} role={role} files={files} maxCount={maxCount} projectId={projectId} />
                   ))}
                 </div>
               </div>

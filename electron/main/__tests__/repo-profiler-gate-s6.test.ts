@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -41,15 +40,12 @@ beforeEach(() => {
 afterEach(() => {
   try {
     fs.rmSync(tmpDir, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
 });
 
 describe('repo-profiler capability-gate (SPEC 4.4)', () => {
   it('orquestrador != claude-sdk -> pula o agente, registra skip e preserva a heuristica', async () => {
-    getSettingMock.mockImplementation((k: string) =>
-      k === 'orchestrator_runtime' ? 'codex-sdk' : '',
-    );
+    getSettingMock.mockImplementation((k: string) => (k === 'orchestrator_runtime' ? 'codex-sdk' : ''));
 
     const onText = vi.fn();
     const manifest = await runRepoProfiler(tmpDir, { onText, onDone: vi.fn() });

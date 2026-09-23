@@ -1,6 +1,4 @@
-
 export type OpenDesignProviderMode = 'local-cli' | 'api-byok';
-
 
 export interface PreflightResult {
   ok: boolean;
@@ -9,7 +7,6 @@ export interface PreflightResult {
   reason?: string;
 }
 
-
 export type BootInstallStatus =
   | { kind: 'idle' }
   | { kind: 'installing'; runner: 'pnpm' | 'corepack' | 'npx'; startedAt: string }
@@ -17,12 +14,11 @@ export type BootInstallStatus =
   | { kind: 'failed'; error: string; failedAt: string };
 
 export type BootInstallStreamEvent =
-  | { kind: 'start';  runner: 'pnpm' | 'corepack' | 'npx' }
+  | { kind: 'start'; runner: 'pnpm' | 'corepack' | 'npx' }
   | { kind: 'stdout'; chunk: string }
   | { kind: 'stderr'; chunk: string }
-  | { kind: 'exit';   code: number | null; signal: NodeJS.Signals | null }
-  | { kind: 'error';  message: string };
-
+  | { kind: 'exit'; code: number | null; signal: NodeJS.Signals | null }
+  | { kind: 'error'; message: string };
 
 export interface BootstrapResult {
   openDesignProjectId: string;
@@ -53,12 +49,7 @@ export type OpenDesignBootstrapStage =
   | 'prompt-verification'
   | 'studio';
 
-export type OpenDesignBootstrapProgressStatus =
-  | 'pending'
-  | 'running'
-  | 'done'
-  | 'warning'
-  | 'error';
+export type OpenDesignBootstrapProgressStatus = 'pending' | 'running' | 'done' | 'warning' | 'error';
 
 export interface OpenDesignBootstrapProgressEvent {
   projectId: string;
@@ -69,14 +60,12 @@ export interface OpenDesignBootstrapProgressEvent {
   at: string;
 }
 
-
 export interface LockedSnapshotPaths {
   snapshotDir: string;
   manifestPath: string;
   contractPath: string;
   artifactHtmlPath: string;
 }
-
 
 export interface OpenDesignSessionConfig {
   agentId: string;
@@ -88,7 +77,6 @@ export interface OpenDesignSessionConfig {
   locale: 'pt-BR' | string;
   configuredAt: string;
 }
-
 
 export interface OpenDesignConfig {
   enabled: boolean;
@@ -118,7 +106,6 @@ export interface OpenDesignConfig {
   sessionConfigHash?: string;
   bootstrappedAt?: string;
 }
-
 
 export interface DesignNavigationItem {
   id: string;
@@ -150,7 +137,19 @@ export interface DesignScreen {
 export interface DesignComponent {
   id: string;
   name: string;
-  type: 'layout' | 'navigation' | 'form' | 'table' | 'card' | 'chart' | 'modal' | 'drawer' | 'chat' | 'calendar' | 'kanban' | 'other';
+  type:
+    | 'layout'
+    | 'navigation'
+    | 'form'
+    | 'table'
+    | 'card'
+    | 'chart'
+    | 'modal'
+    | 'drawer'
+    | 'chat'
+    | 'calendar'
+    | 'kanban'
+    | 'other';
   usedInScreenIds: string[];
   props?: Record<string, string>;
   states?: string[];
@@ -216,7 +215,6 @@ export interface DesignContract {
   deltas: DesignDelta[];
 }
 
-
 export function isValidDesignContract(input: unknown): input is DesignContract {
   return collectDesignContractIssues(input).length === 0;
 }
@@ -239,7 +237,9 @@ export function collectDesignContractIssues(input: unknown): string[] {
   } else {
     const visual = c['visual'] as Record<string, unknown>;
     if (typeof visual['direction'] !== 'string') {
-      issues.push('Falta `visual.direction` (string descrevendo a direcao visual, ex: "editorial dark com acento sage").');
+      issues.push(
+        'Falta `visual.direction` (string descrevendo a direcao visual, ex: "editorial dark com acento sage").',
+      );
     }
     if (typeof visual['tokens'] !== 'object' || visual['tokens'] === null) {
       issues.push('Falta `visual.tokens` (object obrigatorio).');
@@ -274,13 +274,16 @@ export function collectDesignContractIssues(input: unknown): string[] {
         }
         const n = item as Record<string, unknown>;
         if (typeof n['id'] !== 'string') issues.push(`navigation.primary[${i}].id ausente ou nao-string.`);
-        if (!Array.isArray(n['userStoryIds'])) issues.push(`navigation.primary[${i}].userStoryIds precisa ser array (use ["US-XX"] ou [] se nao houver).`);
+        if (!Array.isArray(n['userStoryIds']))
+          issues.push(`navigation.primary[${i}].userStoryIds precisa ser array (use ["US-XX"] ou [] se nao houver).`);
       });
     }
   }
 
   if (!Array.isArray(c['screens'])) {
-    issues.push('Falta `screens` (array no topo). Cada item: `{ id: string, userStoryIds: string[], ...campos extras OK }`.');
+    issues.push(
+      'Falta `screens` (array no topo). Cada item: `{ id: string, userStoryIds: string[], ...campos extras OK }`.',
+    );
   } else {
     (c['screens'] as unknown[]).forEach((item, i) => {
       if (typeof item !== 'object' || item === null) {
@@ -290,13 +293,17 @@ export function collectDesignContractIssues(input: unknown): string[] {
       const s = item as Record<string, unknown>;
       if (typeof s['id'] !== 'string') issues.push(`screens[${i}].id ausente ou nao-string.`);
       if (!Array.isArray(s['userStoryIds'])) {
-        issues.push(`screens[${i}].userStoryIds precisa ser array de strings (NAO use "covers" nem "acceptance_criteria_visualized" como substituto — use "userStoryIds": ["US-01", "US-02", ...]).`);
+        issues.push(
+          `screens[${i}].userStoryIds precisa ser array de strings (NAO use "covers" nem "acceptance_criteria_visualized" como substituto — use "userStoryIds": ["US-01", "US-02", ...]).`,
+        );
       }
     });
   }
 
   if (!Array.isArray(c['components'])) {
-    issues.push('Falta `components` (array no topo). Cada item: `{ id: string, ...campos extras OK }`. Pode ser array vazio `[]`.');
+    issues.push(
+      'Falta `components` (array no topo). Cada item: `{ id: string, ...campos extras OK }`. Pode ser array vazio `[]`.',
+    );
   } else {
     (c['components'] as unknown[]).forEach((item, i) => {
       if (typeof item !== 'object' || item === null) {
@@ -313,14 +320,18 @@ export function collectDesignContractIssues(input: unknown): string[] {
   } else {
     (c['dataRequirements'] as unknown[]).forEach((item, i) => {
       if (typeof item !== 'object' || item === null) {
-        issues.push(`dataRequirements[${i}] precisa ser object com pelo menos { id, fields, sourceScreenIds, userStoryIds }.`);
+        issues.push(
+          `dataRequirements[${i}] precisa ser object com pelo menos { id, fields, sourceScreenIds, userStoryIds }.`,
+        );
         return;
       }
       const dr = item as Record<string, unknown>;
       if (typeof dr['id'] !== 'string') issues.push(`dataRequirements[${i}].id ausente ou nao-string.`);
       if (!Array.isArray(dr['fields'])) issues.push(`dataRequirements[${i}].fields precisa ser array (pode ser []).`);
-      if (!Array.isArray(dr['sourceScreenIds'])) issues.push(`dataRequirements[${i}].sourceScreenIds precisa ser array (pode ser []).`);
-      if (!Array.isArray(dr['userStoryIds'])) issues.push(`dataRequirements[${i}].userStoryIds precisa ser array (use ["US-XX"] ou [] se nao houver).`);
+      if (!Array.isArray(dr['sourceScreenIds']))
+        issues.push(`dataRequirements[${i}].sourceScreenIds precisa ser array (pode ser []).`);
+      if (!Array.isArray(dr['userStoryIds']))
+        issues.push(`dataRequirements[${i}].userStoryIds precisa ser array (use ["US-XX"] ou [] se nao houver).`);
     });
   }
 
@@ -329,20 +340,27 @@ export function collectDesignContractIssues(input: unknown): string[] {
   } else {
     (c['apiExpectations'] as unknown[]).forEach((item, i) => {
       if (typeof item !== 'object' || item === null) {
-        issues.push(`apiExpectations[${i}] precisa ser object com pelo menos { id, operation, screenIds, actionIds, userStoryIds }.`);
+        issues.push(
+          `apiExpectations[${i}] precisa ser object com pelo menos { id, operation, screenIds, actionIds, userStoryIds }.`,
+        );
         return;
       }
       const api = item as Record<string, unknown>;
       if (typeof api['id'] !== 'string') issues.push(`apiExpectations[${i}].id ausente ou nao-string.`);
       if (typeof api['operation'] !== 'string') issues.push(`apiExpectations[${i}].operation ausente ou nao-string.`);
-      if (!Array.isArray(api['screenIds'])) issues.push(`apiExpectations[${i}].screenIds precisa ser array (pode ser []).`);
-      if (!Array.isArray(api['actionIds'])) issues.push(`apiExpectations[${i}].actionIds precisa ser array (pode ser []).`);
-      if (!Array.isArray(api['userStoryIds'])) issues.push(`apiExpectations[${i}].userStoryIds precisa ser array (use ["US-XX"] ou [] se nao houver).`);
+      if (!Array.isArray(api['screenIds']))
+        issues.push(`apiExpectations[${i}].screenIds precisa ser array (pode ser []).`);
+      if (!Array.isArray(api['actionIds']))
+        issues.push(`apiExpectations[${i}].actionIds precisa ser array (pode ser []).`);
+      if (!Array.isArray(api['userStoryIds']))
+        issues.push(`apiExpectations[${i}].userStoryIds precisa ser array (use ["US-XX"] ou [] se nao houver).`);
     });
   }
 
   if (!Array.isArray(c['deltas'])) {
-    issues.push('Falta `deltas` (array no topo). Pode ser `[]`. Cada item (se houver): `{ id: string, summary: string }`.');
+    issues.push(
+      'Falta `deltas` (array no topo). Pode ser `[]`. Cada item (se houver): `{ id: string, summary: string }`.',
+    );
   } else {
     (c['deltas'] as unknown[]).forEach((item, i) => {
       if (typeof item !== 'object' || item === null) {
@@ -351,7 +369,8 @@ export function collectDesignContractIssues(input: unknown): string[] {
       }
       const d = item as Record<string, unknown>;
       if (typeof d['id'] !== 'string') issues.push(`deltas[${i}].id ausente ou nao-string.`);
-      if (!Array.isArray(d['relatedUserStoryIds'])) issues.push(`deltas[${i}].relatedUserStoryIds precisa ser array (pode ser []).`);
+      if (!Array.isArray(d['relatedUserStoryIds']))
+        issues.push(`deltas[${i}].relatedUserStoryIds precisa ser array (pode ser []).`);
     });
   }
 

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
@@ -21,8 +20,7 @@ vi.mock('../db', () => ({
 }));
 vi.mock('../tool-script/tool-script-engine', () => ({
   isToolScriptAvailable: () => state.pythonAvailable,
-  getToolScriptPythonPath: () =>
-    state.pythonAvailable ? '/opt/homebrew/bin/python3' : undefined,
+  getToolScriptPythonPath: () => (state.pythonAvailable ? '/opt/homebrew/bin/python3' : undefined),
   getToolScriptAvailabilityReason: () =>
     state.pythonAvailable ? undefined : (state.pythonReason ?? 'python3 nao encontrado'),
 }));
@@ -36,10 +34,7 @@ vi.mock('../codex-sdk/mcp-config-sync', () => ({
   syncCodexMcpConfig: syncCodexMcpConfigMock,
 }));
 
-import {
-  resolveToolScriptRegistration,
-  applyToolScriptEnabledChange,
-} from '../tool-script/tool-script-availability';
+import { resolveToolScriptRegistration, applyToolScriptEnabledChange } from '../tool-script/tool-script-availability';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -48,7 +43,6 @@ beforeEach(() => {
   state.settings = new Map();
   state.servers = [];
 });
-
 
 describe('resolveToolScriptRegistration', () => {
   it('python3 presente + setting habilitado (default) -> registra', () => {
@@ -83,7 +77,6 @@ describe('resolveToolScriptRegistration', () => {
     expect(d.reason).toContain('python3');
   });
 });
-
 
 describe('applyToolScriptEnabledChange - desligar', () => {
   it('server registrado: stop + isActive=false + re-sync do codex', async () => {

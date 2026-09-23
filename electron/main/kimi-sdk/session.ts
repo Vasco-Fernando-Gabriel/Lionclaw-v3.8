@@ -1,40 +1,33 @@
-
-import { getAgentCwd } from "../paths";
+import { getAgentCwd } from '../paths';
 import { getEnabledTools } from '../db';
-import { buildSystemPrompt, loadGeneratedAgentContext } from "../prompt-builder";
-import { estimateTokensRough } from "../agent-runtime/context-measure";
-import { createLogger } from "../logger";
-import { getKimiAcpDriver } from "../kimi-acp/acp-driver";
-import { startKimiMcpBridge, type KimiMcpBridge } from "../kimi-acp/mcp-http-bridge";
-import { buildKimiSessionTools } from "../agent-runtime/kimi-session-config";
-import { appendAgentDetailsSteering } from "./agent-details-steering";
-import {
-  isKimiAvailable,
-  resolveKimiBinary,
-  KimiUnavailableError,
-} from "../agent-runtime/kimi-availability";
-import type { AgentQueryConfig } from "../agent-config-resolver";
-import type { CliAgenticResponse, CliRunHandle, CliStreamCallbacks } from "../agent-runtime/cli-agentic/contract";
-import type { ChatFeatureToggles } from "../../../src/types";
-import {
-  resolveKimiEffectiveThinking,
-  type KimiEffort,
-} from "../../../src/constants/kimi-models";
-import type { AgentPermissionProfile } from "../agent-runtime/types";
+import { buildSystemPrompt, loadGeneratedAgentContext } from '../prompt-builder';
+import { estimateTokensRough } from '../agent-runtime/context-measure';
+import { createLogger } from '../logger';
+import { getKimiAcpDriver } from '../kimi-acp/acp-driver';
+import { startKimiMcpBridge, type KimiMcpBridge } from '../kimi-acp/mcp-http-bridge';
+import { buildKimiSessionTools } from '../agent-runtime/kimi-session-config';
+import { appendAgentDetailsSteering } from './agent-details-steering';
+import { isKimiAvailable, resolveKimiBinary, KimiUnavailableError } from '../agent-runtime/kimi-availability';
+import type { AgentQueryConfig } from '../agent-config-resolver';
+import type { CliAgenticResponse, CliRunHandle, CliStreamCallbacks } from '../agent-runtime/cli-agentic/contract';
+import type { ChatFeatureToggles } from '../../../src/types';
+import { resolveKimiEffectiveThinking, type KimiEffort } from '../../../src/constants/kimi-models';
+import type { AgentPermissionProfile } from '../agent-runtime/types';
 import {
   createSubagentDispatchContext,
   pendingSubagentProviderAuthError,
   resolveSubagentHostAllowedTools,
-} from "../agent-runtime/subagent-dispatch";
-import { resolveChatInheritedEffort } from "../agent-runtime/chat-effort-inheritance";
-import { acquireKimiSlot } from "../agent-runtime/kimi-concurrency";
-import { randomUUID } from "node:crypto";
+} from '../agent-runtime/subagent-dispatch';
+import { resolveChatInheritedEffort } from '../agent-runtime/chat-effort-inheritance';
+import { acquireKimiSlot } from '../agent-runtime/kimi-concurrency';
+import { randomUUID } from 'node:crypto';
 
-const logger = createLogger("kimi-sdk-session");
+const logger = createLogger('kimi-sdk-session');
 
-const KIMI_SUBSCRIPTION_MODEL = "kimi-code/kimi-for-coding";
+const KIMI_SUBSCRIPTION_MODEL = 'kimi-code/kimi-for-coding';
 
 export interface CreateChatKimiSessionOptions {
+  swarmReadOnly?: boolean;
   sessionId: string;
   model: string;
   effort?: KimiEffort;
@@ -44,6 +37,7 @@ export interface CreateChatKimiSessionOptions {
   isOnboarding?: boolean;
   capabilities?: ChatFeatureToggles;
   lane?: 'desktop' | 'telegram' | 'cron';
+  turnBinding?: { sessionId: string; turnId: string };
 }
 
 export interface KimiSessionContextMeta {
@@ -52,22 +46,16 @@ export interface KimiSessionContextMeta {
 }
 
 export interface ChatKimiSession {
-  send(
-    prompt: string,
-    callbacks: CliStreamCallbacks,
-    abortSignal: AbortSignal,
-  ): Promise<CliAgenticResponse>;
+  send(prompt: string, callbacks: CliStreamCallbacks, abortSignal: AbortSignal): Promise<CliAgenticResponse>;
   close(): Promise<void>;
   contextMeta: KimiSessionContextMeta;
 }
 
-export async function createChatKimiSession(
-  opts: CreateChatKimiSessionOptions,
-): Promise<ChatKimiSession> {
+export async function createChatKimiSession(opts: CreateChatKimiSessionOptions): Promise<ChatKimiSession> {
   const availability = await isKimiAvailable(opts.model);
-  if (availability.authMode === "none") {
+  if (availability.authMode === 'none') {
     throw new KimiUnavailableError(
-      "Kimi nao esta autenticado. Rode `/login` na CLI do Kimi (assinatura) antes de selecionar Kimi como orquestrador.",
+      'Kimi nao esta autenticado. Rode `/login` na CLI do Kimi (assinatura) antes de selecionar Kimi como orquestrador.',
     );
   }
   if (
@@ -75,24 +63,22 @@ export async function createChatKimiSession(
     availability.modelAvailable === false ||
     availability.usable === false
   ) {
-    throw new KimiUnavailableError(
-      `Modelo ${opts.model} nao esta disponivel pelo provider managed/OAuth do Kimi CLI.`,
-    );
+    throw new KimiUnavailableError(`Modelo ${opts.model} nao esta disponivel pelo provider managed/OAuth do Kimi CLI.`);
   }
 
   const binary = await resolveKimiBinary();
   const isOnboarding = opts.isOnboarding ?? false;
   const workDir = getAgentCwd(isOnboarding);
   const effectiveThinking = resolveKimiEffectiveThinking(opts.model, opts.effort, true, 'inherited');
-  const thinking = effectiveThinking.mode !== "none";
+  const thinking = effectiveThinking.mode !== 'none';
 
   const lionPrompt = buildSystemPrompt(opts.agentId, {
     isOnboarding,
     model: opts.model,
-    chatSurface: "kimi-sdk",
+    chatSurface: 'kimi-sdk',
     capabilities: opts.capabilities,
   });
-  const agentContext = isOnboarding ? "" : loadGeneratedAgentContext();
+  const agentContext = isOnboarding ? '' : loadGeneratedAgentContext();
   const chatSystemPrompt = agentContext ? `${agentContext}\n\n${lionPrompt}` : lionPrompt;
 
   const toolAbortController = new AbortController();
@@ -100,12 +86,13 @@ export async function createChatKimiSession(
   if (!permission) throw new Error('Sessao Kimi de chat exige permission profile efetivo.');
   const lane = opts.lane ?? 'desktop';
   const { getMCPConfigForAgent } = await import('../mcp-manager');
-  const parentMcpConfig = lane === 'desktop'
-    ? await getMCPConfigForAgent(opts.agentId, {
-        surface: 'kimi-sdk',
-        capabilities: opts.capabilities,
-      })
-    : undefined;
+  const parentMcpConfig =
+    lane === 'desktop'
+      ? await getMCPConfigForAgent(opts.agentId, {
+          surface: 'kimi-sdk',
+          capabilities: opts.capabilities,
+        })
+      : undefined;
   const parentMcpServerIds = Object.keys(parentMcpConfig ?? {});
   const dispatchContext = createSubagentDispatchContext({
     ownerKind: 'chat',
@@ -123,7 +110,7 @@ export async function createChatKimiSession(
     allowedMcpServerIds: parentMcpServerIds,
     permission,
     parentAbortSignal: toolAbortController.signal,
-    inheritedEffort: resolveChatInheritedEffort(),
+    inheritedEffort: resolveChatInheritedEffort('kimi-sdk', opts.effort),
   });
   const chatConfig: AgentQueryConfig = {
     model: opts.model,
@@ -131,19 +118,21 @@ export async function createChatKimiSession(
     allowedTools: [],
     mcpServers: [],
     maxTurns: undefined,
-    effort: effectiveThinking.mode === "tiered" ? effectiveThinking.effective : "max",
-    thinking: thinking ? "enabled" : "disabled",
+    effort: effectiveThinking.mode === 'tiered' ? effectiveThinking.effective : 'max',
+    thinking: thinking ? 'enabled' : 'disabled',
     thinkingBudget: undefined,
-    runtime: "kimi",
+    runtime: 'kimi',
   };
   const sessionTools = await buildKimiSessionTools({
-    profile: "chat",
+    profile: 'chat',
     config: chatConfig,
     cwd: workDir,
     abortController: toolAbortController,
     lane,
+    sessionId: opts.sessionId,
     dispatchContext,
     capabilities: opts.capabilities,
+    ...(opts.turnBinding ? { turnBinding: { ...opts.turnBinding, ...(lane ? { lane } : {}) } } : {}),
   });
 
   const reconciledPrompt = appendAgentDetailsSteering(
@@ -186,10 +175,10 @@ export async function createChatKimiSession(
 
   let handle: CliRunHandle;
   try {
-    if (sessionTools.externalTools.length > 0) {
+    if (!opts.swarmReadOnly && sessionTools.externalTools.length > 0) {
       bridge = await startKimiMcpBridge({
         tools: sessionTools.externalTools,
-        serverName: "LionClaw Bridge",
+        serverName: 'LionClaw Bridge',
       });
     }
     handle = await getKimiAcpDriver().createRun({
@@ -197,13 +186,13 @@ export async function createChatKimiSession(
       model: opts.model,
       effort: effectiveThinking.envEffort,
       thinking,
-      systemPrompt: "",
+      systemPrompt: '',
       ...(binary ? { executable: binary } : {}),
       ...(opts.permission ? { permission: opts.permission } : {}),
       ...(opts.abortSignal ? { abortSignal: opts.abortSignal } : {}),
-      profile: "chat",
-      surface: "chat",
-      ownerKind: "chat",
+      profile: 'chat',
+      surface: 'chat',
+      ownerKind: 'chat',
       runId: `kimi-chat-${randomUUID()}`,
       ownerId: opts.sessionId,
       mcpServers: bridge ? [bridge.mcpServerEntry] : [],
@@ -232,11 +221,7 @@ export async function createChatKimiSession(
 
   return {
     contextMeta,
-    async send(
-      prompt: string,
-      callbacks: CliStreamCallbacks,
-      abortSignal: AbortSignal,
-    ): Promise<CliAgenticResponse> {
+    async send(prompt: string, callbacks: CliStreamCallbacks, abortSignal: AbortSignal): Promise<CliAgenticResponse> {
       const leadingPrompt =
         firstSend && reconciledPrompt.trim().length > 0
           ? `## Instrucoes do agente\n\n${reconciledPrompt}\n\n## Tarefa\n\n${prompt}`
@@ -268,18 +253,17 @@ export async function createChatKimiSession(
       detachParentAbort = (): void => undefined;
       try {
         toolAbortController.abort();
-      } catch {
-      }
+      } catch {}
       try {
         await handle.close();
       } catch (err) {
-        logger.warn({ err, sessionId: opts.sessionId }, "kimi chat handle.close() failed");
+        logger.warn({ err, sessionId: opts.sessionId }, 'kimi chat handle.close() failed');
       }
       if (bridge) {
         try {
           await bridge.stop();
         } catch (err) {
-          logger.warn({ err, sessionId: opts.sessionId }, "kimi chat bridge.stop() failed");
+          logger.warn({ err, sessionId: opts.sessionId }, 'kimi chat bridge.stop() failed');
         }
       }
       releaseSlot();

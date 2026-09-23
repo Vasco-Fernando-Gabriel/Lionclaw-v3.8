@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
 
@@ -39,9 +38,20 @@ vi.mock('electron', () => ({
   app: { on: vi.fn() },
 }));
 
-vi.mock('fs', () => ({ default: { existsSync: vi.fn().mockReturnValue(false), readFileSync: vi.fn().mockReturnValue('') }, existsSync: vi.fn().mockReturnValue(false), readFileSync: vi.fn().mockReturnValue('') }));
-vi.mock('path', () => ({ default: { join: (...args: string[]) => args.join('/') }, join: (...args: string[]) => args.join('/') }));
-vi.mock('os', () => ({ default: { homedir: () => '/home/user', tmpdir: () => '/tmp' }, homedir: () => '/home/user', tmpdir: () => '/tmp' }));
+vi.mock('fs', () => ({
+  default: { existsSync: vi.fn().mockReturnValue(false), readFileSync: vi.fn().mockReturnValue('') },
+  existsSync: vi.fn().mockReturnValue(false),
+  readFileSync: vi.fn().mockReturnValue(''),
+}));
+vi.mock('path', () => ({
+  default: { join: (...args: string[]) => args.join('/') },
+  join: (...args: string[]) => args.join('/'),
+}));
+vi.mock('os', () => ({
+  default: { homedir: () => '/home/user', tmpdir: () => '/tmp' },
+  homedir: () => '/home/user',
+  tmpdir: () => '/tmp',
+}));
 
 vi.mock('../db', () => ({
   getHarnessProject: vi.fn(),
@@ -78,7 +88,10 @@ vi.mock('../agent-runtime', () => ({
 vi.mock('../codex-runtime/binary', () => ({
   isCodexAvailable: vi.fn().mockResolvedValue({ authenticated: true, appServerSupported: true }),
 }));
-vi.mock('../codex-sdk', () => ({ closeAllCachedChatCodexSessions: vi.fn() }));
+vi.mock('../codex-sdk', () => ({
+  closeAllCachedChatCodexSessions: vi.fn(),
+  closeIdleCachedChatCodexSessions: vi.fn(() => []),
+}));
 vi.mock('../agent-runtime/codex-session-factory', () => ({
   closeAllOfficialRuns: vi.fn(),
   resetOfficialProjectRunsNow: vi.fn(),
@@ -105,7 +118,6 @@ import { PipelineEngine } from '../pipeline-engine';
 import { getHarnessProject } from '../db';
 import { HarnessEngine } from '../harness-engine';
 
-
 function makeEngine() {
   const harnessInstance = new HarnessEngine({} as never);
   return new PipelineEngine(() => null, harnessInstance as never);
@@ -126,9 +138,7 @@ function stubProject(id: string) {
 }
 
 function errorStreams() {
-  return ipc.events.filter(
-    (e) => e.channel === 'pipeline:stream' && (e.payload as { type?: string }).type === 'error',
-  );
+  return ipc.events.filter((e) => e.channel === 'pipeline:stream' && (e.payload as { type?: string }).type === 'error');
 }
 
 const TOKEN_ERROR = { error: 'turno da fase em andamento' };

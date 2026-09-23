@@ -1,8 +1,6 @@
-
 import { describe, it, expect } from 'vitest';
 import { processAgentStream } from '../stream-processor';
 import type { StreamCallbacks } from '../stream-processor';
-
 
 async function* toAsync(events: Array<Record<string, unknown>>) {
   for (const e of events) yield e;
@@ -67,15 +65,9 @@ function resultEvent(text: string): Record<string, unknown> {
 
 const noCallbacks: StreamCallbacks = {};
 
-
 describe('processAgentStream: accumulatedText and textBlocks', () => {
-
   it('accumulates text in a single block correctly', async () => {
-    const events = [
-      textDelta('hello '),
-      textDelta('world'),
-      blockStop(),
-    ];
+    const events = [textDelta('hello '), textDelta('world'), blockStop()];
 
     const result = await processAgentStream(toAsync(events), noCallbacks);
 
@@ -86,14 +78,7 @@ describe('processAgentStream: accumulatedText and textBlocks', () => {
   });
 
   it('separates text blocks correctly when interleaved with tool_use', async () => {
-    const events = [
-      textDelta('A'),
-      blockStop(),
-      blockStartToolUse('MyTool'),
-      blockStop(),
-      textDelta('B'),
-      blockStop(),
-    ];
+    const events = [textDelta('A'), blockStop(), blockStartToolUse('MyTool'), blockStop(), textDelta('B'), blockStop()];
 
     const result = await processAgentStream(toAsync(events), noCallbacks);
 
@@ -114,11 +99,7 @@ describe('processAgentStream: accumulatedText and textBlocks', () => {
   });
 
   it('uses result event as output and still tracks accumulatedText', async () => {
-    const events = [
-      textDelta('some text'),
-      blockStop(),
-      resultEvent('final answer'),
-    ];
+    const events = [textDelta('some text'), blockStop(), resultEvent('final answer')];
 
     const result = await processAgentStream(toAsync(events), noCallbacks);
 
@@ -129,9 +110,7 @@ describe('processAgentStream: accumulatedText and textBlocks', () => {
   });
 
   it('flushes an unclosed text block into textBlocks after stream ends', async () => {
-    const events = [
-      textDelta('unclosed block content'),
-    ];
+    const events = [textDelta('unclosed block content')];
 
     const result = await processAgentStream(toAsync(events), noCallbacks);
 
@@ -164,12 +143,7 @@ describe('processAgentStream: accumulatedText and textBlocks', () => {
   });
 
   it('tracks metrics correctly while collecting text blocks', async () => {
-    const events = [
-      messageStart(10, 2, 3),
-      textDelta('hello'),
-      blockStop(),
-      messageDelta(5),
-    ];
+    const events = [messageStart(10, 2, 3), textDelta('hello'), blockStop(), messageDelta(5)];
 
     const result = await processAgentStream(toAsync(events), noCallbacks);
 
@@ -183,12 +157,7 @@ describe('processAgentStream: accumulatedText and textBlocks', () => {
   });
 
   it('does not add empty tool_use blocks to textBlocks', async () => {
-    const events = [
-      blockStartToolUse('ToolA'),
-      blockStop(),
-      blockStartToolUse('ToolB'),
-      blockStop(),
-    ];
+    const events = [blockStartToolUse('ToolA'), blockStop(), blockStartToolUse('ToolB'), blockStop()];
 
     const result = await processAgentStream(toAsync(events), noCallbacks);
 
@@ -197,7 +166,6 @@ describe('processAgentStream: accumulatedText and textBlocks', () => {
     expect(result.metrics.toolUses).toBe(2);
   });
 });
-
 
 function inputJsonDelta(partialJson: string): Record<string, unknown> {
   return {
@@ -210,16 +178,10 @@ function inputJsonDelta(partialJson: string): Record<string, unknown> {
 }
 
 describe('processAgentStream: onToolUseComplete', () => {
-
   it('assembles input_json_delta fragments and calls onToolUseComplete', async () => {
     const calls: Array<{ name: string; input: unknown }> = [];
 
-    const events = [
-      blockStartToolUse('Read'),
-      inputJsonDelta('{"file_pa'),
-      inputJsonDelta('th":"a.ts"}'),
-      blockStop(),
-    ];
+    const events = [blockStartToolUse('Read'), inputJsonDelta('{"file_pa'), inputJsonDelta('th":"a.ts"}'), blockStop()];
 
     await processAgentStream(toAsync(events), {
       onToolUseComplete: (name, input) => calls.push({ name, input }),
@@ -234,11 +196,7 @@ describe('processAgentStream: onToolUseComplete', () => {
     const legacyCalls: string[] = [];
     const completeCalls: Array<{ name: string; input: unknown }> = [];
 
-    const events = [
-      blockStartToolUse('Read'),
-      inputJsonDelta('{"file_path":"b.ts"}'),
-      blockStop(),
-    ];
+    const events = [blockStartToolUse('Read'), inputJsonDelta('{"file_path":"b.ts"}'), blockStop()];
 
     await processAgentStream(toAsync(events), {
       onToolUse: (name) => legacyCalls.push(name),
@@ -251,11 +209,7 @@ describe('processAgentStream: onToolUseComplete', () => {
   });
 
   it('works correctly when onToolUseComplete is not provided', async () => {
-    const events = [
-      blockStartToolUse('Read'),
-      inputJsonDelta('{"file_path":"c.ts"}'),
-      blockStop(),
-    ];
+    const events = [blockStartToolUse('Read'), inputJsonDelta('{"file_path":"c.ts"}'), blockStop()];
 
     const result = await processAgentStream(toAsync(events), {});
 
@@ -265,11 +219,7 @@ describe('processAgentStream: onToolUseComplete', () => {
   it('passes null input when accumulated JSON is malformed', async () => {
     const calls: Array<{ name: string; input: unknown }> = [];
 
-    const events = [
-      blockStartToolUse('Read'),
-      inputJsonDelta('{bad json'),
-      blockStop(),
-    ];
+    const events = [blockStartToolUse('Read'), inputJsonDelta('{bad json'), blockStop()];
 
     await processAgentStream(toAsync(events), {
       onToolUseComplete: (name, input) => calls.push({ name, input }),
@@ -332,7 +282,9 @@ describe('processAgentStream: onToolUseComplete', () => {
 
     const completes: Array<{ name: string; input: unknown }> = [];
     await processAgentStream(toAsync(events), {
-      onToolUseComplete: (name, input) => { completes.push({ name, input }); },
+      onToolUseComplete: (name, input) => {
+        completes.push({ name, input });
+      },
     });
 
     expect(completes).toEqual([{ name: 'Read', input: { file_path: 'foo.ts' } }]);
@@ -340,7 +292,6 @@ describe('processAgentStream: onToolUseComplete', () => {
 });
 
 describe('processAgentStream: reconciliacao de usage com o result final', () => {
-
   function messageStartSemUsage(): Record<string, unknown> {
     return {
       type: 'stream_event',
@@ -348,10 +299,7 @@ describe('processAgentStream: reconciliacao de usage com o result final', () => 
     };
   }
 
-  function resultEventComUsage(
-    text: string,
-    usage: Record<string, number>,
-  ): Record<string, unknown> {
+  function resultEventComUsage(text: string, usage: Record<string, number>): Record<string, unknown> {
     return { type: 'result', result: text, usage };
   }
 
@@ -404,11 +352,7 @@ describe('processAgentStream: reconciliacao de usage com o result final', () => 
   });
 
   it('result sem usage: metricas do stream ficam intactas', async () => {
-    const events = [
-      messageStart(100, 0, 0),
-      messageDelta(50),
-      resultEvent('x'),
-    ];
+    const events = [messageStart(100, 0, 0), messageDelta(50), resultEvent('x')];
 
     const result = await processAgentStream(toAsync(events), noCallbacks);
 
@@ -417,11 +361,7 @@ describe('processAgentStream: reconciliacao de usage com o result final', () => 
   });
 });
 
-
-function messageStartComId(
-  id: string,
-  usage?: Record<string, number>,
-): Record<string, unknown> {
+function messageStartComId(id: string, usage?: Record<string, number>): Record<string, unknown> {
   return {
     type: 'stream_event',
     event: {
@@ -448,7 +388,6 @@ function systemInit(sessionId: string): Record<string, unknown> {
 }
 
 describe('processAgentStream: BUG 3 F1 — usage por request (mapa por message.id)', () => {
-
   it('assistant messages duplicadas por content block (mesmo id) contam UMA vez (MAX, nao soma)', async () => {
     const usage = {
       input_tokens: 100,
@@ -478,16 +417,13 @@ describe('processAgentStream: BUG 3 F1 — usage por request (mapa por message.i
       cache_creation_input_tokens: 0,
       output_tokens: 0,
     };
-    const events = [
-      messageStartComId('msg_1', usage),
-      assistantMessage('msg_1', { ...usage, output_tokens: 80 }),
-    ];
+    const events = [messageStartComId('msg_1', usage), assistantMessage('msg_1', { ...usage, output_tokens: 80 })];
 
     const result = await processAgentStream(toAsync(events), noCallbacks);
 
-    expect(result.metrics.inputTokens).toBe(2_100); // uma vez, nao 4_200
+    expect(result.metrics.inputTokens).toBe(2_100);
     expect(result.metrics.outputTokens).toBe(80);
-    expect(result.metrics.apiRequests).toBe(1); // so o message_start conta
+    expect(result.metrics.apiRequests).toBe(1);
   });
 
   it('sidechain (parent_tool_use_id) com id proprio conta como request separada', async () => {
@@ -528,10 +464,7 @@ describe('processAgentStream: BUG 3 F1 — usage por request (mapa por message.i
   });
 
   it('id ausente no compat: cada message_start ganha chave sintetica propria', async () => {
-    const events = [
-      messageStart(100, 0, 0),
-      messageStart(150, 0, 0),
-    ];
+    const events = [messageStart(100, 0, 0), messageStart(150, 0, 0)];
 
     const result = await processAgentStream(toAsync(events), noCallbacks);
 
@@ -540,10 +473,7 @@ describe('processAgentStream: BUG 3 F1 — usage por request (mapa por message.i
 
   it('assistant sem id herda a request corrente (MAX), sem dupla contagem', async () => {
     const usage = { input_tokens: 100, cache_read_input_tokens: 0, output_tokens: 30 };
-    const events = [
-      messageStartComId('msg_1', usage),
-      assistantMessage(undefined, usage),
-    ];
+    const events = [messageStartComId('msg_1', usage), assistantMessage(undefined, usage)];
 
     const result = await processAgentStream(toAsync(events), noCallbacks);
 
@@ -553,7 +483,6 @@ describe('processAgentStream: BUG 3 F1 — usage por request (mapa por message.i
 });
 
 describe('processAgentStream: BUG 3 F1 — captura do result (custo/modelUsage/sessionIds)', () => {
-
   it('result com total_cost_usd, modelUsage e session_id expostos no StreamProcessorResult', async () => {
     const events = [
       systemInit('sess-init'),
@@ -621,11 +550,7 @@ describe('processAgentStream: BUG 3 F1 — captura do result (custo/modelUsage/s
   });
 
   it('abort/crash sem result: sem totalCostUsd, mapa e a unica fonte, session do init sobrevive', async () => {
-    const events = [
-      systemInit('sess-abortada'),
-      messageStartComId('msg_1', { input_tokens: 300 }),
-      messageDelta(20),
-    ];
+    const events = [systemInit('sess-abortada'), messageStartComId('msg_1', { input_tokens: 300 }), messageDelta(20)];
 
     const result = await processAgentStream(toAsync(events), noCallbacks);
 

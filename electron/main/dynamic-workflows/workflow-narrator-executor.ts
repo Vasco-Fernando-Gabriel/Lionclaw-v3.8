@@ -1,11 +1,6 @@
-
 import type { AgentConfig } from '../../../src/types';
 import type { AgentQueryConfig } from '../agent-config-resolver';
-import type {
-  AgentExecutionRequest,
-  AgentExecutionResult,
-  RuntimeExecutor,
-} from '../agent-runtime/types';
+import type { AgentExecutionRequest, AgentExecutionResult, RuntimeExecutor } from '../agent-runtime/types';
 import { PERM_DEFAULT_NO_BYPASS } from '../agent-runtime/permission-profiles';
 import { createWatchdog, WATCHDOG_TIMEOUT_MS } from '../agent-runtime/watchdog';
 import { cloudExecutor } from '../agent-runtime/cloud-executor';
@@ -95,18 +90,13 @@ export async function executeNarrator(
 
   const executor = runtimeExecutors[config.runtime];
   if (!executor) {
-    throw new Error(
-      `Runtime do narrador sem executor: ${String(config.runtime)} (agent ${agentId})`,
-    );
+    throw new Error(`Runtime do narrador sem executor: ${String(config.runtime)} (agent ${agentId})`);
   }
 
   const abortController = input.abortController ?? new AbortController();
 
   const watchdog = createWatchdog(WATCHDOG_TIMEOUT_MS, (info) => {
-    logger.warn(
-      { agentId, runtime: config.runtime, ...info },
-      'Narrador stalled: sem progresso por 3min',
-    );
+    logger.warn({ agentId, runtime: config.runtime, ...info }, 'Narrador stalled: sem progresso por 3min');
     input.onStalled?.(info);
   });
 

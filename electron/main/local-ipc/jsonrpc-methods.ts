@@ -1,24 +1,26 @@
-
 import crypto from 'crypto';
 import type { BrowserWindow } from 'electron';
 import {
   getAllAgents,
   insertAuditEntry,
   getAgent,
-  getActiveChatSession,
   getPermissionBypass,
   getCompletedDocsCount,
   getLatestUserTurnIndex,
   type TaskExecutionRollup,
 } from '../db';
+import { isCodexSessionClosing } from '../codex-runtime/turn-barrier';
 import { recordActivity } from '../activity-log';
 import { getAllMCPServers } from '../mcp-manager';
 import { getSecret } from '../secrets-vault';
 import { listSkills, getSkill } from '../skills';
 import { sendAskQuestion } from '../ask-question';
 import { createPermissionGuard } from '../permission-guard';
+import { MCP_DIST_STALE_HINT } from '../mcp-dist-staleness';
 import {
   isPipelineWriteAction,
+  assertPipeVisibleToLane,
+  type PipelineCaller,
   pipelineListCore,
   pipelineInspectCore,
   pipelineCreateCore,
@@ -38,9 +40,10 @@ import { previewCaptureCore, previewOpenCore } from '../preview-open';
 import { createSubagentDispatchContext } from '../agent-runtime/subagent-dispatch';
 import type { SubagentDispatchContext } from '../agent-runtime/types';
 import { resolveChatInheritedEffort } from '../agent-runtime/chat-effort-inheritance';
-const tryBeginBackgroundWorkStart = (_lane: string): (() => void) | null => () => {};
-const UPDATE_MAINTENANCE_START_REFUSED_MESSAGE =
-  'Manutencao de atualizacao em andamento.';
+const tryBeginBackgroundWorkStart =
+  (_lane: string): (() => void) | null =>
+  () => {};
+const UPDATE_MAINTENANCE_START_REFUSED_MESSAGE = 'Manutencao de atualizacao em andamento.';
 
 import {
   isDynamicWorkflowWriteAction,
@@ -62,19 +65,17 @@ import {
 } from '../dynamic-workflows/drive-capability';
 import {
   resolveRepoGraphSessionId,
-  getRepoGraphTurnSession,
+  hasRepoGraphTurnSession,
   getRepoGraphTurnRuntime,
 } from '../repo-graph/turn-context';
 import {
   getActiveChatTurnByLane,
   getChatCapabilityTurn,
+  resolveTurnBinding,
+  type ActiveChatTurnBinding,
   type ChatLane,
 } from '../chat-capability-context';
-import {
-  assertChatCapability,
-  failClosedChatCapability,
-  getChatCapabilityGateMode,
-} from '../chat-capability-gate';
+import { assertChatCapability, failClosedChatCapability, getChatCapabilityGateMode } from '../chat-capability-gate';
 import type { McpInvocationContext } from '../mcp-invocation-context';
 import {
   mintHelperToken,
@@ -82,10 +83,13 @@ import {
   PROCESS_IDENTITY_HELPER_IDS,
   IDENTITY_METHOD_OWNERS,
 } from '../helper-identity';
-import { cronLane, desktopLane, telegramLane } from '../sdk-lane';
-import { resolveKanbanActor } from '../kanban-actor';
+import { cronLane, telegramLane, type SdkLane } from '../sdk-lane';
+import { peekDesktopLane } from '../desktop-lanes';
+import { resolveKanbanActorRef, type KanbanExternalClient } from '../kanban-actor';
 import type { KanbanCardPatch } from '../../../src/types/kanban';
 import type { RepoGraphReader } from '../repo-graph/types';
+import { dispatchSwarmFindings, SWARM_WORKER_OWNER_PREFIX } from '../swarm/worker-bridge';
+import { getSwarmService } from '../swarm';
 import { createLogger } from '../logger';
 import type {
   AskQuestionRequest,
@@ -97,8 +101,7 @@ import type {
 
 const logger = createLogger('local-ipc:jsonrpc');
 
-
-const HIDDEN_SQUADS = new Set(['harness', 'pipeline', 'security', 'feature', 'enrich']);
+const HIDDEN_SQUADS = new Set(['harness', 'pipeline', 'security', 'feature', 'enrich', 'swarm']);
 
 export interface ListAgentsEntry {
   id: string;
@@ -114,13 +117,13 @@ export interface LocalIpcConnectionIdentity {
   authenticatedHelper: boolean;
   serverId?: string;
   connectionId?: string;
+  externalClient?: KanbanExternalClient;
 }
 
 export interface JsonRpcContext {
   getWindow: () => BrowserWindow | null;
   connection?: LocalIpcConnectionIdentity;
 }
-
 
 export function handleListAgents(): ListAgentsEntry[] {
   const agents = getAllAgents();
@@ -137,7 +140,6 @@ export function handleListAgents(): ListAgentsEntry[] {
       skills: Array.isArray(a.skills) ? a.skills : [],
     }));
 }
-
 
 export interface AgentDetailsParams {
   agent_id: string;
@@ -156,14 +158,12 @@ export interface AgentDetailsResult {
   chatEligible: boolean;
 }
 
-export function handleAgentDetails(
-  params: AgentDetailsParams,
-): AgentDetailsResult | { error: string } {
+export function handleAgentDetails(params: AgentDetailsParams): AgentDetailsResult | { error: string } {
   if (!params || typeof params.agent_id !== 'string' || !params.agent_id.trim()) {
     return { error: 'agent_id e obrigatorio' };
   }
   const agent = getAgent(params.agent_id);
-  if (!agent || !agent.isActive) {
+  if (!agent || !agent.isActive || agent.squad === 'swarm') {
     return { error: `Agente nao encontrado ou inativo: ${params.agent_id}` };
   }
   const agentRec = agent as unknown as Record<string, unknown>;
@@ -183,56 +183,102 @@ export function handleAgentDetails(
   };
 }
 
-
 export interface CallAgentParams {
   agent_id: string;
   task: string;
   context?: Record<string, unknown>;
   expected_output?: string;
+  binding?: TurnBindingParams;
 }
 
-let subagentDispatchDepth = 0;
+const subagentDispatchDepthBySession = new Map<string, number>();
 
-export function isSubagentDispatchInFlight(): boolean {
-  return subagentDispatchDepth > 0;
+export function isSubagentDispatchInFlight(sessionId?: string): boolean {
+  if (sessionId === undefined) {
+    for (const depth of subagentDispatchDepthBySession.values()) {
+      if (depth > 0) return true;
+    }
+    return false;
+  }
+  return (subagentDispatchDepthBySession.get(sessionId) ?? 0) > 0;
+}
+
+function bumpSubagentDispatchDepth(sessionId: string, delta: number): void {
+  const next = Math.max(0, (subagentDispatchDepthBySession.get(sessionId) ?? 0) + delta);
+  if (next === 0) subagentDispatchDepthBySession.delete(sessionId);
+  else subagentDispatchDepthBySession.set(sessionId, next);
+}
+
+export interface TurnBindingParams {
+  lane: ChatLane;
+  sessionId?: string;
+  turnId?: string;
+}
+
+function readBindingString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+export function readTurnBindingParams(params: Record<string, unknown>): TurnBindingParams {
+  const sessionId = readBindingString(params['sessionId']);
+  const turnId = readBindingString(params['turnId']);
+  return {
+    lane: normalizeGatewayLane(params['lane']),
+    ...(sessionId ? { sessionId } : {}),
+    ...(turnId ? { turnId } : {}),
+  };
+}
+
+export function isLegacyHelperBinding(binding: TurnBindingParams): boolean {
+  if (binding.lane !== 'desktop') return false;
+  return binding.sessionId === undefined || binding.sessionId.startsWith('gateway-');
+}
+
+function bindingRefusalDetail(binding: TurnBindingParams, reason: string): string {
+  return isLegacyHelperBinding(binding) ? `${reason}; ${MCP_DIST_STALE_HINT}` : reason;
+}
+
+export function stripTurnBindingParams(params: Record<string, unknown>): Record<string, unknown> {
+  const { lane: _lane, sessionId: _sessionId, turnId: _turnId, ...rest } = params;
+  return rest;
+}
+
+function laneStateFor(binding: TurnBindingParams, sessionId: string): SdkLane | undefined {
+  if (binding.lane === 'telegram') return telegramLane;
+  if (binding.lane === 'cron') return cronLane;
+  return peekDesktopLane(sessionId);
 }
 
 const callAgentTurnContexts = new Map<string, SubagentDispatchContext>();
 
-function resolveCallAgentDispatchContext(ctx: JsonRpcContext): SubagentDispatchContext {
+function resolveCallAgentDispatchContext(ctx: JsonRpcContext, binding: TurnBindingParams): SubagentDispatchContext {
   const connection = ctx.connection;
   if (
-    !connection?.authenticatedHelper
-    || connection.serverId?.trim().toLowerCase() !== 'lionclaw-agents'
-    || !connection.connectionId
+    !connection?.authenticatedHelper ||
+    connection.serverId?.trim().toLowerCase() !== 'lionclaw-agents' ||
+    !connection.connectionId
   ) {
     throw new Error('call_agent exige conexao autenticada como lionclaw-agents.');
   }
-  const lanes = [
-    { name: 'desktop' as const, state: desktopLane },
-    { name: 'telegram' as const, state: telegramLane },
-    { name: 'cron' as const, state: cronLane },
-  ];
-  const active = lanes.flatMap(({ name, state }) => {
-    const turn = getActiveChatTurnByLane(name);
-    return turn ? [{ name, state, turn }] : [];
-  });
-  if (active.length !== 1) {
+  const resolution = resolveTurnBinding(binding);
+  if (!resolution.ok) {
     throw new Error(
-      active.length === 0
-        ? 'call_agent exige um turno host ativo.'
-        : 'call_agent recusado: mais de uma lane ativa e o helper nao trouxe binding de turno.',
+      `turn_binding_required: call_agent exige binding de turno host valido (${bindingRefusalDetail(binding, resolution.reason)}); ` +
+        'o helper precisa trazer sessionId e turnId do turno que o chamou.',
     );
   }
-  const [{ name, state, turn }] = active;
+  const turn = resolution.binding;
+  const name = binding.lane;
+  const state = laneStateFor(binding, turn.sessionId);
+  if (!state) throw new Error('call_agent sem lane de execucao para o turno host.');
   const turnContext = getChatCapabilityTurn(turn);
   if (
-    !turnContext?.cwd
-    || !turnContext.permissionProfile?.canUseTool
-    || !Array.isArray(turnContext.allowedTools)
-    || !Array.isArray(turnContext.allowedServerIds)
-    || !Array.isArray(turnContext.readRoots)
-    || !Array.isArray(turnContext.writeRoots)
+    !turnContext?.cwd ||
+    !turnContext.permissionProfile?.canUseTool ||
+    !Array.isArray(turnContext.allowedTools) ||
+    !Array.isArray(turnContext.allowedServerIds) ||
+    !Array.isArray(turnContext.readRoots) ||
+    !Array.isArray(turnContext.writeRoots)
   ) {
     throw new Error('call_agent sem capabilities/roots/permission guard cunhados pelo turno host.');
   }
@@ -240,11 +286,7 @@ function resolveCallAgentDispatchContext(ctx: JsonRpcContext): SubagentDispatchC
   if (!parentAbort) throw new Error('call_agent sem AbortController do turno host.');
   const key = `${connection.connectionId}:${name}:${turn.sessionId}:${turn.turnId}`;
   for (const [candidate, context] of callAgentTurnContexts) {
-    if (
-      candidate !== key
-      || context.parentAbortSignal !== parentAbort.signal
-      || context.parentAbortSignal.aborted
-    ) {
+    if (candidate !== key || context.parentAbortSignal !== parentAbort.signal || context.parentAbortSignal.aborted) {
       callAgentTurnContexts.delete(candidate);
     }
   }
@@ -264,31 +306,41 @@ function resolveCallAgentDispatchContext(ctx: JsonRpcContext): SubagentDispatchC
     permission: turnContext.permissionProfile,
     parentAbortSignal: parentAbort.signal,
     abortOwner: (reason) => parentAbort.abort(reason),
-    inheritedEffort: resolveChatInheritedEffort(),
+    inheritedEffort: turnContext.orchestrator
+      ? resolveChatInheritedEffort(turnContext.orchestrator.runtime, turnContext.orchestrator.effort)
+      : undefined,
   });
   callAgentTurnContexts.set(key, created);
   return created;
 }
 
-
 export type GatedCallTurnResolutionReason =
   | 'ok'
   | 'unauthenticated-connection'
   | 'helper-server-mismatch'
+  | 'turn-binding-required'
   | 'no-active-desktop-turn'
+  | 'turn-binding-mismatch'
+  | 'session-closing'
   | 'turn-context-missing';
 
 export interface GatedCallTurnResolution {
   ok: boolean;
   reason: GatedCallTurnResolutionReason;
+  code?: 'turn_binding_required';
   sessionId?: string;
   turnId?: string;
   turnContext?: ReturnType<typeof getChatCapabilityTurn>;
 }
 
+const CODEX_SESSION_CLOSING_MESSAGE =
+  'turn_binding_required: a sessao Codex esta entre o turn/interrupt e o evento terminal do turno; ' +
+  'nenhuma chamada e aceita ate o turno assentar.';
+
 export function resolveGatedCallTurnContext(
   ctx: JsonRpcContext,
   expectedServerId?: string,
+  binding: TurnBindingParams = { lane: 'desktop' },
 ): GatedCallTurnResolution {
   if (ctx.connection?.authenticatedHelper !== true) {
     return { ok: false, reason: 'unauthenticated-connection' };
@@ -296,9 +348,25 @@ export function resolveGatedCallTurnContext(
   if (expectedServerId && ctx.connection.serverId !== expectedServerId) {
     return { ok: false, reason: 'helper-server-mismatch' };
   }
-  const active = getActiveChatTurnByLane('desktop');
-  if (!active) {
-    return { ok: false, reason: 'no-active-desktop-turn' };
+  const resolution = resolveTurnBinding(binding);
+  if (!resolution.ok) {
+    const reason: GatedCallTurnResolutionReason =
+      resolution.reason === 'session-missing'
+        ? 'turn-binding-required'
+        : resolution.reason === 'turn-mismatch'
+          ? 'turn-binding-mismatch'
+          : 'no-active-desktop-turn';
+    return { ok: false, reason, code: 'turn_binding_required' };
+  }
+  const active = resolution.binding;
+  if (isCodexSessionClosing(active.sessionId)) {
+    return {
+      ok: false,
+      reason: 'session-closing',
+      code: 'turn_binding_required',
+      sessionId: active.sessionId,
+      turnId: active.turnId,
+    };
   }
   const turnContext = getChatCapabilityTurn(active);
   if (!turnContext) {
@@ -318,9 +386,9 @@ export function resolveGatedCallTurnContext(
   };
 }
 
-function logGatedCallShadowResolution(ctx: JsonRpcContext, action: string): void {
+function logGatedCallShadowResolution(ctx: JsonRpcContext, action: string, binding: TurnBindingParams): void {
   try {
-    const resolution = resolveGatedCallTurnContext(ctx);
+    const resolution = resolveGatedCallTurnContext(ctx, undefined, binding);
     if (resolution.ok && resolution.turnContext) {
       logger.info(
         {
@@ -331,7 +399,7 @@ function logGatedCallShadowResolution(ctx: JsonRpcContext, action: string): void
           turnId: resolution.turnId,
           origin: resolution.turnContext.origin,
           capabilities: resolution.turnContext.capabilities,
-          subagentInFlight: isSubagentDispatchInFlight(),
+          subagentInFlight: isSubagentDispatchInFlight(resolution.sessionId),
         },
         'S3b shadow: chamada gated resolveu turno ativo da lane desktop',
       );
@@ -355,15 +423,15 @@ function logGatedCallShadowResolution(ctx: JsonRpcContext, action: string): void
   }
 }
 
-
 const gatedServerIdForMethod = gatedServerIdForMethodCanonical;
 
 function enforceGatedCallCapability(
   ctx: JsonRpcContext,
   serverId: string,
   method: string,
+  binding: TurnBindingParams,
 ): { error: string; code: string; capability: string } | null {
-  const resolution = resolveGatedCallTurnContext(ctx, serverId);
+  const resolution = resolveGatedCallTurnContext(ctx, serverId, binding);
   const turnContext = resolution.ok ? resolution.turnContext : undefined;
   const verdict = turnContext
     ? assertChatCapability({
@@ -376,12 +444,8 @@ function enforceGatedCallCapability(
           ...(turnContext.internalLeaseToken !== undefined
             ? { internalLeaseToken: turnContext.internalLeaseToken }
             : {}),
-          ...(turnContext.driveProjectId !== undefined
-            ? { driveProjectId: turnContext.driveProjectId }
-            : {}),
-          ...(turnContext.driveTurnId !== undefined
-            ? { driveTurnId: turnContext.driveTurnId }
-            : {}),
+          ...(turnContext.driveProjectId !== undefined ? { driveProjectId: turnContext.driveProjectId } : {}),
+          ...(turnContext.driveTurnId !== undefined ? { driveTurnId: turnContext.driveTurnId } : {}),
         } satisfies McpInvocationContext,
       })
     : failClosedChatCapability({ serverId, toolName: method, reason: resolution.reason });
@@ -393,14 +457,12 @@ function observeGatedCallCapabilityShadow(
   ctx: JsonRpcContext,
   serverId: string,
   method: string,
+  binding: TurnBindingParams,
 ): void {
   try {
-    enforceGatedCallCapability(ctx, serverId, method);
+    enforceGatedCallCapability(ctx, serverId, method, binding);
   } catch (err) {
-    logger.warn(
-      { err, method },
-      'S6b shadow: erro ao exercitar o gate de capability (ignorado)',
-    );
+    logger.warn({ err, method }, 'S6b shadow: erro ao exercitar o gate de capability (ignorado)');
   }
 }
 
@@ -443,7 +505,7 @@ async function handleCallAgentWithLease(
   const agent = getAgent(params.agent_id);
   const label = agent?.name ?? params.agent_id;
   const configuredModel = agent?.model;
-  const dispatchContext = resolveCallAgentDispatchContext(ctx);
+  const dispatchContext = resolveCallAgentDispatchContext(ctx, params.binding ?? { lane: 'desktop' });
   const activityId = transportCorrelation
     ? `mcp:${transportCorrelation.value}`
     : `call_agent-${params.agent_id}-${crypto.randomUUID()}`;
@@ -474,7 +536,7 @@ async function handleCallAgentWithLease(
   });
 
   const { lionAgentDispatch } = await import('../lion-sdk/tools/agent');
-  subagentDispatchDepth += 1;
+  bumpSubagentDispatchDepth(dispatchContext.ownerId, 1);
   try {
     if (!sessionId) throw new Error('call_agent exige uma sessao de chat ativa.');
     const result = await lionAgentDispatch(params, {
@@ -490,9 +552,7 @@ async function handleCallAgentWithLease(
         logger.warn({ err, executionId: result.executionId }, 'falha ao ler metricas do ledger de subagente');
       }
     }
-    const reportedMetrics = ledgerRollup?.tokenStatus === 'reported'
-      ? ledgerRollup.metrics
-      : null;
+    const reportedMetrics = ledgerRollup?.tokenStatus === 'reported' ? ledgerRollup.metrics : null;
     emitActivity({
       id: activityId,
       kind: 'subagent',
@@ -509,9 +569,7 @@ async function handleCallAgentWithLease(
             cacheCreation: reportedMetrics.cacheCreationTokens,
           }
         : undefined,
-      costUsd: ledgerRollup?.costStatus === 'known'
-        ? ledgerRollup.metrics.costUsd
-        : undefined,
+      costUsd: ledgerRollup?.costStatus === 'known' ? ledgerRollup.metrics.costUsd : undefined,
       durationMs: ledgerRollup?.metrics.durationMs ?? Date.now() - startMs,
       summary: result.ok ? result.summary : result.error,
       endedAt: new Date().toISOString(),
@@ -532,10 +590,9 @@ async function handleCallAgentWithLease(
     });
     throw err;
   } finally {
-    subagentDispatchDepth = Math.max(0, subagentDispatchDepth - 1);
+    bumpSubagentDispatchDepth(dispatchContext.ownerId, -1);
   }
 }
-
 
 export interface ListSkillsEntry {
   name: string;
@@ -551,7 +608,6 @@ export function handleListSkills(): ListSkillsEntry[] {
     category: s.category,
   }));
 }
-
 
 export interface LoadSkillParams {
   skill_name: string;
@@ -585,21 +641,39 @@ export function handleLoadSkill(params: LoadSkillParams): LoadSkillResult {
   return { body: skill.content, frontmatter };
 }
 
-
 export interface AskUserQuestionParams {
   questions: AskQuestionRequest['questions'];
+  lane?: unknown;
+  sessionId?: unknown;
+  turnId?: unknown;
+}
+
+function resolveAskQuestionTurnContext(
+  ctx: JsonRpcContext,
+  binding: TurnBindingParams,
+): { sessionId: string } | undefined {
+  const resolution = resolveGatedCallTurnContext(ctx, undefined, binding);
+  const boundSessionId = resolution.sessionId ?? binding.sessionId;
+  return boundSessionId ? { sessionId: boundSessionId } : undefined;
 }
 
 export async function handleAskUserQuestion(
   ctx: JsonRpcContext,
   params: AskUserQuestionParams,
+  bindingArg?: TurnBindingParams,
 ): Promise<AskQuestionResponse> {
   if (!params || !Array.isArray(params.questions) || params.questions.length === 0) {
     throw new Error('questions array is required and must be non-empty');
   }
-  return sendAskQuestion(ctx.getWindow, params.questions);
+  const binding = bindingArg ?? readTurnBindingParams(params as unknown as Record<string, unknown>);
+  return sendAskQuestion(
+    ctx.getWindow,
+    params.questions,
+    undefined,
+    undefined,
+    resolveAskQuestionTurnContext(ctx, binding),
+  );
 }
-
 
 export interface GetMcpEnvParams {
   server_id: string;
@@ -649,78 +723,111 @@ export async function handleGetMcpEnv(params: GetMcpEnvParams): Promise<GetMcpEn
   return { env };
 }
 
+type OrchestratorCallAccess = 'read' | 'write';
 
-function assertOrchestratorCaller(action: string): void {
-  if (isSubagentDispatchInFlight()) {
+function assertOrchestratorCaller(
+  action: string,
+  binding: TurnBindingParams,
+  access: OrchestratorCallAccess = 'write',
+): ActiveChatTurnBinding {
+  const resolution = resolveTurnBinding(binding);
+  if (!resolution.ok) {
+    throw new Error(
+      `turn_binding_required: acao ${action} indisponivel fora de um turno de chat do orquestrador ` +
+        `(${bindingRefusalDetail(binding, resolution.reason)}; lane ${binding.lane}).`,
+    );
+  }
+  if (isSubagentDispatchInFlight(resolution.binding.sessionId)) {
     throw new Error(
       `Acao ${action} indisponivel para subagentes: as tools pipeline_* sao exclusivas do orquestrador (sessao de chat).`,
     );
   }
-  if (!getActiveChatSession()) {
+  if (binding.lane !== 'desktop' && access === 'write') {
     throw new Error(
-      `Acao ${action} indisponivel: nenhuma sessao de chat de orquestrador ativa.`,
+      `desktop_lane_required: acao ${action} so pode ser executada por um turno da lane desktop; ` +
+        `a lane ${binding.lane} tem acesso somente leitura (pipeline_list, pipeline_inspect, dynamic_workflow_inspect). ` +
+        'Peca ao usuario para executar esta acao pelo chat do desktop.',
     );
   }
+  return resolution.binding;
 }
 
 function assertAuthenticatedMethodOwner(ctx: JsonRpcContext, method: string): void {
   const expectedServerId = IDENTITY_METHOD_OWNERS[method];
   if (!expectedServerId) throw new Error(`Metodo ${method} sem owner de identidade configurado.`);
-  if (
-    ctx.connection?.authenticatedHelper !== true ||
-    ctx.connection.serverId !== expectedServerId
-  ) {
-    throw new Error(
-      `Acao ${method} recusada: conexao nao autenticada como ${expectedServerId}.`,
-    );
+  if (ctx.connection?.authenticatedHelper !== true || ctx.connection.serverId !== expectedServerId) {
+    throw new Error(`Acao ${method} recusada: conexao nao autenticada como ${expectedServerId}.`);
   }
 }
 
-function isOrchestratorCaller(): boolean {
-  return !isSubagentDispatchInFlight() && !!getActiveChatSession();
+function callerOf(binding: TurnBindingParams, active: ActiveChatTurnBinding): PipelineCaller {
+  return { lane: binding.lane, sessionId: binding.lane === 'desktop' ? active.sessionId : null };
+}
+
+function assertDriveTurnScope(
+  action: string,
+  targetId: string | null,
+  binding: ActiveChatTurnBinding,
+): { error: string; code: 'drive_scope_violation' } | null {
+  const projectId = getChatCapabilityTurn(binding)?.driveProjectId;
+  if (!projectId || !isPipelineWriteAction(action)) return null;
+  if (action !== 'pipeline_create' && targetId === projectId) return null;
+  return {
+    error: `Este turno de drive so pode escrever no pipeline "${projectId}" e nao pode criar pipelines.`,
+    code: 'drive_scope_violation',
+  };
+}
+
+function isOrchestratorCaller(binding: TurnBindingParams): boolean {
+  const resolution = resolveTurnBinding(binding);
+  return resolution.ok && !isSubagentDispatchInFlight(resolution.binding.sessionId);
+}
+
+function guardSessionOptions(binding: TurnBindingParams): { sessionId?: string } {
+  const resolution = resolveTurnBinding(binding);
+  return resolution.ok ? { sessionId: resolution.binding.sessionId } : {};
 }
 
 async function gatePipelineWrite(
   ctx: JsonRpcContext,
   action: string,
   input: Record<string, unknown>,
+  binding: TurnBindingParams,
 ): Promise<void> {
   if (!isPipelineWriteAction(action)) return;
-  const guard = createPermissionGuard(ctx.getWindow);
+  const guard = createPermissionGuard(ctx.getWindow, guardSessionOptions(binding));
   const decision = await guard(`mcp__pipeline-control__${action}`, input);
   if (decision.behavior === 'deny') {
-    throw new Error(
-      `Acao ${action} negada pelo gate de permissao do drive: ${decision.message ?? 'sem detalhes'}`,
-    );
+    throw new Error(`Acao ${action} negada pelo gate de permissao do drive: ${decision.message ?? 'sem detalhes'}`);
   }
 }
 
 async function gatePreviewOpen(
   ctx: JsonRpcContext,
   input: Record<string, unknown>,
+  binding: TurnBindingParams,
 ): Promise<void> {
-  const guard = createPermissionGuard(ctx.getWindow);
+  const guard = createPermissionGuard(ctx.getWindow, guardSessionOptions(binding));
   const decision = await guard('mcp__lionclaw-preview__preview_open', input);
   if (decision.behavior === 'deny') {
-    throw new Error(
-      `Acao preview_open negada pelo gate de permissao: ${decision.message ?? 'sem detalhes'}`,
-    );
+    throw new Error(`Acao preview_open negada pelo gate de permissao: ${decision.message ?? 'sem detalhes'}`);
   }
 }
 
 function unwrap(result: ControlResult): unknown {
   if (result.ok) return result.value;
-  throw new Error(result.error);
+  return { error: result.error, ...(result.code ? { code: result.code } : {}) };
 }
 
 async function gateDynamicWorkflowWrite(
   ctx: JsonRpcContext,
   action: string,
   input: Record<string, unknown>,
+  binding: TurnBindingParams,
 ): Promise<void> {
   if (!isDynamicWorkflowWriteAction(action)) return;
 
-  if (isReadOnlyDriveTurn(resolveActiveDesktopDriveTurnId())) {
+  if (isReadOnlyDriveTurn(resolveBoundDriveTurnId(binding))) {
     throw new Error(
       `Acao ${action} negada: este turno de drive e SOMENTE-LEITURA (wake needs-human, ` +
         'anti-runaway). Use dynamic_workflow_inspect, resuma a situacao ao dono e pare; ' +
@@ -728,21 +835,18 @@ async function gateDynamicWorkflowWrite(
     );
   }
 
-  const driveTurnId = resolveDriveTurnIdFromConnection(ctx);
+  const driveTurnId = resolveDriveTurnIdFromConnection(ctx, binding);
 
-  const guard = createPermissionGuard(ctx.getWindow);
+  const guard = createPermissionGuard(ctx.getWindow, guardSessionOptions(binding));
   const decision = await guard(`mcp__dynamic-workflows__${action}`, input);
   if (decision.behavior === 'deny') {
-    throw new Error(
-      `Acao ${action} negada pelo gate de permissao do workflow: ${decision.message ?? 'sem detalhes'}`,
-    );
+    throw new Error(`Acao ${action} negada pelo gate de permissao do workflow: ${decision.message ?? 'sem detalhes'}`);
   }
 
   try {
-    if (isOrchestratorCaller() && driveTurnId) {
+    if (isOrchestratorCaller(binding) && driveTurnId) {
       const req = resolveDriveCapabilityRequest(action, input);
-      const runId =
-        typeof input['runId'] === 'string' ? (input['runId'] as string) : '';
+      const runId = typeof input['runId'] === 'string' ? (input['runId'] as string) : '';
       if (
         req &&
         runId &&
@@ -756,16 +860,15 @@ async function gateDynamicWorkflowWrite(
         return;
       }
     }
-  } catch {
-  }
+  } catch {}
 
   if (getPermissionBypass()) return;
-  await confirmDynamicWorkflowWriteOrThrow(ctx, action, input);
+  await confirmDynamicWorkflowWriteOrThrow(ctx, action, input, binding);
 }
 
-function resolveDriveTurnIdFromConnection(ctx: JsonRpcContext): string | undefined {
+function resolveDriveTurnIdFromConnection(ctx: JsonRpcContext, binding: TurnBindingParams): string | undefined {
   try {
-    const resolution = resolveGatedCallTurnContext(ctx);
+    const resolution = resolveGatedCallTurnContext(ctx, undefined, binding);
     if (!resolution.ok || !resolution.turnContext) return undefined;
     const id = resolution.turnContext.driveTurnId;
     return typeof id === 'string' && id.length > 0 ? id : undefined;
@@ -774,11 +877,11 @@ function resolveDriveTurnIdFromConnection(ctx: JsonRpcContext): string | undefin
   }
 }
 
-function resolveActiveDesktopDriveTurnId(): string | undefined {
+function resolveBoundDriveTurnId(binding: TurnBindingParams): string | undefined {
   try {
-    const active = getActiveChatTurnByLane('desktop');
-    if (!active) return undefined;
-    const id = getChatCapabilityTurn(active)?.driveTurnId;
+    const resolution = resolveTurnBinding(binding);
+    if (!resolution.ok) return undefined;
+    const id = getChatCapabilityTurn(resolution.binding)?.driveTurnId;
     return typeof id === 'string' && id.length > 0 ? id : undefined;
   } catch {
     return undefined;
@@ -820,6 +923,7 @@ async function confirmDynamicWorkflowWriteOrThrow(
   ctx: JsonRpcContext,
   action: string,
   input: Record<string, unknown>,
+  binding: TurnBindingParams,
 ): Promise<void> {
   const runId = typeof input['runId'] === 'string' ? (input['runId'] as string) : undefined;
   const alvo = runId ? `o run "${runId}"` : 'um novo workflow';
@@ -830,16 +934,22 @@ async function confirmDynamicWorkflowWriteOrThrow(
 
   let response: AskQuestionResponse;
   try {
-    response = await sendAskQuestion(ctx.getWindow, [
-      {
-        question,
-        header,
-        options: [
-          { label: APPROVE, description: `Executa ${action} agora.` },
-          { label: DENY, description: 'Cancela a acao; nada e despachado.' },
-        ],
-      },
-    ]);
+    response = await sendAskQuestion(
+      ctx.getWindow,
+      [
+        {
+          question,
+          header,
+          options: [
+            { label: APPROVE, description: `Executa ${action} agora.` },
+            { label: DENY, description: 'Cancela a acao; nada e despachado.' },
+          ],
+        },
+      ],
+      undefined,
+      undefined,
+      resolveAskQuestionTurnContext(ctx, binding),
+    );
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     insertAuditEntry({
@@ -848,9 +958,7 @@ async function confirmDynamicWorkflowWriteOrThrow(
       input: JSON.stringify(input).substring(0, 500),
       approved: false,
     });
-    throw new Error(
-      `Acao ${action} recusada: confirmacao do modo semi nao foi concluida (${reason}).`,
-    );
+    throw new Error(`Acao ${action} recusada: confirmacao do modo semi nao foi concluida (${reason}).`);
   }
 
   const answers = Object.values(response.answers).flat();
@@ -915,7 +1023,6 @@ export interface DesignSessionConfigParams {
   designSystemId?: string;
 }
 
-
 export interface DynamicWorkflowRunIdParams {
   runId: string;
 }
@@ -947,7 +1054,6 @@ export interface DynamicWorkflowEditCoordinatorRpcParams {
   reason: string;
   resume?: boolean;
 }
-
 
 const REPO_GRAPH_NO_REPO_ERROR =
   'nenhum repositorio ativo nesta conversa. Peca ao usuario para vincular uma pasta pelo seletor de repositorio do chat.';
@@ -984,15 +1090,12 @@ interface RepoGraphUsageInput {
   durationMs: number;
 }
 
-async function recordRepoGraphUsage(
-  ctx: JsonRpcContext,
-  input: RepoGraphUsageInput,
-): Promise<void> {
+async function recordRepoGraphUsage(ctx: JsonRpcContext, input: RepoGraphUsageInput): Promise<void> {
   const db = await import('../db');
-  const source: RepoGraphChunkPayload['source'] = isSubagentDispatchInFlight()
+  const source: RepoGraphChunkPayload['source'] = isSubagentDispatchInFlight(input.sessionId)
     ? 'subagent-mcp'
     : 'orchestrator-mcp';
-  const runtime = getRepoGraphTurnRuntime();
+  const runtime = getRepoGraphTurnRuntime(input.sessionId);
   let turnIndex = 0;
   try {
     turnIndex = db.getLatestUserTurnIndex(input.sessionId);
@@ -1021,7 +1124,7 @@ async function recordRepoGraphUsage(
   try {
     const repoGraph: RepoGraphChunkPayload = {
       sessionId: input.sessionId,
-      turnIndex: getRepoGraphTurnSession() ? turnIndex : undefined,
+      turnIndex: hasRepoGraphTurnSession(input.sessionId) ? turnIndex : undefined,
       repositoryId: input.repositoryId,
       status: input.graphStatus,
       used: true,
@@ -1068,9 +1171,15 @@ export async function handleRepoGraphRead(
   ctx: JsonRpcContext,
   toolName: string,
   params: Record<string, unknown>,
+  bindingArg?: TurnBindingParams,
 ): Promise<unknown> {
-  const sessionId = resolveRepoGraphSessionId();
-  if (!sessionId) return { error: REPO_GRAPH_NO_REPO_ERROR };
+  let sessionId: string;
+  try {
+    const binding = bindingArg ?? readTurnBindingParams(params);
+    sessionId = resolveRepoGraphSessionId(resolveBindingSessionId(binding));
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
   const db = await import('../db');
   const attach = db.getSessionActiveRepository(sessionId);
   if (!attach) return { error: REPO_GRAPH_NO_REPO_ERROR };
@@ -1178,7 +1287,6 @@ export async function handleRepoGraphRead(
   }
 }
 
-
 interface McpGatewayParams {
   server?: unknown;
   tool?: unknown;
@@ -1199,6 +1307,19 @@ function normalizeGatewaySurface(raw: unknown): GatewaySurface {
 function normalizeGatewayLane(raw: unknown): ChatLane {
   return raw === 'telegram' || raw === 'cron' ? raw : 'desktop';
 }
+
+function resolveBindingSessionId(binding: TurnBindingParams): { sessionId?: string } {
+  if (binding.sessionId) return { sessionId: binding.sessionId };
+  if (binding.lane === 'telegram' || binding.lane === 'cron') {
+    const active = getActiveChatTurnByLane(binding.lane);
+    return active ? { sessionId: active.sessionId } : {};
+  }
+  return {};
+}
+
+const TURN_BINDING_REQUIRED_MESSAGE =
+  'turn_binding_required: a chamada nao trouxe um binding de turno valido (sessionId/turnId de um turno de chat ativo); ' +
+  'no desktop cada chamada precisa identificar a lane que a originou.';
 
 function requireGatewayString(value: unknown, field: string, method: string): string {
   const s = typeof value === 'string' ? value.trim() : '';
@@ -1234,25 +1355,42 @@ async function resolveGatewayAllowedServerIds(surface: GatewaySurface): Promise<
 
 async function handleGatewayMcpInvoke(
   params: McpGatewayParams,
+  binding: TurnBindingParams,
 ): Promise<{ content: string; isError?: boolean; displayName: string }> {
   const server = requireGatewayString(params.server, 'server', 'mcp_invoke');
   const tool = requireGatewayString(params.tool, 'tool', 'mcp_invoke');
   const surface = normalizeGatewaySurface(params.surface);
-  const activeTurn = getActiveChatTurnByLane(normalizeGatewayLane(params.lane));
-  const sessionId =
-    activeTurn?.sessionId ??
-    (typeof params.sessionId === 'string' && params.sessionId.trim()
-      ? params.sessionId
-      : 'gateway-session');
-  const turnId =
-    activeTurn?.turnId ??
-    (typeof params.turnId === 'string' && params.turnId.trim() ? params.turnId : '1');
+  const displayName = `mcp__${server}__${tool}`;
+  const resolution = resolveTurnBinding(binding);
+  if (!resolution.ok) {
+    logger.warn(
+      { server, tool, surface, lane: binding.lane, reason: resolution.reason },
+      'mcp_invoke recusado: binding de turno invalido (turn_binding_required)',
+    );
+    return {
+      content: `${TURN_BINDING_REQUIRED_MESSAGE} (${bindingRefusalDetail(binding, resolution.reason)})`,
+      isError: true,
+      displayName,
+    };
+  }
+  const activeTurn = resolution.binding;
+  if (isCodexSessionClosing(activeTurn.sessionId)) {
+    return {
+      content: CODEX_SESSION_CLOSING_MESSAGE,
+      isError: true,
+      displayName,
+    };
+  }
+  const sessionId = activeTurn.sessionId;
+  const turnId = activeTurn.turnId;
 
   const allowedServerIds = await resolveGatewayAllowedServerIds(surface);
   const { invokeMcpTool } = await import('../mcp-invoke');
   const gateContext: McpInvocationContext = {
     surface: 'chat',
-    ...(activeTurn ? { sessionId: activeTurn.sessionId, turnId: activeTurn.turnId } : {}),
+    sessionId: activeTurn.sessionId,
+    turnId: activeTurn.turnId,
+    lane: binding.lane,
   };
   return invokeMcpTool({
     serverId: server,
@@ -1266,19 +1404,16 @@ async function handleGatewayMcpInvoke(
   });
 }
 
-async function handleGatewayMcpGetSchema(
-  params: McpGatewayParams,
-): Promise<{ content: string; isError?: boolean }> {
+async function handleGatewayMcpGetSchema(params: McpGatewayParams): Promise<{ content: string; isError?: boolean }> {
   const server = requireGatewayString(params.server, 'server', 'mcp_get_schema');
   const tool = requireGatewayString(params.tool, 'tool', 'mcp_get_schema');
   const surface = normalizeGatewaySurface(params.surface);
   const allowedServerIds = await resolveGatewayAllowedServerIds(surface);
   if (!allowedServerIds.includes(server)) {
     return {
-      content:
-        `Servidor MCP "${server}" nao esta no catalogo desta sessao. Servidores permitidos: ${
-          allowedServerIds.length > 0 ? allowedServerIds.join(', ') : '(nenhum)'
-        }.`,
+      content: `Servidor MCP "${server}" nao esta no catalogo desta sessao. Servidores permitidos: ${
+        allowedServerIds.length > 0 ? allowedServerIds.join(', ') : '(nenhum)'
+      }.`,
       isError: true,
     };
   }
@@ -1286,15 +1421,13 @@ async function handleGatewayMcpGetSchema(
   return getMcpToolSchema(server, tool);
 }
 
-
 interface MintHelperTokenParams {
   server_id?: unknown;
   caller_pid?: unknown;
 }
 
 function handleMintHelperToken(params: MintHelperTokenParams): { token: string } {
-  const serverId =
-    typeof params.server_id === 'string' ? params.server_id.trim().toLowerCase() : '';
+  const serverId = typeof params.server_id === 'string' ? params.server_id.trim().toLowerCase() : '';
   const identityScoped = PROCESS_IDENTITY_HELPER_IDS.has(serverId);
   if (!serverId || !identityScoped) {
     throw new Error(
@@ -1310,9 +1443,11 @@ function handleMintHelperToken(params: MintHelperTokenParams): { token: string }
   return { token: mintHelperToken(serverId) };
 }
 
-
 export interface RunToolScriptParams {
   code?: unknown;
+  lane?: unknown;
+  sessionId?: unknown;
+  turnId?: unknown;
 }
 
 export interface RunToolScriptRpcResult {
@@ -1331,14 +1466,16 @@ export interface RunToolScriptRpcResult {
 export async function handleRunToolScript(
   ctx: JsonRpcContext,
   params: RunToolScriptParams,
+  bindingArg?: TurnBindingParams,
 ): Promise<RunToolScriptRpcResult | { error: string; code?: string }> {
-  const resolution = resolveGatedCallTurnContext(ctx, 'lionclaw-toolscript');
+  const binding = bindingArg ?? readTurnBindingParams((params ?? {}) as Record<string, unknown>);
+  const resolution = resolveGatedCallTurnContext(ctx, 'lionclaw-toolscript', binding);
   if (!resolution.ok || resolution.sessionId === undefined || resolution.turnId === undefined) {
     return {
       error:
         'run_tool_script fail-closed: identidade do turno nao resolvida ' +
-        `(${resolution.reason}); o helper precisa de handshake valido e de um turno desktop ativo com turn-context`,
-      code: resolution.reason,
+        `(${bindingRefusalDetail(binding, resolution.reason)}); o helper precisa de handshake valido e de um turno desktop ativo com turn-context`,
+      code: resolution.code ?? resolution.reason,
     };
   }
   const code = typeof params?.code === 'string' ? params.code : '';
@@ -1346,11 +1483,10 @@ export async function handleRunToolScript(
     return { error: 'run_tool_script: "code" (string nao-vazia) e obrigatorio' };
   }
 
-  const signal = desktopLane.currentAbortController?.signal;
+  const signal = laneStateFor(binding, resolution.sessionId)?.currentAbortController?.signal;
   if (signal === undefined || signal.aborted) {
     return {
-      error:
-        'run_tool_script: turno desktop sem execucao ativa (stop em curso ou corrida); nada foi executado',
+      error: 'run_tool_script: turno desktop sem execucao ativa (stop em curso ou corrida); nada foi executado',
       code: 'turn-aborted',
     };
   }
@@ -1382,23 +1518,18 @@ export async function handleRunToolScript(
   const runStartedAtIso = new Date(runStartedAtMs).toISOString();
 
   try {
-    const [
-      { runToolScript },
-      { createToolScriptDispatcher },
-      { buildToolScriptEnv },
-      { readToolScriptSettings },
-    ] = await Promise.all([
-      import('../tool-script/tool-script-engine'),
-      import('../tool-script/tool-script-dispatch'),
-      import('../tool-script/tool-script-env'),
-      import('../tool-script/tool-script-settings'),
-    ]);
+    const [{ runToolScript }, { createToolScriptDispatcher }, { buildToolScriptEnv }, { readToolScriptSettings }] =
+      await Promise.all([
+        import('../tool-script/tool-script-engine'),
+        import('../tool-script/tool-script-dispatch'),
+        import('../tool-script/tool-script-env'),
+        import('../tool-script/tool-script-settings'),
+      ]);
 
     const settings = readToolScriptSettings();
     if (!settings.enabled) {
       return {
-        error:
-          'run_tool_script desabilitado (tool_script_enabled=false); reative na pagina de Settings',
+        error: 'run_tool_script desabilitado (tool_script_enabled=false); reative na pagina de Settings',
         code: 'tool-script-disabled',
       };
     }
@@ -1494,10 +1625,7 @@ export async function handleRunToolScript(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    logger.error(
-      { err, sessionId, turnId },
-      'run_tool_script falhou',
-    );
+    logger.error({ err, sessionId, turnId }, 'run_tool_script falhou');
     emitToolScriptActivity({
       id: runActivityId,
       kind: 'tool',
@@ -1521,7 +1649,6 @@ function codePreviewForActivity(code: string): string {
   return trimmed.length > 120 ? `${trimmed.slice(0, 120)}...` : trimmed;
 }
 
-
 const KANBAN_METHODS = new Set([
   'kanban_board_create',
   'kanban_board_list',
@@ -1544,10 +1671,7 @@ function kanbanStr(params: Record<string, unknown>, key: string): string | undef
   return typeof value === 'string' ? value : undefined;
 }
 
-function kanbanNullableStr(
-  params: Record<string, unknown>,
-  key: string,
-): string | null | undefined {
+function kanbanNullableStr(params: Record<string, unknown>, key: string): string | null | undefined {
   if (!(key in params)) return undefined;
   const value = params[key];
   if (value === null) return null;
@@ -1559,14 +1683,28 @@ function kanbanLocalId(params: Record<string, unknown>): number {
   return typeof value === 'number' ? value : Number(value);
 }
 
+const KANBAN_OWNER_ONLY_FOR_EXTERNAL =
+  'acao reservada ao dono na tela do LionClaw; cliente externo nao pode executa-la';
+
 async function handleKanbanMethod(
   method: string,
   params: Record<string, unknown>,
+  binding: TurnBindingParams,
+  connection: LocalIpcConnectionIdentity | undefined,
 ): Promise<unknown> {
   const { getKanbanEngine } = await import('../kanban-engine');
   const engine = getKanbanEngine();
-  const actor = resolveKanbanActor();
+  const externalClient = connection?.externalClient ?? null;
+  const actor = resolveKanbanActorRef(binding, externalClient);
   const board = kanbanStr(params, 'board') ?? '';
+  if (externalClient && method === 'kanban_board_create') {
+    return { error: `criacao de quadro: ${KANBAN_OWNER_ONLY_FOR_EXTERNAL}` };
+  }
+  if (externalClient && method === 'kanban_card_delete' && params['hard'] === true) {
+    return {
+      error: `delecao definitiva: ${KANBAN_OWNER_ONLY_FOR_EXTERNAL}; use hard=false para arquivar`,
+    };
+  }
   switch (method) {
     case 'kanban_board_create':
       return engine.createBoard({
@@ -1654,17 +1792,11 @@ async function handleKanbanMethod(
     case 'kanban_card_delete':
       return engine.deleteCard(board, kanbanLocalId(params), params['hard'] === true, actor);
     case 'kanban_card_attach':
-      return engine.attachFile(
-        board,
-        kanbanLocalId(params),
-        kanbanStr(params, 'file_path') ?? '',
-        actor,
-      );
+      return engine.attachFile(board, kanbanLocalId(params), kanbanStr(params, 'file_path') ?? '', actor);
     default:
       return { error: `metodo kanban desconhecido: ${method}` };
   }
 }
-
 
 export interface JsonRpcRequest {
   jsonrpc?: '2.0';
@@ -1680,23 +1812,100 @@ export interface JsonRpcResponse {
   error?: { code: number; message: string };
 }
 
-export async function dispatch(
-  ctx: JsonRpcContext,
-  req: JsonRpcRequest,
-): Promise<JsonRpcResponse> {
+export async function dispatch(ctx: JsonRpcContext, req: JsonRpcRequest): Promise<JsonRpcResponse> {
   const id = req.id ?? null;
   try {
-    const params = (req.params ?? {}) as Record<string, unknown>;
+    const rawParams = (req.params ?? {}) as Record<string, unknown>;
+    const binding = readTurnBindingParams(rawParams);
+    const params = stripTurnBindingParams(rawParams);
+    if (ctx.connection?.externalClient && !isKanbanMethod(req.method)) {
+      return {
+        jsonrpc: '2.0',
+        id,
+        error: {
+          code: -32003,
+          message: `cliente externo ${ctx.connection.externalClient.id} so pode chamar metodos kanban_*`,
+        },
+      };
+    }
+    if (ctx.connection?.serverId?.startsWith(SWARM_WORKER_OWNER_PREFIX) && req.method !== 'swarm_write_findings')
+      throw new Error('Worker Swarm só pode entregar seu relatório.');
+    if (req.method === 'swarm_write_findings') {
+      if (!ctx.connection?.authenticatedHelper || !ctx.connection.serverId?.startsWith(SWARM_WORKER_OWNER_PREFIX))
+        throw new Error('Worker autenticado necessário.');
+      return { jsonrpc: '2.0', id, result: await dispatchSwarmFindings(ctx.connection.serverId!, params.upload) };
+    }
+    if (['swarm_start', 'swarm_inspect', 'swarm_abort', 'swarm_list', 'swarm_catalog'].includes(req.method)) {
+      const resolution = resolveGatedCallTurnContext(ctx, 'lionclaw-swarm', binding);
+      if (!resolution.ok || !resolution.turnContext) {
+        logger.warn(
+          { method: req.method, reason: resolution.reason, helperServerId: ctx.connection?.serverId },
+          'Swarm recusado por identidade/contexto inválido',
+        );
+        return {
+          jsonrpc: '2.0',
+          id,
+          result: {
+            error:
+              resolution.reason === 'unauthenticated-connection'
+                ? 'Conexão do helper Swarm sem autenticação de processo. Falha no transporte MCP; não indica chip desligado.'
+                : 'Contexto de turno Swarm ausente ou incompatível. Não confundir com chip desligado.',
+            code: 'chat_capability_no_turn_context',
+            reason: resolution.reason,
+          },
+        };
+      }
+      const turn = resolution.turnContext;
+      const service = getSwarmService();
+      const enabled = turn.capabilities.swarm === true && turn.origin === 'user';
+      if ((req.method === 'swarm_start' || req.method === 'swarm_catalog') && !enabled)
+        return {
+          jsonrpc: '2.0',
+          id,
+          result: { error: 'Ligue o chip Swarm e reenvie.', code: 'chat_capability_swarm_disabled' },
+        };
+      assertOrchestratorCaller(req.method, binding);
+      let result: unknown;
+      if (req.method === 'swarm_start')
+        result = await service.start(
+          { sessionId: turn.sessionId, swarmEnabled: enabled, readRoots: turn.readRoots ?? [] },
+          params as unknown as import('../../../src/types/swarm').SwarmStartInput,
+        );
+      else if (req.method === 'swarm_catalog') result = await service.getCatalog(turn.sessionId, enabled);
+      else if (req.method === 'swarm_list')
+        result = await service.listRuns(
+          turn.sessionId,
+          params.cursor as string | undefined,
+          params.limit as number | undefined,
+        );
+      else if (req.method === 'swarm_abort') result = await service.abort(turn.sessionId, String(params.runId));
+      else result = await service.getRunState(turn.sessionId, String(params.runId));
+      return { jsonrpc: '2.0', id, result };
+    }
+    if (req.method === 'pipeline_list' || req.method === 'pipeline_inspect' || isPipelineWriteAction(req.method)) {
+      const active = assertOrchestratorCaller(
+        req.method,
+        binding,
+        isPipelineWriteAction(req.method) ? 'write' : 'read',
+      );
+      const targetId = typeof params.id === 'string' ? params.id : null;
+      if (req.method !== 'pipeline_list' && req.method !== 'pipeline_create' && targetId !== null) {
+        const denial = assertPipeVisibleToLane(req.method, targetId, callerOf(binding, active));
+        if (denial) return { jsonrpc: '2.0', id, result: denial };
+      }
+      const scopeDenial = assertDriveTurnScope(req.method, targetId, active);
+      if (scopeDenial) return { jsonrpc: '2.0', id, result: scopeDenial };
+    }
     const gatedServerId = gatedServerIdForMethod(req.method);
     if (gatedServerId !== null) {
       if (getChatCapabilityGateMode() === 'enforce') {
-        const denial = enforceGatedCallCapability(ctx, gatedServerId, req.method);
+        const denial = enforceGatedCallCapability(ctx, gatedServerId, req.method, binding);
         if (denial !== null) {
           return { jsonrpc: '2.0', id, result: denial };
         }
       } else {
-        logGatedCallShadowResolution(ctx, req.method);
-        observeGatedCallCapabilityShadow(ctx, gatedServerId, req.method);
+        logGatedCallShadowResolution(ctx, req.method, binding);
+        observeGatedCallCapabilityShadow(ctx, gatedServerId, req.method, binding);
       }
     }
     switch (req.method) {
@@ -1713,7 +1922,7 @@ export async function dispatch(
       case 'call_agent': {
         const result = await handleCallAgent(
           ctx,
-          params as unknown as CallAgentParams,
+          { ...(params as unknown as CallAgentParams), binding },
           { kind: 'local-ipc-request-id', value: String(id) },
         );
         return { jsonrpc: '2.0', id, result };
@@ -1729,10 +1938,7 @@ export async function dispatch(
         };
       }
       case 'ask_user_question': {
-        const result = await handleAskUserQuestion(
-          ctx,
-          params as unknown as AskUserQuestionParams,
-        );
+        const result = await handleAskUserQuestion(ctx, params as unknown as AskUserQuestionParams, binding);
         return { jsonrpc: '2.0', id, result };
       }
       case 'get_mcp_env': {
@@ -1744,22 +1950,22 @@ export async function dispatch(
         return { jsonrpc: '2.0', id, result };
       }
       case 'run_tool_script': {
-        const result = await handleRunToolScript(ctx, params as RunToolScriptParams);
+        const result = await handleRunToolScript(ctx, params as RunToolScriptParams, binding);
         return { jsonrpc: '2.0', id, result };
       }
       case 'pipeline_list': {
-        assertOrchestratorCaller('pipeline_list');
-        return { jsonrpc: '2.0', id, result: unwrap(pipelineListCore()) };
+        const caller = assertOrchestratorCaller('pipeline_list', binding, 'read');
+        return { jsonrpc: '2.0', id, result: unwrap(pipelineListCore(callerOf(binding, caller))) };
       }
       case 'pipeline_inspect': {
-        assertOrchestratorCaller('pipeline_inspect');
+        const caller = assertOrchestratorCaller('pipeline_inspect', binding, 'read');
         const p = params as unknown as PipelineInspectParams;
-        return { jsonrpc: '2.0', id, result: unwrap(pipelineInspectCore(p.id)) };
+        return { jsonrpc: '2.0', id, result: unwrap(pipelineInspectCore(p.id, callerOf(binding, caller))) };
       }
       case 'pipeline_create': {
-        assertOrchestratorCaller('pipeline_create');
+        const caller = assertOrchestratorCaller('pipeline_create', binding);
         const p = params as unknown as PipelineCreateParams;
-        await gatePipelineWrite(ctx, 'pipeline_create', params);
+        await gatePipelineWrite(ctx, 'pipeline_create', params, binding);
         return {
           jsonrpc: '2.0',
           id,
@@ -1770,51 +1976,57 @@ export async function dispatch(
               name: p.name,
               brief: p.brief,
               drive: p.drive,
+              driveSessionId: caller.sessionId,
             }),
           ),
         };
       }
       case 'pipeline_drive': {
-        assertOrchestratorCaller('pipeline_drive');
+        const caller = assertOrchestratorCaller('pipeline_drive', binding);
         const p = params as unknown as PipelineDriveParams;
-        await gatePipelineWrite(ctx, 'pipeline_drive', params);
-        return { jsonrpc: '2.0', id, result: unwrap(pipelineDriveCore(p.id, p.mode)) };
+        await gatePipelineWrite(ctx, 'pipeline_drive', params, binding);
+        return {
+          jsonrpc: '2.0',
+          id,
+          result: unwrap(pipelineDriveCore(p.id, p.mode, caller.sessionId)),
+        };
       }
       case 'pipeline_reply': {
-        assertOrchestratorCaller('pipeline_reply');
+        assertOrchestratorCaller('pipeline_reply', binding);
         const p = params as unknown as PipelineReplyParams;
-        await gatePipelineWrite(ctx, 'pipeline_reply', params);
+        await gatePipelineWrite(ctx, 'pipeline_reply', params, binding);
         return { jsonrpc: '2.0', id, result: unwrap(await pipelineReplyCore(p.id, p.message)) };
       }
       case 'pipeline_approve': {
-        assertOrchestratorCaller('pipeline_approve');
+        assertOrchestratorCaller('pipeline_approve', binding);
         const p = params as unknown as PipelineApproveParams;
-        await gatePipelineWrite(ctx, 'pipeline_approve', params);
+        await gatePipelineWrite(ctx, 'pipeline_approve', params, binding);
         const metadata = normalizeApproveMetadata(p.metadata);
         return { jsonrpc: '2.0', id, result: unwrap(await pipelineApproveCore(p.id, metadata)) };
       }
       case 'pipeline_escalate': {
-        assertOrchestratorCaller('pipeline_escalate');
+        assertOrchestratorCaller('pipeline_escalate', binding);
         const p = params as unknown as PipelineEscalateParams;
-        await gatePipelineWrite(ctx, 'pipeline_escalate', params);
+        await gatePipelineWrite(ctx, 'pipeline_escalate', params, binding);
         return { jsonrpc: '2.0', id, result: unwrap(pipelineEscalateCore(p.id, p.message)) };
       }
       case 'pipeline_abort': {
-        assertOrchestratorCaller('pipeline_abort');
+        assertOrchestratorCaller('pipeline_abort', binding);
         const p = params as unknown as PipelineIdParams;
-        await gatePipelineWrite(ctx, 'pipeline_abort', params);
+        await gatePipelineWrite(ctx, 'pipeline_abort', params, binding);
         return { jsonrpc: '2.0', id, result: unwrap(pipelineAbortCore(p.id)) };
       }
       case 'pipeline_pause': {
-        assertOrchestratorCaller('pipeline_pause');
+        assertOrchestratorCaller('pipeline_pause', binding);
         const p = params as unknown as PipelineIdParams;
-        await gatePipelineWrite(ctx, 'pipeline_pause', params);
+        await gatePipelineWrite(ctx, 'pipeline_pause', params, binding);
         return { jsonrpc: '2.0', id, result: unwrap(pipelinePauseCore(p.id)) };
       }
       case 'dynamic_workflow_author': {
-        assertOrchestratorCaller('dynamic_workflow_author');
+        const caller = assertOrchestratorCaller('dynamic_workflow_author', binding);
         const p = params as unknown as DynamicWorkflowAuthorRpcParams;
-        await gateDynamicWorkflowWrite(ctx, 'dynamic_workflow_author', params);
+        await gateDynamicWorkflowWrite(ctx, 'dynamic_workflow_author', params, binding);
+        const chatSessionId = caller.sessionId;
         return {
           jsonrpc: '2.0',
           id,
@@ -1824,14 +2036,15 @@ export async function dispatch(
               ...(p.name !== undefined ? { name: p.name } : {}),
               workflowJsSource: p.workflowJsSource,
               ...(p.start !== undefined ? { start: p.start } : {}),
+              ...(chatSessionId ? { chatSessionId } : {}),
             }),
           ),
         };
       }
       case 'dynamic_workflow_start': {
-        assertOrchestratorCaller('dynamic_workflow_start');
+        assertOrchestratorCaller('dynamic_workflow_start', binding);
         const p = params as unknown as DynamicWorkflowRunIdParams;
-        await gateDynamicWorkflowWrite(ctx, 'dynamic_workflow_start', params);
+        await gateDynamicWorkflowWrite(ctx, 'dynamic_workflow_start', params, binding);
         return {
           jsonrpc: '2.0',
           id,
@@ -1839,7 +2052,7 @@ export async function dispatch(
         };
       }
       case 'dynamic_workflow_inspect': {
-        assertOrchestratorCaller('dynamic_workflow_inspect');
+        assertOrchestratorCaller('dynamic_workflow_inspect', binding, 'read');
         const p = params as unknown as DynamicWorkflowRunIdParams;
         return {
           jsonrpc: '2.0',
@@ -1848,21 +2061,19 @@ export async function dispatch(
         };
       }
       case 'dynamic_workflow_reply': {
-        assertOrchestratorCaller('dynamic_workflow_reply');
+        assertOrchestratorCaller('dynamic_workflow_reply', binding);
         const p = params as unknown as DynamicWorkflowReplyRpcParams;
-        await gateDynamicWorkflowWrite(ctx, 'dynamic_workflow_reply', params);
+        await gateDynamicWorkflowWrite(ctx, 'dynamic_workflow_reply', params, binding);
         return {
           jsonrpc: '2.0',
           id,
-          result: unwrapWorkflow(
-            await dynamicWorkflowReplyCore(p.runId, p.message, p.targetNodeId),
-          ),
+          result: unwrapWorkflow(await dynamicWorkflowReplyCore(p.runId, p.message, p.targetNodeId)),
         };
       }
       case 'dynamic_workflow_approve': {
-        assertOrchestratorCaller('dynamic_workflow_approve');
+        assertOrchestratorCaller('dynamic_workflow_approve', binding);
         const p = params as unknown as DynamicWorkflowApproveRpcParams;
-        await gateDynamicWorkflowWrite(ctx, 'dynamic_workflow_approve', params);
+        await gateDynamicWorkflowWrite(ctx, 'dynamic_workflow_approve', params, binding);
         return {
           jsonrpc: '2.0',
           id,
@@ -1876,21 +2087,19 @@ export async function dispatch(
         };
       }
       case 'dynamic_workflow_intervene': {
-        assertOrchestratorCaller('dynamic_workflow_intervene');
+        assertOrchestratorCaller('dynamic_workflow_intervene', binding);
         const p = params as unknown as DynamicWorkflowInterveneRpcParams;
-        await gateDynamicWorkflowWrite(ctx, 'dynamic_workflow_intervene', params);
+        await gateDynamicWorkflowWrite(ctx, 'dynamic_workflow_intervene', params, binding);
         return {
           jsonrpc: '2.0',
           id,
-          result: unwrapWorkflow(
-            await dynamicWorkflowInterveneCore(p.runId, p.intervention),
-          ),
+          result: unwrapWorkflow(await dynamicWorkflowInterveneCore(p.runId, p.intervention)),
         };
       }
       case 'dynamic_workflow_abort': {
-        assertOrchestratorCaller('dynamic_workflow_abort');
+        assertOrchestratorCaller('dynamic_workflow_abort', binding);
         const p = params as unknown as DynamicWorkflowRunIdParams;
-        await gateDynamicWorkflowWrite(ctx, 'dynamic_workflow_abort', params);
+        await gateDynamicWorkflowWrite(ctx, 'dynamic_workflow_abort', params, binding);
         return {
           jsonrpc: '2.0',
           id,
@@ -1898,9 +2107,9 @@ export async function dispatch(
         };
       }
       case 'dynamic_workflow_edit_coordinator': {
-        assertOrchestratorCaller('dynamic_workflow_edit_coordinator');
+        assertOrchestratorCaller('dynamic_workflow_edit_coordinator', binding);
         const p = params as unknown as DynamicWorkflowEditCoordinatorRpcParams;
-        await gateDynamicWorkflowWrite(ctx, 'dynamic_workflow_edit_coordinator', params);
+        await gateDynamicWorkflowWrite(ctx, 'dynamic_workflow_edit_coordinator', params, binding);
         return {
           jsonrpc: '2.0',
           id,
@@ -1916,14 +2125,14 @@ export async function dispatch(
       }
       case 'preview_open': {
         assertAuthenticatedMethodOwner(ctx, 'preview_open');
-        assertOrchestratorCaller('preview_open');
+        assertOrchestratorCaller('preview_open', binding);
         const p = params as unknown as PreviewOpenParams;
-        await gatePreviewOpen(ctx, params);
+        await gatePreviewOpen(ctx, params, binding);
         return { jsonrpc: '2.0', id, result: unwrap(await previewOpenCore(p.target)) };
       }
       case 'preview_capture': {
         assertAuthenticatedMethodOwner(ctx, 'preview_capture');
-        assertOrchestratorCaller('preview_capture');
+        assertOrchestratorCaller('preview_capture', binding);
         const p = params as unknown as PreviewCaptureParams;
         return {
           jsonrpc: '2.0',
@@ -1932,14 +2141,14 @@ export async function dispatch(
         };
       }
       case 'design_session_config': {
-        assertOrchestratorCaller('design_session_config');
+        assertOrchestratorCaller('design_session_config', binding);
         const p = params as unknown as DesignSessionConfigParams;
-        await gatePipelineWrite(ctx, 'design_session_config', params);
+        await gatePipelineWrite(ctx, 'design_session_config', params, binding);
         return { jsonrpc: '2.0', id, result: unwrap(await designSessionConfigCore(p)) };
       }
       case 'telegram_notify': {
         assertAuthenticatedMethodOwner(ctx, 'telegram_notify');
-        assertOrchestratorCaller('telegram_notify');
+        assertOrchestratorCaller('telegram_notify', binding);
         const message = typeof params['message'] === 'string' ? (params['message'] as string) : '';
         const { getTelegramArmed } = await import('../db');
         if (!getTelegramArmed()) {
@@ -1982,7 +2191,7 @@ export async function dispatch(
         }
       }
       case 'mcp_invoke': {
-        const result = await handleGatewayMcpInvoke(params as McpGatewayParams);
+        const result = await handleGatewayMcpInvoke(params as McpGatewayParams, binding);
         return { jsonrpc: '2.0', id, result };
       }
       case 'mcp_get_schema': {
@@ -1996,7 +2205,7 @@ export async function dispatch(
       case 'repo_graph_node':
       case 'repo_graph_callers':
       case 'repo_graph_callees': {
-        const result = await handleRepoGraphRead(ctx, req.method, params);
+        const result = await handleRepoGraphRead(ctx, req.method, params, binding);
         return { jsonrpc: '2.0', id, result };
       }
       case 'kanban_board_create':
@@ -2009,7 +2218,7 @@ export async function dispatch(
       case 'kanban_card_deliver':
       case 'kanban_card_delete':
       case 'kanban_card_attach': {
-        const result = await handleKanbanMethod(req.method, params);
+        const result = await handleKanbanMethod(req.method, params, binding, ctx.connection);
         return { jsonrpc: '2.0', id, result };
       }
       default: {

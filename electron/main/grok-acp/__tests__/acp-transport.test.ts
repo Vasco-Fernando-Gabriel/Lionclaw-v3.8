@@ -97,7 +97,9 @@ describe('Grok ACP transport fail-closed', () => {
   it('preserva code/data do erro JSON-RPC', async () => {
     const state = transport();
     const pending = state.transport.request('session/new', {});
-    state.child.feed('{"jsonrpc":"2.0","id":1,"error":{"code":401,"message":"token expired","data":{"reason":"auth_required"}}}\n');
+    state.child.feed(
+      '{"jsonrpc":"2.0","id":1,"error":{"code":401,"message":"token expired","data":{"reason":"auth_required"}}}\n',
+    );
     const error = await pending.catch((value: unknown) => value);
     expect(error).toBeInstanceOf(GrokJsonRpcError);
     expect(error).toMatchObject({
@@ -109,8 +111,7 @@ describe('Grok ACP transport fail-closed', () => {
 
   it('mata o child e rejeita request pendente em timeout ou abort', async () => {
     const timed = transport();
-    await expect(timed.transport.request('initialize', {}, { timeoutMs: 5 }))
-      .rejects.toThrow(/timed out/);
+    await expect(timed.transport.request('initialize', {}, { timeoutMs: 5 })).rejects.toThrow(/timed out/);
     expect(killProcessTree).toHaveBeenCalledWith(timed.child, 'SIGKILL');
 
     killProcessTree.mockClear();

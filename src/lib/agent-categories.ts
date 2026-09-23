@@ -45,7 +45,7 @@ export function categoryKind(value: string): 'workflow' | 'library' {
 export const CANONICAL_CATEGORY_VALUES: string[] = ORDER;
 
 export function categoryLabel(value: string): string {
-  return LABEL_BY_VALUE.get(value) ?? (value.charAt(0).toUpperCase() + value.slice(1));
+  return LABEL_BY_VALUE.get(value) ?? value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 export function sortCategories(values: string[]): string[] {

@@ -1,19 +1,3 @@
-/**
- * lionclaw-user-question MCP server.
- *
- * SPEC-001 §11.6 / SP-7.6.
- *
- * Exposes one tool to the orchestrator (Codex / Lion-SDK):
- *   - `ask_user_question`: ask the user one or more questions and wait for
- *     the response. Proxies to the existing LionClaw `chat:ask-question` IPC
- *     pathway via the local IPC server.
- *
- * No direct DB or filesystem access from this process.
- *
- * On startup, if the IPC endpoint file is missing the server exits with
- * code 1 (boot-order safeguard; S8 fixes the order).
- */
-
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -46,9 +30,7 @@ server.tool(
     try {
       const result = await callMethod('ask_user_question', { questions });
       return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result) },
-        ],
+        content: [{ type: 'text' as const, text: JSON.stringify(result) }],
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

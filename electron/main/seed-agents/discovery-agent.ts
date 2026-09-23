@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const DISCOVERY_AGENT_ID = 'discovery-agent';

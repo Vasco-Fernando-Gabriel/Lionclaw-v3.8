@@ -1,5 +1,3 @@
-
-
 export type KanbanColumnId = 'Backlog' | 'Desenvolvimento' | 'Testes' | 'Done';
 
 export type KanbanCardType = 'Bug' | 'Feature' | 'Débito técnico' | 'Chore';
@@ -21,15 +19,16 @@ export type KanbanEventType =
   | 'attachment-added'
   | 'attachment-removed';
 
-export type KanbanActor = 'user' | 'orchestrator' | 'scheduler';
+export type KanbanActor = 'user' | 'orchestrator' | 'scheduler' | 'lioncode';
 
-export const KANBAN_COLUMNS: readonly KanbanColumnId[] = [
-  'Backlog',
-  'Desenvolvimento',
-  'Testes',
-  'Done',
-];
+export interface KanbanActorRef {
+  actor: KanbanActor;
+  detail: string | null;
+}
 
+export type KanbanActorInput = KanbanActor | KanbanActorRef;
+
+export const KANBAN_COLUMNS: readonly KanbanColumnId[] = ['Backlog', 'Desenvolvimento', 'Testes', 'Done'];
 
 export interface KanbanBoard {
   id: string;
@@ -42,6 +41,8 @@ export interface KanbanBoard {
 
 export interface KanbanBoardWithCounts extends KanbanBoard {
   columnCounts: Record<KanbanColumnId, number>;
+  repoPath: string | null;
+  repoName: string | null;
 }
 
 export interface KanbanCard {
@@ -79,6 +80,7 @@ export interface KanbanCardEvent {
   toColumn: KanbanColumnId | null;
   reason: string | null;
   actor: KanbanActor;
+  actorDetail: string | null;
   createdAt: string;
 }
 
@@ -91,7 +93,6 @@ export interface KanbanAttachment {
   sizeBytes: number | null;
   createdAt: string;
 }
-
 
 export interface KanbanQueryFilters {
   board?: string;
@@ -142,9 +143,7 @@ export interface KanbanCardCreateInput {
   body?: string | null;
 }
 
-export type KanbanWriteResult<T> =
-  | ({ ok: true; warnings: string[] } & T)
-  | { error: string };
+export type KanbanWriteResult<T> = ({ ok: true; warnings: string[] } & T) | { error: string };
 
 export type KanbanAck = { ok: true; warnings: string[] } | { error: string };
 
@@ -157,7 +156,6 @@ export interface KanbanCardDetail {
 export interface KanbanChangedEvent {
   boardId: string;
 }
-
 
 export interface KanbanBoardCreateInput {
   name?: string;
@@ -196,10 +194,7 @@ export interface KanbanAPI {
     toColumn?: string | null,
   ) => Promise<KanbanWriteResult<{ card: KanbanCard }>>;
   archiveCard: (board: string, localId: number) => Promise<KanbanWriteResult<{ card: KanbanCard }>>;
-  unarchiveCard: (
-    board: string,
-    localId: number,
-  ) => Promise<KanbanWriteResult<{ card: KanbanCard }>>;
+  unarchiveCard: (board: string, localId: number) => Promise<KanbanWriteResult<{ card: KanbanCard }>>;
   deleteCard: (
     board: string,
     localId: number,

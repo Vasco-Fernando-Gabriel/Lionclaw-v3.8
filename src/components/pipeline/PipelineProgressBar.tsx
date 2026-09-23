@@ -4,7 +4,6 @@ import type { PhaseDefinition, PipelinePhaseMetrics } from '@/types';
 import { usePipelineStore } from '@/stores/pipeline-store';
 import { TechGroup } from './TechGroup';
 
-
 type PhaseDisplayStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
 function resolvePhaseDisplayStatus(
@@ -33,7 +32,6 @@ function resolvePhaseDisplayStatus(
   return 'pending';
 }
 
-
 function PhaseStatusIcon({ status }: { status: PhaseDisplayStatus }) {
   if (status === 'completed') {
     return <Check size={10} strokeWidth={3} className="text-green-400" />;
@@ -49,34 +47,22 @@ function PhaseStatusIcon({ status }: { status: PhaseDisplayStatus }) {
   if (status === 'skipped') {
     return <Minus size={10} strokeWidth={2} className="text-zinc-500" />;
   }
-  return (
-    <span
-      className="inline-block w-2.5 h-2.5 rounded-full"
-      style={{ border: '1.5px dashed #52525b' }}
-    />
-  );
+  return <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ border: '1.5px dashed #52525b' }} />;
 }
 
-
 const STATUS_NUM_COLOR: Record<PhaseDisplayStatus, string> = {
-  pending:   'text-zinc-600',
-  running:   'text-orange-300',
+  pending: 'text-zinc-600',
+  running: 'text-orange-300',
   completed: 'text-green-400',
-  failed:    'text-red-400',
-  skipped:   'text-zinc-500',
+  failed: 'text-red-400',
+  skipped: 'text-zinc-500',
 };
-
 
 function PhaseConnector({ completed }: { completed: boolean }) {
   return (
-    <div
-      className={`h-0.5 flex-1 mx-0.5 rounded transition-colors ${
-        completed ? 'bg-green-600' : 'bg-zinc-800'
-      }`}
-    />
+    <div className={`h-0.5 flex-1 mx-0.5 rounded transition-colors ${completed ? 'bg-green-600' : 'bg-zinc-800'}`} />
   );
 }
-
 
 function formatMs(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -100,7 +86,9 @@ function PhaseTooltip({ phase, metrics, status }: PhaseTooltipProps) {
     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 pointer-events-none">
       <div className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-300 whitespace-nowrap shadow-xl">
         <p className="font-semibold text-zinc-100 mb-1">{phase.name}</p>
-        <p className="text-zinc-500 mb-1.5">Fase {phase.number} — {phase.stageName}</p>
+        <p className="text-zinc-500 mb-1.5">
+          Fase {phase.number} — {phase.stageName}
+        </p>
         {metrics ? (
           <div className="space-y-0.5 text-[11px]">
             <div className="flex gap-3">
@@ -125,9 +113,7 @@ function PhaseTooltip({ phase, metrics, status }: PhaseTooltipProps) {
             {status === 'pending' ? 'Ainda nao executado' : 'Sem metricas disponíveis'}
           </p>
         )}
-        {status === 'completed' && (
-          <p className="text-zinc-600 text-[10px] mt-1.5">Clique para ver historico</p>
-        )}
+        {status === 'completed' && <p className="text-zinc-600 text-[10px] mt-1.5">Clique para ver historico</p>}
       </div>
       {/* arrow */}
       <div className="flex justify-center">
@@ -136,7 +122,6 @@ function PhaseTooltip({ phase, metrics, status }: PhaseTooltipProps) {
     </div>
   );
 }
-
 
 interface PipelineProgressBarProps {
   phases: PhaseDefinition[];
@@ -161,9 +146,7 @@ export function PipelineProgressBar({
 
   const { viewingPhase, activeProjectId, setViewingPhase, loadPhaseHistory } = usePipelineStore();
 
-  const metricsMap = new Map<number, PipelinePhaseMetrics>(
-    phaseMetrics.map((m) => [m.phaseNumber, m])
-  );
+  const metricsMap = new Map<number, PipelinePhaseMetrics>(phaseMetrics.map((m) => [m.phaseNumber, m]));
 
   const stages = useMemo(() => {
     const stageMap = new Map<number, { stageName: string; phases: PhaseDefinition[] }>();
@@ -277,7 +260,8 @@ export function PipelineProgressBar({
             if (nextItemForGroup) {
               if (nextItemForGroup.kind === 'phase') {
                 nextCompletedForGroup =
-                  resolvePhaseDisplayStatus(nextItemForGroup.phase.number, currentPhase, phaseStatus, metricsMap) === 'completed';
+                  resolvePhaseDisplayStatus(nextItemForGroup.phase.number, currentPhase, phaseStatus, metricsMap) ===
+                  'completed';
               } else {
                 nextCompletedForGroup = groupCompleted[nextItemForGroup.groupId] ?? false;
               }
@@ -357,7 +341,9 @@ export function PipelineProgressBar({
                     {phase.agentId === 'open-design-studio' ? (
                       <PenTool
                         size={10}
-                        className={sidecarRunning && isCurrentPhase ? 'text-amber-400' : STATUS_NUM_COLOR[displayStatus]}
+                        className={
+                          sidecarRunning && isCurrentPhase ? 'text-amber-400' : STATUS_NUM_COLOR[displayStatus]
+                        }
                       />
                     ) : phase.agentId === 'design-lock' ? (
                       <Lock size={10} className={STATUS_NUM_COLOR[displayStatus]} />
@@ -366,19 +352,11 @@ export function PipelineProgressBar({
                     )}
                   </div>
                   {/* History viewing underline indicator */}
-                  {isViewingThis && (
-                    <div className="w-full h-0.5 mt-0.5 rounded bg-amber-400" />
-                  )}
+                  {isViewingThis && <div className="w-full h-0.5 mt-0.5 rounded bg-amber-400" />}
                 </div>
 
                 {/* Tooltip */}
-                {isHovered && (
-                  <PhaseTooltip
-                    phase={phase}
-                    metrics={metrics}
-                    status={displayStatus}
-                  />
-                )}
+                {isHovered && <PhaseTooltip phase={phase} metrics={metrics} status={displayStatus} />}
 
                 {/* Reset button: only for resetable phases that are completed or running */}
                 {phase.resetable && (isCompleted || isCurrentPhase) && onRequestReset && isHovered && (
@@ -396,9 +374,7 @@ export function PipelineProgressBar({
               </div>
 
               {/* Connector to next item */}
-              {!isLast && (
-                <PhaseConnector completed={isCompleted && nextCompleted} />
-              )}
+              {!isLast && <PhaseConnector completed={isCompleted && nextCompleted} />}
             </div>
           );
         })}

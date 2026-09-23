@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi } from 'vitest';
-
 
 vi.mock('../logger', () => ({
   createLogger: () => ({
@@ -19,10 +17,8 @@ vi.mock('../vault-registry', () => ({
   getSecret: vi.fn().mockResolvedValue(null),
 }));
 
-
 import { resolveExternalPricing, computePricingKey } from '../agent-runtime/external-http';
 import type { ExternalConfig } from '../../../src/types';
-
 
 function makeExtCfg(overrides: Partial<ExternalConfig>): ExternalConfig {
   return {
@@ -33,7 +29,6 @@ function makeExtCfg(overrides: Partial<ExternalConfig>): ExternalConfig {
     ...overrides,
   };
 }
-
 
 describe('resolveExternalPricing - legacy providers (always known)', () => {
   it('openrouter: returns { status: known, pricingKey: or:<model> }', () => {
@@ -51,7 +46,11 @@ describe('resolveExternalPricing - legacy providers (always known)', () => {
   });
 
   it('openai-compatible (Custom): returns { status: known, pricingKey: <model> }', () => {
-    const cfg = makeExtCfg({ provider: 'openai-compatible', model: 'my-custom-model', baseUrl: 'https://my-endpoint.example.com/v1' });
+    const cfg = makeExtCfg({
+      provider: 'openai-compatible',
+      model: 'my-custom-model',
+      baseUrl: 'https://my-endpoint.example.com/v1',
+    });
     const result = resolveExternalPricing(cfg);
     expect(result.status).toBe('known');
     expect(result.pricingKey).toBe('my-custom-model');
@@ -64,7 +63,6 @@ describe('resolveExternalPricing - legacy providers (always known)', () => {
     expect(result.pricingKey).toBe(computePricingKey(cfg));
   });
 });
-
 
 describe('resolveExternalPricing - new providers with known pricing', () => {
   it('deepseek + deepseek-chat: returns { status: known, pricingKey: deepseek-chat }', () => {
@@ -128,7 +126,6 @@ describe('resolveExternalPricing - new providers with known pricing', () => {
   });
 });
 
-
 describe('resolveExternalPricing - new providers with pricingKey: null', () => {
   it('minimax-payg + MiniMax-Text-01: returns { status: unknown, pricingKey: null }', () => {
     const cfg = makeExtCfg({
@@ -177,7 +174,6 @@ describe('resolveExternalPricing - new providers with pricingKey: null', () => {
     expect(result.pricingKey).toBeNull();
   });
 });
-
 
 describe('resolveExternalPricing - model not in catalog', () => {
   it('kimi + unknown-model: returns { status: unknown, pricingKey: null }', () => {

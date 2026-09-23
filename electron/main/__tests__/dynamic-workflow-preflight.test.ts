@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   preflightNode,
@@ -279,17 +278,7 @@ describe('preflightNode - cursor (SPEC cursor-runtime E6)', () => {
 
 describe('DRIFT da matriz vs AgentConfig (risco 19)', () => {
   it('o union de runtimes da matriz cobre AgentConfig[runtime] (menos lion-sdk)', () => {
-    const agentConfigRuntimes = [
-      'cloud',
-      'local',
-      'external',
-      'codex',
-      'zai',
-      'minimax-tp',
-      'kimi',
-      'grok',
-      'cursor',
-    ];
+    const agentConfigRuntimes = ['cloud', 'local', 'external', 'codex', 'zai', 'minimax-tp', 'kimi', 'grok', 'cursor'];
     for (const rt of agentConfigRuntimes) {
       expect(Object.keys(RUNTIME_CAPABILITIES)).toContain(rt);
     }

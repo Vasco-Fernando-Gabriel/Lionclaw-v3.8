@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { vi } from 'vitest';
 import fs from 'fs';
@@ -16,13 +15,12 @@ vi.mock('../logger', () => ({
 }));
 
 vi.mock('../db', () => ({
+  threadIdOf: (s: { id: string; sdkSessionId?: string | null }) => s.sdkSessionId ?? s.id,
+  getSessionOrchestrator: () => null,
   listActiveTelegramSessions: vi.fn(() => []),
 }));
 
-import {
-  migrateTelegramJsonlOnBoot,
-  sanitizeClaudeProjectDir,
-} from '../telegram-jsonl-migration';
+import { migrateTelegramJsonlOnBoot, sanitizeClaudeProjectDir } from '../telegram-jsonl-migration';
 
 const OLD_CWD = '/Users/teste/.lionclaw/background';
 const NEW_CWD = '/Users/teste/.lionclaw';
@@ -53,9 +51,7 @@ function runMigration(sessions: Array<{ id: string; sdkSessionId?: string }>) {
 
 describe('sanitizeClaudeProjectDir', () => {
   it('troca todo caractere nao-alfanumerico por "-" (padrao do Agent SDK)', () => {
-    expect(sanitizeClaudeProjectDir('/Users/x/.lionclaw/background')).toBe(
-      '-Users-x--lionclaw-background',
-    );
+    expect(sanitizeClaudeProjectDir('/Users/x/.lionclaw/background')).toBe('-Users-x--lionclaw-background');
     expect(sanitizeClaudeProjectDir('/Users/x/.lionclaw')).toBe('-Users-x--lionclaw');
   });
 });

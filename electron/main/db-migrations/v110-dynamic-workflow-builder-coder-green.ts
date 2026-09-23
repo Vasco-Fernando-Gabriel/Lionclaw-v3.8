@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const OLD_BLOCK = `NUNCA emita um coder unico fixo para a feature inteira nem um scout/discovery generalista: a decomposicao e feita pelo Sprint Planner em runtime.`;
 
 const NEW_BLOCK = `NUNCA emita um coder unico fixo para a feature inteira nem um scout/discovery generalista: a decomposicao e feita pelo Sprint Planner em runtime.

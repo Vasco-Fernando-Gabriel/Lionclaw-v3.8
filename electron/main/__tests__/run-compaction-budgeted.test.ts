@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -114,7 +113,6 @@ vi.mock('../secrets-vault', () => ({
 
 import { runCompaction } from '../memory-pipeline';
 
-
 const VALID_SUMMARY = {
   executive_summary: 'resumo executivo do ciclo',
   decisions: [],
@@ -175,7 +173,7 @@ beforeEach(() => {
     if (key === 'orchestrator_runtime') return 'claude-sdk';
     if (key === 'orchestrator_provider') return 'anthropic';
     if (key === 'orchestrator_model') return 'claude-sonnet-4-6';
-    return undefined; // compaction provider/model vazios -> Auto
+    return undefined;
   });
   h.resolveOrchestratorSelectionMock.mockResolvedValue({
     runtime: 'claude-sdk',
@@ -190,7 +188,6 @@ beforeEach(() => {
   });
   h.saveDreamingReportMock.mockResolvedValue(undefined);
 });
-
 
 describe('ordem canonica 11.1 (AC-41)', () => {
   it('maps do builder -> summarize -> gate (lock) -> daily (pos-lock); nenhum map dentro do lock', async () => {
@@ -215,32 +212,28 @@ describe('ordem canonica 11.1 (AC-41)', () => {
 
     const gateInput = h.runDreamingGateMock.mock.calls[0][0] as { conversationExcerpt: string };
     expect(gateInput.conversationExcerpt.length).toBeLessThanOrEqual(8000);
-    expect(gateInput.conversationExcerpt).toContain('FINAL-DA-CONVERSA-XYZ'); // cauda
-    expect(gateInput.conversationExcerpt).not.toContain('MAPRES'); // inicio ficou fora
+    expect(gateInput.conversationExcerpt).toContain('FINAL-DA-CONVERSA-XYZ');
+    expect(gateInput.conversationExcerpt).not.toContain('MAPRES');
   });
 });
-
 
 describe('selection resolvida 1x (AC-35)', () => {
   it('mesmo com maps de gigante, orchestrator_compaction_provider e lido exatamente 1x', async () => {
     h.dbMessages = [makeRow(1, 'user', GIANT)];
     await runCompaction(new Date(), new Date(), 'sess-1');
-    const reads = h.getSettingMock.mock.calls.filter(
-      (c) => c[0] === 'orchestrator_compaction_provider',
-    );
+    const reads = h.getSettingMock.mock.calls.filter((c) => c[0] === 'orchestrator_compaction_provider');
     expect(reads).toHaveLength(1);
     expect(h.events).toContain('llm:map');
     expect(h.events).toContain('llm:summarize');
   });
 });
 
-
 describe('tres callers passam pelo builder (AC-42)', () => {
   async function assertBuilderPath(): Promise<void> {
     const prompt = summarizePrompt();
     expect(prompt).toContain('[resumo automatico de mensagem longa');
     expect(prompt).toContain('RESUMO-DO-MAP');
-    expect(prompt).not.toContain('g'.repeat(30000)); // gigante cru nao vaza
+    expect(prompt).not.toContain('g'.repeat(30000));
   }
 
   it('desktop: sessao INTEGRAL (sessionId sem sinceMessageId)', async () => {
@@ -265,7 +258,6 @@ describe('tres callers passam pelo builder (AC-42)', () => {
   });
 });
 
-
 describe('tudo-cabe via runCompaction (AC-34)', () => {
   it('mensagens pequenas entram byte-identicas ([role] content \\n\\n), zero maps', async () => {
     await runCompaction(new Date(), new Date(), 'sess-1');
@@ -274,7 +266,6 @@ describe('tudo-cabe via runCompaction (AC-34)', () => {
     expect(prompt).toContain('[user] primeira mensagem\n\n[assistant] primeira resposta');
   });
 });
-
 
 describe('orcamento: piso, priorSummary patologico e teto do resumo rolante (AC-40)', () => {
   it('priorSummary patologico e pre-comprimido por map dedicado antes do desconto', async () => {
@@ -287,7 +278,7 @@ describe('orcamento: piso, priorSummary patologico e teto do resumo rolante (AC-
       h.events.push('llm:summarize');
       return Promise.resolve({ text: JSON.stringify(VALID_SUMMARY), actualModelLabel: 'Claude Sonnet 4.6' });
     });
-    const pathologicalPrior = 'P'.repeat(250000); // ~62.5k tok >> budget 48k
+    const pathologicalPrior = 'P'.repeat(250000);
     await runCompaction(new Date(), new Date(), 'sess-1', { priorSummary: pathologicalPrior });
 
     const mapPrompt = promptsSent().find(isMapPrompt);
@@ -313,7 +304,6 @@ describe('orcamento: piso, priorSummary patologico e teto do resumo rolante (AC-
     expect(summarizePrompt()).toContain('resumo anterior curto');
   });
 });
-
 
 describe('instrumentacao por ciclo (AC-43)', () => {
   it('emite logger.info "compaction input budget" com todos os campos de 11.8', async () => {
@@ -345,29 +335,20 @@ describe('instrumentacao por ciclo (AC-43)', () => {
   });
 });
 
-
 describe('builder sabotado (AC-39, nivel 3)', () => {
   it('conteudo nao-string derruba o builder -> assembly legado -> ciclo conclui', async () => {
-    h.dbMessages = [
-      makeRow(1, 'user', null as unknown as string),
-      makeRow(2, 'assistant', 'mensagem valida'),
-    ];
+    h.dbMessages = [makeRow(1, 'user', null as unknown as string), makeRow(2, 'assistant', 'mensagem valida')];
     const result = await runCompaction(new Date(), new Date(), 'sess-1');
-    expect(result).toEqual({ executiveSummary: 'resumo executivo do ciclo' });
+    expect(result).toMatchObject({ executiveSummary: 'resumo executivo do ciclo' });
+    expect(result?.warnings.map((w) => w.step)).toEqual(['transcript']);
     expect(summarizePrompt()).toContain('[assistant] mensagem valida');
-    expect(
-      h.logError.mock.calls.some((c) => String(c[1]).includes('assembly legado')),
-    ).toBe(true);
+    expect(h.logError.mock.calls.some((c) => String(c[1]).includes('assembly legado'))).toBe(true);
   });
 });
 
-
 describe('remocao do truncamento mecanico (AC-33)', () => {
   it('memory-pipeline.ts nao contem substring(0, 2000) nem substring(0, 50000)', () => {
-    const src = fs.readFileSync(
-      fileURLToPath(new URL('../memory-pipeline.ts', import.meta.url)),
-      'utf-8',
-    );
+    const src = fs.readFileSync(fileURLToPath(new URL('../memory-pipeline.ts', import.meta.url)), 'utf-8');
     expect(src).not.toContain('.substring(0, 2000)');
     expect(src).not.toContain('.substring(0, 50000)');
   });

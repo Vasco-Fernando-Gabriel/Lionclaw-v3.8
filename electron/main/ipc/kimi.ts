@@ -3,7 +3,6 @@ import type { IpcContext } from './context';
 import { setSetting } from '../db';
 
 export function registerKimiHandlers(_ctx: IpcContext): void {
-
   ipcMain.handle('kimi:status', async () => {
     const { isKimiAvailable } = await import('../agent-runtime/kimi-availability');
     return isKimiAvailable();
@@ -19,17 +18,9 @@ export function registerKimiHandlers(_ctx: IpcContext): void {
     const { createLogger } = await import('../logger');
     const logger = createLogger('ipc-kimi');
     const { spawn } = await import('child_process');
-    const {
-      buildKimiChildEnv,
-      resolveKimiBinary,
-      ensureKimiHome,
-    } = await import('../agent-runtime/kimi-availability');
+    const { buildKimiChildEnv, resolveKimiBinary, ensureKimiHome } = await import('../agent-runtime/kimi-availability');
     const { getSetting } = await import('../db');
-    const {
-      shellEscapePOSIX,
-      appleScriptEscape,
-      cmdQuote,
-    } = await import('../shell-escape');
+    const { shellEscapePOSIX, appleScriptEscape, cmdQuote } = await import('../shell-escape');
 
     const resolvedPath = await resolveKimiBinary();
     const binaryPath = resolvedPath || getSetting('kimi_binary_path') || 'kimi';
@@ -51,11 +42,12 @@ export function registerKimiHandlers(_ctx: IpcContext): void {
       t.on('error', (err) => logger.warn({ err }, 'kimi open-login: falha ao abrir Terminal via osascript'));
       t.unref();
     } else if (platform === 'win32') {
-      const t = spawn(
-        'cmd',
-        ['/c', 'start', '""', 'cmd', '/k', `${cmdQuote(binaryPath)} acp --login`],
-        { detached: true, shell: false, windowsVerbatimArguments: true, env: childEnv },
-      );
+      const t = spawn('cmd', ['/c', 'start', '""', 'cmd', '/k', `${cmdQuote(binaryPath)} acp --login`], {
+        detached: true,
+        shell: false,
+        windowsVerbatimArguments: true,
+        env: childEnv,
+      });
       t.on('error', (err) => logger.warn({ err }, 'kimi open-login: falha ao abrir cmd'));
       t.unref();
     } else {

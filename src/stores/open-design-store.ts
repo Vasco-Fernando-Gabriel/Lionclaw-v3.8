@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 
-
 export interface SidecarStatus {
   running: boolean;
   daemonUrl: string | null;
@@ -8,7 +7,6 @@ export interface SidecarStatus {
   daemonPort: number | null;
   webPort: number | null;
 }
-
 
 interface OpenDesignState {
   sidecarStatus: SidecarStatus | null;
@@ -48,7 +46,9 @@ export const useOpenDesignStore = create<OpenDesignStore>()((set, get) => ({
 
   closeStudio: () => {
     get().stopPolling();
-    window.lionclaw.openDesign.hideView().catch(() => { /* ignore */ });
+    window.lionclaw.openDesign.hideView().catch(() => {
+      /* ignore */
+    });
     set({ isStudioOpen: false });
   },
 
@@ -67,7 +67,7 @@ export const useOpenDesignStore = create<OpenDesignStore>()((set, get) => ({
 
   startPolling: (projectId: string) => {
     const existing = get()._pollHandle;
-    if (existing !== null) return; // already polling
+    if (existing !== null) return;
 
     const handle = setInterval(() => {
       void get().refreshStatus(projectId);

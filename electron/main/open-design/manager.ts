@@ -8,13 +8,9 @@ import { getOpenDesignConfig, setOpenDesignConfig, resolveRunDir } from './confi
 import { resolveOpenDesignGlobalDataDir, resolveOpenDesignRoot } from './paths';
 import { ensurePnpm, ensurePnpmShimDir, getCachedPnpm, spawnPnpm } from './pnpm-runner';
 import { destroyODView } from './webview';
-import {
-  minimalInternalRuntimeEnv,
-  resolveOpenDesignSidecar,
-} from '../distribution-runtime';
+import { minimalInternalRuntimeEnv, resolveOpenDesignSidecar } from '../distribution-runtime';
 
 const logger = createLogger('open-design-manager');
-
 
 interface ProcessHandle {
   projectId: string;
@@ -29,11 +25,7 @@ interface ProcessHandle {
 
 let active: ProcessHandle | null = null;
 
-export function persistRuntimeCoordinates(
-  projectId: string,
-  daemonUrl: string,
-  webUrl: string,
-): void {
+export function persistRuntimeCoordinates(projectId: string, daemonUrl: string, webUrl: string): void {
   setOpenDesignConfig(projectId, {
     daemonUrl,
     webUrl,
@@ -99,8 +91,7 @@ async function waitForHealth(url: string, attempts = 10, delayMs = 500): Promise
       const res = await fetch(`${url}/api/health`, { signal: controller.signal });
       clearTimeout(timeout);
       if (res.ok) return true;
-    } catch {
-    }
+    } catch {}
     await new Promise((r) => setTimeout(r, delayMs));
   }
   return false;
@@ -114,8 +105,7 @@ async function waitForWebReady(webUrl: string, attempts = 20, delayMs = 500): Pr
       const res = await fetch(`${webUrl}/`, { signal: controller.signal });
       clearTimeout(timeout);
       if (res.status >= 200 && res.status < 400) return true;
-    } catch {
-    }
+    } catch {}
     await new Promise((r) => setTimeout(r, delayMs));
   }
   return false;
@@ -125,9 +115,7 @@ function killProcessTree(pid: number | undefined, signal: NodeJS.Signals): boole
   if (typeof pid !== 'number' || pid <= 0) return false;
   if (process.platform === 'win32') {
     try {
-      const args = signal === 'SIGKILL'
-        ? ['/PID', String(pid), '/T', '/F']
-        : ['/PID', String(pid), '/T'];
+      const args = signal === 'SIGKILL' ? ['/PID', String(pid), '/T', '/F'] : ['/PID', String(pid), '/T'];
       const res = spawnSync('taskkill', args, { stdio: 'ignore', windowsHide: true });
       return res.status === 0;
     } catch {
@@ -138,7 +126,12 @@ function killProcessTree(pid: number | undefined, signal: NodeJS.Signals): boole
     process.kill(-pid, signal);
     return true;
   } catch {
-    try { process.kill(pid, signal); return true; } catch { return false; }
+    try {
+      process.kill(pid, signal);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -148,7 +141,7 @@ async function cleanupOrphanDaemonWindows(): Promise<void> {
   if (!fs.existsSync(stampsDir)) return;
 
   const invocation = getCachedPnpm();
-  if (!invocation) return; // start() ja chamou ensurePnpm; checagem defensiva.
+  if (!invocation) return;
 
   await new Promise<void>((resolve) => {
     let settled = false;
@@ -166,7 +159,11 @@ async function cleanupOrphanDaemonWindows(): Promise<void> {
       });
       const timer = setTimeout(() => {
         logger.warn('cleanupOrphanDaemon (win32): tools-dev stop timed out, continuing');
-        try { proc.kill(); } catch { /* ignore */ }
+        try {
+          proc.kill();
+        } catch {
+          /* ignore */
+        }
         done();
       }, 8000);
       proc.once('exit', () => {
@@ -212,7 +209,9 @@ async function cleanupOrphanDaemon(): Promise<void> {
     try {
       const invocation = getCachedPnpm();
       if (invocation) {
-        const argv = [invocation.bin, ...invocation.prefixArgs, 'tools-dev', 'stop'].map((s) => `'${s.replace(/'/g, `'\\''`)}'`).join(' ');
+        const argv = [invocation.bin, ...invocation.prefixArgs, 'tools-dev', 'stop']
+          .map((s) => `'${s.replace(/'/g, `'\\''`)}'`)
+          .join(' ');
         logger.info({ vendorRoot }, 'cleanupOrphanDaemon: running `tools-dev stop` (best-effort)');
         await run(`cd ${vendorRoot} && ${argv}`, 5000);
       }
@@ -228,21 +227,43 @@ async function cleanupOrphanDaemon(): Promise<void> {
 
   for (const pid of pids) {
     logger.warn({ pid }, 'cleanupOrphanDaemon: killing orphan process holding /tmp/open-design');
-    try { process.kill(-pid, 'SIGTERM'); } catch { try { process.kill(pid, 'SIGTERM'); } catch { /* ignore */ } }
+    try {
+      process.kill(-pid, 'SIGTERM');
+    } catch {
+      try {
+        process.kill(pid, 'SIGTERM');
+      } catch {
+        /* ignore */
+      }
+    }
   }
   if (pids.length > 0) {
     await new Promise((r) => setTimeout(r, 500));
     for (const pid of pids) {
-      try { process.kill(-pid, 'SIGKILL'); } catch { try { process.kill(pid, 'SIGKILL'); } catch { /* ignore */ } }
+      try {
+        process.kill(-pid, 'SIGKILL');
+      } catch {
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch {
+          /* ignore */
+        }
+      }
     }
   }
 
   if (hasIpc) {
     try {
       for (const entry of fs.readdirSync(ipcDir)) {
-        try { fs.unlinkSync(path.join(ipcDir, entry)); } catch { /* ignore */ }
+        try {
+          fs.unlinkSync(path.join(ipcDir, entry));
+        } catch {
+          /* ignore */
+        }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   if (hasStamps) {
@@ -252,7 +273,9 @@ async function cleanupOrphanDaemon(): Promise<void> {
         const full = path.join(stampsDir, entry);
         fs.rmSync(full, { recursive: true, force: true });
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   logger.info({ killedPids: pids, stampsCleared: hasStamps, ipcCleared: hasIpc }, 'cleanupOrphanDaemon: done');
@@ -334,7 +357,10 @@ async function startPackagedRuntime(
   const ready = await new Promise<PackagedReady>((resolveReady, rejectReady) => {
     const timeout = setTimeout(() => rejectReady(new Error('timeout aguardando readiness packaged')), 60_000);
     const cleanup = (): void => clearTimeout(timeout);
-    proc.once('error', (error) => { cleanup(); rejectReady(error); });
+    proc.once('error', (error) => {
+      cleanup();
+      rejectReady(error);
+    });
     proc.once('exit', (code, signal) => {
       cleanup();
       rejectReady(new Error(`LionDesign packaged saiu antes da readiness: code=${code} signal=${signal ?? 'none'}`));
@@ -347,7 +373,10 @@ async function startPackagedRuntime(
       for (const line of lines) {
         try {
           const parsed = parsePackagedReady(line);
-          if (parsed) { cleanup(); resolveReady(parsed); }
+          if (parsed) {
+            cleanup();
+            resolveReady(parsed);
+          }
         } catch (error) {
           cleanup();
           rejectReady(error);

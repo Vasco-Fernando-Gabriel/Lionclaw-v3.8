@@ -99,12 +99,7 @@ export function KanbanPage() {
     const data = active.data.current as { localId: number; fromColumn: KanbanColumnId } | undefined;
     if (!data || data.fromColumn === toColumn) return;
     const backward = COLUMN_ORDER[toColumn] < COLUMN_ORDER[data.fromColumn];
-    void store.moveCard(
-      board.prefix,
-      data.localId,
-      toColumn,
-      backward ? BACKWARD_DRAG_REASON : null,
-    );
+    void store.moveCard(board.prefix, data.localId, toColumn, backward ? BACKWARD_DRAG_REASON : null);
   };
 
   const openCard = (card: KanbanCard) => {
@@ -140,9 +135,7 @@ export function KanbanPage() {
           </select>
         )}
         {board && repoPaths[board.repositoryId] && (
-          <span className="text-[11px] text-zinc-600 font-mono truncate max-w-xs">
-            {repoPaths[board.repositoryId]}
-          </span>
+          <span className="text-[11px] text-zinc-600 font-mono truncate max-w-xs">{repoPaths[board.repositoryId]}</span>
         )}
         {board && (
           <button
@@ -175,8 +168,8 @@ export function KanbanPage() {
           <Kanban size={32} className="text-zinc-700" />
           <p className="text-sm text-zinc-400">Nenhum quadro ainda.</p>
           <p className="text-xs text-zinc-600 max-w-sm leading-relaxed">
-            Um quadro por repositório registrado, com 4 colunas fixas e as mesmas tools
-            que o orquestrador usa. Crie o primeiro.
+            Um quadro por repositório registrado, com 4 colunas fixas e as mesmas tools que o orquestrador usa. Crie o
+            primeiro.
           </p>
           <button
             onClick={() => setShowNewBoard(true)}
@@ -244,9 +237,7 @@ export function KanbanPage() {
               </button>
             )}
             <span className="text-xs text-zinc-500 tabular-nums">
-              {anyFilter
-                ? `${visibleCards.length} de ${allCards.length} cards`
-                : `${allCards.length} cards`}
+              {anyFilter ? `${visibleCards.length} de ${allCards.length} cards` : `${allCards.length} cards`}
             </span>
             <label className="inline-flex items-center gap-1.5 text-xs text-zinc-500 cursor-pointer select-none ml-1">
               <input
@@ -264,12 +255,7 @@ export function KanbanPage() {
           <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
             <div className="flex-1 min-h-0 grid grid-cols-4 gap-3.5 px-5 py-4">
               {KANBAN_COLUMNS.map((col) => (
-                <BoardColumn
-                  key={col}
-                  column={col}
-                  cards={byColumn.get(col) ?? []}
-                  onOpenCard={openCard}
-                />
+                <BoardColumn key={col} column={col} cards={byColumn.get(col) ?? []} onOpenCard={openCard} />
               ))}
             </div>
           </DndContext>
@@ -278,13 +264,9 @@ export function KanbanPage() {
 
       {/* Modals */}
       {openCardDetail && <CardModal detail={openCardDetail} onClose={store.closeCard} />}
-      {showNewCard && board && (
-        <NewCardModal boardPrefix={board.prefix} onClose={() => setShowNewCard(false)} />
-      )}
+      {showNewCard && board && <NewCardModal boardPrefix={board.prefix} onClose={() => setShowNewCard(false)} />}
       {showNewBoard && <NewBoardModal onClose={() => setShowNewBoard(false)} />}
-      {showDeleteBoard && board && (
-        <DeleteBoardModal board={board} onClose={() => setShowDeleteBoard(false)} />
-      )}
+      {showDeleteBoard && board && <DeleteBoardModal board={board} onClose={() => setShowDeleteBoard(false)} />}
 
       <KanbanToastHost />
     </div>

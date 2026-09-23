@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 const h = vi.hoisted(() => ({
   buildSystemPromptMock: vi.fn((_agentId?: string, _opts?: Record<string, unknown>) => ''),
@@ -16,7 +14,6 @@ const h = vi.hoisted(() => ({
   } as Record<string, unknown>,
 }));
 
-
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: () => {
     const iter = (async function* () {})();
@@ -30,6 +27,8 @@ vi.mock('../logger', () => ({
 }));
 
 vi.mock('../db', () => ({
+  threadIdOf: (s: { id: string; sdkSessionId?: string | null }) => s.sdkSessionId ?? s.id,
+  getSessionOrchestrator: () => null,
   getAllAgents: vi.fn(() => [] as unknown[]),
   getAgent: vi.fn(() => undefined),
   insertMessage: vi.fn(() => 1),
@@ -165,7 +164,10 @@ vi.mock('../lion-sdk', () => ({
 }));
 
 import { executeQuery, type QueryOptions } from '../orchestrator';
-import { desktopLane, telegramLane } from '../sdk-lane';
+import { telegramLane } from '../sdk-lane';
+import { getDesktopLane } from '../desktop-lanes';
+
+const desktopLane = getDesktopLane('sess-wiring');
 import {
   computeEffectiveCapabilitiesForTurn,
   __resetChatCapabilityContextForTests,
@@ -215,6 +217,9 @@ function mcpConfigOpts(): { surface: unknown; capabilities: unknown } {
 const OFF: ChatFeatureToggles = { pipelineControl: false, dynamicWorkflows: false };
 const ON: ChatFeatureToggles = { pipelineControl: true, dynamicWorkflows: true };
 const MIXED: ChatFeatureToggles = { pipelineControl: true, dynamicWorkflows: false };
+const EFFECTIVE_OFF = { ...OFF, swarm: false };
+const EFFECTIVE_ON = { ...ON, swarm: false };
+const EFFECTIVE_MIXED = { ...MIXED, swarm: false };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -225,41 +230,42 @@ beforeEach(() => {
   useSelection(CLAUDE_SELECTION);
 });
 
-
 describe('S5b: wiring claude-sdk (executeClaudeSdkQuery le o turn-context da lane desktop)', () => {
   it('turno desktop com toggles OFF -> buildSystemPrompt E getMCPConfigForAgent recebem OFF', async () => {
     await executeQuery('oi', options({ featureToggles: { ...OFF } }), noopGetWindow, desktopLane);
 
-    expect(promptCapabilities()).toEqual(OFF);
-    expect(mcpConfigOpts()).toEqual({ surface: 'claude-sdk', capabilities: OFF });
+    expect(promptCapabilities()).toEqual(EFFECTIVE_OFF);
+    expect(mcpConfigOpts()).toEqual({ surface: 'claude-sdk', capabilities: EFFECTIVE_OFF });
   });
 
   it('turno desktop com toggles ON -> os 2 calls recebem ON (secao completa + helper presente)', async () => {
     await executeQuery('oi', options({ featureToggles: { ...ON } }), noopGetWindow, desktopLane);
 
-    expect(promptCapabilities()).toEqual(ON);
-    expect(mcpConfigOpts()).toEqual({ surface: 'claude-sdk', capabilities: ON });
+    expect(promptCapabilities()).toEqual(EFFECTIVE_ON);
+    expect(mcpConfigOpts()).toEqual({ surface: 'claude-sdk', capabilities: EFFECTIVE_ON });
   });
 
   it('toggles mistos passam intactos (pipeline ON, workflows OFF)', async () => {
     await executeQuery('oi', options({ featureToggles: { ...MIXED } }), noopGetWindow, desktopLane);
 
-    expect(promptCapabilities()).toEqual(MIXED);
-    expect(mcpConfigOpts()).toEqual({ surface: 'claude-sdk', capabilities: MIXED });
+    expect(promptCapabilities()).toEqual(EFFECTIVE_MIXED);
+    expect(mcpConfigOpts()).toEqual({ surface: 'claude-sdk', capabilities: EFFECTIVE_MIXED });
   });
 
   it('sem featureToggles nas options: hook S3a registra default OFF (A.4) e o wiring o entrega', async () => {
     await executeQuery('oi', options(), noopGetWindow, desktopLane);
 
-    expect(promptCapabilities()).toEqual(OFF);
-    expect(mcpConfigOpts()).toEqual({ surface: 'claude-sdk', capabilities: OFF });
+    expect(promptCapabilities()).toEqual(EFFECTIVE_OFF);
+    expect(mcpConfigOpts()).toEqual({ surface: 'claude-sdk', capabilities: EFFECTIVE_OFF });
   });
 
-  it('desktop SEM turn-context (miss tolerado do S3a) -> capabilities undefined = default S5a byte-identico', async () => {
-    await executeQuery('oi', { silent: true, featureToggles: { ...ON } }, noopGetWindow, desktopLane);
+  it('desktop SEM sessionId (lanes 5.3, RM7): session_required tipado, nada composto', async () => {
+    await expect(
+      executeQuery('oi', { silent: true, featureToggles: { ...ON } }, noopGetWindow, desktopLane),
+    ).rejects.toThrow(/session_required/);
 
-    expect(promptCapabilities()).toBeUndefined();
-    expect(mcpConfigOpts()).toEqual({ surface: 'claude-sdk', capabilities: undefined });
+    expect(h.buildSystemPromptMock).not.toHaveBeenCalled();
+    expect(h.getMCPConfigForAgentMock).not.toHaveBeenCalled();
   });
 
   it('lane telegram (nao-desktop, A.9): capabilities undefined mesmo com toggles ON no turno', async () => {
@@ -275,7 +281,6 @@ describe('S5b: wiring claude-sdk (executeClaudeSdkQuery le o turn-context da lan
   });
 });
 
-
 describe('S5b: wiring claude-compat-sdk (executor real, espelho do claude-sdk)', () => {
   beforeEach(() => {
     useSelection(COMPAT_SELECTION);
@@ -284,15 +289,15 @@ describe('S5b: wiring claude-compat-sdk (executor real, espelho do claude-sdk)',
   it('turno desktop com toggles OFF -> os 2 calls recebem OFF (surface claude-compat-sdk)', async () => {
     await executeQuery('oi', options({ featureToggles: { ...OFF } }), noopGetWindow, desktopLane);
 
-    expect(promptCapabilities()).toEqual(OFF);
-    expect(mcpConfigOpts()).toEqual({ surface: 'claude-compat-sdk', capabilities: OFF });
+    expect(promptCapabilities()).toEqual(EFFECTIVE_OFF);
+    expect(mcpConfigOpts()).toEqual({ surface: 'claude-compat-sdk', capabilities: EFFECTIVE_OFF });
   });
 
   it('turno desktop com toggles ON -> os 2 calls recebem ON', async () => {
     await executeQuery('oi', options({ featureToggles: { ...ON } }), noopGetWindow, desktopLane);
 
-    expect(promptCapabilities()).toEqual(ON);
-    expect(mcpConfigOpts()).toEqual({ surface: 'claude-compat-sdk', capabilities: ON });
+    expect(promptCapabilities()).toEqual(EFFECTIVE_ON);
+    expect(mcpConfigOpts()).toEqual({ surface: 'claude-compat-sdk', capabilities: EFFECTIVE_ON });
   });
 
   it('lane telegram: capabilities undefined (byte-identico) mesmo com toggles ON', async () => {
@@ -307,7 +312,6 @@ describe('S5b: wiring claude-compat-sdk (executor real, espelho do claude-sdk)',
     expect(mcpConfigOpts()).toEqual({ surface: 'claude-compat-sdk', capabilities: undefined });
   });
 });
-
 
 describe('computeEffectiveCapabilitiesForTurn (helper compartilhado, 0.5.2)', () => {
   function ctx(overrides: Partial<ChatCapabilityTurnContext> = {}): ChatCapabilityTurnContext {
@@ -324,7 +328,7 @@ describe('computeEffectiveCapabilitiesForTurn (helper compartilhado, 0.5.2)', ()
   }
 
   it('turno user: efetivas = toggles do turno (identidade)', () => {
-    expect(computeEffectiveCapabilitiesForTurn(ctx())).toEqual(MIXED);
+    expect(computeEffectiveCapabilitiesForTurn(ctx())).toEqual(EFFECTIVE_MIXED);
   });
 
   it('turno system-event com token que NAO e lease valida: efetivas = toggles (fail-closed do deriveLease, S6a)', () => {
@@ -337,7 +341,7 @@ describe('computeEffectiveCapabilitiesForTurn (helper compartilhado, 0.5.2)', ()
         capabilities: { ...OFF },
       }),
     );
-    expect(effective).toEqual(OFF);
+    expect(effective).toEqual(EFFECTIVE_OFF);
   });
 
   it('puro: retorna objeto NOVO (mutar o retorno nao envenena o turn-context)', () => {

@@ -19,10 +19,7 @@ function sha256File(filePath: string): string {
   return crypto.createHash('sha256').update(buf).digest('hex');
 }
 
-async function fetchArtifactFromDaemon(
-  daemonUrl: string,
-  openDesignProjectId: string,
-): Promise<string | null> {
+async function fetchArtifactFromDaemon(daemonUrl: string, openDesignProjectId: string): Promise<string | null> {
   try {
     const controller = new AbortController();
     const healthTimeout = setTimeout(() => controller.abort(), 800);
@@ -43,10 +40,7 @@ async function fetchArtifactFromDaemon(
   }
 }
 
-function findArtifactOnFilesystem(
-  dataDir: string,
-  openDesignProjectId: string | undefined,
-): string | null {
+function findArtifactOnFilesystem(dataDir: string, openDesignProjectId: string | undefined): string | null {
   if (!openDesignProjectId) return null;
   if (!fs.existsSync(dataDir)) return null;
 
@@ -74,8 +68,7 @@ function findArtifactOnFilesystem(
             bestMtime = stat.mtimeMs;
             bestPath = fullPath;
           }
-        } catch {
-        }
+        } catch {}
       }
     }
   };
@@ -91,9 +84,7 @@ export interface CaptureSnapshotResult {
   hashes: { htmlSha256: string; contractSha256: string | null };
 }
 
-export async function captureSnapshot(
-  projectId: string,
-): Promise<CaptureSnapshotResult | { error: string }> {
+export async function captureSnapshot(projectId: string): Promise<CaptureSnapshotResult | { error: string }> {
   try {
     const cfg = getOpenDesignConfig(projectId);
     if (!cfg?.runDir) return { error: 'runDir not configured for project' };
@@ -107,15 +98,12 @@ export async function captureSnapshot(
     const designPaths = project?.projectPath
       ? resolveDesignSnapshotPaths(project.projectPath, project.pipelineDocsId ?? null)
       : null;
-    const snapshotDir = designPaths?.snapshotDir
-      ?? path.join(runDir, 'open-design', 'snapshots', 'latest');
-    const destHtmlPath = designPaths?.artifactHtmlPath
-      ?? path.join(snapshotDir, 'artifact', 'index.html');
+    const snapshotDir = designPaths?.snapshotDir ?? path.join(runDir, 'open-design', 'snapshots', 'latest');
+    const destHtmlPath = designPaths?.artifactHtmlPath ?? path.join(snapshotDir, 'artifact', 'index.html');
     fs.mkdirSync(path.dirname(destHtmlPath), { recursive: true });
 
     const openDesignProjectId =
-      cfg.openDesignProjectId ??
-      ((cfg as unknown as Record<string, unknown>).odProjectId as string | undefined);
+      cfg.openDesignProjectId ?? ((cfg as unknown as Record<string, unknown>).odProjectId as string | undefined);
 
     let htmlContent: string | null = null;
     if (daemonUrl && openDesignProjectId) {
@@ -163,12 +151,11 @@ export async function captureSnapshot(
     if (fs.existsSync(manifestPath)) {
       try {
         existingManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as Record<string, unknown>;
-      } catch {
-      }
+      } catch {}
     }
 
     const hashes: Record<string, string> = {
-      ...(existingManifest.hashes as Record<string, string> | undefined ?? {}),
+      ...((existingManifest.hashes as Record<string, string> | undefined) ?? {}),
     };
     if (!hashes.htmlSha256) hashes.htmlSha256 = htmlSha256;
     if (!hashes.contractSha256 && contractSha256) hashes.contractSha256 = contractSha256;

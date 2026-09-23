@@ -1,13 +1,13 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const SECURITY_AUDITOR_ID = 'security-auditor';
 
 export const securityAuditor: Omit<AgentConfig, 'sortOrder'> = {
   id: SECURITY_AUDITOR_ID,
-  name: "Auditor de Segurança",
-  description: "Use quando precisar realizar avaliações abrangentes de segurança, auditorias de conformidade e avaliações de risco",
-  model: "claude-opus-4-8",
+  name: 'Auditor de Segurança',
+  description:
+    'Use quando precisar realizar avaliações abrangentes de segurança, auditorias de conformidade e avaliações de risco',
+  model: 'claude-opus-5-5',
   effort: 'medium' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,

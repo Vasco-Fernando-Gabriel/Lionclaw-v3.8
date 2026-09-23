@@ -1,9 +1,7 @@
-
 import os from 'os';
 import path from 'path';
 import Database from 'better-sqlite3';
 import * as sqliteVec from 'sqlite-vec';
-
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 if (!OPENAI_API_KEY) {
@@ -18,29 +16,20 @@ const BATCH_DELAY_MS = 200;
 
 const DB_PATH = path.join(os.homedir(), '.lionclaw', 'data', 'lionclaw.db');
 
-
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 sqliteVec.load(db);
 
-
 const selectMissing = db.prepare<[]>(
-  `SELECT id, content FROM semantic_memories WHERE embedding IS NULL AND content IS NOT NULL`
+  `SELECT id, content FROM semantic_memories WHERE embedding IS NULL AND content IS NOT NULL`,
 );
 
-const updateEmbedding = db.prepare<[Buffer, number]>(
-  `UPDATE semantic_memories SET embedding = ? WHERE id = ?`
-);
+const updateEmbedding = db.prepare<[Buffer, number]>(`UPDATE semantic_memories SET embedding = ? WHERE id = ?`);
 
-const deleteVec = db.prepare<[string]>(
-  `DELETE FROM semantic_memories_vec WHERE id = ?`
-);
+const deleteVec = db.prepare<[string]>(`DELETE FROM semantic_memories_vec WHERE id = ?`);
 
-const insertVec = db.prepare<[string, Buffer]>(
-  `INSERT INTO semantic_memories_vec (id, embedding) VALUES (?, ?)`
-);
-
+const insertVec = db.prepare<[string, Buffer]>(`INSERT INTO semantic_memories_vec (id, embedding) VALUES (?, ?)`);
 
 async function fetchEmbeddings(texts: string[]): Promise<number[][]> {
   const res = await fetch('https://api.openai.com/v1/embeddings', {
@@ -65,11 +54,8 @@ async function fetchEmbeddings(texts: string[]): Promise<number[][]> {
     data: Array<{ embedding: number[]; index: number }>;
   };
 
-  return json.data
-    .sort((a, b) => a.index - b.index)
-    .map((d) => d.embedding);
+  return json.data.sort((a, b) => a.index - b.index).map((d) => d.embedding);
 }
-
 
 function normalizeL2(vec: number[]): number[] {
   let norm = 0;
@@ -78,7 +64,6 @@ function normalizeL2(vec: number[]): number[] {
   if (norm === 0) return vec;
   return vec.map((v) => v / norm);
 }
-
 
 interface Row {
   id: number;
@@ -120,7 +105,11 @@ async function main(): Promise<void> {
 
         db.transaction(() => {
           updateEmbedding.run(buf, row.id);
-          try { deleteVec.run(vecId); } catch { /* may not exist */ }
+          try {
+            deleteVec.run(vecId);
+          } catch {
+            /* may not exist */
+          }
           insertVec.run(vecId, buf);
         })();
 
@@ -140,9 +129,11 @@ async function main(): Promise<void> {
   console.log(`\nDone. Total: ${total} | Success: ${success} | Failures: ${failures}`);
 }
 
-main().catch((err) => {
-  console.error('Fatal error:', err);
-  process.exit(1);
-}).finally(() => {
-  db.close();
-});
+main()
+  .catch((err) => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+  })
+  .finally(() => {
+    db.close();
+  });

@@ -1,9 +1,7 @@
-
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import type { OrchestratorSelection } from '../../orchestrator-selection';
 import type { QueryOptions } from '../../orchestrator';
 import type { ChatFeatureToggles } from '../../../../src/types';
-
 
 vi.mock('../../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
@@ -39,6 +37,7 @@ vi.mock('../../title-generator', () => ({
 
 vi.mock('../../chat-compaction-trigger', () => ({
   maybeCompactChatSession: vi.fn(async () => {}),
+  isChatTimelineReinjectEnabled: () => false,
 }));
 
 vi.mock('../../dreaming-turn-engine', () => ({ recordCompletedMainChatTurn: vi.fn() }));
@@ -78,9 +77,11 @@ vi.mock('../session', () => ({
   }),
 }));
 
-
 import { executeCursorSdkQuery } from '../index';
-import { desktopLane, telegramLane } from '../../sdk-lane';
+import { telegramLane } from '../../sdk-lane';
+import { getDesktopLane } from '../../desktop-lanes';
+
+const desktopLane = getDesktopLane('sess-cursor-turn');
 import {
   registerChatCapabilityTurn,
   setActiveChatTurn,

@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { createLogger } from './logger';
-import { listActiveTelegramSessions } from './db';
+import { listActiveTelegramSessions, threadIdOf } from './db';
 import { getLionClawHome, getBackgroundCwd } from './paths';
 
 const logger = createLogger('telegram-jsonl-migration');
@@ -27,9 +27,7 @@ export interface TelegramJsonlMigrationResult {
   skipped: number;
 }
 
-export function migrateTelegramJsonlOnBoot(
-  options: TelegramJsonlMigrationOptions = {},
-): TelegramJsonlMigrationResult {
+export function migrateTelegramJsonlOnBoot(options: TelegramJsonlMigrationOptions = {}): TelegramJsonlMigrationResult {
   const projectsRoot = options.projectsRoot ?? getClaudeProjectsRoot();
   const oldDir = path.join(projectsRoot, sanitizeClaudeProjectDir(options.oldCwd ?? getBackgroundCwd()));
   const newDir = path.join(projectsRoot, sanitizeClaudeProjectDir(options.newCwd ?? getLionClawHome()));
@@ -46,7 +44,7 @@ export function migrateTelegramJsonlOnBoot(
   let skipped = 0;
 
   for (const session of sessions) {
-    const threadId = session.sdkSessionId ?? session.id;
+    const threadId = threadIdOf(session);
     const src = path.join(oldDir, `${threadId}.jsonl`);
     const dst = path.join(newDir, `${threadId}.jsonl`);
     try {

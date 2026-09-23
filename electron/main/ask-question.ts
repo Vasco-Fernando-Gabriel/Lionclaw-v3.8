@@ -15,19 +15,46 @@ interface PendingAskQuestion {
 
 const pendingAskQuestions = new Map<string, PendingAskQuestion>();
 
+export interface AskQuestionTurnContext {
+  sessionId: string;
+  title?: string;
+  laneBadge?: number | null;
+}
+
+export class AskQuestionSessionRequiredError extends Error {
+  readonly code = 'session_required' as const;
+
+  constructor() {
+    super('AskUserQuestion sem sessionId no contexto do turno (session_required)');
+    this.name = 'AskQuestionSessionRequiredError';
+  }
+}
+
 export function sendAskQuestion(
   getWindow: () => BrowserWindow | null,
   questions: AskQuestionRequest['questions'],
   signal?: AbortSignal,
   timeoutMs = 300_000,
+  context?: Partial<AskQuestionTurnContext>,
 ): Promise<AskQuestionResponse> {
+  const sessionId = context?.sessionId;
+  if (!sessionId) {
+    logger.error({ questions: questions.length }, 'AskUserQuestion sem sessionId (session_required)');
+    return Promise.reject(new AskQuestionSessionRequiredError());
+  }
   const window = getWindow();
   if (!window) {
     return Promise.reject(new Error('Janela nao disponivel para pergunta'));
   }
 
   const id = crypto.randomUUID();
-  const request: AskQuestionRequest = { id, questions };
+  const request: AskQuestionRequest = {
+    id,
+    questions,
+    sessionId,
+    ...(context.title !== undefined ? { title: context.title } : {}),
+    ...(context.laneBadge !== undefined ? { laneBadge: context.laneBadge } : {}),
+  };
 
   if (signal?.aborted) return Promise.reject(new Error('AskUserQuestion cancelada'));
 
@@ -56,6 +83,7 @@ export function sendAskQuestion(
     window.webContents.send('chat:stream', {
       type: 'ask_question',
       askRequest: request,
+      sessionId,
     });
   });
 }

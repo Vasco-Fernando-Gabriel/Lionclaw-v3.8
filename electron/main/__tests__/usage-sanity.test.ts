@@ -28,7 +28,7 @@ import { runUsageSanityCheck, slugifyCwd } from '../pipeline-engine/usage-sanity
 
 const PROJECT_ID = 'proj-f6';
 const CWD = '/home/user/NeonChat';
-const SLUG = slugifyCwd(CWD); // -home-user-NeonChat
+const SLUG = slugifyCwd(CWD);
 
 let root: string;
 
@@ -96,9 +96,7 @@ afterEach(() => {
 
 describe('BUG 3 F6 — invariante de sanidade de usage', () => {
   it('slugifyCwd converte todo nao-alfanumerico em hifen', () => {
-    expect(slugifyCwd('/home/user/Neon_Chat v2')).toBe(
-      '-home-user-Neon-Chat-v2',
-    );
+    expect(slugifyCwd('/home/user/Neon_Chat v2')).toBe('-home-user-Neon-Chat-v2');
   });
 
   it('fase sem sessionIds capturado e ignorada (codex/kimi nunca disparam)', async () => {
@@ -111,12 +109,8 @@ describe('BUG 3 F6 — invariante de sanidade de usage', () => {
   });
 
   it('divergencia >10% (sessao descartada preservada) grava warning no metadata', async () => {
-    writeTranscript(`${SLUG}/sess-a.jsonl`, [
-      usageLine('msg_a1', { input: 3000, output: 1000 }),
-    ]);
-    writeTranscript(`${SLUG}/sess-b.jsonl`, [
-      usageLine('msg_b1', { input: 1000, output: 500 }),
-    ]);
+    writeTranscript(`${SLUG}/sess-a.jsonl`, [usageLine('msg_a1', { input: 3000, output: 1000 })]);
+    writeTranscript(`${SLUG}/sess-b.jsonl`, [usageLine('msg_b1', { input: 1000, output: 500 })]);
     mocks.getPipelinePhaseMetricsRows.mockReturnValue([
       metricsRow({
         inputTokens: 1000,
@@ -168,9 +162,7 @@ describe('BUG 3 F6 — invariante de sanidade de usage', () => {
 
   it('subagents/*.jsonl entram na uniao da sessao', async () => {
     writeTranscript(`${SLUG}/sess-a.jsonl`, [usageLine('msg_1', { input: 500, output: 100 })]);
-    writeTranscript(`${SLUG}/sess-a/subagents/agent-1.jsonl`, [
-      usageLine('msg_sub1', { input: 2000, output: 400 }),
-    ]);
+    writeTranscript(`${SLUG}/sess-a/subagents/agent-1.jsonl`, [usageLine('msg_sub1', { input: 2000, output: 400 })]);
     mocks.getPipelinePhaseMetricsRows.mockReturnValue([
       metricsRow({
         inputTokens: 500,
@@ -182,7 +174,7 @@ describe('BUG 3 F6 — invariante de sanidade de usage', () => {
     const warnings = await runUsageSanityCheck(PROJECT_ID, { claudeProjectsRoot: root });
 
     expect(warnings).toHaveLength(1);
-    expect(warnings[0].transcriptTokens).toBe(3000); // 600 main + 2400 subagent
+    expect(warnings[0].transcriptTokens).toBe(3000);
   });
 
   it('arquivo/slug ausente nao explode e nao gera warning', async () => {
@@ -193,9 +185,7 @@ describe('BUG 3 F6 — invariante de sanidade de usage', () => {
         metadata: { sessionIds: ['sess-inexistente'] },
       }),
     ]);
-    await expect(
-      runUsageSanityCheck(PROJECT_ID, { claudeProjectsRoot: root }),
-    ).resolves.toEqual([]);
+    await expect(runUsageSanityCheck(PROJECT_ID, { claudeProjectsRoot: root })).resolves.toEqual([]);
     expect(mocks.mergePipelinePhaseMetricsMetadata).not.toHaveBeenCalled();
   });
 
@@ -271,7 +261,6 @@ describe('BUG 3 F6 — invariante de sanidade de usage', () => {
   });
 });
 
-
 describe('BUG 3 F6 — contratos de fonte (reset preservation + wiring)', () => {
   const MAIN = path.join(__dirname, '..');
 
@@ -280,7 +269,7 @@ describe('BUG 3 F6 — contratos de fonte (reset preservation + wiring)', () => 
     const fnStart = src.indexOf('export function deletePipelinePhaseMetricsForSprint');
     expect(fnStart).toBeGreaterThan(-1);
     const fnBlock = src.slice(fnStart, fnStart + 2500);
-    expect(fnBlock).toContain("JSON.stringify({ sessionIds })");
+    expect(fnBlock).toContain('JSON.stringify({ sessionIds })');
     expect(fnBlock).toContain("status = 'pending'");
     expect(fnBlock).toContain('DELETE FROM pipeline_phase_metrics WHERE id = ?');
   });
@@ -297,10 +286,7 @@ describe('BUG 3 F6 — contratos de fonte (reset preservation + wiring)', () => 
   });
 
   it('lifecycle.ts: completePipeline dispara runUsageSanityCheck fire-and-forget', () => {
-    const src = fs.readFileSync(
-      path.join(MAIN, 'pipeline-engine', 'lifecycle.ts'),
-      'utf-8',
-    );
+    const src = fs.readFileSync(path.join(MAIN, 'pipeline-engine', 'lifecycle.ts'), 'utf-8');
     expect(src).toContain("import { runUsageSanityCheck } from './usage-sanity'");
     const fnStart = src.indexOf('export function completePipeline');
     const fnBlock = src.slice(fnStart, src.indexOf('failPhase', fnStart));

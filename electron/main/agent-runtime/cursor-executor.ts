@@ -1,4 +1,3 @@
-
 import { randomUUID } from 'crypto';
 import { createLogger } from '../logger';
 import { calculateCost, getPricingSnapshot, hasKnownPricing } from '../pricing';
@@ -6,16 +5,10 @@ import { getSecret } from '../secrets-vault';
 import { getCursorModel } from '../../../src/constants/cursor-models';
 import { WATCHDOG_TIMEOUT_MS, createWatchdog } from './watchdog';
 import { TypedProviderError, emptyResponseExecutionError } from './llm-error';
-import {
-  CursorSidecarError,
-  runCursorSidecarExecution,
-} from './cursor-sidecar/sidecar-manager';
+import { CursorSidecarError, runCursorSidecarExecution } from './cursor-sidecar/sidecar-manager';
 import type { CursorSidecarStreamEvent } from './cursor-sidecar/sidecar-manager';
 import { composeCursorToolDispatchers } from './cursor-sidecar/tool-dispatch';
-import {
-  CURSOR_GUARDED_NATIVE_ALLOWLIST,
-  buildCursorGuardedToolset,
-} from './cursor-sidecar/guarded-tools';
+import { CURSOR_GUARDED_NATIVE_ALLOWLIST, buildCursorGuardedToolset } from './cursor-sidecar/guarded-tools';
 import { isCursorCatalogModel } from './cursor-sidecar/model-catalog';
 import {
   buildCursorSessionKey,
@@ -24,11 +17,7 @@ import {
   saveCursorSession,
 } from './cursor-sidecar/session-registry';
 import type { AgentQueryConfig } from '../agent-config-resolver';
-import type {
-  AgentExecutionRequest,
-  AgentExecutionResult,
-  RuntimeExecutor,
-} from './types';
+import type { AgentExecutionRequest, AgentExecutionResult, RuntimeExecutor } from './types';
 
 const logger = createLogger('cursor-executor');
 
@@ -57,11 +46,7 @@ interface StreamCallbackStats {
   toolUses: number;
 }
 
-function relayStreamEvent(
-  event: unknown,
-  req: AgentExecutionRequest,
-  stats: StreamCallbackStats,
-): void {
+function relayStreamEvent(event: unknown, req: AgentExecutionRequest, stats: StreamCallbackStats): void {
   if (!event || typeof event !== 'object' || Array.isArray(event)) {
     req.onActivity?.();
     return;
@@ -78,10 +63,10 @@ function relayStreamEvent(
       if (Array.isArray(content)) {
         for (const block of content) {
           if (
-            block
-            && typeof block === 'object'
-            && (block as Record<string, unknown>)['type'] === 'text'
-            && typeof (block as Record<string, unknown>)['text'] === 'string'
+            block &&
+            typeof block === 'object' &&
+            (block as Record<string, unknown>)['type'] === 'text' &&
+            typeof (block as Record<string, unknown>)['text'] === 'string'
           ) {
             req.onText?.((block as Record<string, unknown>)['text'] as string);
             emitted = true;
@@ -115,10 +100,7 @@ function relayStreamEvent(
   }
 }
 
-async function run(
-  req: AgentExecutionRequest,
-  config: AgentQueryConfig,
-): Promise<AgentExecutionResult> {
+async function run(req: AgentExecutionRequest, config: AgentQueryConfig): Promise<AgentExecutionResult> {
   if (req.abortController.signal.aborted) {
     throw new CursorSidecarError('Execucao cursor abortada antes do start.', 'aborted');
   }
@@ -127,14 +109,13 @@ async function run(
   const composedGuard = req.permission.canUseTool;
   if (guarded && !composedGuard) {
     throw new Error(
-      'Runtime cursor: perfil guardado sem canUseTool (PERM_DEFAULT_NO_BYPASS) nao e suportado — '
-        + 'o enforcement guardado exige a policy composta no canUseTool do profile '
-        + '(SPEC cursor-runtime, "Enforcement de tools nativas"). Fail-closed.',
+      'Runtime cursor: perfil guardado sem canUseTool (PERM_DEFAULT_NO_BYPASS) nao e suportado — ' +
+        'o enforcement guardado exige a policy composta no canUseTool do profile ' +
+        '(SPEC cursor-runtime, "Enforcement de tools nativas"). Fail-closed.',
     );
   }
-  const guardedToolset = guarded && composedGuard
-    ? buildCursorGuardedToolset({ cwd: req.cwd, canUseTool: composedGuard })
-    : null;
+  const guardedToolset =
+    guarded && composedGuard ? buildCursorGuardedToolset({ cwd: req.cwd, canUseTool: composedGuard }) : null;
 
   if (!getCursorModel(config.model) && !isCursorCatalogModel(config.model)) {
     throw new TypedProviderError('LLM-MODEL-404', {
@@ -147,8 +128,8 @@ async function run(
   if (!apiKey) {
     throw new TypedProviderError('LLM-AUTH-401', {
       message:
-        'Cursor API key ausente do Vault (CURSOR_API_KEY). '
-        + 'Gere uma User API key em cursor.com/dashboard e cadastre em Settings > Providers.',
+        'Cursor API key ausente do Vault (CURSOR_API_KEY). ' +
+        'Gere uma User API key em cursor.com/dashboard e cadastre em Settings > Providers.',
       raw: `vaultKey=${CURSOR_VAULT_KEY}`,
     });
   }
@@ -200,8 +181,8 @@ async function run(
     abortWithTimeout(
       new TypedProviderError('LLM-TIMEOUT', {
         message:
-          `Runtime cursor sem progresso ha ${info.secondsSinceLastChunk}s — `
-          + 'execucao abortada pelo watchdog de stall.',
+          `Runtime cursor sem progresso ha ${info.secondsSinceLastChunk}s — ` +
+          'execucao abortada pelo watchdog de stall.',
         raw: `executionId=${executionId} lastChunkAt=${info.lastChunkAt}`,
       }),
     );
@@ -211,8 +192,8 @@ async function run(
     abortWithTimeout(
       new TypedProviderError('LLM-TIMEOUT', {
         message:
-          `Runtime cursor nao emitiu nenhum evento em ${CURSOR_FIRST_TOKEN_TIMEOUT_MS}ms — `
-          + 'execucao abortada pelo watchdog de primeiro token.',
+          `Runtime cursor nao emitiu nenhum evento em ${CURSOR_FIRST_TOKEN_TIMEOUT_MS}ms — ` +
+          'execucao abortada pelo watchdog de primeiro token.',
         raw: `executionId=${executionId}`,
       }),
     );
@@ -240,9 +221,7 @@ async function run(
         prompt,
         settingSources: [],
         guarded,
-        ...(guardedToolset !== null
-          ? { allowedTools: [...CURSOR_GUARDED_NATIVE_ALLOWLIST] }
-          : {}),
+        ...(guardedToolset !== null ? { allowedTools: [...CURSOR_GUARDED_NATIVE_ALLOWLIST] } : {}),
         ...(!guarded && process.platform !== 'win32' ? { sandbox: true } : {}),
         customTools: guardedToolset?.declarations ?? [],
         ...(resumeAgentId !== undefined ? { resumeAgentId } : {}),
@@ -254,16 +233,13 @@ async function run(
 
     if (watchdogError !== null) throw watchdogError;
     if (result.status === 'cancelled') {
-      throw new CursorSidecarError(
-        `Execucao cursor ${executionId} cancelada pelo abort.`,
-        'aborted',
-      );
+      throw new CursorSidecarError(`Execucao cursor ${executionId} cancelada pelo abort.`, 'aborted');
     }
     if (result.status !== 'finished') {
       throw new Error(
-        `Run cursor terminou com status "${result.status}"`
-          + `${result.errorCode !== undefined ? ` (code=${result.errorCode})` : ''}`
-          + `${result.errorMessage !== undefined ? `: ${result.errorMessage}` : ''}`,
+        `Run cursor terminou com status "${result.status}"` +
+          `${result.errorCode !== undefined ? ` (code=${result.errorCode})` : ''}` +
+          `${result.errorMessage !== undefined ? `: ${result.errorMessage}` : ''}`,
       );
     }
 
@@ -276,7 +252,7 @@ async function run(
     }
 
     const durationMs = result.durationMs ?? Date.now() - startedAt;
-    const output = result.finalText.length > 0 ? result.finalText : result.resultText ?? '';
+    const output = result.finalText.length > 0 ? result.finalText : (result.resultText ?? '');
     const usage = result.usage;
     const resultError = emptyResponseExecutionError({
       content: output,
@@ -316,13 +292,11 @@ async function run(
       };
     }
 
-    const aggregatedInputTokens =
-      usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
+    const aggregatedInputTokens = usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
     const pricingKnown = hasKnownPricing(config.model);
     const pricingSnapshot = getPricingSnapshot(config.model);
     const cacheWriteUnpriced =
-      pricingSnapshot.entry?.cacheCreationBilling === 'not-separately-reported'
-      && usage.cacheWriteTokens > 0;
+      pricingSnapshot.entry?.cacheCreationBilling === 'not-separately-reported' && usage.cacheWriteTokens > 0;
     const costUsd = pricingKnown
       ? calculateCost(
           config.model,
@@ -371,9 +345,7 @@ async function run(
         costStatus,
         tokenStatus: 'reported',
         ...(costStatus === 'unknown' ? { costUnknownReason: 'unknown-pricing' as const } : {}),
-        ...(costStatus === 'estimated-partial'
-          ? { costStatusReasons: ['cache-write-not-reported'] as const }
-          : {}),
+        ...(costStatus === 'estimated-partial' ? { costStatusReasons: ['cache-write-not-reported'] as const } : {}),
       },
       model: config.model,
       runtime: 'cursor',
@@ -390,9 +362,7 @@ async function run(
             cacheReadInputTokens: usage.cacheReadTokens,
             cacheCreationInputTokens: usage.cacheWriteTokens,
             costUSD: costUsd,
-            ...(usage.reasoningTokens !== undefined
-              ? { reasoningTokens: usage.reasoningTokens }
-              : {}),
+            ...(usage.reasoningTokens !== undefined ? { reasoningTokens: usage.reasoningTokens } : {}),
             modelCalls: 1,
           },
         },

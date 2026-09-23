@@ -1,5 +1,157 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`IPC channel payload snapshots > Clear por lane (SPEC conversas-paralelas 6 e 11, Sprint 1b) - canais ADITIVOS > chat:clear recusas tipadas (6.1, 6.2, V6, D3) 1`] = `
+{
+  "busy": {
+    "code": "session_busy",
+    "error": "A lane esta ocupada (turno em voo, item na fila ou Compactacao em andamento).",
+    "ok": false,
+  },
+  "clearing": {
+    "code": "session_clearing",
+    "error": "Esta lane ja esta em Clear.",
+    "ok": false,
+  },
+  "drive": {
+    "code": "drive_active",
+    "error": "Ha um drive de pipeline ativo nesta lane; pare o drive antes do Clear.",
+    "ok": false,
+  },
+  "empty": {
+    "code": "empty_session",
+    "error": "Conversa vazia nao tem Clear.",
+    "ok": false,
+  },
+  "memory": {
+    "code": "COMPACT-MEMORY-FAILED",
+    "error": "Gate de memoria / MEMORY.md / USER.md falhou: EACCES",
+    "ok": false,
+  },
+  "notSettled": {
+    "code": "turn_did_not_settle",
+    "error": "O turno em voo nao assentou no prazo; nada foi arquivado. Tente de novo.",
+    "ok": false,
+  },
+  "summary": {
+    "code": "COMPACT-SUMMARY-FAILED",
+    "error": "Sumarizador falhou: provider 529 overloaded",
+    "ok": false,
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > Clear por lane (SPEC conversas-paralelas 6 e 11, Sprint 1b) - canais ADITIVOS > chat:clear request shape - sessionId obrigatorio + force opcional 1`] = `
+{
+  "opts": {
+    "force": true,
+  },
+  "sessionId": "sess_a",
+}
+`;
+
+exports[`IPC channel payload snapshots > Clear por lane (SPEC conversas-paralelas 6 e 11, Sprint 1b) - canais ADITIVOS > chat:clear result ok - compacted, conversa nova no mesmo badge, warnings por passo 1`] = `
+{
+  "newSessionId": "c0ffee00-1111-4222-8333-444455556666",
+  "ok": true,
+  "pausedDriveProjectIds": [],
+  "sessionId": "sess_a",
+  "warnings": [
+    {
+      "detail": "configure um provedor de embeddings em Settings (3 de 3 chunks nao gravados)",
+      "step": "embeddings",
+    },
+    {
+      "detail": "EACCES: permission denied",
+      "step": "transcript",
+    },
+  ],
+}
+`;
+
+exports[`IPC channel payload snapshots > Clear por lane (SPEC conversas-paralelas 6 e 11, Sprint 1b) - canais ADITIVOS > chat:clear-cancel result ok e clear_not_queued 1`] = `
+{
+  "notQueued": {
+    "code": "clear_not_queued",
+    "error": "Nao ha Clear na fila para esta lane.",
+    "ok": false,
+  },
+  "ok": {
+    "ok": true,
+    "sessionId": "sess_b",
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > Clear por lane (SPEC conversas-paralelas 6 e 11, Sprint 1b) - canais ADITIVOS > chat:confirm-request e ask_question carregam sessionId e title (10.1 fase 1) 1`] = `
+{
+  "ask": {
+    "askRequest": {
+      "id": "ask_1",
+      "questions": [],
+      "sessionId": "sess_a",
+      "title": "Conversa A",
+    },
+    "sessionId": "sess_a",
+    "type": "ask_question",
+  },
+  "confirm": {
+    "description": "rm -rf build",
+    "id": "confirm_1",
+    "input": {
+      "command": "rm -rf build",
+    },
+    "risk": "high",
+    "sessionId": "sess_a",
+    "title": "Conversa A",
+    "tool": "Bash",
+  },
+  "dreaming": {
+    "isDreaming": true,
+    "sessionId": "sess_a",
+    "type": "dreaming_status",
+  },
+  "session": {
+    "content": "sess_a",
+    "sessionId": "sess_a",
+    "type": "session",
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > Clear por lane (SPEC conversas-paralelas 6 e 11, Sprint 1b) - canais ADITIVOS > chat:send recusa session_clearing (6.1 / 6.10) 1`] = `
+{
+  "accepted": false,
+  "code": "session_clearing",
+  "error": "Esta lane esta em Clear; aguarde o Clear terminar ou refaca o Clear.",
+}
+`;
+
+exports[`IPC channel payload snapshots > Clear por lane (SPEC conversas-paralelas 6 e 11, Sprint 1b) - canais ADITIVOS > compaction:active com phase queued/running, modelLabel e title (6.9, AC-9) 1`] = `
+{
+  "done": {
+    "isActive": false,
+    "sessionId": "sess_a",
+    "source": "lionclaw",
+  },
+  "queued": {
+    "isActive": true,
+    "modelLabel": "Claude Sonnet 4.6",
+    "phase": "queued",
+    "sessionId": "sess_b",
+    "source": "lionclaw",
+    "title": "Conversa B",
+  },
+  "running": {
+    "isActive": true,
+    "modelLabel": "Claude Sonnet 4.6",
+    "phase": "running",
+    "sessionId": "sess_a",
+    "source": "lionclaw",
+    "title": "Conversa A",
+  },
+}
+`;
+
 exports[`IPC channel payload snapshots > activity:get-blocks (SPEC K2 v2) > request shape — sessionId 1`] = `
 {
   "sessionId": "sess_abc123",
@@ -174,6 +326,25 @@ exports[`IPC channel payload snapshots > chat:get-context-usage (SPEC robustez-c
 `;
 
 exports[`IPC channel payload snapshots > chat:get-context-usage (SPEC robustez-chat SA-2, Canal ADITIVO UX-CTX) > result — null (janela desconhecida / sessao sem tokens / erro): D5, sem barra 1`] = `null`;
+
+exports[`IPC channel payload snapshots > chat:stream > artifact chunk (html) with filePath, size and sha256 1`] = `
+{
+  "artifact": {
+    "data": {
+      "fileName": "revisao-20260908-1400.html",
+      "filePath": "C:\\Users\\example\\.lionclaw\\artifacts\\revisao-20260908-1400.html",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size": 39855,
+    },
+    "id": "art_html_1",
+    "title": "Artefatos HTML",
+    "toolName": "file-output",
+    "type": "html",
+  },
+  "sessionId": "sess_abc123",
+  "type": "artifact",
+}
+`;
 
 exports[`IPC channel payload snapshots > chat:stream > ask_question chunk (from ask-question.ts) 1`] = `
 {
@@ -956,6 +1127,168 @@ exports[`IPC channel payload snapshots > kimi:* (SPEC-011 S4/S10) > kimi:test re
 }
 `;
 
+exports[`IPC channel payload snapshots > lanes (SPEC conversas-paralelas 11, Sprint 1a) - canais ADITIVOS e aliases > chat:create-session erro tipado lanes_full 1`] = `
+{
+  "code": "lanes_full",
+  "error": "Todas as lanes estao ocupadas. De Clear numa lane para abrir outra conversa.",
+}
+`;
+
+exports[`IPC channel payload snapshots > lanes (SPEC conversas-paralelas 11, Sprint 1a) - canais ADITIVOS e aliases > chat:create-session result ok - OpenChatSession com badge e orquestrador pre-selecionado 1`] = `
+{
+  "session": {
+    "createdAt": "2026-09-08 10:00:00",
+    "id": "b3b1d2c4-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+    "laneBadge": 1,
+    "lastUserMessageAt": null,
+    "messageCount": 0,
+    "orchestrator": {
+      "effort": "high",
+      "model": "claude-opus-4-7",
+      "provider": "anthropic",
+      "runtime": "claude-sdk",
+    },
+    "state": "idle",
+    "title": "",
+    "updatedAt": "2026-09-08 10:00:00",
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > lanes (SPEC conversas-paralelas 11, Sprint 1a) - canais ADITIVOS e aliases > chat:list-open-sessions result - N lanes ordenadas por badge com state 1`] = `
+[
+  {
+    "createdAt": "2026-09-08 09:00:00",
+    "id": "sess_a",
+    "laneBadge": 1,
+    "lastUserMessageAt": "2026-09-08 09:58:00",
+    "messageCount": 4,
+    "orchestrator": {
+      "model": "claude-opus-4-7",
+      "provider": "anthropic",
+      "runtime": "claude-sdk",
+    },
+    "state": "streaming",
+    "title": "Lane A",
+    "updatedAt": "2026-09-08 09:58:30",
+  },
+  {
+    "createdAt": "2026-09-08 09:30:00",
+    "id": "sess_b",
+    "laneBadge": 2,
+    "lastUserMessageAt": null,
+    "messageCount": 0,
+    "orchestrator": {
+      "model": "gpt-5.5",
+      "provider": "codex",
+      "runtime": "codex-sdk",
+    },
+    "state": "idle",
+    "title": "",
+    "updatedAt": "2026-09-08 09:30:00",
+  },
+]
+`;
+
+exports[`IPC channel payload snapshots > lanes (SPEC conversas-paralelas 11, Sprint 1a) - canais ADITIVOS e aliases > chat:list-open-sessions result em falha - { error } (RM7: nunca []) 1`] = `
+{
+  "error": "SQLITE_BUSY: database is locked",
+}
+`;
+
+exports[`IPC channel payload snapshots > lanes (SPEC conversas-paralelas 11, Sprint 1a) - canais ADITIVOS e aliases > chat:send recusas tipadas - session_required e lane_required (accepted:false + code) 1`] = `
+{
+  "laneRequired": {
+    "accepted": false,
+    "code": "lane_required",
+    "error": "Esta conversa esta aberta sem lane: de Clear nela ou escolha uma lane.",
+  },
+  "sessionRequired": {
+    "accepted": false,
+    "code": "session_required",
+    "error": "sessionId obrigatorio: toda mensagem do desktop pertence a uma lane.",
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > lanes (SPEC conversas-paralelas 11, Sprint 1a) - canais ADITIVOS e aliases > chat:session-updated event shape (coexiste com chat:sessions-updated sem payload) 1`] = `
+{
+  "laneBadge": 2,
+  "messageCount": 0,
+  "orchestrator": {
+    "model": "gpt-5.5",
+    "provider": "codex",
+    "runtime": "codex-sdk",
+  },
+  "sessionId": "sess_b",
+  "state": "idle",
+}
+`;
+
+exports[`IPC channel payload snapshots > lanes (SPEC conversas-paralelas 11, Sprint 1a) - canais ADITIVOS e aliases > chat:set-session-orchestrator request shape - sessionId + selection 1`] = `
+{
+  "selection": {
+    "effort": "xhigh",
+    "model": "gpt-5.5",
+    "provider": "codex",
+    "runtime": "codex-sdk",
+  },
+  "sessionId": "sess_b",
+}
+`;
+
+exports[`IPC channel payload snapshots > lanes (SPEC conversas-paralelas 11, Sprint 1a) - canais ADITIVOS e aliases > chat:set-session-orchestrator result ok e erro provider_locked 1`] = `
+{
+  "locked": {
+    "code": "provider_locked",
+    "error": "A lane ja tem mensagens ou um turno pendente: o provider esta travado. De Clear para trocar.",
+  },
+  "ok": {
+    "ok": true,
+    "orchestrator": {
+      "effort": "xhigh",
+      "model": "gpt-5.5",
+      "provider": "codex",
+      "runtime": "codex-sdk",
+    },
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > lanes (SPEC conversas-paralelas 11, Sprint 1a) - canais ADITIVOS e aliases > chat:stop request shape - sessionId opcional (sem argumento = alias antigo) 1`] = `
+{
+  "legacy": undefined,
+  "withSession": "sess_a",
+}
+`;
+
+exports[`IPC channel payload snapshots > lanes (SPEC conversas-paralelas 11, Sprint 1a) - canais ADITIVOS e aliases > compaction:active ganha sessionId (payload aditivo) 1`] = `
+{
+  "isActive": true,
+  "modelLabel": "GLM-4.6",
+  "sessionId": "sess_a",
+  "source": "lionclaw",
+}
+`;
+
+exports[`IPC channel payload snapshots > lanes (SPEC conversas-paralelas 11, Sprint 1a) - canais ADITIVOS e aliases > drive:start / drive:resume request shape com sessionId obrigatorio (V9) e recusa session_required 1`] = `
+{
+  "refused": {
+    "code": "session_required",
+    "error": "session_required: escolha a lane (conversa aberta) que vai dirigir o pipeline.",
+  },
+  "resume": {
+    "projectId": "proj_456",
+    "sessionId": "sess_a",
+  },
+  "start": {
+    "mode": "semi",
+    "projectId": "proj_456",
+    "sessionId": "sess_a",
+  },
+}
+`;
+
 exports[`IPC channel payload snapshots > open-design channels (registry) > boot install status shape (failed) 1`] = `
 {
   "error": "pnpm install exited with code 1",
@@ -1349,6 +1682,164 @@ exports[`IPC channel payload snapshots > open-design view bridge > show-view req
     "y": 48,
   },
   "url": "http://127.0.0.1:5175",
+}
+`;
+
+exports[`IPC channel payload snapshots > orquestrador por lane (SPEC conversas-paralelas 7.2/7.3/7.6/7.7, Sprint 3a) - payloads ADITIVOS > agents:sync-to-orchestrator request com selection obrigatoria (dryRun e real) e response.orchestrator ecoando a selecao com effort 1`] = `
+{
+  "request": {
+    "dryRun": true,
+    "mode": "manual-button",
+    "selection": {
+      "effort": "xhigh",
+      "model": "gpt-5.5",
+      "provider": "codex",
+      "runtime": "codex-sdk",
+    },
+  },
+  "response": {
+    "blocked": false,
+    "orchestrator": {
+      "effort": "xhigh",
+      "model": "gpt-5.5",
+      "provider": "codex",
+      "runtime": "codex-sdk",
+    },
+    "results": [],
+    "summary": {
+      "failed": 0,
+      "skipped": 0,
+      "updated": 0,
+    },
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > orquestrador por lane (SPEC conversas-paralelas 7.2/7.3/7.6/7.7, Sprint 3a) - payloads ADITIVOS > chat:confirm-request e ask_question carregam laneBadge (10.4 fase 3, popup rotulado "Lane N: <titulo>") 1`] = `
+{
+  "ask": {
+    "askRequest": {
+      "id": "ask_2",
+      "laneBadge": 2,
+      "questions": [],
+      "sessionId": "sess_b",
+      "title": "Conversa B",
+    },
+    "sessionId": "sess_b",
+    "type": "ask_question",
+  },
+  "confirm": {
+    "description": "Acao MCP destrutiva: send_email",
+    "id": "confirm_2",
+    "input": {
+      "to": "x@y.z",
+    },
+    "laneBadge": 2,
+    "risk": "high",
+    "sessionId": "sess_b",
+    "title": "Conversa B",
+    "tool": "mcp__google-gmail__send_email",
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > orquestrador por lane (SPEC conversas-paralelas 7.2/7.3/7.6/7.7, Sprint 3a) - payloads ADITIVOS > chat:send options - campos aditivos model e effort (validados contra o provider da lane, persistidos nas colunas) 1`] = `
+{
+  "message": "Continue a implementacao",
+  "options": {
+    "effort": "max",
+    "model": "claude-sonnet-5",
+    "sessionId": "sess_a",
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > orquestrador por lane (SPEC conversas-paralelas 7.2/7.3/7.6/7.7, Sprint 3a) - payloads ADITIVOS > chat:send recusas tipadas - model_not_in_provider e effort_not_supported 1`] = `
+{
+  "effortNotSupported": {
+    "accepted": false,
+    "code": "effort_not_supported",
+    "error": "Effort "ultra" nao e suportado por "claude-sonnet-5" (anthropic); opcoes: low, medium, high, max.",
+  },
+  "modelNotInProvider": {
+    "accepted": false,
+    "code": "model_not_in_provider",
+    "error": "Modelo "gpt-5.5" nao pertence ao provider "anthropic" do runtime "claude-sdk".",
+  },
+}
+`;
+
+exports[`IPC channel payload snapshots > orquestrador por lane (SPEC conversas-paralelas 7.2/7.3/7.6/7.7, Sprint 3a) - payloads ADITIVOS > chat:session-updated carrega o orquestrador COMPLETO com effort (10.6) 1`] = `
+{
+  "laneBadge": 1,
+  "messageCount": 3,
+  "orchestrator": {
+    "effort": "max",
+    "model": "claude-sonnet-5",
+    "provider": "anthropic",
+    "runtime": "claude-sdk",
+  },
+  "sessionId": "sess_a",
+  "state": "idle",
+}
+`;
+
+exports[`IPC channel payload snapshots > orquestrador por lane (SPEC conversas-paralelas 7.2/7.3/7.6/7.7, Sprint 3a) - payloads ADITIVOS > mcp:dist-stale (broadcast) e mcp:get-dist-stale (pull) - helpers MCP com dist mais antigo que o src (9.2 rollout, RM4) 1`] = `
+{
+  "event": {
+    "command": "npm run build:mcps",
+    "servers": [
+      "gateway",
+      "lionclaw-kanban",
+    ],
+  },
+  "pullFresh": null,
+}
+`;
+
+exports[`IPC channel payload snapshots > orquestrador por lane (SPEC conversas-paralelas 7.2/7.3/7.6/7.7, Sprint 3a) - payloads ADITIVOS > provider:list-statuses request { refresh } e entrada ESTENDIDA (available + models com reasoningOptions/defaultReasoning/contextWindow) 1`] = `
+{
+  "dynamicEntry": {
+    "available": true,
+    "connected": true,
+    "models": [
+      {
+        "contextWindow": 131072,
+        "defaultReasoning": null,
+        "displayName": "llama3.1:8b",
+        "id": "llama3.1:8b",
+        "label": "llama3.1:8b",
+        "reasoningOptions": [],
+      },
+    ],
+    "provider": "ollama",
+    "runtime": "lion-sdk",
+  },
+  "entry": {
+    "available": false,
+    "connected": false,
+    "models": [
+      {
+        "contextWindow": 1000000,
+        "defaultReasoning": "high",
+        "displayName": "Claude Sonnet 5",
+        "id": "claude-sonnet-5",
+        "label": "Claude Sonnet 5",
+        "reasoningOptions": [
+          "low",
+          "medium",
+          "high",
+          "max",
+        ],
+      },
+    ],
+    "provider": "anthropic",
+    "reason": "Engine Claude Code nao encontrado.",
+    "runtime": "claude-sdk",
+  },
+  "request": {
+    "refresh": true,
+  },
 }
 `;
 
@@ -1915,5 +2406,29 @@ exports[`IPC channel payload snapshots > terminal:* (terminal integrado no chat)
 exports[`IPC channel payload snapshots > terminal:* (terminal integrado no chat) > terminal:open result - ok 1`] = `
 {
   "ok": true,
+}
+`;
+
+exports[`Swarm V1 IPC payload snapshots > start retorna identidade assíncrona e settings usam milissegundos 1`] = `
+{
+  "runId": "swarm-20260913_120000-abc123",
+  "status": "queued",
+}
+`;
+
+exports[`Swarm V1 IPC payload snapshots > start retorna identidade assíncrona e settings usam milissegundos 2`] = `
+{
+  "concurrencyCap": 5,
+  "hardTimeoutMs": 7200000,
+  "idleTimeoutMs": 1200000,
+  "maxAttempts": 2,
+}
+`;
+
+exports[`Swarm V1 IPC payload snapshots > stream identifica sessão, run e revisão sem conteúdo nem credenciais 1`] = `
+{
+  "chatSessionId": "chat-1",
+  "revision": 3,
+  "runId": "swarm-20260913_120000-abc123",
 }
 `;

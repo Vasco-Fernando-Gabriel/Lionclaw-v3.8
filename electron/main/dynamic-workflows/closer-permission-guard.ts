@@ -1,14 +1,6 @@
+import type { ComposedToolInput, ToolDecision } from './workflow-agent-adapter';
 
-import type {
-  ComposedToolInput,
-  ToolDecision,
-} from './workflow-agent-adapter';
-
-export type CloserGitClass =
-  | 'read'
-  | 'write-local'
-  | 'remote-denied'
-  | 'unknown';
+export type CloserGitClass = 'read' | 'write-local' | 'remote-denied' | 'unknown';
 
 const GIT_READ_SUBCOMMANDS = new Set<string>([
   'status',
@@ -141,7 +133,7 @@ export interface GitClassification {
 function classifyGit(command: string): GitClassification {
   const { tokens, compound } = tokenizeCommand(command);
   const overridePaths: string[] = [];
-  let idx = 1; // tokens[0] === 'git'
+  let idx = 1;
   while (idx < tokens.length) {
     const t = tokens[idx];
     if (t === '-C' && idx + 1 < tokens.length) {
@@ -177,7 +169,7 @@ function classifyGit(command: string): GitClassification {
       idx += 1;
       continue;
     }
-    break; // chegou no subcomando.
+    break;
   }
 
   const subcommand = idx < tokens.length ? tokens[idx] : null;
@@ -202,8 +194,12 @@ function classifyGit(command: string): GitClassification {
   }
 
   if (subcommand === 'config') {
-    const isRead = rest.some((a) => a === '--get' || a === '-l' || a === '--list' || a === '--get-all' || a === '--get-regexp');
-    const isWrite = rest.some((a) => a === '--unset' || a === '--add' || a === '--replace-all') || rest.filter((a) => !a.startsWith('-')).length >= 2;
+    const isRead = rest.some(
+      (a) => a === '--get' || a === '-l' || a === '--list' || a === '--get-all' || a === '--get-regexp',
+    );
+    const isWrite =
+      rest.some((a) => a === '--unset' || a === '--add' || a === '--replace-all') ||
+      rest.filter((a) => !a.startsWith('-')).length >= 2;
     if (isRead && !isWrite) {
       return { klass: 'read', subcommand, overridePaths, compound };
     }
@@ -232,16 +228,9 @@ function classifyGit(command: string): GitClassification {
   return { klass: 'unknown', subcommand, overridePaths, compound };
 }
 
+export type PathContainmentCheck = (workspaceRoot: string, candidate: string) => boolean;
 
-export type PathContainmentCheck = (
-  workspaceRoot: string,
-  candidate: string,
-) => boolean;
-
-export const defaultPathContainment: PathContainmentCheck = (
-  workspaceRoot,
-  candidate,
-) => {
+export const defaultPathContainment: PathContainmentCheck = (workspaceRoot, candidate) => {
   const root = normalizeAbs(workspaceRoot);
   const target = candidate.startsWith('/')
     ? normalizeAbs(candidate)
@@ -267,7 +256,6 @@ function normalizeAbs(p: string): string {
   }
   return (isAbs ? '/' : '') + out.join('/');
 }
-
 
 export interface CloserGitConfirmRequest {
   runId: string;
@@ -311,10 +299,7 @@ export function createCloserPermissionGuard(
   };
 }
 
-async function runDelegate(
-  options: CloserPermissionGuardOptions,
-  input: ComposedToolInput,
-): Promise<ToolDecision> {
+async function runDelegate(options: CloserPermissionGuardOptions, input: ComposedToolInput): Promise<ToolDecision> {
   if (!options.delegate) {
     return {
       behavior: 'deny',
@@ -334,14 +319,11 @@ async function decideGit(
   if (cls.compound) {
     return {
       behavior: 'deny',
-      message:
-        'comando git encadeado (;, &&, |, subshell) nao e permitido ao closer: rode um comando git por vez',
+      message: 'comando git encadeado (;, &&, |, subshell) nao e permitido ao closer: rode um comando git por vez',
     };
   }
 
-  const escaping = cls.overridePaths.filter(
-    (p) => !containment(options.workspaceCwd, p),
-  );
+  const escaping = cls.overridePaths.filter((p) => !containment(options.workspaceCwd, p));
   if (escaping.length > 0) {
     return {
       behavior: 'deny',
@@ -380,7 +362,7 @@ async function decideGit(
             subcommand: cls.subcommand ?? '?',
             cwd: options.workspaceCwd,
           })
-        : false; // fail-closed sem confirmador.
+        : false;
 
       options.auditGit?.({
         runId: options.runId,

@@ -7,34 +7,47 @@ export interface CodexModelOption {
 }
 
 export const CODEX_MODELS: CodexModelOption[] = [
-  { slug: 'gpt-6-astra',   label: 'GPT-6-Astra',   description: 'Frontier GPT-6 (recomendado)' },
-  { slug: 'gpt-5.6-sol',   label: 'GPT-5.6-Sol',   description: 'Frontier agentic da geracao 5.6' },
+  { slug: 'gpt-6-sol', label: 'GPT-6-Sol', description: 'GPT-6 agentic, custo 5x menor que Astra (recomendado)' },
+  { slug: 'gpt-6-astra', label: 'GPT-6-Astra', description: 'Frontier GPT-6, maximo de capacidade' },
+  { slug: 'gpt-6-luna', label: 'GPT-6-Luna', description: 'GPT-6 rapido e barato' },
+  { slug: 'gpt-5.6-sol', label: 'GPT-5.6-Sol', description: 'Frontier agentic da geracao 5.6' },
   { slug: 'gpt-5.6-terra', label: 'GPT-5.6-Terra', description: 'Equilibrado, ~5.5 pela metade do preco' },
-  { slug: 'gpt-5.6-luna',  label: 'GPT-5.6-Luna',  description: 'Rapido e barato' },
-  { slug: 'gpt-5.5',       label: 'GPT-5.5',       description: 'Frontier, codex-tuned' },
-  { slug: 'gpt-5.4',       label: 'GPT-5.4',       description: 'Generalista frontier' },
-  { slug: 'gpt-5.4-mini',  label: 'GPT-5.4-Mini',  description: 'Mais barato e rapido' },
+  { slug: 'gpt-5.6-luna', label: 'GPT-5.6-Luna', description: 'Rapido e barato' },
+  { slug: 'gpt-5.5', label: 'GPT-5.5', description: 'Codex-tuned; sai do Codex em 14/10/2026' },
+  { slug: 'gpt-5.4', label: 'GPT-5.4', description: 'Generalista frontier' },
+  { slug: 'gpt-5.4-mini', label: 'GPT-5.4-Mini', description: 'Mais barato e rapido' },
   { slug: 'gpt-5.3-codex', label: 'GPT-5.3-Codex', description: 'Variante codex-tuned (legado)' },
-  { slug: 'gpt-5.2',       label: 'GPT-5.2',       description: 'Anterior, generalista' },
+  { slug: 'gpt-5.2', label: 'GPT-5.2', description: 'Anterior, generalista' },
 ];
 
-export const CODEX_DEFAULT_MODEL = 'gpt-6-astra';
+export const CODEX_DEFAULT_MODEL = 'gpt-6-sol';
 
 export const CODEX_SANDBOX_OPTIONS = ['workspace-write', 'read-only', 'danger-full-access'] as const;
-
 
 export const CODEX_EFFORT_ORDER = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const;
 
 const CODEX_CHAT_BASE_EFFORTS: readonly CodexChatReasoningEffort[] = ['low', 'medium', 'high'];
-export const CODEX_CHAT_EFFORTS_WITH_XHIGH: readonly CodexChatReasoningEffort[] =
-  ['low', 'medium', 'high', 'xhigh'];
-export const CODEX_CHAT_EFFORTS_WITH_MAX: readonly CodexChatReasoningEffort[] =
-  ['low', 'medium', 'high', 'xhigh', 'max'];
-export const CODEX_CHAT_EFFORTS_FULL: readonly CodexChatReasoningEffort[] =
-  ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
+export const CODEX_CHAT_EFFORTS_WITH_XHIGH: readonly CodexChatReasoningEffort[] = ['low', 'medium', 'high', 'xhigh'];
+export const CODEX_CHAT_EFFORTS_WITH_MAX: readonly CodexChatReasoningEffort[] = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+];
+export const CODEX_CHAT_EFFORTS_FULL: readonly CodexChatReasoningEffort[] = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+  'ultra',
+];
 
 const STATIC_MODEL_EFFORTS: Record<string, readonly CodexChatReasoningEffort[]> = {
   'gpt-6-astra': CODEX_CHAT_EFFORTS_FULL,
+  'gpt-6-sol': CODEX_CHAT_EFFORTS_FULL,
+  'gpt-6-luna': CODEX_CHAT_EFFORTS_WITH_MAX,
   'gpt-5.6-sol': CODEX_CHAT_EFFORTS_FULL,
   'gpt-5.6-terra': CODEX_CHAT_EFFORTS_FULL,
   'gpt-5.6-luna': CODEX_CHAT_EFFORTS_WITH_MAX,
@@ -64,17 +77,10 @@ export function codexModelSupportsXhigh(model: string): boolean {
 
 export function codexModelRequiresOfficial(model: string): boolean {
   const slug = (model || '').trim().toLowerCase();
-  return (
-    slug === 'gpt-5.6' ||
-    slug.startsWith('gpt-5.6-') ||
-    slug === 'gpt-6' ||
-    slug.startsWith('gpt-6-')
-  );
+  return slug === 'gpt-5.6' || slug.startsWith('gpt-5.6-') || slug === 'gpt-6' || slug.startsWith('gpt-6-');
 }
 
-export function codexEffortRequiresOfficial(
-  effort: CodexChatReasoningEffort | undefined,
-): boolean {
+export function codexEffortRequiresOfficial(effort: CodexChatReasoningEffort | undefined): boolean {
   return effort === 'max' || effort === 'ultra';
 }
 
@@ -100,15 +106,10 @@ export const CODEX_EFFORT_LABELS: Record<CodexChatReasoningEffort, string> = {
   ultra: 'Ultra (delega a subagentes internos, consumo 2 a 3x)',
 };
 
-export function clampCodexEffortForModel(
-  effort: CodexChatReasoningEffort,
-  model: string,
-): CodexChatReasoningEffort {
+export function clampCodexEffortForModel(effort: CodexChatReasoningEffort, model: string): CodexChatReasoningEffort {
   return clampCodexEffortToSupported(effort, staticEffortsFor(model));
 }
 
-export function CODEX_CHAT_EFFORT_BY_MODEL(
-  model: string,
-): readonly CodexChatReasoningEffort[] {
+export function CODEX_CHAT_EFFORT_BY_MODEL(model: string): readonly CodexChatReasoningEffort[] {
   return staticEffortsFor(model);
 }

@@ -1,4 +1,3 @@
-
 import type {
   DynamicWorkflowManifestNode,
   DynamicWorkflowNodeCreateInput,
@@ -63,54 +62,29 @@ function writerWriteSet(sprint: PlannedSprint): string[] {
 }
 
 function coderIdFor(sprintIndex: number, redevRound: number, round: number): string {
-  return redevRound > 0
-    ? devRedevCoderNodeId(sprintIndex, redevRound, round)
-    : devCoderNodeId(sprintIndex, round);
+  return redevRound > 0 ? devRedevCoderNodeId(sprintIndex, redevRound, round) : devCoderNodeId(sprintIndex, round);
 }
 function fixIdFor(sprintIndex: number, redevRound: number, round: number): string {
-  return redevRound > 0
-    ? devRedevFixNodeId(sprintIndex, redevRound, round)
-    : devFixNodeId(sprintIndex, round);
+  return redevRound > 0 ? devRedevFixNodeId(sprintIndex, redevRound, round) : devFixNodeId(sprintIndex, round);
 }
 function fixerIdFor(sprintIndex: number, redevRound: number, round: number): string {
-  return redevRound > 0
-    ? devRedevFixerNodeId(sprintIndex, redevRound, round)
-    : devFixerNodeId(sprintIndex, round);
+  return redevRound > 0 ? devRedevFixerNodeId(sprintIndex, redevRound, round) : devFixerNodeId(sprintIndex, round);
 }
-function validatorIdFor(
-  validatorIndex: number,
-  sprintIndex: number,
-  redevRound: number,
-  round: number,
-): string {
+function validatorIdFor(validatorIndex: number, sprintIndex: number, redevRound: number, round: number): string {
   return redevRound > 0
     ? devRedevValidatorNodeId(validatorIndex, sprintIndex, redevRound, round)
     : devValidatorNodeId(validatorIndex, sprintIndex, round);
 }
-function validatorGroupIdFor(
-  sprintIndex: number,
-  redevRound: number,
-  round: number,
-): string {
+function validatorGroupIdFor(sprintIndex: number, redevRound: number, round: number): string {
   return redevRound > 0
     ? devRedevValidatorGroupId(sprintIndex, redevRound, round)
     : devValidatorGroupId(sprintIndex, round);
 }
-function refuterIdFor(
-  sprintIndex: number,
-  redevRound: number,
-  round: number,
-): string {
-  return redevRound > 0
-    ? devRedevRefuterNodeId(sprintIndex, redevRound, round)
-    : devRefuterNodeId(sprintIndex, round);
+function refuterIdFor(sprintIndex: number, redevRound: number, round: number): string {
+  return redevRound > 0 ? devRedevRefuterNodeId(sprintIndex, redevRound, round) : devRefuterNodeId(sprintIndex, round);
 }
 
-function buildCoderNode(
-  sprint: PlannedSprint,
-  round: number,
-  redevRound = 0,
-): DynamicWorkflowManifestNode {
+function buildCoderNode(sprint: PlannedSprint, round: number, redevRound = 0): DynamicWorkflowManifestNode {
   const tag = devRedevTag(redevRound);
   const id = coderIdFor(sprint.index, redevRound, round);
   return {
@@ -137,11 +111,7 @@ function buildCoderNode(
   };
 }
 
-function buildFixNode(
-  sprint: PlannedSprint,
-  round: number,
-  redevRound = 0,
-): DynamicWorkflowManifestNode {
+function buildFixNode(sprint: PlannedSprint, round: number, redevRound = 0): DynamicWorkflowManifestNode {
   const tag = devRedevTag(redevRound);
   const id = fixIdFor(sprint.index, redevRound, round);
   const coderId = coderIdFor(sprint.index, redevRound, round);
@@ -232,11 +202,7 @@ function buildValidatorNode(
   };
 }
 
-function buildRefuterNode(
-  sprint: PlannedSprint,
-  round: number,
-  redevRound = 0,
-): DynamicWorkflowManifestNode {
+function buildRefuterNode(sprint: PlannedSprint, round: number, redevRound = 0): DynamicWorkflowManifestNode {
   const tag = devRedevTag(redevRound);
   const id = refuterIdFor(sprint.index, redevRound, round);
   const coderId = coderIdFor(sprint.index, redevRound, round);
@@ -261,16 +227,10 @@ function buildRefuterNode(
 }
 
 function effectiveValidatorAgentIds(sprint: PlannedSprint): string[] {
-  return sprint.validatorAgentIds.length > 0
-    ? [...sprint.validatorAgentIds]
-    : [...DEV_DEFAULT_VALIDATOR_AGENT_IDS];
+  return sprint.validatorAgentIds.length > 0 ? [...sprint.validatorAgentIds] : [...DEV_DEFAULT_VALIDATOR_AGENT_IDS];
 }
 
-function buildValidatorGroupNode(
-  sprint: PlannedSprint,
-  round: number,
-  redevRound = 0,
-): DynamicWorkflowManifestNode {
+function buildValidatorGroupNode(sprint: PlannedSprint, round: number, redevRound = 0): DynamicWorkflowManifestNode {
   const tag = devRedevTag(redevRound);
   const id = validatorGroupIdFor(sprint.index, redevRound, round);
   const coderId = coderIdFor(sprint.index, redevRound, round);
@@ -315,10 +275,7 @@ export function buildDevSprintNodes(
 
     const sprintMaxRounds = Math.max(
       1,
-      Math.min(
-        sprint.maxRounds && sprint.maxRounds > 0 ? Math.floor(sprint.maxRounds) : maxDevRounds,
-        maxDevRounds,
-      ),
+      Math.min(sprint.maxRounds && sprint.maxRounds > 0 ? Math.floor(sprint.maxRounds) : maxDevRounds, maxDevRounds),
     );
 
     const expandRounds = (redevRound: number, collectExecutable: boolean): void => {
@@ -330,12 +287,7 @@ export function buildDevSprintNodes(
         );
         const refuter = buildRefuterNode(sprint, round, redevRound);
         const fix = buildFixNode(sprint, round, redevRound);
-        const fixer = buildFixerNode(
-          sprint,
-          round,
-          resolvedFixerAgentId ?? sprint.coderAgentId,
-          redevRound,
-        );
+        const fixer = buildFixerNode(sprint, round, resolvedFixerAgentId ?? sprint.coderAgentId, redevRound);
 
         manifestNodes.push(coder, group, ...validators, refuter, fix, fixer);
 

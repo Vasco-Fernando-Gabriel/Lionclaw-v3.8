@@ -1,7 +1,6 @@
 import { FolderGit2, Hammer, Clock, X, EyeOff } from 'lucide-react';
 import type { LocalRepositoryRecord } from '@/types/repo-graph';
 
-
 interface RepoGraphConsentDialogProps {
   repository: LocalRepositoryRecord;
   fileCount?: number;

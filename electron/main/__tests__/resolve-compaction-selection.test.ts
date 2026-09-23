@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -45,6 +44,10 @@ vi.mock('../paths', () => ({
 }));
 
 vi.mock('../embedding-provider', () => ({ generateEmbedding: vi.fn() }));
+const providerStatusesMock = vi.fn(async (): Promise<Array<Record<string, unknown>>> => []);
+vi.mock('../provider-availability', () => ({
+  listProviderStatuses: () => providerStatusesMock(),
+}));
 vi.mock('../mgraph-engine', () => ({
   executeVaultOperation: vi.fn(),
   regenerateVaultIndex: vi.fn(),
@@ -74,6 +77,75 @@ function setSettings(map: Record<string, string | undefined>) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockedGetSecret.mockResolvedValue(null);
+  providerStatusesMock.mockResolvedValue([]);
+});
+
+describe('7.8: compactacao Auto NUNCA resolve para provider "off" em provider:list-statuses', () => {
+  it('provider da lane off (subscription) = CompactionProviderUnavailableError com a dica de Settings', async () => {
+    setSettings({
+      orchestrator_runtime: 'claude-sdk',
+      orchestrator_provider: 'anthropic',
+      orchestrator_model: 'claude-opus-4-7',
+      orchestrator_compaction_provider: '',
+      orchestrator_compaction_model: '',
+    });
+    providerStatusesMock.mockResolvedValue([
+      {
+        runtime: 'claude-sdk',
+        provider: 'anthropic',
+        connected: false,
+        available: false,
+        reason: 'Engine Claude Code nao encontrado.',
+      },
+    ]);
+    await expect(resolveCompactionSelection()).rejects.toBeInstanceOf(CompactionProviderUnavailableError);
+    await expect(resolveCompactionSelection()).rejects.toThrowError(/configure o Modelo de compactacao em Settings/);
+  });
+
+  it('provider da lane off (lion Auto chat) tambem falha com a dica', async () => {
+    setSettings({
+      orchestrator_runtime: 'lion-sdk',
+      orchestrator_provider: 'ollama',
+      orchestrator_model: 'llama3.1:8b',
+      orchestrator_ollama_base_url: 'http://localhost:11434',
+      orchestrator_compaction_provider: '',
+      orchestrator_compaction_model: '',
+    });
+    providerStatusesMock.mockResolvedValue([
+      { runtime: 'lion-sdk', provider: 'ollama', connected: false, available: false, reason: 'Ollama probe failed' },
+    ]);
+    await expect(resolveCompactionSelection()).rejects.toThrowError(/configure o Modelo de compactacao em Settings/);
+  });
+
+  it('provider on = resolve normalmente; modelo de compactacao EXPLICITO nao passa pelo gate', async () => {
+    setSettings({
+      orchestrator_runtime: 'claude-sdk',
+      orchestrator_provider: 'anthropic',
+      orchestrator_model: 'claude-opus-4-7',
+      orchestrator_compaction_provider: '',
+      orchestrator_compaction_model: '',
+    });
+    providerStatusesMock.mockResolvedValue([
+      { runtime: 'claude-sdk', provider: 'anthropic', connected: true, available: true },
+    ]);
+    const on = await resolveCompactionSelection();
+    expect(on.kind).toBe('subscription');
+
+    setSettings({
+      orchestrator_runtime: 'claude-sdk',
+      orchestrator_provider: 'anthropic',
+      orchestrator_model: 'claude-opus-4-7',
+      orchestrator_compaction_provider: 'anthropic',
+      orchestrator_compaction_model: 'claude-haiku-4-5-20251001',
+    });
+    providerStatusesMock.mockResolvedValue([
+      { runtime: 'claude-sdk', provider: 'anthropic', connected: false, available: false },
+    ]);
+    const explicit = await resolveCompactionSelection();
+    expect(explicit.kind).toBe('subscription');
+    if (explicit.kind !== 'subscription') throw new Error('expected subscription');
+    expect(explicit.selection.model).toBe('claude-haiku-4-5-20251001');
+  });
 });
 
 describe('resolveCompactionSelection — subscription (Auto, inherit chat)', () => {
@@ -238,9 +310,7 @@ describe('resolveCompactionSelection — lion-sdk explicit (D9, local/independen
       orchestrator_openai_compat_base_url: '',
     });
 
-    await expect(resolveCompactionSelection()).rejects.toThrow(
-      /OpenAI-compatible compaction requer/,
-    );
+    await expect(resolveCompactionSelection()).rejects.toThrow(/OpenAI-compatible compaction requer/);
   });
 });
 
@@ -278,9 +348,7 @@ describe('resolveCompactionSelection - non-active subscription pick is honored (
       orchestrator_compaction_model: 'glm-4.7',
     });
 
-    await expect(resolveCompactionSelection()).rejects.toBeInstanceOf(
-      CompactionProviderUnavailableError,
-    );
+    await expect(resolveCompactionSelection()).rejects.toBeInstanceOf(CompactionProviderUnavailableError);
     await expect(resolveCompactionSelection()).rejects.toMatchObject({
       code: 'compaction_provider_unavailable',
     });
@@ -383,9 +451,7 @@ describe('resolveCompactionSelection — sem fallback (SPEC 4.1: aborta em vez d
       orchestrator_compaction_model: '',
     });
 
-    await expect(resolveCompactionSelection()).rejects.toBeInstanceOf(
-      CompactionProviderUnavailableError,
-    );
+    await expect(resolveCompactionSelection()).rejects.toBeInstanceOf(CompactionProviderUnavailableError);
     await expect(resolveCompactionSelection()).rejects.toMatchObject({
       code: 'compaction_provider_unavailable',
     });
@@ -400,9 +466,7 @@ describe('resolveCompactionSelection — sem fallback (SPEC 4.1: aborta em vez d
       orchestrator_compaction_model: '',
     });
 
-    await expect(resolveCompactionSelection()).rejects.toBeInstanceOf(
-      CompactionProviderUnavailableError,
-    );
+    await expect(resolveCompactionSelection()).rejects.toBeInstanceOf(CompactionProviderUnavailableError);
   });
 });
 

@@ -29,7 +29,9 @@ describe('D16/D19: secao dynamic-workflow do prompt (regras curtas + semaforo)',
     expect(section).toContain('sprintIndex');
     expect(section).toMatch(/ordenacao canonica/);
     expect(section).toMatch(/closer\/narrator\/maestro/);
-    expect(section).toMatch(/scout, doc-writer, coder\/-codex\/-glm, fixer, validator-spec\/-regression\/-tests, refuter, sprint-planner, plan-validator-\*/);
+    expect(section).toMatch(
+      /scout, doc-writer, coder\/-codex\/-glm, fixer, validator-spec\/-regression\/-tests, refuter, sprint-planner, plan-validator-\*/,
+    );
   });
 
   it('autoria: doutrina de passos curtos resumida', () => {
@@ -41,7 +43,7 @@ describe('D16/D19: secao dynamic-workflow do prompt (regras curtas + semaforo)',
 
   it('wake por semaforo (D19): as 5 linhas do semaforo com as acoes certas', () => {
     expect(section).toContain('SEMAFORO');
-    expect(section).toContain("ok, seguindo");
+    expect(section).toContain('ok, seguindo');
     expect(section).toMatch(/SEMAFORO: VERDE => responda 'ok, seguindo'\. Nao chame tools\./);
     expect(section).toContain('boundary:');
     expect(section).toContain('rerun-node');

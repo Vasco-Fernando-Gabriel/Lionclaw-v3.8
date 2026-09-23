@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -28,10 +27,7 @@ vi.mock('../secrets-vault', () => ({
 
 import { getSetting } from '../db';
 import { getSecret } from '../secrets-vault';
-import {
-  resolveOrchestratorSelection,
-  type OrchestratorSelection,
-} from '../orchestrator-selection';
+import { resolveOrchestratorSelection, type OrchestratorSelection } from '../orchestrator-selection';
 
 const mockedGetSetting = vi.mocked(getSetting);
 const mockedGetSecret = vi.mocked(getSecret);
@@ -54,12 +50,9 @@ beforeEach(() => {
 describe('AC-12 parity gate: claude-sdk settings fixos -> selection estavel', () => {
   it('resolve o mesmo runtime/provider/model/source (snapshot inline)', async () => {
     setSettings(FIXED_CLAUDE_SETTINGS);
-    const sel = await resolveOrchestratorSelection({ surface: 'main-chat' });
+    const sel = await resolveOrchestratorSelection({ surface: 'default' });
 
-    const snapshot: Pick<
-      OrchestratorSelection,
-      'runtime' | 'provider' | 'model' | 'source'
-    > = {
+    const snapshot: Pick<OrchestratorSelection, 'runtime' | 'provider' | 'model' | 'source'> = {
       runtime: sel.runtime,
       provider: sel.provider,
       model: sel.model,
@@ -75,8 +68,8 @@ describe('AC-12 parity gate: claude-sdk settings fixos -> selection estavel', ()
 
   it('e deterministico: duas resolucoes com os mesmos settings sao identicas', async () => {
     setSettings(FIXED_CLAUDE_SETTINGS);
-    const a = await resolveOrchestratorSelection({ surface: 'main-chat' });
-    const b = await resolveOrchestratorSelection({ surface: 'main-chat' });
+    const a = await resolveOrchestratorSelection({ surface: 'default' });
+    const b = await resolveOrchestratorSelection({ surface: 'default' });
     expect({
       runtime: a.runtime,
       provider: a.provider,
@@ -93,7 +86,7 @@ describe('AC-12 parity gate: claude-sdk settings fixos -> selection estavel', ()
   it('agentModel NAO muda runtime/provider, MAS sobrescreve o modelo (S4: source agent)', async () => {
     setSettings(FIXED_CLAUDE_SETTINGS);
     const sel = await resolveOrchestratorSelection({
-      surface: 'main-chat',
+      surface: 'default',
       agentModel: 'claude-sonnet-4-6',
     });
     expect(sel.runtime).toBe('claude-sdk');

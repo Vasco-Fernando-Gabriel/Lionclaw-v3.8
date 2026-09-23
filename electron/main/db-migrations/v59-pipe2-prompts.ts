@@ -1,7 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
-
 const OLD_PIPE2_PRD_COMPLETO_PROMPT = `Voce e o pipe2-prd-completo. Prompt placeholder — sera atualizado na Sprint 6.`;
 
 const OLD_PIPE2_TECH_FRONTEND_PROMPT = `Voce e o pipe2-tech-frontend. Prompt placeholder — sera atualizado na Sprint 6.`;
@@ -11,7 +9,6 @@ const OLD_PIPE2_SPEC_BUILDER_PROMPT = `Voce e o pipe2-spec-builder. Prompt place
 const OLD_PIPE2_SPEC_VALIDATOR_PROMPT = `Voce e o pipe2-spec-validator. Prompt placeholder — sera atualizado na Sprint 6.`;
 
 const OLD_PIPE2_SPEC_ENRICHER_PROMPT = `Voce e o pipe2-spec-enricher. Prompt placeholder — sera atualizado na Sprint 6.`;
-
 
 const NEW_PIPE2_PRD_COMPLETO_PROMPT = `Voce esta gerando o PRD Completo do Development Pipeline 2.0.
 
@@ -293,18 +290,15 @@ Instrua o usuario: "Se nao ha mais nada para enriquecer, clique no botao Aprovar
 
 Toda comunicacao em portugues brasileiro.`;
 
-
 export function applyMigrationV59(db: Database.Database): void {
-  const update = db.prepare(
-    `UPDATE agents SET system_prompt = ? WHERE id = ? AND system_prompt = ?`,
-  );
+  const update = db.prepare(`UPDATE agents SET system_prompt = ? WHERE id = ? AND system_prompt = ?`);
 
   const updateAll = db.transaction(() => {
-    update.run(NEW_PIPE2_PRD_COMPLETO_PROMPT,   'pipe2-prd-completo',   OLD_PIPE2_PRD_COMPLETO_PROMPT);
-    update.run(NEW_PIPE2_TECH_FRONTEND_PROMPT,  'pipe2-tech-frontend',  OLD_PIPE2_TECH_FRONTEND_PROMPT);
-    update.run(NEW_PIPE2_SPEC_BUILDER_PROMPT,   'pipe2-spec-builder',   OLD_PIPE2_SPEC_BUILDER_PROMPT);
+    update.run(NEW_PIPE2_PRD_COMPLETO_PROMPT, 'pipe2-prd-completo', OLD_PIPE2_PRD_COMPLETO_PROMPT);
+    update.run(NEW_PIPE2_TECH_FRONTEND_PROMPT, 'pipe2-tech-frontend', OLD_PIPE2_TECH_FRONTEND_PROMPT);
+    update.run(NEW_PIPE2_SPEC_BUILDER_PROMPT, 'pipe2-spec-builder', OLD_PIPE2_SPEC_BUILDER_PROMPT);
     update.run(NEW_PIPE2_SPEC_VALIDATOR_PROMPT, 'pipe2-spec-validator', OLD_PIPE2_SPEC_VALIDATOR_PROMPT);
-    update.run(NEW_PIPE2_SPEC_ENRICHER_PROMPT,  'pipe2-spec-enricher',  OLD_PIPE2_SPEC_ENRICHER_PROMPT);
+    update.run(NEW_PIPE2_SPEC_ENRICHER_PROMPT, 'pipe2-spec-enricher', OLD_PIPE2_SPEC_ENRICHER_PROMPT);
   });
 
   updateAll();

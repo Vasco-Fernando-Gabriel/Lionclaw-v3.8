@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { appendGitRestrictionsToPrompt, GIT_RESTRICTIONS_BLOCK } from '../harness-prompts';
 

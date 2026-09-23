@@ -1,14 +1,10 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 
-
 const h = vi.hoisted(() => ({
   tmpHome: '',
-  listActiveTelegramSessionsMock: vi.fn((): Array<{ id: string; sdkSessionId?: string }> => []),
 }));
-
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof import('os')>();
@@ -38,7 +34,6 @@ vi.mock('../db', () => ({
   createSession: vi.fn(),
   getSession: vi.fn(() => undefined),
   purgeActivityLog: vi.fn(),
-  listActiveTelegramSessions: () => h.listActiveTelegramSessionsMock(),
 }));
 
 vi.mock('../memory-pipeline', () => ({
@@ -51,14 +46,8 @@ vi.mock('../memory-pipeline/oneshot-subscription', () => ({
 }));
 
 vi.mock('../orchestrator', () => ({ resetSdkSessionState: vi.fn() }));
-vi.mock('../telegram-bridge', () => ({ onTelegramSessionCompacted: vi.fn() }));
 
-
-import {
-  clearSDKSessionFiles,
-  getTelegramActiveThreadIds,
-} from '../ipc/_shared/chat-compaction';
-
+import { clearSDKSessionFiles } from '../ipc/_shared/chat-compaction';
 
 const SANITIZED_LIONCLAW_HOME = '-lionclaw-home';
 
@@ -79,14 +68,11 @@ function remainingFiles(): string[] {
 
 beforeEach(() => {
   h.tmpHome = fs.mkdtempSync(path.join(process.env.TMPDIR ?? '/tmp', 'lionclaw-clear-sdk-test-'));
-  h.listActiveTelegramSessionsMock.mockReset();
-  h.listActiveTelegramSessionsMock.mockReturnValue([]);
 });
 
 afterEach(() => {
   fs.rmSync(h.tmpHome, { recursive: true, force: true });
 });
-
 
 describe('clearSDKSessionFiles - filtro de exclusao (SPEC 14-obs / AC-23)', () => {
   it('preserva o .jsonl do thread ativo do Telegram e apaga os demais', () => {
@@ -124,36 +110,5 @@ describe('clearSDKSessionFiles - filtro de exclusao (SPEC 14-obs / AC-23)', () =
 
   it('diretorio de projects ausente e no-op (nao lanca)', () => {
     expect(() => clearSDKSessionFiles(['qualquer'])).not.toThrow();
-  });
-});
-
-
-describe('getTelegramActiveThreadIds (resolver sdk_session_id ?? sessionId)', () => {
-  it('resolve sdkSessionId quando presente e cai no id da sessao quando NULL', () => {
-    h.listActiveTelegramSessionsMock.mockReturnValue([
-      { id: 's1', sdkSessionId: 'thr-1' },
-      { id: 's2' },
-    ]);
-
-    expect(getTelegramActiveThreadIds()).toEqual(['thr-1', 's2']);
-  });
-
-  it('falha do DB degrada para lista vazia (best-effort, nunca lanca)', () => {
-    h.listActiveTelegramSessionsMock.mockImplementation(() => {
-      throw new Error('db off');
-    });
-
-    expect(getTelegramActiveThreadIds()).toEqual([]);
-  });
-
-  it('integracao: clearSDKSessionFiles(getTelegramActiveThreadIds()) preserva os threads do Telegram', () => {
-    h.listActiveTelegramSessionsMock.mockReturnValue([
-      { id: 's-tele', sdkSessionId: 'thr-uuid' },
-    ]);
-    seedJsonlFiles(['thr-uuid.jsonl', 's-desktop.jsonl']);
-
-    clearSDKSessionFiles(getTelegramActiveThreadIds());
-
-    expect(remainingFiles()).toEqual(['thr-uuid.jsonl']);
   });
 });

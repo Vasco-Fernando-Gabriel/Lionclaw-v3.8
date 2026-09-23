@@ -14,7 +14,11 @@ export function killProcessTree(proc: ChildProcess, signal: NodeJS.Signals = 'SI
       spawn('taskkill', ['/pid', String(pid), '/t', '/f'], { stdio: 'ignore' });
     } catch (error) {
       logger.warn({ pid, error }, 'taskkill falhou; usando proc.kill como fallback');
-      try { proc.kill(); } catch { /* ja morreu */ }
+      try {
+        proc.kill();
+      } catch {
+        /* ja morreu */
+      }
     }
     return;
   }
@@ -22,6 +26,10 @@ export function killProcessTree(proc: ChildProcess, signal: NodeJS.Signals = 'SI
   try {
     process.kill(-pid, signal);
   } catch {
-    try { proc.kill(signal); } catch { /* ja morreu */ }
+    try {
+      proc.kill(signal);
+    } catch {
+      /* ja morreu */
+    }
   }
 }

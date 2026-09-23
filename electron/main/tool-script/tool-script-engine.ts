@@ -1,4 +1,3 @@
-
 import { spawn, execFileSync, type ChildProcess } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -8,10 +7,7 @@ import path from 'path';
 import { createLogger } from '../logger';
 import { getChatCapabilityTurn } from '../chat-capability-context';
 import type { ChatCapabilityTurnContext } from '../chat-capability-context';
-import {
-  generateLionclawToolsStub,
-  type ToolScriptTransport,
-} from './tool-script-python-stub';
+import { generateLionclawToolsStub, type ToolScriptTransport } from './tool-script-python-stub';
 import {
   ToolScriptError,
   TOOL_SCRIPT_DEFAULT_TOOLS,
@@ -33,7 +29,6 @@ const logger = createLogger('tool-script-engine');
 const CODE_LOG_PREVIEW_CHARS = 200;
 
 const PYTHON_PROBE_TIMEOUT_MS = 3_000;
-
 
 interface PythonDetection {
   available: boolean;
@@ -79,10 +74,7 @@ function macCommandLineToolsPresent(): boolean {
   }
 }
 
-function findExecutableInPath(
-  name: string,
-  excludedDirs: readonly string[],
-): string | undefined {
+function findExecutableInPath(name: string, excludedDirs: readonly string[]): string | undefined {
   const pathEnv = process.env.PATH ?? '';
   for (const rawDir of pathEnv.split(path.delimiter)) {
     const dir = rawDir.trim();
@@ -124,8 +116,7 @@ function detectPython(): PythonDetection {
     }
     return {
       available: false,
-      reason:
-        '/usr/bin/python3 e stub do CLT (xcode-select -p falhou) e nenhum outro python3 foi encontrado',
+      reason: '/usr/bin/python3 e stub do CLT (xcode-select -p falhou) e nenhum outro python3 foi encontrado',
     };
   }
 
@@ -136,15 +127,9 @@ function resolvePythonDetection(): PythonDetection {
   if (cachedPythonDetection === undefined) {
     cachedPythonDetection = detectPython();
     if (cachedPythonDetection.available) {
-      logger.info(
-        { pythonPath: cachedPythonDetection.pythonPath },
-        'python3 detectado para o Tool Script',
-      );
+      logger.info({ pythonPath: cachedPythonDetection.pythonPath }, 'python3 detectado para o Tool Script');
     } else {
-      logger.warn(
-        { reason: cachedPythonDetection.reason },
-        'Tool Script indisponivel: python3 nao detectado',
-      );
+      logger.warn({ reason: cachedPythonDetection.reason }, 'Tool Script indisponivel: python3 nao detectado');
     }
   }
   return cachedPythonDetection;
@@ -156,9 +141,7 @@ export function isToolScriptAvailable(): boolean {
 
 export function getToolScriptAvailabilityReason(): string | undefined {
   const detection = resolvePythonDetection();
-  return detection.available
-    ? undefined
-    : (detection.reason ?? 'python3 nao encontrado');
+  return detection.available ? undefined : (detection.reason ?? 'python3 nao encontrado');
 }
 
 export function getToolScriptPythonPath(): string | undefined {
@@ -169,14 +152,9 @@ export function __resetToolScriptPythonDetectionForTests(): void {
   cachedPythonDetection = undefined;
 }
 
-
 export function createToolScriptSocketPath(): string {
-  return path.join(
-    os.tmpdir(),
-    `lcts-${crypto.randomBytes(4).toString('hex')}.sock`,
-  );
+  return path.join(os.tmpdir(), `lcts-${crypto.randomBytes(4).toString('hex')}.sock`);
 }
-
 
 const DEFAULT_ENV_ALLOWLIST: readonly string[] = [
   'HOME',
@@ -200,7 +178,6 @@ export function buildDefaultToolScriptEnv(): NodeJS.ProcessEnv {
   }
   return env;
 }
-
 
 class PausableTimer {
   private timer: NodeJS.Timeout | null = null;
@@ -253,7 +230,6 @@ class PausableTimer {
   }
 }
 
-
 class CappedCollector {
   private chunks: Buffer[] = [];
   private storedBytes = 0;
@@ -293,17 +269,12 @@ function ensureOverflowGitignore(dir: string): void {
       return;
     }
     const content = fs.readFileSync(gitignorePath, 'utf8');
-    const hasWildcard = content
-      .split('\n')
-      .some((line) => line.trim() === '*');
+    const hasWildcard = content.split('\n').some((line) => line.trim() === '*');
     if (!hasWildcard) {
       fs.appendFileSync(gitignorePath, `${content.endsWith('\n') ? '' : '\n'}*\n`);
     }
   } catch (err) {
-    logger.warn(
-      { err, gitignorePath },
-      'falha ao garantir .gitignore do dir de overflow do tool-script (best-effort)',
-    );
+    logger.warn({ err, gitignorePath }, 'falha ao garantir .gitignore do dir de overflow do tool-script (best-effort)');
   }
 }
 
@@ -335,10 +306,7 @@ export function applyStdoutOverflowPolicy(
     fs.writeFileSync(target, stored, { mode: 0o600 });
     persistedPath = target;
   } catch (err) {
-    logger.warn(
-      { err, cwd },
-      'falha ao persistir stdout completo do tool-script; overflow segue so com head+tail',
-    );
+    logger.warn({ err, cwd }, 'falha ao persistir stdout completo do tool-script; overflow segue so com head+tail');
   }
 
   const note =
@@ -348,11 +316,7 @@ export function applyStdoutOverflowPolicy(
   return { text: `${head}${note}${tail}`, persistedPath };
 }
 
-function capOutput(
-  collector: CappedCollector,
-  capBytes: number,
-  overflow?: { cwd: string },
-): CappedOutput {
+function capOutput(collector: CappedCollector, capBytes: number, overflow?: { cwd: string }): CappedOutput {
   const full = collector.buffer();
   const truncated = collector.totalBytes > capBytes;
   if (!truncated) {
@@ -361,15 +325,9 @@ function capOutput(
   if (overflow === undefined) {
     return { text: full.subarray(0, capBytes).toString('utf8'), truncated: true };
   }
-  const outcome = applyStdoutOverflowPolicy(
-    full,
-    collector.totalBytes,
-    capBytes,
-    overflow.cwd,
-  );
+  const outcome = applyStdoutOverflowPolicy(full, collector.totalBytes, capBytes, overflow.cwd);
   return { text: outcome.text, truncated: true, persistedPath: outcome.persistedPath };
 }
-
 
 interface ParsedRequestFrame {
   id: number;
@@ -400,16 +358,11 @@ function parseRequestFrame(line: string): ParsedRequestFrame | undefined {
   if (typeof token !== 'string') return undefined;
   const args = frame.args;
   const parsedArgs =
-    typeof args === 'object' && args !== null && !Array.isArray(args)
-      ? (args as Record<string, unknown>)
-      : {};
+    typeof args === 'object' && args !== null && !Array.isArray(args) ? (args as Record<string, unknown>) : {};
   return { id, tool, args: parsedArgs, token };
 }
 
-function writeFrame(
-  conn: net.Socket,
-  frame: ToolScriptRpcResponseFrame | ToolScriptHeartbeatFrame,
-): void {
+function writeFrame(conn: net.Socket, frame: ToolScriptRpcResponseFrame | ToolScriptHeartbeatFrame): void {
   if (conn.destroyed || conn.writableEnded) return;
   try {
     conn.write(`${JSON.stringify(frame)}\n`);
@@ -421,7 +374,6 @@ function writeFrame(
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
-
 
 interface ResolvedDeps {
   dispatchRpc: ToolScriptEngineDeps['dispatchRpc'];
@@ -497,7 +449,6 @@ class ToolScriptExecution {
     }
   }
 
-
   private async startServer(): Promise<void> {
     const server = net.createServer((conn) => {
       this.connections.add(conn);
@@ -544,7 +495,6 @@ class ToolScriptExecution {
     this.transport = { kind: 'unix', socketPath };
   }
 
-
   private writeScripts(): void {
     if (this.transport === undefined) {
       throw new Error('transporte do tool-script nao inicializado');
@@ -563,7 +513,6 @@ class ToolScriptExecution {
       mode: 0o600,
     });
   }
-
 
   private async spawnAndWait(): Promise<{ code: number | null; signal: string | null }> {
     if (this.tmpDir === undefined) throw new Error('temp dir nao criado');
@@ -593,22 +542,20 @@ class ToolScriptExecution {
 
     this.input.abortSignal.addEventListener('abort', this.onAbort, { once: true });
 
-    return new Promise<{ code: number | null; signal: string | null }>(
-      (resolve, reject) => {
-        let settled = false;
-        child.once('error', (err) => {
-          if (settled) return;
-          settled = true;
-          logger.error({ err }, 'falha ao spawnar python3 do tool-script');
-          reject(err);
-        });
-        child.once('close', (code, signal) => {
-          if (settled) return;
-          settled = true;
-          resolve({ code, signal });
-        });
-      },
-    );
+    return new Promise<{ code: number | null; signal: string | null }>((resolve, reject) => {
+      let settled = false;
+      child.once('error', (err) => {
+        if (settled) return;
+        settled = true;
+        logger.error({ err }, 'falha ao spawnar python3 do tool-script');
+        reject(err);
+      });
+      child.once('close', (code, signal) => {
+        if (settled) return;
+        settled = true;
+        resolve({ code, signal });
+      });
+    });
   }
 
   private killProcessGroup(reason: string): void {
@@ -625,11 +572,9 @@ class ToolScriptExecution {
       logger.debug({ err, reason }, 'kill(-pid) falhou; fallback kill direto');
       try {
         this.child?.kill('SIGKILL');
-      } catch {
-      }
+      } catch {}
     }
   }
-
 
   private async handleFrame(line: string, conn: net.Socket): Promise<void> {
     const frame = parseRequestFrame(line);
@@ -674,10 +619,7 @@ class ToolScriptExecution {
     };
     const resumeTimeout = (): void => {
       if (pauseDepth === 0) {
-        logger.warn(
-          { tool: frame.tool },
-          'resumeTimeout sem pauseTimeout correspondente (ignorado)',
-        );
+        logger.warn({ tool: frame.tool }, 'resumeTimeout sem pauseTimeout correspondente (ignorado)');
         return;
       }
       pauseDepth--;
@@ -753,7 +695,6 @@ class ToolScriptExecution {
     });
   }
 
-
   private buildResult(exit: { code: number | null; signal: string | null }): ToolScriptResult {
     const stdout = capOutput(this.stdout, this.deps.maxStdoutBytes, {
       cwd: this.turnCtx.cwd,
@@ -766,9 +707,7 @@ class ToolScriptExecution {
       toolCallCount: this.toolCallCount,
       timedOut: this.timedOut,
       aborted: this.aborted,
-      ...(stdout.persistedPath !== undefined
-        ? { persistedPath: stdout.persistedPath }
-        : {}),
+      ...(stdout.persistedPath !== undefined ? { persistedPath: stdout.persistedPath } : {}),
       stdoutTruncated: stdout.truncated,
       stderrTruncated: stderr.truncated,
       toolCallLimitExceeded: this.toolCallLimitExceeded,
@@ -783,9 +722,7 @@ class ToolScriptExecution {
         aborted: result.aborted,
         stdoutBytes: this.stdout.totalBytes,
         stderrBytes: this.stderr.totalBytes,
-        ...(result.persistedPath !== undefined
-          ? { persistedPath: result.persistedPath }
-          : {}),
+        ...(result.persistedPath !== undefined ? { persistedPath: result.persistedPath } : {}),
         stdoutTruncated: result.stdoutTruncated,
         stderrTruncated: result.stderrTruncated,
         toolCallLimitExceeded: result.toolCallLimitExceeded,
@@ -829,7 +766,6 @@ class ToolScriptExecution {
   }
 }
 
-
 function resolveDeps(deps: ToolScriptEngineDeps): ResolvedDeps {
   const pythonPath = deps.pythonPath ?? getToolScriptPythonPath();
   if (pythonPath === undefined) {
@@ -851,10 +787,7 @@ function resolveDeps(deps: ToolScriptEngineDeps): ResolvedDeps {
   };
 }
 
-export async function runToolScript(
-  input: RunToolScriptInput,
-  deps: ToolScriptEngineDeps,
-): Promise<ToolScriptResult> {
+export async function runToolScript(input: RunToolScriptInput, deps: ToolScriptEngineDeps): Promise<ToolScriptResult> {
   const turnCtx = getChatCapabilityTurn({
     sessionId: input.sessionId,
     turnId: input.turnId,
@@ -906,9 +839,7 @@ export async function runToolScript(
   const execution = new ToolScriptExecution(input, resolved, {
     ...turnCtx,
     cwd: turnCtx.cwd as string,
-    permissionProfile: turnCtx.permissionProfile as NonNullable<
-      ChatCapabilityTurnContext['permissionProfile']
-    >,
+    permissionProfile: turnCtx.permissionProfile as NonNullable<ChatCapabilityTurnContext['permissionProfile']>,
     allowedServerIds: turnCtx.allowedServerIds as string[],
   });
   return execution.run();

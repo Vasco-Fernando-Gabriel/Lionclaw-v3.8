@@ -1,4 +1,3 @@
-
 import * as fs from 'fs';
 import { createLogger } from '../logger';
 import { emitIPC } from '../pipeline-shared/ipc-emitter';
@@ -26,12 +25,7 @@ import { generatePipelineDocsId } from '../pipeline-paths';
 import { getArchitectureReviewContext } from '../architecture-review-paths';
 import { getBugContext } from '../bug-paths';
 import { wipeOpenDesign } from '../open-design/full-wipe';
-import {
-  getResetablePhases,
-  getPhaseArtifactMap,
-  getAutoPhases,
-  getPhaseNumberForAgent,
-} from './registry';
+import { getResetablePhases, getPhaseArtifactMap, getAutoPhases, getPhaseNumberForAgent } from './registry';
 import { resolveExecutorFiles, resolvePreviewFiles } from './artifact-resolver';
 
 const logger = createLogger('pipeline-engine');
@@ -66,7 +60,6 @@ export interface ResetPreview {
   metricsToDelete: number;
   sprintsAffected: number[];
 }
-
 
 export async function resetPhase(
   ctx: ResetEngineContext,
@@ -154,8 +147,7 @@ export async function resetPhase(
         for (const p of filesToDelete) {
           try {
             fs.rmSync(p, { force: true });
-          } catch {
-          }
+          } catch {}
         }
         if (mapping.files.includes('SPEC')) {
           updateHarnessProject(projectId, { specPath: '' });
@@ -191,8 +183,7 @@ export async function resetPhase(
         for (const p of filesToDelete) {
           try {
             fs.rmSync(p, { force: true });
-          } catch {
-          }
+          } catch {}
         }
         if (mapping.files.includes('SPEC')) {
           updateHarnessProject(projectId, { specPath: '' });
@@ -211,15 +202,17 @@ export async function resetPhase(
     for (const fullPath of filesToDelete) {
       try {
         fs.rmSync(fullPath, { force: true });
-      } catch {
-      }
+      } catch {}
     }
   }
 
   if (project.pipelineType === 'development-v2' && phase === 5) {
     const wipe = await wipeOpenDesign(projectId);
     if ('error' in wipe) {
-      logger.error({ projectId, error: wipe.error }, '[dev-v2] reset fase 5: wipeOpenDesign falhou (continuando o reset do DB)');
+      logger.error(
+        { projectId, error: wipe.error },
+        '[dev-v2] reset fase 5: wipeOpenDesign falhou (continuando o reset do DB)',
+      );
     }
   }
 
@@ -241,10 +234,7 @@ export async function resetPhase(
   const autoPhases = getAutoPhases(project);
   if (autoPhases.has(phase)) {
     void ctx.runAutoPhase(projectId, phase).catch((err) => {
-      logger.error(
-        { err, projectId, phase },
-        'Background runAutoPhase after resetPhase failed',
-      );
+      logger.error({ err, projectId, phase }, 'Background runAutoPhase after resetPhase failed');
       releaseProjectLock(projectId);
       emitIPC('pipeline:error', {
         projectId,
@@ -256,7 +246,6 @@ export async function resetPhase(
 
   return { ok: true };
 }
-
 
 export async function resetSprint(
   ctx: ResetEngineContext,
@@ -275,10 +264,12 @@ export async function resetSprint(
   }
 
   const carryProject = getHarnessProject(projectId);
-  const carryCoderPhase = (carryProject ? getPhaseNumberForAgent(carryProject, 'harness-coder') : undefined)
-    ?? (carryProject?.pipelineType === 'security' || carryProject?.pipelineType === 'architecture-review' ? 10 : 13);
-  const carryEvaluatorPhase = (carryProject ? getPhaseNumberForAgent(carryProject, 'harness-evaluator') : undefined)
-    ?? (carryProject?.pipelineType === 'security' || carryProject?.pipelineType === 'architecture-review' ? 11 : 14);
+  const carryCoderPhase =
+    (carryProject ? getPhaseNumberForAgent(carryProject, 'harness-coder') : undefined) ??
+    (carryProject?.pipelineType === 'security' || carryProject?.pipelineType === 'architecture-review' ? 10 : 13);
+  const carryEvaluatorPhase =
+    (carryProject ? getPhaseNumberForAgent(carryProject, 'harness-evaluator') : undefined) ??
+    (carryProject?.pipelineType === 'security' || carryProject?.pipelineType === 'architecture-review' ? 11 : 14);
   carryHarnessRoundSessionIdsForSprint(projectId, sprintIndex, carryCoderPhase, carryEvaluatorPhase);
 
   deleteHarnessRoundsForSprint(projectId, sprintIndex);
@@ -295,7 +286,8 @@ export async function resetSprint(
   state.status = 'running';
 
   const resetSprintProject = getHarnessProject(projectId);
-  const resetCoderPhase = (resetSprintProject ? getPhaseNumberForAgent(resetSprintProject, 'harness-coder') : undefined) ?? 13;
+  const resetCoderPhase =
+    (resetSprintProject ? getPhaseNumberForAgent(resetSprintProject, 'harness-coder') : undefined) ?? 13;
 
   ctx.updateProjectColumns(projectId, {
     pipelineCurrentPhase: resetCoderPhase,
@@ -321,7 +313,6 @@ export async function resetSprint(
 
   return { ok: true };
 }
-
 
 export function getResetPreview(
   _ctx: ResetEngineContext,
@@ -357,9 +348,7 @@ export function getResetPreview(
     const messagesToDelete = countPipelineMessagesFromPhase(projectId, mapping.fromPhase);
     const metricsToDelete = countPipelinePhaseMetricsFromPhase(projectId, mapping.fromPhase);
 
-    const sprintsAffected = mapping.wipeSprints
-      ? getHarnessSprints(projectId).map((s) => s.sprintIndex)
-      : [];
+    const sprintsAffected = mapping.wipeSprints ? getHarnessSprints(projectId).map((s) => s.sprintIndex) : [];
 
     return {
       filesToDelete,

@@ -1,6 +1,4 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-
 
 vi.mock('../logger', () => ({
   createLogger: () => ({
@@ -44,7 +42,6 @@ vi.mock('../lion-sdk', () => ({
   resetLionSdkSessionState: vi.fn(),
   stopLionSdkQuery: vi.fn(),
 }));
-
 
 vi.mock('../db', () => ({
   getAllAgents: () => [],
@@ -125,17 +122,6 @@ vi.mock('../title-generator', () => ({
   generateSessionTitle: vi.fn(),
 }));
 
-vi.mock('../message-queue', () => ({
-  messageQueue: {
-    enqueue: vi.fn(),
-    dequeue: vi.fn(),
-    clear: vi.fn(),
-    isProcessing: false,
-    length: 0,
-    processingDurationMs: 0,
-  },
-}));
-
 import { resolveOrchestratorSelection } from '../orchestrator-selection';
 import * as orchestrator from '../orchestrator';
 import {
@@ -153,7 +139,7 @@ import {
   resetLionSdkSessionState as resetLion,
   stopLionSdkQuery as stopLion,
 } from '../lion-sdk';
-import { messageQueue } from '../message-queue';
+import { getDesktopLane, resetDesktopLanesForTests } from '../desktop-lanes';
 
 const mockResolve = vi.mocked(resolveOrchestratorSelection);
 const executeClaudeCompatSdkQuery = vi.mocked(compatExecutor);
@@ -165,7 +151,7 @@ const resetLionSdkSessionState = vi.mocked(resetLion);
 const stopClaudeCompatQuery = vi.mocked(stopCompat);
 const stopCodexSdkQuery = vi.mocked(stopCodex);
 const stopLionSdkQuery = vi.mocked(stopLion);
-const clearMessageQueue = vi.mocked(messageQueue.clear);
+let clearMessageQueue: ReturnType<typeof vi.spyOn>;
 
 const fakeGetWindow = () => null;
 
@@ -180,7 +166,8 @@ beforeEach(() => {
   stopClaudeCompatQuery.mockClear();
   stopCodexSdkQuery.mockClear();
   stopLionSdkQuery.mockClear();
-  clearMessageQueue.mockClear();
+  resetDesktopLanesForTests();
+  clearMessageQueue = vi.spyOn(getDesktopLane('smoke-lane').queue, 'drain');
 });
 
 describe('SPEC-001 §8 router dispatch (SP-13.3)', () => {
@@ -192,7 +179,7 @@ describe('SPEC-001 §8 router dispatch (SP-13.3)', () => {
       source: 'settings',
     } as never);
 
-    await expect(orchestrator.executeQuery('hi', {}, fakeGetWindow)).resolves.toBeUndefined();
+    await expect(orchestrator.executeQuery('hi', { sessionId: 'smoke-lane' }, fakeGetWindow)).resolves.toBeUndefined();
 
     expect(executeClaudeCompatSdkQuery).not.toHaveBeenCalled();
     expect(executeCodexSdkQuery).not.toHaveBeenCalled();
@@ -209,7 +196,7 @@ describe('SPEC-001 §8 router dispatch (SP-13.3)', () => {
       source: 'settings',
     } as never);
 
-    await orchestrator.executeQuery('hi', {}, fakeGetWindow);
+    await orchestrator.executeQuery('hi', { sessionId: 'smoke-lane' }, fakeGetWindow);
 
     expect(executeClaudeCompatSdkQuery).toHaveBeenCalledTimes(1);
     expect(executeCodexSdkQuery).not.toHaveBeenCalled();
@@ -232,7 +219,7 @@ describe('SPEC-001 §8 router dispatch (SP-13.3)', () => {
       source: 'settings',
     } as never);
 
-    await orchestrator.executeQuery('hi', {}, fakeGetWindow);
+    await orchestrator.executeQuery('hi', { sessionId: 'smoke-lane' }, fakeGetWindow);
 
     expect(executeCodexSdkQuery).toHaveBeenCalledTimes(1);
     expect(executeClaudeCompatSdkQuery).not.toHaveBeenCalled();
@@ -248,7 +235,7 @@ describe('SPEC-001 §8 router dispatch (SP-13.3)', () => {
       source: 'settings',
     } as never);
 
-    await orchestrator.executeQuery('hi', {}, fakeGetWindow);
+    await orchestrator.executeQuery('hi', { sessionId: 'smoke-lane' }, fakeGetWindow);
 
     expect(executeLionSdkQuery).toHaveBeenCalledTimes(1);
     expect(executeClaudeCompatSdkQuery).not.toHaveBeenCalled();
@@ -272,7 +259,7 @@ describe('SPEC-001 §8 router dispatch (SP-13.3)', () => {
       source: 'settings',
     } as never);
 
-    await orchestrator.executeQuery('hi', {}, fakeGetWindow);
+    await orchestrator.executeQuery('hi', { sessionId: 'smoke-lane' }, fakeGetWindow);
 
     expect(executeLionSdkQuery).toHaveBeenCalledTimes(1);
     const callArgs = executeLionSdkQuery.mock.calls[0]!;
@@ -290,7 +277,7 @@ describe('SPEC-001 §8 router dispatch (SP-13.3)', () => {
       source: 'settings',
     } as never);
 
-    await orchestrator.executeQuery('hi', {}, fakeGetWindow);
+    await orchestrator.executeQuery('hi', { sessionId: 'smoke-lane' }, fakeGetWindow);
 
     expect(executeLionSdkQuery).toHaveBeenCalledTimes(1);
     const callArgs = executeLionSdkQuery.mock.calls[0]!;

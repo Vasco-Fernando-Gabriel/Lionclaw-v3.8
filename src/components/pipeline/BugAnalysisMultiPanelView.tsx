@@ -6,7 +6,6 @@ import { useActiveProjectState } from '@/hooks/useActiveProjectState';
 import { shortenModel } from '@/utils/model-display';
 import type { AuditAgentState } from '@/types/pipeline';
 
-
 const TOTAL_BUG_ANALYSTS = 3;
 
 interface BugAnalysisMultiPanelViewProps {
@@ -52,19 +51,21 @@ function BugAnalystPanel({ agent }: BugAnalystPanelProps) {
         <div className="px-3 py-2 border-b border-zinc-800/60 text-xs text-zinc-600 italic shrink-0">
           Aguardando analista
         </div>
-        <div className="flex-1 flex items-center justify-center text-zinc-700 text-xs italic">
-          slot vazio
-        </div>
+        <div className="flex-1 flex items-center justify-center text-zinc-700 text-xs italic">slot vazio</div>
       </div>
     );
   }
 
   const statusIcon = (() => {
     switch (agent.status) {
-      case 'completed': return <CheckCircle size={12} className="text-green-400 shrink-0" />;
-      case 'failed': return <XCircle size={12} className="text-red-400 shrink-0" />;
-      case 'running': return <Loader2 size={12} className="text-amber-400 animate-spin shrink-0" />;
-      default: return null;
+      case 'completed':
+        return <CheckCircle size={12} className="text-green-400 shrink-0" />;
+      case 'failed':
+        return <XCircle size={12} className="text-red-400 shrink-0" />;
+      case 'running':
+        return <Loader2 size={12} className="text-amber-400 animate-spin shrink-0" />;
+      default:
+        return null;
     }
   })();
 
@@ -74,9 +75,7 @@ function BugAnalystPanel({ agent }: BugAnalystPanelProps) {
       <div className="px-3 py-2 border-b border-zinc-800/60 shrink-0">
         <div className="flex items-center gap-2 mb-1">
           {statusIcon}
-          <span className="text-xs font-semibold text-zinc-200 truncate flex-1">
-            {agent.name}
-          </span>
+          <span className="text-xs font-semibold text-zinc-200 truncate flex-1">{agent.name}</span>
           {agent.model && (
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-red-900/30 text-red-300 border border-red-800/50 shrink-0">
               {shortenModel(agent.model)}
@@ -118,12 +117,10 @@ function BugAnalystPanel({ agent }: BugAnalystPanelProps) {
 }
 
 export function BugAnalysisMultiPanelView({ isStreaming }: BugAnalysisMultiPanelViewProps) {
-  const bugAgents = useActiveProjectState(s => s.auditAgents) ?? new Map<string, AuditAgentState>();
+  const bugAgents = useActiveProjectState((s) => s.auditAgents) ?? new Map<string, AuditAgentState>();
 
   const panels: Array<AuditAgentState | null> = useMemo(() => {
-    const ordered = Array.from(bugAgents.values()).sort(
-      (a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0),
-    );
+    const ordered = Array.from(bugAgents.values()).sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
     const slots: Array<AuditAgentState | null> = [];
     for (let i = 0; i < TOTAL_BUG_ANALYSTS; i += 1) {
       slots.push(ordered[i] ?? null);
@@ -132,16 +129,14 @@ export function BugAnalysisMultiPanelView({ isStreaming }: BugAnalysisMultiPanel
   }, [bugAgents]);
 
   const completedAgents = Array.from(bugAgents.values())
-    .filter(a => a.status === 'completed' || a.status === 'failed')
+    .filter((a) => a.status === 'completed' || a.status === 'failed')
     .sort((a, b) => (a.completedAt ?? 0) - (b.completedAt ?? 0));
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-zinc-950">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/60 shrink-0">
-        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
-          Analise Paralela (Fase 2)
-        </span>
+        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Analise Paralela (Fase 2)</span>
         <span className="text-[11px] text-zinc-500 font-mono">
           {completedAgents.length}/{TOTAL_BUG_ANALYSTS} concluidos
         </span>
@@ -161,13 +156,17 @@ export function BugAnalysisMultiPanelView({ isStreaming }: BugAnalysisMultiPanel
               </tr>
             </thead>
             <tbody>
-              {completedAgents.map(a => (
+              {completedAgents.map((a) => (
                 <tr key={a.agentId} className="text-zinc-400 border-t border-zinc-800/40">
                   <td className="pr-3 py-1 truncate max-w-[180px]">{a.name}</td>
                   <td className="pr-3 py-1 font-mono">{shortenModel(a.model)}</td>
                   <td
                     className="pr-3 py-1 font-mono text-right"
-                    title={a.runtime === 'codex' ? 'Metrica de arquivos abertos nao disponivel para runtime Codex (sem tool Read tipado)' : undefined}
+                    title={
+                      a.runtime === 'codex'
+                        ? 'Metrica de arquivos abertos nao disponivel para runtime Codex (sem tool Read tipado)'
+                        : undefined
+                    }
                   >
                     {a.runtime === 'codex' ? '—' : a.additionalFilesAfterStart}
                   </td>

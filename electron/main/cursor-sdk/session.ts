@@ -1,4 +1,3 @@
-
 import type { BrowserWindow } from 'electron';
 import { randomUUID } from 'crypto';
 import { getEnabledTools, getSessionActiveRepository, getLocalRepository } from '../db';
@@ -53,12 +52,14 @@ const CURSOR_VAULT_KEY = 'CURSOR_API_KEY';
 export interface CreateChatCursorSessionOptions {
   sessionId: string;
   model: string;
+  effort?: string;
   getWindow: () => BrowserWindow | null;
   abortController: AbortController;
   lane: CursorChatLane;
   agentId?: string;
   isOnboarding?: boolean;
   capabilities?: ChatFeatureToggles;
+  turnBinding?: { sessionId: string; turnId: string };
 }
 
 export interface CursorSessionContextMeta {
@@ -70,10 +71,7 @@ export interface ChatCursorSession {
   resuming: boolean;
   contextMeta: CursorSessionContextMeta;
   workspace: CursorChatWorkspace;
-  send(
-    prompt: string,
-    onEvent: (event: CursorSidecarStreamEvent) => void,
-  ): Promise<CursorSidecarExecutionResult>;
+  send(prompt: string, onEvent: (event: CursorSidecarStreamEvent) => void): Promise<CursorSidecarExecutionResult>;
   close(): void;
 }
 
@@ -81,9 +79,7 @@ export function buildCursorChatSessionKey(lane: CursorChatLane, sessionId: strin
   return `chat::${lane}::${sessionId}`;
 }
 
-export async function createChatCursorSession(
-  opts: CreateChatCursorSessionOptions,
-): Promise<ChatCursorSession> {
+export async function createChatCursorSession(opts: CreateChatCursorSessionOptions): Promise<ChatCursorSession> {
   if (!getCursorModel(opts.model) && !isCursorCatalogModel(opts.model)) {
     throw new TypedProviderError('LLM-MODEL-404', {
       message: `Modelo "${opts.model}" nao pertence ao catalogo do runtime Cursor.`,
@@ -94,8 +90,8 @@ export async function createChatCursorSession(
   if (!apiKey) {
     throw new TypedProviderError('LLM-AUTH-401', {
       message:
-        'Cursor API key ausente do Vault (CURSOR_API_KEY). '
-        + 'Gere uma User API key em cursor.com/dashboard e cadastre em Settings > Providers.',
+        'Cursor API key ausente do Vault (CURSOR_API_KEY). ' +
+        'Gere uma User API key em cursor.com/dashboard e cadastre em Settings > Providers.',
       raw: `vaultKey=${CURSOR_VAULT_KEY}`,
     });
   }
@@ -104,14 +100,13 @@ export async function createChatCursorSession(
   const workspace = resolveCursorChatWorkspace(opts.lane, opts.sessionId);
   const lionHome = getLionClawHome();
 
-  const repoRoot = opts.lane === 'desktop'
-    ? (() => {
-        const attachment = getSessionActiveRepository(opts.sessionId);
-        return attachment
-          ? getLocalRepository(attachment.repositoryId)?.canonicalRootPath
-          : undefined;
-      })()
-    : undefined;
+  const repoRoot =
+    opts.lane === 'desktop'
+      ? (() => {
+          const attachment = getSessionActiveRepository(opts.sessionId);
+          return attachment ? getLocalRepository(attachment.repositoryId)?.canonicalRootPath : undefined;
+        })()
+      : undefined;
 
   const lionPrompt = buildSystemPrompt(opts.agentId, {
     isOnboarding,
@@ -125,27 +120,28 @@ export async function createChatCursorSession(
     '',
     `Cursor (@cursor/sdk) via assinatura; modelo ${opts.model}.`,
     'O custo em dolar exibido e equivalente-API estimado; a cobranca real e o plano Cursor.',
-    'Operacoes de arquivo usam as tools lion_* host-controladas do LionClaw. '
-      + 'Esta surface NAO tem shell: execucao de comandos e delegada a subagents, '
-      + 'pipelines ou workflows.',
+    'Operacoes de arquivo usam as tools lion_* host-controladas do LionClaw. ' +
+      'Esta surface NAO tem shell: execucao de comandos e delegada a subagents, ' +
+      'pipelines ou workflows.',
   ].join('\n');
   const workspaceBlock = repoRoot
     ? [
         '## Workspace conectado',
         '',
         `O usuario conectou o repositorio local desta conversa: ${repoRoot}`,
-        'Perguntas sobre "este repositorio/workspace/projeto" referem-se a ESSE caminho, '
-          + 'nao ao ~/.lionclaw (que e a memoria do LionClaw).',
-        'Para ler/buscar arquivos dele use as tools lion_* com CAMINHOS ABSOLUTOS '
-          + '(o cwd da sessao nao e o repositorio).',
+        'Perguntas sobre "este repositorio/workspace/projeto" referem-se a ESSE caminho, ' +
+          'nao ao ~/.lionclaw (que e a memoria do LionClaw).',
+        'Para ler/buscar arquivos dele use as tools lion_* com CAMINHOS ABSOLUTOS ' +
+          '(o cwd da sessao nao e o repositorio).',
       ].join('\n')
     : '';
   const baseSystemPrompt = appendRepoGraphSection(
     [generated, lionPrompt, runtimeBlock, workspaceBlock].filter(Boolean).join('\n\n'),
+    opts.sessionId,
   );
 
   const permission = PERM_DEFAULT_WITH_GUARD(
-    createPermissionGuard(opts.getWindow, { isOnboarding }),
+    createPermissionGuard(opts.getWindow, { isOnboarding, sessionId: opts.sessionId }),
   );
   const baseGuard = permission.canUseTool;
   permission.canUseTool = async (toolName, input, context) => {
@@ -159,25 +155,24 @@ export async function createChatCursorSession(
       return {
         behavior: 'deny',
         message:
-          'Workspaces de sessao Cursor (runtime/cursor-chat-workspaces) sao fonte de '
-          + 'instrucao protegida de TODAS as sessoes; nenhuma escrita/leitura via tools ali.',
+          'Workspaces de sessao Cursor (runtime/cursor-chat-workspaces) sao fonte de ' +
+          'instrucao protegida de TODAS as sessoes; nenhuma escrita/leitura via tools ali.',
       };
     }
-    return baseGuard
-      ? baseGuard(toolName, input, context)
-      : { behavior: 'deny', message: 'Tool sem guard efetivo.' };
+    return baseGuard ? baseGuard(toolName, input, context) : { behavior: 'deny', message: 'Tool sem guard efetivo.' };
   };
 
   const { getMCPConfigForAgent } = await import('../mcp-manager');
-  const parentMcpConfig = opts.lane === 'desktop'
-    ? await getMCPConfigForAgent(opts.agentId, {
-        surface: 'cursor-sdk',
-        capabilities: opts.capabilities,
-      })
-    : undefined;
+  const parentMcpConfig =
+    opts.lane === 'desktop'
+      ? await getMCPConfigForAgent(opts.agentId, {
+          surface: 'cursor-sdk',
+          capabilities: opts.capabilities,
+        })
+      : undefined;
   const parentMcpServerIds = Object.keys(parentMcpConfig ?? {});
   const enabledTools = opts.lane === 'desktop' ? getEnabledTools() : [];
-  const inheritedEffort = resolveChatInheritedEffort();
+  const inheritedEffort = resolveChatInheritedEffort('cursor-sdk', opts.effort);
   const dispatchContext = createSubagentDispatchContext({
     ownerKind: 'chat',
     ownerId: opts.sessionId,
@@ -197,7 +192,9 @@ export async function createChatCursorSession(
   const bridge = await buildCursorSessionTools({
     profile: opts.lane === 'desktop' ? 'chat' : 'remote-chat',
     systemPrompt: baseSystemPrompt,
-    scope: { sessionId: opts.sessionId, turnId: randomUUID() },
+    scope: opts.turnBinding
+      ? { sessionId: opts.sessionId, turnId: opts.turnBinding.turnId, lane: opts.lane }
+      : { sessionId: opts.sessionId, turnId: randomUUID() },
     ...(opts.agentId !== undefined ? { agentId: opts.agentId } : {}),
     ...(opts.capabilities ? { capabilities: opts.capabilities } : {}),
     dispatchContext,
@@ -230,9 +227,7 @@ export async function createChatCursorSession(
 
   const contextMeta: CursorSessionContextMeta = {
     systemPromptTokens: estimateTokensRough(rulesContent),
-    toolSchemasTokens: declarations.length > 0
-      ? estimateTokensRough(JSON.stringify(declarations))
-      : 0,
+    toolSchemasTokens: declarations.length > 0 ? estimateTokensRough(JSON.stringify(declarations)) : 0,
   };
 
   return {

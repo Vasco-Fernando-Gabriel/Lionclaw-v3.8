@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { debugSpy, warnSpy } = vi.hoisted(() => ({
@@ -48,10 +47,7 @@ describe('mintHelperToken', () => {
   it('NUNCA loga o token inteiro (so hash truncado)', () => {
     const token = mintHelperToken();
     revokeHelperToken(token);
-    const allLogPayloads = JSON.stringify([
-      ...debugSpy.mock.calls,
-      ...warnSpy.mock.calls,
-    ]);
+    const allLogPayloads = JSON.stringify([...debugSpy.mock.calls, ...warnSpy.mock.calls]);
     expect(allLogPayloads).not.toContain(token);
     for (const call of debugSpy.mock.calls) {
       const payload = call[0] as { tokenHash?: string };
@@ -128,10 +124,11 @@ describe('contrato com o spawn (S3b depende disso)', () => {
 });
 
 describe('CHAT_GATED_HELPER_IDS — definicao canonica (S4b)', () => {
-  it('contem EXATAMENTE os 2 helpers gated da Fase A (lowercase)', () => {
+  it('contem helpers gated de Pipeline, Workflows e Swarm (lowercase)', () => {
     expect([...CHAT_GATED_HELPER_IDS].sort()).toEqual([
       'lionclaw-dynamic-workflows',
       'lionclaw-pipeline-control',
+      'lionclaw-swarm',
     ]);
   });
 

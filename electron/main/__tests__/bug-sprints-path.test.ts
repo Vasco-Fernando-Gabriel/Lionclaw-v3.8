@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -19,20 +18,13 @@ vi.mock('electron', () => ({
 vi.mock('../pipeline-shared/ipc-emitter', () => ({ emitIPC: vi.fn() }));
 vi.mock('../pipeline-shared/sdk-bootstrap', () => ({ ensureNodeInPath: vi.fn() }));
 
-import {
-  initDatabase,
-  insertHarnessProject,
-  getHarnessProject,
-  updateHarnessProject,
-  reconcileSeedAgent,
-} from '../db';
+import { initDatabase, insertHarnessProject, getHarnessProject, updateHarnessProject, reconcileSeedAgent } from '../db';
 import { HarnessEngine } from '../harness-engine';
 import { harnessPlanner } from '../seed-agents';
 import { ensureBugContext, getBugContext } from '../bug-paths';
 import { ensureArchitectureReviewContext } from '../architecture-review-paths';
 import { resolveHarnessSprintsPath } from '../pipeline-paths';
 import type { HarnessProject, PipelineType } from '../../../src/types';
-
 
 let tmpHome = '';
 const projectDirs: string[] = [];
@@ -65,8 +57,7 @@ afterAll(() => {
   for (const dir of [tmpHome, ...projectDirs]) {
     try {
       fs.rmSync(dir, { recursive: true, force: true });
-    } catch {
-    }
+    } catch {}
   }
 });
 
@@ -98,8 +89,8 @@ function insertProject(pipelineType: PipelineType, projectPath: string): Harness
 
 function makeEngine(): HarnessEngine {
   const engine = new HarnessEngine(() => null);
-  (engine as unknown as { executeAgentWithSubagentControl: unknown }).executeAgentWithSubagentControl =
-    vi.fn(async () => ({
+  (engine as unknown as { executeAgentWithSubagentControl: unknown }).executeAgentWithSubagentControl = vi.fn(
+    async () => ({
       output: PLANNER_JSON,
       metrics: {
         inputTokens: 10,
@@ -114,10 +105,10 @@ function makeEngine(): HarnessEngine {
       model: 'claude-opus-5',
       runtime: 'cloud',
       provider: 'anthropic',
-    }));
+    }),
+  );
   return engine;
 }
-
 
 describe('TB-33 (a): sprints do Bug Pipe caem no runDir, nao em docs/', () => {
   it('sprints_json_path === <runDir>/sprints-<runId>.json e o arquivo existe la', async () => {
@@ -136,9 +127,7 @@ describe('TB-33 (a): sprints do Bug Pipe caem no runDir, nao em docs/', () => {
     const bugCtx = getBugContext(after)!;
 
     expect(after.sprintsJsonPath).toBe(bugCtx.sprintsPath);
-    expect(bugCtx.sprintsPath).toBe(
-      path.join(bugCtx.runDir, `sprints-${bugCtx.runId}.json`),
-    );
+    expect(bugCtx.sprintsPath).toBe(path.join(bugCtx.runDir, `sprints-${bugCtx.runId}.json`));
     expect(fs.existsSync(bugCtx.sprintsPath)).toBe(true);
 
     const legacy = resolveHarnessSprintsPath(after);
@@ -146,7 +135,6 @@ describe('TB-33 (a): sprints do Bug Pipe caem no runDir, nao em docs/', () => {
     expect(fs.existsSync(legacy)).toBe(false);
   });
 });
-
 
 describe('TB-33 (b): bug sem config.bug.runId falha com erro acionavel', () => {
   it('plan() lanca citando a fase 1 / config.bug.runId, e nao grava sprints_json_path', async () => {
@@ -162,7 +150,6 @@ describe('TB-33 (b): bug sem config.bug.runId falha com erro acionavel', () => {
     expect(after.sprintsJsonPath ?? '').toBe('');
   });
 });
-
 
 describe('TB-33 (c): os outros 5 tipos nao regridem', () => {
   it.each(['development', 'feature', 'security', 'development-v2'] as const)(
@@ -193,8 +180,6 @@ describe('TB-33 (c): os outros 5 tipos nao regridem', () => {
 
     const after = getHarnessProject(project.id)!;
     expect(after.sprintsJsonPath).toBe(context.sprintsPath);
-    expect(after.sprintsJsonPath).toContain(
-      `${path.sep}pipelines${path.sep}architecture-review${path.sep}`,
-    );
+    expect(after.sprintsJsonPath).toContain(`${path.sep}pipelines${path.sep}architecture-review${path.sep}`);
   });
 });

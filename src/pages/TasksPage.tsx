@@ -53,7 +53,13 @@ function formatDate(dateStr: string | null): string {
 function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return '';
   const d = new Date(dateStr);
-  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function isOverdue(task: PersonalTask): boolean {
@@ -61,7 +67,6 @@ function isOverdue(task: PersonalTask): boolean {
   const today = new Date().toISOString().split('T')[0];
   return task.dueDate < today;
 }
-
 
 function FilterChip({
   label,
@@ -75,7 +80,7 @@ function FilterChip({
   onChange: (v: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const selected = options.find(o => o.value === value);
+  const selected = options.find((o) => o.value === value);
 
   return (
     <div className="relative">
@@ -94,10 +99,13 @@ function FilterChip({
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute top-full left-0 mt-1 z-20 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl py-1 min-w-[140px]">
-            {options.map(opt => (
+            {options.map((opt) => (
               <button
                 key={opt.value}
-                onClick={() => { onChange(opt.value); setOpen(false); }}
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
                 className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
                   value === opt.value ? 'text-amber-400 bg-amber-500/10' : 'text-zinc-300 hover:bg-zinc-700'
                 }`}
@@ -112,7 +120,6 @@ function FilterChip({
   );
 }
 
-
 function TaskFormModal({
   task,
   categories,
@@ -121,7 +128,13 @@ function TaskFormModal({
 }: {
   task?: PersonalTask;
   categories: string[];
-  onSave: (data: { title: string; description?: string; category?: string; priority?: string; dueDate?: string }) => void;
+  onSave: (data: {
+    title: string;
+    description?: string;
+    category?: string;
+    priority?: string;
+    dueDate?: string;
+  }) => void;
   onClose: () => void;
 }) {
   const [title, setTitle] = useState(task?.title || '');
@@ -148,9 +161,7 @@ function TaskFormModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-lg mx-4 p-6">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-zinc-100">
-            {task ? 'Editar Task' : 'Nova Task'}
-          </h2>
+          <h2 className="text-lg font-semibold text-zinc-100">{task ? 'Editar Task' : 'Nova Task'}</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-zinc-800 text-zinc-500">
             <X size={18} />
           </button>
@@ -162,7 +173,7 @@ function TaskFormModal({
             <input
               type="text"
               value={title}
-              onChange={e => setTitle(e.target.value)}
+              onChange={(e) => setTitle(e.target.value)}
               placeholder="O que precisa ser feito?"
               className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-500/50"
               autoFocus
@@ -173,7 +184,7 @@ function TaskFormModal({
             <label className="block text-xs text-zinc-400 mb-1.5">Descricao</label>
             <textarea
               value={description}
-              onChange={e => setDescription(e.target.value)}
+              onChange={(e) => setDescription(e.target.value)}
               placeholder="Detalhes, contexto, links..."
               rows={3}
               className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-500/50 resize-none"
@@ -188,7 +199,7 @@ function TaskFormModal({
                   <input
                     type="text"
                     value={newCategory}
-                    onChange={e => setNewCategory(e.target.value)}
+                    onChange={(e) => setNewCategory(e.target.value)}
                     placeholder="Nova categoria"
                     className="flex-1 px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 outline-none focus:border-amber-500/50"
                   />
@@ -202,7 +213,7 @@ function TaskFormModal({
               ) : (
                 <select
                   value={category}
-                  onChange={e => {
+                  onChange={(e) => {
                     if (e.target.value === '__new__') {
                       setShowNewCategory(true);
                       setCategory('');
@@ -213,8 +224,10 @@ function TaskFormModal({
                   className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 outline-none focus:border-amber-500/50"
                 >
                   <option value="">Sem categoria</option>
-                  {categories.map(c => (
-                    <option key={c} value={c}>{c}</option>
+                  {categories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
                   ))}
                   <option value="__new__">+ Nova categoria</option>
                 </select>
@@ -225,7 +238,7 @@ function TaskFormModal({
               <label className="block text-xs text-zinc-400 mb-1.5">Prioridade</label>
               <select
                 value={priority}
-                onChange={e => setPriority(e.target.value as 'low' | 'normal' | 'high')}
+                onChange={(e) => setPriority(e.target.value as 'low' | 'normal' | 'high')}
                 className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 outline-none focus:border-amber-500/50"
               >
                 <option value="low">Baixa</option>
@@ -240,7 +253,7 @@ function TaskFormModal({
             <input
               type="date"
               value={dueDate}
-              onChange={e => setDueDate(e.target.value)}
+              onChange={(e) => setDueDate(e.target.value)}
               className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 outline-none focus:border-amber-500/50"
             />
           </div>
@@ -265,7 +278,6 @@ function TaskFormModal({
     </div>
   );
 }
-
 
 function TaskDetailPopup({
   task,
@@ -323,7 +335,10 @@ function TaskDetailPopup({
             <input
               type="text"
               value={title}
-              onChange={e => { setTitle(e.target.value); markDirty(); }}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                markDirty();
+              }}
               className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 outline-none focus:border-amber-500/50"
             />
           </div>
@@ -332,7 +347,10 @@ function TaskDetailPopup({
             <label className="block text-xs text-zinc-400 mb-1.5">Descricao</label>
             <textarea
               value={description}
-              onChange={e => { setDescription(e.target.value); markDirty(); }}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                markDirty();
+              }}
               rows={14}
               className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 outline-none focus:border-amber-500/50 resize-y"
             />
@@ -343,12 +361,17 @@ function TaskDetailPopup({
               <label className="block text-xs text-zinc-400 mb-1.5">Categoria</label>
               <select
                 value={category}
-                onChange={e => { setCategory(e.target.value); markDirty(); }}
+                onChange={(e) => {
+                  setCategory(e.target.value);
+                  markDirty();
+                }}
                 className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 outline-none focus:border-amber-500/50"
               >
                 <option value="">Sem categoria</option>
-                {categories.map(c => (
-                  <option key={c} value={c}>{c}</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
                 ))}
               </select>
             </div>
@@ -357,7 +380,10 @@ function TaskDetailPopup({
               <label className="block text-xs text-zinc-400 mb-1.5">Prioridade</label>
               <select
                 value={priority}
-                onChange={e => { setPriority(e.target.value as PersonalTask['priority']); markDirty(); }}
+                onChange={(e) => {
+                  setPriority(e.target.value as PersonalTask['priority']);
+                  markDirty();
+                }}
                 className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 outline-none focus:border-amber-500/50"
               >
                 <option value="low">Baixa</option>
@@ -372,7 +398,10 @@ function TaskDetailPopup({
               <label className="block text-xs text-zinc-400 mb-1.5">Status</label>
               <select
                 value={status}
-                onChange={e => { setStatus(e.target.value as PersonalTask['status']); markDirty(); }}
+                onChange={(e) => {
+                  setStatus(e.target.value as PersonalTask['status']);
+                  markDirty();
+                }}
                 className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 outline-none focus:border-amber-500/50"
               >
                 <option value="pending">Pendente</option>
@@ -386,7 +415,10 @@ function TaskDetailPopup({
               <input
                 type="date"
                 value={dueDate}
-                onChange={e => { setDueDate(e.target.value); markDirty(); }}
+                onChange={(e) => {
+                  setDueDate(e.target.value);
+                  markDirty();
+                }}
                 className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 outline-none focus:border-amber-500/50"
               />
             </div>
@@ -397,7 +429,10 @@ function TaskDetailPopup({
               <label className="block text-xs text-zinc-400 mb-1.5">Comentario de conclusao</label>
               <textarea
                 value={doneComment}
-                onChange={e => { setDoneComment(e.target.value); markDirty(); }}
+                onChange={(e) => {
+                  setDoneComment(e.target.value);
+                  markDirty();
+                }}
                 placeholder="Como foi feito? O que lembrar para a proxima vez?"
                 rows={3}
                 className="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-500/50 resize-none"
@@ -429,7 +464,10 @@ function TaskDetailPopup({
             <div className="flex items-center gap-2">
               <span className="text-xs text-red-400">Confirmar exclusao?</span>
               <button
-                onClick={() => { onDelete(task.id); onClose(); }}
+                onClick={() => {
+                  onDelete(task.id);
+                  onClose();
+                }}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
               >
                 Deletar
@@ -476,7 +514,6 @@ function TaskDetailPopup({
   );
 }
 
-
 export function TasksPage() {
   const [tasks, setTasks] = useState<PersonalTask[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -519,7 +556,13 @@ export function TasksPage() {
     loadTasks();
   }, [loadTasks]);
 
-  const handleCreate = async (data: { title: string; description?: string; category?: string; priority?: string; dueDate?: string }) => {
+  const handleCreate = async (data: {
+    title: string;
+    description?: string;
+    category?: string;
+    priority?: string;
+    dueDate?: string;
+  }) => {
     await window.lionclaw.tasks.create(data);
     setShowCreateModal(false);
     loadTasks();
@@ -541,10 +584,7 @@ export function TasksPage() {
     loadTasks();
   };
 
-  const categoryOptions = [
-    { value: 'all', label: 'Todas' },
-    ...categories.map(c => ({ value: c, label: c })),
-  ];
+  const categoryOptions = [{ value: 'all', label: 'Todas' }, ...categories.map((c) => ({ value: c, label: c }))];
 
   const statusOptions = [
     { value: 'all', label: 'Todas' },
@@ -583,10 +623,30 @@ export function TasksPage() {
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2 mb-5">
-          <FilterChip label="Status" options={statusOptions} value={filters.status || 'all'} onChange={v => setFilters(f => ({ ...f, status: v }))} />
-          <FilterChip label="Categoria" options={categoryOptions} value={filters.category || 'all'} onChange={v => setFilters(f => ({ ...f, category: v }))} />
-          <FilterChip label="Prioridade" options={priorityOptions} value={filters.priority || 'all'} onChange={v => setFilters(f => ({ ...f, priority: v }))} />
-          <FilterChip label="Periodo" options={periodOptions} value={filters.period || 'last30'} onChange={v => setFilters(f => ({ ...f, period: v as PersonalTaskFilters['period'] }))} />
+          <FilterChip
+            label="Status"
+            options={statusOptions}
+            value={filters.status || 'all'}
+            onChange={(v) => setFilters((f) => ({ ...f, status: v }))}
+          />
+          <FilterChip
+            label="Categoria"
+            options={categoryOptions}
+            value={filters.category || 'all'}
+            onChange={(v) => setFilters((f) => ({ ...f, category: v }))}
+          />
+          <FilterChip
+            label="Prioridade"
+            options={priorityOptions}
+            value={filters.priority || 'all'}
+            onChange={(v) => setFilters((f) => ({ ...f, priority: v }))}
+          />
+          <FilterChip
+            label="Periodo"
+            options={periodOptions}
+            value={filters.period || 'last30'}
+            onChange={(v) => setFilters((f) => ({ ...f, period: v as PersonalTaskFilters['period'] }))}
+          />
         </div>
 
         {/* Loading */}
@@ -612,47 +672,54 @@ export function TasksPage() {
                 <Circle size={14} className="text-amber-400" />
                 <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide">A Fazer</h2>
                 <span className="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded-full">
-                  {tasks.filter(t => t.status !== 'done').length}
+                  {tasks.filter((t) => t.status !== 'done').length}
                 </span>
               </div>
               <div className="space-y-2">
-                {tasks.filter(t => t.status !== 'done').map(task => (
-                  <div
-                    key={task.id}
-                    onClick={() => setSelectedTask(task)}
-                    className="group p-3 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 cursor-pointer transition-colors"
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleToggleDone(task); }}
-                        className="shrink-0 mt-0.5 transition-colors"
-                        title="Marcar como concluida"
-                      >
-                        <StatusIcon status={task.status} />
-                      </button>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm text-zinc-200 block">{task.title}</span>
-                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                          {task.category && (
-                            <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700/50">
-                              {task.category}
+                {tasks
+                  .filter((t) => t.status !== 'done')
+                  .map((task) => (
+                    <div
+                      key={task.id}
+                      onClick={() => setSelectedTask(task)}
+                      className="group p-3 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleDone(task);
+                          }}
+                          className="shrink-0 mt-0.5 transition-colors"
+                          title="Marcar como concluida"
+                        >
+                          <StatusIcon status={task.status} />
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm text-zinc-200 block">{task.title}</span>
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                            {task.category && (
+                              <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700/50">
+                                {task.category}
+                              </span>
+                            )}
+                            {task.dueDate && (
+                              <span
+                                className={`flex items-center gap-1 text-[11px] ${isOverdue(task) ? 'text-red-400' : 'text-zinc-500'}`}
+                              >
+                                <Calendar size={11} />
+                                {formatDate(task.dueDate)}
+                              </span>
+                            )}
+                            <span className="shrink-0" title={PRIORITY_LABELS[task.priority]}>
+                              <PriorityIcon priority={task.priority} />
                             </span>
-                          )}
-                          {task.dueDate && (
-                            <span className={`flex items-center gap-1 text-[11px] ${isOverdue(task) ? 'text-red-400' : 'text-zinc-500'}`}>
-                              <Calendar size={11} />
-                              {formatDate(task.dueDate)}
-                            </span>
-                          )}
-                          <span className="shrink-0" title={PRIORITY_LABELS[task.priority]}>
-                            <PriorityIcon priority={task.priority} />
-                          </span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-                {tasks.filter(t => t.status !== 'done').length === 0 && (
+                  ))}
+                {tasks.filter((t) => t.status !== 'done').length === 0 && (
                   <p className="text-xs text-zinc-600 text-center py-8">Nenhuma task pendente</p>
                 )}
               </div>
@@ -664,43 +731,46 @@ export function TasksPage() {
                 <CheckCircle2 size={14} className="text-green-400" />
                 <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide">Concluido</h2>
                 <span className="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded-full">
-                  {tasks.filter(t => t.status === 'done').length}
+                  {tasks.filter((t) => t.status === 'done').length}
                 </span>
               </div>
               <div className="space-y-2">
-                {tasks.filter(t => t.status === 'done').map(task => (
-                  <div
-                    key={task.id}
-                    onClick={() => setSelectedTask(task)}
-                    className="group p-3 rounded-lg bg-zinc-900/50 border border-zinc-800/50 hover:border-zinc-700 cursor-pointer transition-colors"
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleToggleDone(task); }}
-                        className="shrink-0 mt-0.5 transition-colors"
-                        title="Reabrir"
-                      >
-                        <StatusIcon status={task.status} />
-                      </button>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm text-zinc-500 line-through block">{task.title}</span>
-                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                          {task.category && (
-                            <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-zinc-800/50 text-zinc-500 border border-zinc-700/30">
-                              {task.category}
-                            </span>
-                          )}
-                          {task.doneAt && (
-                            <span className="text-[11px] text-zinc-600">
-                              {formatDate(task.doneAt)}
-                            </span>
-                          )}
+                {tasks
+                  .filter((t) => t.status === 'done')
+                  .map((task) => (
+                    <div
+                      key={task.id}
+                      onClick={() => setSelectedTask(task)}
+                      className="group p-3 rounded-lg bg-zinc-900/50 border border-zinc-800/50 hover:border-zinc-700 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleDone(task);
+                          }}
+                          className="shrink-0 mt-0.5 transition-colors"
+                          title="Reabrir"
+                        >
+                          <StatusIcon status={task.status} />
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm text-zinc-500 line-through block">{task.title}</span>
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                            {task.category && (
+                              <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-zinc-800/50 text-zinc-500 border border-zinc-700/30">
+                                {task.category}
+                              </span>
+                            )}
+                            {task.doneAt && (
+                              <span className="text-[11px] text-zinc-600">{formatDate(task.doneAt)}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-                {tasks.filter(t => t.status === 'done').length === 0 && (
+                  ))}
+                {tasks.filter((t) => t.status === 'done').length === 0 && (
                   <p className="text-xs text-zinc-600 text-center py-8">Nenhuma task concluida</p>
                 )}
               </div>
@@ -711,11 +781,7 @@ export function TasksPage() {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <TaskFormModal
-          categories={categories}
-          onSave={handleCreate}
-          onClose={() => setShowCreateModal(false)}
-        />
+        <TaskFormModal categories={categories} onSave={handleCreate} onClose={() => setShowCreateModal(false)} />
       )}
 
       {/* Detail Popup */}

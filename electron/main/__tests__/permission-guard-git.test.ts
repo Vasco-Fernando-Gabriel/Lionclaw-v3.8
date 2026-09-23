@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -30,7 +29,8 @@ vi.mock('electron', () => ({
 
 import { createPermissionGuard } from '../permission-guard';
 
-const DENY_MESSAGE = 'Comandos git que modificam state (commit, push, reset, rebase, merge, etc) sao proibidos. O usuario faz controle de versao manualmente. Use Write/Edit para arquivos, e git status/diff/log para inspecao.';
+const DENY_MESSAGE =
+  'Comandos git que modificam state (commit, push, reset, rebase, merge, etc) sao proibidos. O usuario faz controle de versao manualmente. Use Write/Edit para arquivos, e git status/diff/log para inspecao.';
 
 function makeGuard() {
   return createPermissionGuard(() => null);
@@ -99,7 +99,6 @@ describe('permission-guard: FORBIDDEN_GIT_PATTERNS', () => {
       expect(result.behavior).toBe('allow');
     });
   }
-
 
   const newForbiddenCommands = [
     {

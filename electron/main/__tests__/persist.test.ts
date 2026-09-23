@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../db', () => ({
@@ -30,11 +29,7 @@ describe('persistMessage — pipeline target', () => {
   });
 
   it('delega pra savePipelineMessage com payload minimo', () => {
-    persistMessage(
-      { kind: 'pipeline', projectId: 'proj-1', phaseNumber: 2 },
-      'assistant',
-      'hello world',
-    );
+    persistMessage({ kind: 'pipeline', projectId: 'proj-1', phaseNumber: 2 }, 'assistant', 'hello world');
 
     expect(dbSavePipelineMessage).toHaveBeenCalledTimes(1);
     expect(dbSavePipelineMessage).toHaveBeenCalledWith({
@@ -56,12 +51,9 @@ describe('persistMessage — pipeline target', () => {
       { tool: 'Write', input: { path: '/y', content: 'data' } },
     ];
 
-    persistMessage(
-      { kind: 'pipeline', projectId: 'proj-1', phaseNumber: 2 },
-      'assistant',
-      'output text',
-      { toolCalls },
-    );
+    persistMessage({ kind: 'pipeline', projectId: 'proj-1', phaseNumber: 2 }, 'assistant', 'output text', {
+      toolCalls,
+    });
 
     expect(dbSavePipelineMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -103,20 +95,10 @@ describe('persistMessage — enrich target', () => {
   });
 
   it('delega pra insertEnrichMessage sem toolCalls', () => {
-    persistMessage(
-      { kind: 'enrich', sessionId: 'sess-1', phase: 'validator' },
-      'user',
-      'user message',
-    );
+    persistMessage({ kind: 'enrich', sessionId: 'sess-1', phase: 'validator' }, 'user', 'user message');
 
     expect(dbInsertEnrichMessage).toHaveBeenCalledTimes(1);
-    expect(dbInsertEnrichMessage).toHaveBeenCalledWith(
-      'sess-1',
-      'validator',
-      'user',
-      'user message',
-      undefined,
-    );
+    expect(dbInsertEnrichMessage).toHaveBeenCalledWith('sess-1', 'validator', 'user', 'user message', undefined);
     expect(dbSavePipelineMessage).not.toHaveBeenCalled();
   });
 
@@ -126,36 +108,19 @@ describe('persistMessage — enrich target', () => {
       { tool: 'Edit', input: { path: '/y', old: 'a', new: 'b' } },
     ];
 
-    persistMessage(
-      { kind: 'enrich', sessionId: 'sess-1', phase: 'enricher' },
-      'assistant',
-      'agent output',
-      { toolCalls: inputToolCalls },
-    );
+    persistMessage({ kind: 'enrich', sessionId: 'sess-1', phase: 'enricher' }, 'assistant', 'agent output', {
+      toolCalls: inputToolCalls,
+    });
 
-    expect(dbInsertEnrichMessage).toHaveBeenCalledWith(
-      'sess-1',
-      'enricher',
-      'assistant',
-      'agent output',
-      [
-        { tool: 'Read', input: { path: '/x' } },
-        { tool: 'Edit', input: { path: '/y', old: 'a', new: 'b' } },
-      ],
-    );
+    expect(dbInsertEnrichMessage).toHaveBeenCalledWith('sess-1', 'enricher', 'assistant', 'agent output', [
+      { tool: 'Read', input: { path: '/x' } },
+      { tool: 'Edit', input: { path: '/y', old: 'a', new: 'b' } },
+    ]);
   });
 
   it('aceita ambas as fases (validator + enricher)', () => {
-    persistMessage(
-      { kind: 'enrich', sessionId: 's', phase: 'validator' },
-      'user',
-      'v',
-    );
-    persistMessage(
-      { kind: 'enrich', sessionId: 's', phase: 'enricher' },
-      'user',
-      'e',
-    );
+    persistMessage({ kind: 'enrich', sessionId: 's', phase: 'validator' }, 'user', 'v');
+    persistMessage({ kind: 'enrich', sessionId: 's', phase: 'enricher' }, 'user', 'e');
 
     expect(dbInsertEnrichMessage).toHaveBeenCalledTimes(2);
     expect(dbInsertEnrichMessage).toHaveBeenNthCalledWith(1, 's', 'validator', 'user', 'v', undefined);

@@ -1,7 +1,5 @@
-
 import Database from 'better-sqlite3';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 let testDb: Database.Database;
 
@@ -26,9 +24,7 @@ vi.mock('../app-version', () => ({
   getAppVersion: () => '0.0.0-test',
 }));
 
-
 import { getMCPConfigForAgent } from '../mcp-manager';
-
 
 function buildFixtureDb(): Database.Database {
   const db = new Database(':memory:');
@@ -62,13 +58,11 @@ function buildFixtureDb(): Database.Database {
   return db;
 }
 
-
 describe('mcp-manager visibility (SPEC-001 SP-3.2 / SP-3.3)', () => {
   beforeEach(() => {
     testDb?.close();
     testDb = buildFixtureDb();
   });
-
 
   it('default path (sem opts) retorna apenas servers visible_to=all', async () => {
     const config = await getMCPConfigForAgent(/* no agentId */);
@@ -86,7 +80,6 @@ describe('mcp-manager visibility (SPEC-001 SP-3.2 / SP-3.3)', () => {
     expect(ids).toEqual(['server-all-1', 'server-all-2']);
   });
 
-
   it('surface=claude-sdk retorna mesmo conjunto que default (apenas all)', async () => {
     const config = await getMCPConfigForAgent(undefined, { surface: 'claude-sdk' });
     expect(config).toBeDefined();
@@ -101,31 +94,19 @@ describe('mcp-manager visibility (SPEC-001 SP-3.2 / SP-3.3)', () => {
     expect(ids).toEqual(['server-all-1', 'server-all-2']);
   });
 
-
   it('surface=codex-sdk inclui helpers visible_to=codex-lion-only', async () => {
     const config = await getMCPConfigForAgent(undefined, { surface: 'codex-sdk' });
     expect(config).toBeDefined();
     const ids = Object.keys(config!).sort();
-    expect(ids).toEqual([
-      'helper-codex-1',
-      'helper-codex-2',
-      'server-all-1',
-      'server-all-2',
-    ]);
+    expect(ids).toEqual(['helper-codex-1', 'helper-codex-2', 'server-all-1', 'server-all-2']);
   });
 
   it('surface=lion-sdk inclui helpers visible_to=codex-lion-only', async () => {
     const config = await getMCPConfigForAgent(undefined, { surface: 'lion-sdk' });
     expect(config).toBeDefined();
     const ids = Object.keys(config!).sort();
-    expect(ids).toEqual([
-      'helper-codex-1',
-      'helper-codex-2',
-      'server-all-1',
-      'server-all-2',
-    ]);
+    expect(ids).toEqual(['helper-codex-1', 'helper-codex-2', 'server-all-1', 'server-all-2']);
   });
-
 
   it('snapshot bit-identico: sem helpers no DB, default path retorna o mesmo conjunto', async () => {
     const withHelpers = await getMCPConfigForAgent();

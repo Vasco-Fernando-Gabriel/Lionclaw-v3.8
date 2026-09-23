@@ -1,18 +1,18 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const CODE_REVIEWER_ID = 'code-reviewer';
 
 export const codeReviewer: Omit<AgentConfig, 'sortOrder'> = {
   id: CODE_REVIEWER_ID,
-  name: "Revisor de Código",
-  description: "Use quando precisar conduzir revisões abrangentes de código com foco em qualidade, vulnerabilidades de segurança e boas práticas",
-  model: "claude-opus-4-8",
+  name: 'Revisor de Código',
+  description:
+    'Use quando precisar conduzir revisões abrangentes de código com foco em qualidade, vulnerabilidades de segurança e boas práticas',
+  model: 'claude-opus-5-5',
   effort: 'medium' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,
   maxToolRounds: 5,
-  allowedTools: ["Read","Write","Edit","Bash","Glob","Grep","WebSearch"],
+  allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch'],
   mcpServers: [],
   isActive: true,
   skills: [],

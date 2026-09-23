@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -9,9 +8,7 @@ vi.mock('../secrets-vault', () => ({
 }));
 
 vi.mock('../agent-runtime/cursor-sidecar/sidecar-manager', async (importOriginal) => {
-  const actual = await importOriginal<
-    typeof import('../agent-runtime/cursor-sidecar/sidecar-manager')
-  >();
+  const actual = await importOriginal<typeof import('../agent-runtime/cursor-sidecar/sidecar-manager')>();
   return {
     ...actual,
     runCursorSidecarExecution: vi.fn(),
@@ -25,10 +22,7 @@ import {
   type CursorSidecarExecutionOptions,
   type CursorSidecarExecutionResult,
 } from '../agent-runtime/cursor-sidecar/sidecar-manager';
-import {
-  cursorExecutor,
-  CURSOR_FIRST_TOKEN_TIMEOUT_MS,
-} from '../agent-runtime/cursor-executor';
+import { cursorExecutor, CURSOR_FIRST_TOKEN_TIMEOUT_MS } from '../agent-runtime/cursor-executor';
 import {
   buildCursorSessionKey,
   cursorSessionStoreDir,
@@ -74,9 +68,7 @@ function makeRequest(overrides: Partial<AgentExecutionRequest> = {}): AgentExecu
   };
 }
 
-function finishedResult(
-  overrides: Partial<CursorSidecarExecutionResult> = {},
-): CursorSidecarExecutionResult {
+function finishedResult(overrides: Partial<CursorSidecarExecutionResult> = {}): CursorSidecarExecutionResult {
   return {
     status: 'finished',
     finalText: 'resposta final',
@@ -101,9 +93,7 @@ beforeEach(() => {
   fs.mkdirSync(path.join(testHome, 'workspace'), { recursive: true });
   mockedRun.mockReset();
   mockedGetSecret.mockClear();
-  mockedGetSecret.mockImplementation(async (key: string) =>
-    key === 'CURSOR_API_KEY' ? 'test-cursor-key' : null,
-  );
+  mockedGetSecret.mockImplementation(async (key: string) => (key === 'CURSOR_API_KEY' ? 'test-cursor-key' : null));
 });
 
 afterEach(() => {
@@ -112,8 +102,7 @@ afterEach(() => {
   else process.env['LIONCLAW_TEST_HOME'] = originalTestHome;
   try {
     fs.rmSync(testHome, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
 });
 
 describe('cursorExecutor.run — caminho feliz', () => {
@@ -131,10 +120,7 @@ describe('cursorExecutor.run — caminho feliz', () => {
     expect(result.metrics.inputTokens).toBe(1200);
     expect(result.metrics.outputTokens).toBe(500);
     expect(result.metrics.cacheReadTokens).toBe(200);
-    expect(result.metrics.costUsd).toBeCloseTo(
-      calculateCost('composer-2.5', 1200, 500, 200, 0),
-      12,
-    );
+    expect(result.metrics.costUsd).toBeCloseTo(calculateCost('composer-2.5', 1200, 500, 200, 0), 12);
     expect(result.metrics.costStatus).toBe('known');
     expect(result.metrics.tokenStatus).toBe('reported');
     expect(result.metrics.durationMs).toBe(4321);
@@ -194,10 +180,7 @@ describe('cursorExecutor.run — caminho feliz', () => {
     );
     const result = await cursorExecutor.run(makeRequest(), makeConfig());
     expect(result.metrics.inputTokens).toBe(5050);
-    expect(result.metrics.costUsd).toBeCloseTo(
-      calculateCost('composer-2.5', 5050, 20, 5000, 0),
-      12,
-    );
+    expect(result.metrics.costUsd).toBeCloseTo(calculateCost('composer-2.5', 5050, 20, 5000, 0), 12);
     expect(result.metrics.costUsd).toBeGreaterThan(0);
   });
 
@@ -216,8 +199,7 @@ describe('cursorExecutor.run — caminho feliz', () => {
 describe('cursorExecutor.run — stream relay', () => {
   it('mapeia os eventos do SDK para os callbacks canonicos', async () => {
     mockedRun.mockImplementation(async (opts) => {
-      const emit = (event: unknown): void =>
-        opts.onEvent?.({ executionId: opts.config.executionId, event });
+      const emit = (event: unknown): void => opts.onEvent?.({ executionId: opts.config.executionId, event });
       emit({
         type: 'assistant',
         message: { role: 'assistant', content: [{ type: 'text', text: 'Oi' }] },
@@ -249,7 +231,7 @@ describe('cursorExecutor.run — stream relay', () => {
     expect(thinking).toEqual(['pensando...']);
     expect(toolStarts).toEqual(['shell']);
     expect(toolDone).toEqual([['shell', { command: 'ls' }]]);
-    expect(activity).toBeGreaterThanOrEqual(1); // evento 'status' = prova de vida
+    expect(activity).toBeGreaterThanOrEqual(1);
     expect(result.metrics.toolUses).toBe(1);
   });
 });
@@ -361,9 +343,7 @@ describe('cursorExecutor.run — enforcement de tools (E5)', () => {
         { signal: new AbortController().signal },
       ),
     ).rejects.toThrow(/Permissao negada \(Write\): fora do writeSet/);
-    expect(guardCalls).toEqual([
-      { toolName: 'Write', input: { file_path: 'hack.txt', content: 'x' } },
-    ]);
+    expect(guardCalls).toEqual([{ toolName: 'Write', input: { file_path: 'hack.txt', content: 'x' } }]);
     expect(fs.existsSync(path.join(req.cwd, 'hack.txt'))).toBe(false);
   });
 
@@ -395,7 +375,6 @@ describe('cursorExecutor.run — enforcement de tools (E5)', () => {
     expect(opts.config.model).toBe('composer-2.5');
   });
 
-
   it('API key ausente do Vault vira LLM-AUTH-401', async () => {
     mockedGetSecret.mockResolvedValue(null);
     const err = await cursorExecutor.run(makeRequest(), makeConfig()).catch((e: unknown) => e);
@@ -417,9 +396,7 @@ describe('cursorExecutor.run — enforcement de tools (E5)', () => {
     mockedRun.mockResolvedValue(
       finishedResult({ status: 'failed', errorCode: 'rate_limited', errorMessage: 'HTTP 429' }),
     );
-    await expect(cursorExecutor.run(makeRequest(), makeConfig())).rejects.toThrow(
-      /failed.*rate_limited.*HTTP 429/s,
-    );
+    await expect(cursorExecutor.run(makeRequest(), makeConfig())).rejects.toThrow(/failed.*rate_limited.*HTTP 429/s);
   });
 
   it('abort do usuario (status cancelled) propaga como aborted, nao como timeout', async () => {
@@ -448,10 +425,7 @@ describe('cursorExecutor.run — watchdog com ABORT EFETIVO', () => {
       return new Promise<CursorSidecarExecutionResult>((_resolve, reject) => {
         opts.abortController.signal.addEventListener(
           'abort',
-          () =>
-            reject(
-              new CursorSidecarError('Execucao abortada (sidecar encerrado)', 'aborted'),
-            ),
+          () => reject(new CursorSidecarError('Execucao abortada (sidecar encerrado)', 'aborted')),
           { once: true },
         );
       });
@@ -482,10 +456,7 @@ describe('cursorExecutor.run — watchdog com ABORT EFETIVO', () => {
       return new Promise<CursorSidecarExecutionResult>((_resolve, reject) => {
         opts.abortController.signal.addEventListener(
           'abort',
-          () =>
-            reject(
-              new CursorSidecarError('Execucao abortada (sidecar encerrado)', 'aborted'),
-            ),
+          () => reject(new CursorSidecarError('Execucao abortada (sidecar encerrado)', 'aborted')),
           { once: true },
         );
       });

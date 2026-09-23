@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   buildReplanLinkage,
@@ -7,10 +6,7 @@ import {
   closerReasonFromState,
   type RealClaudeCompatBackendDeps,
 } from '../ipc/dynamic-workflow';
-import {
-  buildCloserCanUseTool,
-  resolveCloserCwd,
-} from '../dynamic-workflows/workflow-closer';
+import { buildCloserCanUseTool, resolveCloserCwd } from '../dynamic-workflows/workflow-closer';
 import type {
   ClaudeCompatExecInput,
   ClaudeCompatExecResult,
@@ -24,9 +20,7 @@ import type {
   DynamicWorkflowEvent,
 } from '../dynamic-workflows/types';
 
-function makeDefinition(
-  patch: Partial<DynamicWorkflowDefinition> = {},
-): DynamicWorkflowDefinition {
+function makeDefinition(patch: Partial<DynamicWorkflowDefinition> = {}): DynamicWorkflowDefinition {
   return {
     id: 'dwfd_prev',
     name: 'demo-workflow',
@@ -111,7 +105,6 @@ describe('fluxo do handler com CRUD fake (insert da nova + update da anterior)',
   });
 });
 
-
 function captureRunNode(
   capture: (input: ClaudeCompatExecInput) => void,
   output = 'walkthrough',
@@ -132,10 +125,7 @@ function captureRunNode(
   }) as RealClaudeCompatBackendDeps['runNode'];
 }
 
-function closerDeps(
-  capture: (input: ClaudeCompatExecInput) => void,
-  output?: string,
-): RealClaudeCompatBackendDeps {
+function closerDeps(capture: (input: ClaudeCompatExecInput) => void, output?: string): RealClaudeCompatBackendDeps {
   return {
     resolveConfig: async () => ({
       model: 'claude-opus',
@@ -319,9 +309,7 @@ describe('realCloserAgentTurn liga o guard git-first ao executor (R0/P1, AC-26)'
 describe('closerGuardToSdkCanUseTool (bridge ComposedToolInput -> SDK CanUseTool)', () => {
   it('repassa allow/deny sem mexer na decisao do guard', async () => {
     const sdk = closerGuardToSdkCanUseTool(async ({ toolName }) =>
-      toolName === 'Write'
-        ? { behavior: 'allow' }
-        : { behavior: 'deny', message: 'nope' },
+      toolName === 'Write' ? { behavior: 'allow' } : { behavior: 'deny', message: 'nope' },
     );
     const opts = { signal: new AbortController().signal, toolUseID: 't', requestId: 'req-1' };
     const allow = await sdk('Write', { file_path: '/x' }, opts);
@@ -331,7 +319,6 @@ describe('closerGuardToSdkCanUseTool (bridge ComposedToolInput -> SDK CanUseTool
     if (deny?.behavior === 'deny') expect(deny.message).toBe('nope');
   });
 });
-
 
 function makeRun(patch: Partial<DynamicWorkflowRun> = {}): DynamicWorkflowRun {
   return {

@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const TIMEOUT_MS = 5 * 60 * 1000;
 
 type Provider = 'ollama' | 'lmstudio' | 'openai-compatible';
 
@@ -17,14 +17,22 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
-async function chatOllama(baseUrl: string, model: string, prompt: string, systemPrompt?: string, temperature?: number, maxTokens?: number): Promise<{ content: string; model: string; tokensUsed?: number }> {
+async function chatOllama(
+  baseUrl: string,
+  model: string,
+  prompt: string,
+  systemPrompt?: string,
+  temperature?: number,
+  maxTokens?: number,
+): Promise<{ content: string; model: string; tokensUsed?: number }> {
   const messages: Array<{ role: string; content: string }> = [];
   if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
   messages.push({ role: 'user', content: prompt });
 
   const body: Record<string, unknown> = { model, messages, stream: false };
-  if (temperature !== undefined) body.options = { ...(body.options as Record<string, unknown> || {}), temperature };
-  if (maxTokens !== undefined) body.options = { ...(body.options as Record<string, unknown> || {}), num_predict: maxTokens };
+  if (temperature !== undefined) body.options = { ...((body.options as Record<string, unknown>) || {}), temperature };
+  if (maxTokens !== undefined)
+    body.options = { ...((body.options as Record<string, unknown>) || {}), num_predict: maxTokens };
 
   const response = await fetchWithTimeout(`${baseUrl}/api/chat`, {
     method: 'POST',
@@ -37,7 +45,7 @@ async function chatOllama(baseUrl: string, model: string, prompt: string, system
     throw new Error(`Ollama error ${response.status}: ${text}`);
   }
 
-  const data = await response.json() as Record<string, unknown>;
+  const data = (await response.json()) as Record<string, unknown>;
   const message = data.message as { content: string } | undefined;
   const evalCount = data.eval_count as number | undefined;
 
@@ -48,7 +56,14 @@ async function chatOllama(baseUrl: string, model: string, prompt: string, system
   };
 }
 
-async function chatOpenAICompatible(baseUrl: string, model: string, prompt: string, systemPrompt?: string, temperature?: number, maxTokens?: number): Promise<{ content: string; model: string; tokensUsed?: number }> {
+async function chatOpenAICompatible(
+  baseUrl: string,
+  model: string,
+  prompt: string,
+  systemPrompt?: string,
+  temperature?: number,
+  maxTokens?: number,
+): Promise<{ content: string; model: string; tokensUsed?: number }> {
   const messages: Array<{ role: string; content: string }> = [];
   if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
   messages.push({ role: 'user', content: prompt });
@@ -68,7 +83,7 @@ async function chatOpenAICompatible(baseUrl: string, model: string, prompt: stri
     throw new Error(`API error ${response.status}: ${text}`);
   }
 
-  const data = await response.json() as Record<string, unknown>;
+  const data = (await response.json()) as Record<string, unknown>;
   const choices = data.choices as Array<{ message: { content: string } }> | undefined;
   const usage = data.usage as { total_tokens?: number } | undefined;
 
@@ -83,7 +98,7 @@ async function listModelsOllama(baseUrl: string): Promise<Array<{ name: string; 
   const response = await fetchWithTimeout(`${baseUrl}/api/tags`, { method: 'GET' }, 15000);
   if (!response.ok) throw new Error(`Ollama error ${response.status}`);
 
-  const data = await response.json() as { models?: Array<{ name: string; size: number; modified_at: string }> };
+  const data = (await response.json()) as { models?: Array<{ name: string; size: number; modified_at: string }> };
   return (data.models || []).map((m) => ({
     name: m.name,
     size: formatBytes(m.size),
@@ -95,7 +110,7 @@ async function listModelsOpenAI(baseUrl: string): Promise<Array<{ name: string; 
   const response = await fetchWithTimeout(`${baseUrl}/v1/models`, { method: 'GET' }, 15000);
   if (!response.ok) throw new Error(`API error ${response.status}`);
 
-  const data = await response.json() as { data?: Array<{ id: string; created?: number }> };
+  const data = (await response.json()) as { data?: Array<{ id: string; created?: number }> };
   return (data.data || []).map((m) => ({
     name: m.id,
     size: 'N/A',
@@ -110,7 +125,6 @@ function formatBytes(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
 }
-
 
 const server = new McpServer({
   name: 'local-llm',
@@ -201,7 +215,7 @@ server.tool(
       if (provider === 'ollama') {
         const response = await fetchWithTimeout(`${baseUrl}/api/version`, { method: 'GET' }, 10000);
         if (!response.ok) throw new Error(`Status ${response.status}`);
-        const data = await response.json() as { version?: string };
+        const data = (await response.json()) as { version?: string };
         return {
           content: [{ type: 'text' as const, text: JSON.stringify({ healthy: true, version: data.version }) }],
         };

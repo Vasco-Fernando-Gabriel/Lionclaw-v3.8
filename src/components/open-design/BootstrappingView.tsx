@@ -1,8 +1,5 @@
 import { AlertTriangle, CheckCircle2, Circle, Loader2 } from 'lucide-react';
-import type {
-  OpenDesignBootstrapProgressEvent,
-  OpenDesignBootstrapStage,
-} from '@/types/open-design';
+import type { OpenDesignBootstrapProgressEvent, OpenDesignBootstrapStage } from '@/types/open-design';
 
 const STEPS: Array<{ id: OpenDesignBootstrapStage; label: string }> = [
   { id: 'run-dir', label: 'Preparando pasta da sessao' },
@@ -28,9 +25,7 @@ export function BootstrappingView({ error, events = [] }: BootstrappingViewProps
   }
 
   const currentEvent =
-    [...events].reverse().find((event) => event.status === 'running') ??
-    events[events.length - 1] ??
-    null;
+    [...events].reverse().find((event) => event.status === 'running') ?? events[events.length - 1] ?? null;
   const hasError = error !== null || events.some((event) => event.status === 'error');
 
   return (
@@ -85,9 +80,7 @@ export function BootstrappingView({ error, events = [] }: BootstrappingViewProps
                     {event?.label ?? step.label}
                   </div>
                   {event?.detail && (
-                    <div className="mt-0.5 text-[11px] leading-4 text-zinc-500 break-words">
-                      {event.detail}
-                    </div>
+                    <div className="mt-0.5 text-[11px] leading-4 text-zinc-500 break-words">{event.detail}</div>
                   )}
                 </div>
               </div>
@@ -102,9 +95,7 @@ export function BootstrappingView({ error, events = [] }: BootstrappingViewProps
         )}
 
         {error && (
-          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-300">
-            {error}
-          </div>
+          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs text-red-300">{error}</div>
         )}
       </div>
     </div>

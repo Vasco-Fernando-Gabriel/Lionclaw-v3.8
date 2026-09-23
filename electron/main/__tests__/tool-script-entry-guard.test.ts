@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -10,12 +9,9 @@ const state = vi.hoisted(() => ({
 }));
 
 const confirmMock = vi.hoisted(() =>
-  vi.fn(
-    async (
-      _getWindow: unknown,
-      _action: unknown,
-    ): Promise<{ approved: boolean; message?: string }> => ({ approved: true }),
-  ),
+  vi.fn(async (_getWindow: unknown, _action: unknown): Promise<{ approved: boolean; message?: string }> => ({
+    approved: true,
+  })),
 );
 
 vi.mock('../logger', () => ({
@@ -51,29 +47,18 @@ vi.mock('../mcp-tool-bridge', () => ({
   teardownMCPsForSession: vi.fn(),
 }));
 
-import {
-  createToolScriptDispatcher,
-  type CreateToolScriptDispatcherInput,
-} from '../tool-script/tool-script-dispatch';
+import { createToolScriptDispatcher, type CreateToolScriptDispatcherInput } from '../tool-script/tool-script-dispatch';
 import type {
   ToolScriptDispatchContext,
   ToolScriptRpcDispatcher,
   ToolScriptResult,
 } from '../tool-script/tool-script-types';
 import { runToolScript } from '../tool-script/tool-script-engine';
-import {
-  registerChatCapabilityTurn,
-  __resetChatCapabilityContextForTests,
-} from '../chat-capability-context';
+import { registerChatCapabilityTurn, __resetChatCapabilityContextForTests } from '../chat-capability-context';
 import type { AgentPermissionProfile } from '../agent-runtime/types';
 
-
 function resolveTestPython(): string {
-  for (const candidate of [
-    '/opt/homebrew/bin/python3',
-    '/usr/local/bin/python3',
-    '/usr/bin/python3',
-  ]) {
+  for (const candidate of ['/opt/homebrew/bin/python3', '/usr/local/bin/python3', '/usr/bin/python3']) {
     if (fs.existsSync(candidate)) return candidate;
   }
   return 'python3';
@@ -102,10 +87,7 @@ interface RunScriptOptions {
   overrides?: CreateToolScriptDispatcherInput['overrides'];
 }
 
-async function runScript(
-  code: string,
-  opts: RunScriptOptions = {},
-): Promise<ToolScriptResult> {
+async function runScript(code: string, opts: RunScriptOptions = {}): Promise<ToolScriptResult> {
   turnCounter++;
   const sessionId = `sess-eg-${turnCounter}`;
   const turnId = `turn-eg-${turnCounter}`;
@@ -139,9 +121,7 @@ async function runScript(
   );
 }
 
-function makeCtx(
-  overrides: Partial<ToolScriptDispatchContext> = {},
-): ToolScriptDispatchContext {
+function makeCtx(overrides: Partial<ToolScriptDispatchContext> = {}): ToolScriptDispatchContext {
   return {
     sessionId: 'sess-direct',
     turnId: 'turn-direct',
@@ -179,7 +159,6 @@ afterEach(() => {
   __resetChatCapabilityContextForTests();
   fs.rmSync(testCwd, { recursive: true, force: true });
 });
-
 
 describe('AC-B4: script 100% read-only', () => {
   it('bypass OFF, so read_file/grep/search_files -> NENHUM popup e roda', async () => {
@@ -251,30 +230,22 @@ describe('AC-B4: script mutante com bypass OFF', () => {
   it('mcp_invoke no codigo tambem classifica mutante: popup antes, invoke depois', async () => {
     const invokeMcp = vi.fn(async () => ({ content: 'resposta-mcp', displayName: 'd' }));
     const result = await runScript(
-      [
-        'from lionclaw_tools import mcp_invoke',
-        'print(mcp_invoke("gmail", "send_email", {"to": "x"}))',
-      ].join('\n'),
+      ['from lionclaw_tools import mcp_invoke', 'print(mcp_invoke("gmail", "send_email", {"to": "x"}))'].join('\n'),
       { overrides: { invokeMcp } },
     );
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('resposta-mcp\n');
     expect(confirmMock).toHaveBeenCalledTimes(1);
     expect(invokeMcp).toHaveBeenCalledTimes(1);
-    expect(confirmMock.mock.invocationCallOrder[0]).toBeLessThan(
-      invokeMcp.mock.invocationCallOrder[0],
-    );
+    expect(confirmMock.mock.invocationCallOrder[0]).toBeLessThan(invokeMcp.mock.invocationCallOrder[0]);
   }, 20_000);
 });
-
 
 describe('AC-B4: bypass', () => {
   it('setting permission:bypass ON (default do app) -> script mutante SEM popup', async () => {
     state.bypass = true;
     const result = await runScript(
-      ['from lionclaw_tools import run_command', 'print(run_command("echo livre").strip())'].join(
-        '\n',
-      ),
+      ['from lionclaw_tools import run_command', 'print(run_command("echo livre").strip())'].join('\n'),
     );
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('livre\n');
@@ -284,10 +255,7 @@ describe('AC-B4: bypass', () => {
   it('profile bypass do turno (pipeline/harness) -> SEM popup mesmo com setting OFF', async () => {
     state.bypass = false;
     const result = await runScript(
-      [
-        'from lionclaw_tools import run_command',
-        'print(run_command("echo perfil-bypass").strip())',
-      ].join('\n'),
+      ['from lionclaw_tools import run_command', 'print(run_command("echo perfil-bypass").strip())'].join('\n'),
       { profile: BYPASS_PROFILE },
     );
     expect(result.exitCode).toBe(0);
@@ -295,7 +263,6 @@ describe('AC-B4: bypass', () => {
     expect(confirmMock).not.toHaveBeenCalled();
   }, 20_000);
 });
-
 
 describe('integracao com o relogio do S1 (AC-B9 parcial)', () => {
   it('pauseTimeout antes do popup e resumeTimeout depois da decisao', async () => {
@@ -343,7 +310,6 @@ describe('integracao com o relogio do S1 (AC-B9 parcial)', () => {
   });
 });
 
-
 describe('escalacao: RPC mutante num script classificado read-only', () => {
   it('read-only nao pede popup; frame mutante forjado ESCALA para a confirmacao', async () => {
     const dispatcher = createToolScriptDispatcher({
@@ -357,12 +323,7 @@ describe('escalacao: RPC mutante num script classificado read-only', () => {
     await call(dispatcher, 'read_file', { path: 'dado.txt' }, ctx);
     expect(confirmMock).not.toHaveBeenCalled();
 
-    const saida = await call(
-      dispatcher,
-      'write_file',
-      { path: 'escalado.txt', content: 'x' },
-      ctx,
-    );
+    const saida = await call(dispatcher, 'write_file', { path: 'escalado.txt', content: 'x' }, ctx);
     expect(saida).toMatch(/sucesso/);
     expect(confirmMock).toHaveBeenCalledTimes(1);
     expect(fs.existsSync(path.join(testCwd, 'escalado.txt'))).toBe(true);
@@ -377,12 +338,12 @@ describe('escalacao: RPC mutante num script classificado read-only', () => {
     });
     const ctx = makeCtx();
 
-    await expect(
-      call(dispatcher, 'write_file', { path: 'a.txt', content: 'x' }, ctx),
-    ).rejects.toThrow(/negado pelo guard de entrada/);
-    await expect(
-      call(dispatcher, 'run_command', { command: 'echo x' }, ctx),
-    ).rejects.toThrow(/negado pelo guard de entrada/);
+    await expect(call(dispatcher, 'write_file', { path: 'a.txt', content: 'x' }, ctx)).rejects.toThrow(
+      /negado pelo guard de entrada/,
+    );
+    await expect(call(dispatcher, 'run_command', { command: 'echo x' }, ctx)).rejects.toThrow(
+      /negado pelo guard de entrada/,
+    );
     expect(confirmMock).toHaveBeenCalledTimes(1);
     expect(fs.existsSync(path.join(testCwd, 'a.txt'))).toBe(false);
   });

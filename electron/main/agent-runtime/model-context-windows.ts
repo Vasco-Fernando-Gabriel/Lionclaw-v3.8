@@ -1,11 +1,8 @@
-
-
 export const CTX_GPT_5_2_UNCONFIRMED = 1_050_000;
 
 export const CTX_GLM_5_TURBO_UNCONFIRMED = 200_000;
 
 export const CTX_GLM_4_5_AIR_UNCONFIRMED = 131_072;
-
 
 const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'opus': 1_000_000,
@@ -13,6 +10,7 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'haiku': 200_000,
   'claude-fable-5-1': 1_000_000,
   'claude-fable-5': 1_000_000,
+  'claude-opus-5-5': 1_000_000,
   'claude-opus-5': 1_000_000,
   'claude-opus-4-8': 1_000_000,
   'claude-opus-4-7': 1_000_000,
@@ -26,6 +24,8 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'claude-haiku-3-5-20241022': 200_000,
 
   'gpt-6-astra': 1_050_000,
+  'gpt-6-sol': 1_050_000,
+  'gpt-6-luna': 1_050_000,
   'gpt-5.6-sol': 1_050_000,
   'gpt-5.6-terra': 1_050_000,
   'gpt-5.6-luna': 1_050_000,
@@ -85,7 +85,6 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
   'gemini-2.0-flash-lite': 1_048_576,
 };
 
-
 const CONTEXT_SUBSTRING_TABLE: ReadonlyArray<readonly [string, number]> = [
   ['qwen2.5:27b', 130_000],
   ['qwen2.5-72b', 131_072],
@@ -119,7 +118,6 @@ const CONTEXT_SUBSTRING_TABLE: ReadonlyArray<readonly [string, number]> = [
   ['starcoder', 8_192],
 ];
 
-
 export type LocalProbeProvider = 'ollama' | 'lmstudio';
 
 const probedContextWindows = new Map<LocalProbeProvider, Map<string, number>>();
@@ -146,7 +144,6 @@ export function clearProbedContextWindows(): void {
 function isLocalProbeProvider(provider: string | undefined): provider is LocalProbeProvider {
   return provider === 'ollama' || provider === 'lmstudio';
 }
-
 
 export function getContextWindow(model: string, provider?: string): number | undefined {
   const normalizedModel = model.toLowerCase();

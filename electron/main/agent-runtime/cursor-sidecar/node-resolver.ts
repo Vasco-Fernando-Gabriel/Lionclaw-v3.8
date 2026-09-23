@@ -1,4 +1,3 @@
-
 import { execFile } from 'child_process';
 import { createHash } from 'crypto';
 import fs from 'fs';
@@ -55,18 +54,13 @@ type ExecFileProbe = (nodePath: string) => Promise<string>;
 
 function defaultProbe(nodePath: string): Promise<string> {
   return new Promise<string>((resolve, reject) => {
-    execFile(
-      nodePath,
-      ['--version'],
-      { timeout: 10_000, windowsHide: true },
-      (err, stdout) => {
-        if (err) {
-          reject(err instanceof Error ? err : new Error(String(err)));
-          return;
-        }
-        resolve(String(stdout));
-      },
-    );
+    execFile(nodePath, ['--version'], { timeout: 10_000, windowsHide: true }, (err, stdout) => {
+      if (err) {
+        reject(err instanceof Error ? err : new Error(String(err)));
+        return;
+      }
+      resolve(String(stdout));
+    });
   });
 }
 
@@ -97,7 +91,6 @@ function isElectronPackagedDefault(): boolean {
   }
 }
 
-
 interface CursorNodePayloadManifestFile {
   path?: string;
   sha256?: string;
@@ -115,10 +108,7 @@ function sha256File(filePath: string): string {
   return createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
 }
 
-export function resolveCursorPayloadNodeAt(
-  dir: string,
-  platform: NodeJS.Platform = process.platform,
-): string | null {
+export function resolveCursorPayloadNodeAt(dir: string, platform: NodeJS.Platform = process.platform): string | null {
   const binaryName = platform === 'win32' ? 'node.exe' : 'node';
   const binaryPath = path.join(dir, binaryName);
   const manifestPath = path.join(dir, 'node-manifest.json');
@@ -164,10 +154,7 @@ function tryPayloadNodeDefault(packaged: boolean): string | null {
   return resolveCursorPayloadNodeAt(path.join(resourcesPath, 'cursor-sidecar', 'node', target));
 }
 
-async function probeVersion(
-  nodePath: string,
-  probe: ExecFileProbe,
-): Promise<ParsedNodeVersion & { raw: string }> {
+async function probeVersion(nodePath: string, probe: ExecFileProbe): Promise<ParsedNodeVersion & { raw: string }> {
   const raw = (await probe(nodePath)).trim();
   const parsed = parseNodeVersion(raw);
   if (!parsed) {
@@ -293,7 +280,6 @@ export function getCursorSidecarNodeStatus(): CursorSidecarNodeStatus | null {
   return bootStatus;
 }
 
-
 export interface ResolveCursorSidecarEntryOptions {
   candidates?: string[];
 }
@@ -313,17 +299,14 @@ function defaultEntryCandidates(): string[] {
     if (!packaged && appPath) {
       candidates.push(path.join(appPath, 'resources', 'cursor-sidecar', 'sidecar.cjs'));
     }
-  } catch {
-  }
+  } catch {}
   if (candidates.length === 0) {
     candidates.push(path.join(process.cwd(), 'resources', 'cursor-sidecar', 'sidecar.cjs'));
   }
   return candidates;
 }
 
-export function resolveCursorSidecarEntry(
-  options: ResolveCursorSidecarEntryOptions = {},
-): string {
+export function resolveCursorSidecarEntry(options: ResolveCursorSidecarEntryOptions = {}): string {
   const candidates = options.candidates ?? defaultEntryCandidates();
   const found = candidates.find((candidate) => {
     try {

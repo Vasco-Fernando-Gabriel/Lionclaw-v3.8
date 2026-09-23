@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -85,8 +84,7 @@ function baseAgentConfig(agentId: string, allowedToolsOverride?: string[]) {
   return {
     model: 'claude-sonnet-4-6',
     systemPrompt: agentId === 'analista' ? 'Prompt do analista' : '',
-    allowedTools:
-      allowedToolsOverride ?? (agentId === 'analista' ? ['Read', 'Grep'] : []),
+    allowedTools: allowedToolsOverride ?? (agentId === 'analista' ? ['Read', 'Grep'] : []),
     mcpServers: [],
     maxTurns: agentId === 'analista' ? 10 : 0,
     effort: 'high',
@@ -227,10 +225,7 @@ describe('buildAgentDefinitions COM ctx — merge repo-aware (11.1/F12/AC-7)', (
 
   it('merge e idempotente (tool repo-graph ja na allowlist nao duplica)', async () => {
     agentConfigByIdMock.mockImplementation((agentId: string) =>
-      baseAgentConfig(
-        agentId,
-        agentId === 'analista' ? ['Read', 'mcp__repo-graph__repo_graph_search'] : [],
-      ),
+      baseAgentConfig(agentId, agentId === 'analista' ? ['Read', 'mcp__repo-graph__repo_graph_search'] : []),
     );
     const defs = await buildAgentDefinitions(REPO_CTX);
     const tools = defs['analista']!['tools'] as string[];

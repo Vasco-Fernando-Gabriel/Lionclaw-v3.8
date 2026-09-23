@@ -78,8 +78,8 @@ export function NewCardModal({ boardPrefix, onClose }: NewCardModalProps) {
             </select>
           </div>
           <p className="text-xs text-zinc-500 leading-relaxed">
-            Só o título é obrigatório. O card nasce no Backlog e o agente completa os
-            detalhes na conversa: critério de aceite, reprodução, severidade. Sem travas.
+            Só o título é obrigatório. O card nasce no Backlog e o agente completa os detalhes na conversa: critério de
+            aceite, reprodução, severidade. Sem travas.
           </p>
           <div className="flex justify-end gap-2">
             <button

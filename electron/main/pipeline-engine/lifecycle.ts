@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import { createLogger } from '../logger';
@@ -18,13 +17,7 @@ import {
 } from '../db';
 import { getPipelineDocsContext } from '../pipeline-paths';
 import { runUsageSanityCheck } from './usage-sanity';
-import {
-  getAutoPhases,
-  getLoopPhases,
-  getPhaseName,
-  getMaxPhase,
-  PHASE_NAMES,
-} from './registry';
+import { getAutoPhases, getLoopPhases, getPhaseName, getMaxPhase, PHASE_NAMES } from './registry';
 
 const logger = createLogger('pipeline-engine');
 
@@ -54,17 +47,16 @@ export interface LifecycleEngineContext {
     phaseNumber: number,
     sprintIndex?: number,
   ): string | null;
-  getConversationGreeting(phase: number, projectName: string, project?: { pipelineType?: string; projectPath?: string; pipelineDocsId?: string | null }): string;
+  getConversationGreeting(
+    phase: number,
+    projectName: string,
+    project?: { pipelineType?: string; projectPath?: string; pipelineDocsId?: string | null },
+  ): string;
   runAutoPhase(projectId: string, phase: number): Promise<void>;
   runSprint(projectId: string, sprintIndex: number): Promise<void>;
-  sendMessage(
-    projectId: string,
-    message: string,
-    opts?: { isGreeting?: boolean },
-  ): Promise<{ error: string } | void>;
+  sendMessage(projectId: string, message: string, opts?: { isGreeting?: boolean }): Promise<{ error: string } | void>;
   abortHarness(projectId: string): void;
 }
-
 
 export interface CompletePipelineOptions {
   terminalStatusString: 'completed' | 'pipeline-completed';
@@ -106,10 +98,7 @@ export function completePipeline(
   }
 }
 
-
-export type FailStatusUpdate =
-  | 'pure-paused'
-  | { columns: { status: string; pipelineCurrentPhase: number } };
+export type FailStatusUpdate = 'pure-paused' | { columns: { status: string; pipelineCurrentPhase: number } };
 
 export interface FailPhaseOptions {
   phase: number;
@@ -172,7 +161,6 @@ export function failPhase(
   }
 }
 
-
 export async function advanceToNextPhase(
   ctx: LifecycleEngineContext,
   projectId: string,
@@ -194,7 +182,6 @@ export async function advanceToNextPhase(
     return;
   }
 
-
   state.currentPhase = nextPhase;
   state.status = 'running';
   ctx.updateProjectColumns(projectId, {
@@ -203,7 +190,8 @@ export async function advanceToNextPhase(
   });
 
   const isConversation = ctx.isConversationPhase(nextPhase, advProject ?? undefined);
-  const nextPhaseName = (advProject ? getPhaseName(nextPhase, advProject) : PHASE_NAMES[nextPhase]) ?? `Phase ${nextPhase}`;
+  const nextPhaseName =
+    (advProject ? getPhaseName(nextPhase, advProject) : PHASE_NAMES[nextPhase]) ?? `Phase ${nextPhase}`;
 
   emitIPC('pipeline:phase-changed', {
     projectId,
@@ -211,9 +199,7 @@ export async function advanceToNextPhase(
     phaseName: nextPhaseName,
     status: 'started',
     awaitingUser: isConversation,
-    currentModel: advProject
-      ? ctx.resolveCurrentModelForPhase(advProject, nextPhase, state.currentSprintIndex)
-      : null,
+    currentModel: advProject ? ctx.resolveCurrentModelForPhase(advProject, nextPhase, state.currentSprintIndex) : null,
   });
 
   const advAutoSet = getAutoPhases(advProject ?? {});
@@ -230,17 +216,17 @@ export async function advanceToNextPhase(
     if (isDevV2OpenDesignPhase) {
       logger.info({ projectId, nextPhase }, 'advanceToNextPhase: skipping greeting for dev-v2 phase 5 (UI dedicada)');
     } else {
-      const greetingMsg = ctx.getConversationGreeting(nextPhase, advProject?.name ?? projectId, advProject ?? undefined);
+      const greetingMsg = ctx.getConversationGreeting(
+        nextPhase,
+        advProject?.name ?? projectId,
+        advProject ?? undefined,
+      );
       await ctx.sendMessage(projectId, greetingMsg, { isGreeting: true });
     }
   }
 }
 
-
-export async function advancePhase(
-  ctx: LifecycleEngineContext,
-  projectId: string,
-): Promise<void> {
+export async function advancePhase(ctx: LifecycleEngineContext, projectId: string): Promise<void> {
   const state = ctx.getState(projectId);
 
   if (state.status === 'aborted') {
@@ -276,7 +262,10 @@ export async function advancePhase(
               logger.warn({ projectId, projectPath }, 'No feature-discovery-notes-*.md file found after phase 1');
             }
           } else {
-            logger.warn({ projectId, projectPath }, 'No feature-discovery-notes-*.md file found in projectPath after phase 1');
+            logger.warn(
+              { projectId, projectPath },
+              'No feature-discovery-notes-*.md file found in projectPath after phase 1',
+            );
           }
         }
       }
@@ -299,7 +288,6 @@ export async function advancePhase(
   }
 
   logger.info({ projectId, nextPhase }, 'Advancing pipeline to next phase');
-
 
   state.currentPhase = nextPhase;
   ctx.updateProjectColumns(projectId, {
@@ -335,7 +323,6 @@ export async function advancePhase(
   }
 }
 
-
 export function abortPipeline(ctx: LifecycleEngineContext, projectId: string): void {
   const state = ctx.getState(projectId);
   logger.info({ projectId, currentPhase: state.currentPhase }, 'Aborting pipeline');
@@ -368,7 +355,6 @@ export function abortPipeline(ctx: LifecycleEngineContext, projectId: string): v
     awaitingUser: false,
   });
 }
-
 
 export function pausePipeline(ctx: LifecycleEngineContext, projectId: string): void {
   const state = ctx.getState(projectId);
@@ -421,7 +407,6 @@ export function pausePipeline(ctx: LifecycleEngineContext, projectId: string): v
   state.status = 'paused';
   setProjectStatus(projectId, 'paused');
 
-
   emitIPC('pipeline:phase-changed', {
     projectId,
     phase,
@@ -429,7 +414,6 @@ export function pausePipeline(ctx: LifecycleEngineContext, projectId: string): v
     awaitingUser: false,
   });
 }
-
 
 export async function resumePipeline(ctx: LifecycleEngineContext, projectId: string): Promise<void> {
   const state = ctx.getState(projectId);
@@ -471,10 +455,7 @@ export async function resumePipeline(ctx: LifecycleEngineContext, projectId: str
   const isConversation = ctx.isConversationPhase(phase, resumeProject ?? undefined);
 
   if (isConversation) {
-    logger.info(
-      { projectId, phase },
-      'Resume no-op on conversation phase: awaiting user input (BUG-20)',
-    );
+    logger.info({ projectId, phase }, 'Resume no-op on conversation phase: awaiting user input (BUG-20)');
     emitIPC('pipeline:phase-changed', {
       projectId,
       phase,
@@ -508,7 +489,6 @@ export async function resumePipeline(ctx: LifecycleEngineContext, projectId: str
     await ctx.runSprint(projectId, sprintIndex);
   }
 }
-
 
 export function recoverInterruptedPipelines(): void {
   try {

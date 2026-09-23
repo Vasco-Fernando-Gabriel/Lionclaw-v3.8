@@ -57,17 +57,17 @@ describe('cursor chat workspace (rules materializadas, G13)', () => {
   });
 
   it('keeps the rules file in the per-run transient list (nunca em entrega)', () => {
-    expect(CURSOR_CHAT_TRANSIENT_RELPATHS).toContain(
-      CURSOR_CHAT_RULES_RELPATH.replace(/\\/g, '/'),
-    );
+    expect(CURSOR_CHAT_TRANSIENT_RELPATHS).toContain(CURSOR_CHAT_RULES_RELPATH.replace(/\\/g, '/'));
   });
 
   it('detects tool inputs touching the session .cursor subtree (fonte protegida)', () => {
     const ws = resolveCursorChatWorkspace('desktop', 'sessao-guard');
     expect(cursorChatInputTouchesRules(ws, { file_path: ws.rulesFilePath })).toBe(true);
-    expect(cursorChatInputTouchesRules(ws, {
-      command: `echo hacked > ${ws.rulesFilePath}`,
-    })).toBe(true);
+    expect(
+      cursorChatInputTouchesRules(ws, {
+        command: `echo hacked > ${ws.rulesFilePath}`,
+      }),
+    ).toBe(true);
     expect(cursorChatInputTouchesRules(ws, { file_path: '.cursor/rules/x.mdc' })).toBe(true);
     expect(cursorChatInputTouchesRules(ws, { file_path: path.join(testHome, 'USER.md') })).toBe(false);
     expect(cursorChatInputTouchesRules(ws, { command: 'git status' })).toBe(false);
@@ -79,16 +79,24 @@ describe('cursor chat workspace (rules materializadas, G13)', () => {
     materializeCursorChatRules(other, 'IDENTIDADE DA OUTRA SESSAO');
 
     expect(cursorChatInputTouchesWorkspacesRoot({ file_path: other.rulesFilePath })).toBe(true);
-    expect(cursorChatInputTouchesWorkspacesRoot({
-      command: `echo hacked > ${other.rulesFilePath}`,
-    })).toBe(true);
+    expect(
+      cursorChatInputTouchesWorkspacesRoot({
+        command: `echo hacked > ${other.rulesFilePath}`,
+      }),
+    ).toBe(true);
     expect(cursorChatInputTouchesWorkspacesRoot({ file_path: own.workspaceDir })).toBe(true);
-    expect(cursorChatInputTouchesWorkspacesRoot({
-      file_path: 'runtime/cursor-chat-workspaces/telegram/qualquer/.cursor/rules/x.mdc',
-    })).toBe(true);
-    expect(cursorChatInputTouchesWorkspacesRoot({
-      file_path: [testHome, 'qualquer', '..', 'runtime', 'cursor-chat-workspaces', 'desktop', 'h', 'x.mdc'].join(path.sep),
-    })).toBe(true);
+    expect(
+      cursorChatInputTouchesWorkspacesRoot({
+        file_path: 'runtime/cursor-chat-workspaces/telegram/qualquer/.cursor/rules/x.mdc',
+      }),
+    ).toBe(true);
+    expect(
+      cursorChatInputTouchesWorkspacesRoot({
+        file_path: [testHome, 'qualquer', '..', 'runtime', 'cursor-chat-workspaces', 'desktop', 'h', 'x.mdc'].join(
+          path.sep,
+        ),
+      }),
+    ).toBe(true);
     expect(cursorChatInputTouchesWorkspacesRoot({ file_path: path.join(testHome, 'USER.md') })).toBe(false);
     expect(cursorChatInputTouchesWorkspacesRoot({ file_path: 'USER.md' })).toBe(false);
     expect(cursorChatInputTouchesWorkspacesRoot({ command: 'git status' })).toBe(false);

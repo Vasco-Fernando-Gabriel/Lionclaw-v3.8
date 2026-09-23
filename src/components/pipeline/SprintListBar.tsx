@@ -2,20 +2,15 @@ import { useState } from 'react';
 import { Check, X, RotateCcw, Loader2 } from 'lucide-react';
 import type { SprintStatus } from '@/stores/pipeline-store';
 
-
 type SprintDisplayStatus = 'pending' | 'running' | 'passed' | 'failed';
 
-function resolveSprintDisplayStatus(
-  sprint: SprintStatus,
-  currentSprintIndex: number | null,
-): SprintDisplayStatus {
+function resolveSprintDisplayStatus(sprint: SprintStatus, currentSprintIndex: number | null): SprintDisplayStatus {
   const v = sprint.verdict?.toLowerCase() ?? '';
   if (v === 'pass' || v === 'passed' || v === 'accepted' || v === 'completed') return 'passed';
   if (v === 'fail' || v === 'failed' || v === 'rejected') return 'failed';
   if (sprint.index === currentSprintIndex) return 'running';
   return 'pending';
 }
-
 
 function SprintStatusIcon({ status }: { status: SprintDisplayStatus }) {
   if (status === 'passed') {
@@ -27,14 +22,8 @@ function SprintStatusIcon({ status }: { status: SprintDisplayStatus }) {
   if (status === 'failed') {
     return <X size={10} strokeWidth={3} className="text-red-400" />;
   }
-  return (
-    <span
-      className="inline-block w-2 h-2 rounded-full"
-      style={{ border: '1.5px dashed #52525b' }}
-    />
-  );
+  return <span className="inline-block w-2 h-2 rounded-full" style={{ border: '1.5px dashed #52525b' }} />;
 }
-
 
 function sprintBadgeClass(status: SprintDisplayStatus, isActive: boolean): string {
   const base =
@@ -59,13 +48,16 @@ function sprintBadgeClass(status: SprintDisplayStatus, isActive: boolean): strin
 function sprintLabelColor(status: SprintDisplayStatus, isActive: boolean): string {
   if (isActive) return 'text-amber-300';
   switch (status) {
-    case 'passed': return 'text-green-400';
-    case 'running': return 'text-amber-300';
-    case 'failed': return 'text-red-400';
-    default: return 'text-zinc-600';
+    case 'passed':
+      return 'text-green-400';
+    case 'running':
+      return 'text-amber-300';
+    case 'failed':
+      return 'text-red-400';
+    default:
+      return 'text-zinc-600';
   }
 }
-
 
 export interface SprintListBarProps {
   sprints: SprintStatus[];
@@ -74,12 +66,7 @@ export interface SprintListBarProps {
   onRequestReset: (sprintIndex: number) => void;
 }
 
-export function SprintListBar({
-  sprints,
-  currentSprintIndex,
-  onSelectSprint,
-  onRequestReset,
-}: SprintListBarProps) {
+export function SprintListBar({ sprints, currentSprintIndex, onSelectSprint, onRequestReset }: SprintListBarProps) {
   const [hoveredSprint, setHoveredSprint] = useState<number | null>(null);
 
   if (sprints.length === 0) return null;
@@ -107,9 +94,7 @@ export function SprintListBar({
                 title={`Sprint ${sprint.index + 1}: ${sprint.name} — ${sprint.verdict ?? 'pendente'}`}
                 style={{ minWidth: 36 }}
               >
-                <span className={`text-[10px] font-bold leading-none ${labelColor}`}>
-                  S{sprint.index + 1}
-                </span>
+                <span className={`text-[10px] font-bold leading-none ${labelColor}`}>S{sprint.index + 1}</span>
                 <div className="flex items-center justify-center h-3">
                   <SprintStatusIcon status={status} />
                 </div>

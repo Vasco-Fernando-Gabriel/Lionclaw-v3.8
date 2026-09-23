@@ -12,11 +12,7 @@ import { createLogger } from '../logger';
 import { executeAgent } from './execute';
 import { GrokAuthError } from './grok-availability';
 import { KimiAuthError } from './kimi-availability';
-import type {
-  AgentExecutionResult,
-  AgentPermissionProfile,
-  SubagentDispatchContext,
-} from './types';
+import type { AgentExecutionResult, AgentPermissionProfile, SubagentDispatchContext } from './types';
 import type { AgentQueryConfig } from '../agent-config-resolver';
 
 const logger = createLogger('subagent-dispatch');
@@ -115,13 +111,11 @@ export function pendingSubagentProviderAuthError(
 ): Error | undefined {
   const contextError = context?.controlState?.providerAuthError;
   if (contextError) return contextError;
-  return isSubagentProviderAuthError(parentAbortSignal?.reason)
-    ? parentAbortSignal.reason
-    : undefined;
+  return isSubagentProviderAuthError(parentAbortSignal?.reason) ? parentAbortSignal.reason : undefined;
 }
 
 function controlStateFor(context: SubagentDispatchContext): NonNullable<SubagentDispatchContext['controlState']> {
-  return context.controlState ??= {};
+  return (context.controlState ??= {});
 }
 
 export function isSubagentProviderAuthError(error: unknown): error is CodexAuthError | GrokAuthError | KimiAuthError {
@@ -184,15 +178,24 @@ function recordPolicyRefusal(
 
 function providerForRuntime(runtime: AgentExecutionResult['runtime']): string {
   switch (runtime) {
-    case 'cloud': return 'anthropic';
-    case 'codex': return 'openai-codex';
-    case 'zai': return 'zai';
-    case 'minimax-tp': return 'minimax';
-    case 'kimi': return 'kimi';
-    case 'grok': return 'grok';
-    case 'cursor': return 'cursor';
-    case 'local': return 'local';
-    case 'external': return 'external';
+    case 'cloud':
+      return 'anthropic';
+    case 'codex':
+      return 'openai-codex';
+    case 'zai':
+      return 'zai';
+    case 'minimax-tp':
+      return 'minimax';
+    case 'kimi':
+      return 'kimi';
+    case 'grok':
+      return 'grok';
+    case 'cursor':
+      return 'cursor';
+    case 'local':
+      return 'local';
+    case 'external':
+      return 'external';
   }
 }
 
@@ -229,13 +232,12 @@ function validateHostContext(host: SubagentDispatchContext, agentId: string): st
 }
 
 function eligibilityError(agent: NonNullable<ReturnType<typeof getAgent>>): string | null {
+  if (agent.squad === 'swarm') return 'Membros Swarm executam somente pelo runner swarm_start.';
   if (!agent.isActive) return `Agente desativado: ${agent.id}`;
   return null;
 }
 
-export function createSubagentConfinedPermission(
-  host: SubagentDispatchContext,
-): AgentPermissionProfile {
+export function createSubagentConfinedPermission(host: SubagentDispatchContext): AgentPermissionProfile {
   return { ...host.permission };
 }
 
@@ -250,10 +252,7 @@ export function mergeSubagentHostAllowedTools(
   allowedTools: readonly string[],
   materializedMcpTools: readonly string[],
 ): string[] {
-  return [...new Set([
-    ...allowedTools,
-    ...materializedMcpTools.filter((tool) => mcpServerIdForTool(tool) !== null),
-  ])];
+  return [...new Set([...allowedTools, ...materializedMcpTools.filter((tool) => mcpServerIdForTool(tool) !== null)])];
 }
 
 export async function resolveSubagentHostAllowedTools(
@@ -263,10 +262,7 @@ export async function resolveSubagentHostAllowedTools(
   if (allowedMcpServerIds.length === 0) return [...new Set(allowedTools)];
   try {
     const { getMCPToolsFromRegistry } = await import('../mcp-manager');
-    return mergeSubagentHostAllowedTools(
-      allowedTools,
-      getMCPToolsFromRegistry([...new Set(allowedMcpServerIds)]),
-    );
+    return mergeSubagentHostAllowedTools(allowedTools, getMCPToolsFromRegistry([...new Set(allowedMcpServerIds)]));
   } catch (error) {
     logger.warn({ error }, 'Falha ao cunhar grants MCP exatos do host; mantendo somente tools ja autorizadas');
     return [...new Set(allowedTools)];
@@ -279,10 +275,12 @@ export function withResolvedRootSubagentGrants(
 ): SubagentDispatchContext | undefined {
   if (!context || context.depth !== 0) return context;
   const allowedTools = [...(config.allowedTools ?? [])];
-  const allowedMcpServerIds = [...new Set([
-    ...(config.mcpServers ?? []).flatMap((server) => Object.keys(server)),
-    ...allowedTools.map(mcpServerIdForTool).filter((id): id is string => id !== null),
-  ])];
+  const allowedMcpServerIds = [
+    ...new Set([
+      ...(config.mcpServers ?? []).flatMap((server) => Object.keys(server)),
+      ...allowedTools.map(mcpServerIdForTool).filter((id): id is string => id !== null),
+    ]),
+  ];
   return {
     ...context,
     capabilityCeiling: Object.freeze({
@@ -306,21 +304,20 @@ export async function resolveSubagentConfigWithinCeiling(
 ): Promise<{ config?: AgentQueryConfig; error?: string }> {
   const agent = getAgent(agentId);
   if (!agent) return { error: `Agente desconhecido: ${agentId}` };
+  if (agent.squad === 'swarm') return { error: 'Membros Swarm executam somente pelo runner swarm_start.' };
   const denied = eligibilityError(agent);
   if (denied) return { error: denied };
   const config = await resolveAgentQueryConfig(agentId);
   return applySubagentCapabilityCeiling(config, host);
 }
 
-export function reserveSubagentInvocation(
-  host: SubagentDispatchContext,
-  agentId: string,
-): string | null {
+export function reserveSubagentInvocation(host: SubagentDispatchContext, agentId: string): string | null {
   controlStateFor(host);
   const contextError = validateHostContext(host, agentId);
   if (contextError) return contextError;
   const agent = getAgent(agentId);
   if (!agent) return `Agente desconhecido: ${agentId}`;
+  if (agent.squad === 'swarm') return 'Membros Swarm executam somente pelo runner swarm_start.';
   const denied = eligibilityError(agent);
   if (denied) return denied;
   host.budgetState.remaining -= 1;
@@ -372,18 +369,16 @@ export async function dispatchLionSubagent(
     capabilityCeiling: Object.freeze({
       ...host.capabilityCeiling,
       allowedTools: Object.freeze([...resolvedConfig.allowedTools]),
-      allowedMcpServerIds: Object.freeze([...new Set([
-        ...resolvedConfig.mcpServers.flatMap((server) => Object.keys(server)),
-        ...resolvedConfig.allowedTools
-          .map(mcpServerIdForTool)
-          .filter((id): id is string => id !== null),
-      ])]),
+      allowedMcpServerIds: Object.freeze([
+        ...new Set([
+          ...resolvedConfig.mcpServers.flatMap((server) => Object.keys(server)),
+          ...resolvedConfig.allowedTools.map(mcpServerIdForTool).filter((id): id is string => id !== null),
+        ]),
+      ]),
     }),
   };
   const fullPrompt = input.context ? `${input.context}\n\n${input.prompt}` : input.prompt;
-  const transportMetadata = input.transportCorrelation
-    ? { transportCorrelation: input.transportCorrelation }
-    : {};
+  const transportMetadata = input.transportCorrelation ? { transportCorrelation: input.transportCorrelation } : {};
 
   startTaskExecution({
     executionId: host.rootExecutionId,

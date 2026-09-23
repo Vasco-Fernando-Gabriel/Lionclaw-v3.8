@@ -2,11 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentQueryConfig } from '../../agent-config-resolver';
 import { createSubagentDispatchContext } from '../subagent-dispatch';
 import * as subagentDispatch from '../subagent-dispatch';
-import {
-  buildGrokNativeToolPolicy,
-  buildGrokSessionTools,
-  stripUnmaterializedGrokTools,
-} from '../grok-session-config';
+import { buildGrokNativeToolPolicy, buildGrokSessionTools, stripUnmaterializedGrokTools } from '../grok-session-config';
 
 const { invokeMcpTool } = vi.hoisted(() => ({
   invokeMcpTool: vi.fn(async (_request: unknown) => ({
@@ -18,18 +14,20 @@ const { invokeMcpTool } = vi.hoisted(() => ({
 vi.mock('../../mcp-invoke', () => ({ invokeMcpTool }));
 vi.mock('../../mcp-manager', () => ({
   getMCPConfigForAgent: vi.fn(async () => ({ skills: { command: 'node', args: [] } })),
-  getMcpToolRegistryEntries: vi.fn(() => [{
-    mcpId: 'skills',
-    toolName: 'load_skill',
-    description: 'Carrega uma skill pelo nome.',
-    inputSchema: JSON.stringify({
-      type: 'object',
-      properties: { name: { type: 'string' } },
-      required: ['name'],
-      additionalProperties: false,
-    }),
-    lastDiscoveredAt: '2026-07-18T00:00:00.000Z',
-  }]),
+  getMcpToolRegistryEntries: vi.fn(() => [
+    {
+      mcpId: 'skills',
+      toolName: 'load_skill',
+      description: 'Carrega uma skill pelo nome.',
+      inputSchema: JSON.stringify({
+        type: 'object',
+        properties: { name: { type: 'string' } },
+        required: ['name'],
+        additionalProperties: false,
+      }),
+      lastDiscoveredAt: '2026-07-18T00:00:00.000Z',
+    },
+  ]),
 }));
 
 function config(allowedTools: string[] = []): AgentQueryConfig {
@@ -78,22 +76,26 @@ describe('Grok session config', () => {
         required: ['server', 'tool'],
       },
     });
-    await expect(result.externalTools[0]!.handler({ server: 'skills', tool: 'inexistente' }))
-      .rejects.toThrow(/nao pertence ao escopo MCP/);
+    await expect(result.externalTools[0]!.handler({ server: 'skills', tool: 'inexistente' })).rejects.toThrow(
+      /nao pertence ao escopo MCP/,
+    );
   });
 
-  it.each(['workflow', 'pipeline'] as const)('%s usa indice MCP portatil mesmo com configuracao global full', async (profile) => {
-    const result = await buildGrokSessionTools({
-      profile,
-      config: config(['Read', 'mcp__skills__load_skill']),
-      cwd: '/tmp',
-      abortController: new AbortController(),
-    });
+  it.each(['workflow', 'pipeline'] as const)(
+    '%s usa indice MCP portatil mesmo com configuracao global full',
+    async (profile) => {
+      const result = await buildGrokSessionTools({
+        profile,
+        config: config(['Read', 'mcp__skills__load_skill']),
+        cwd: '/tmp',
+        abortController: new AbortController(),
+      });
 
-    expect(result.externalTools.map((tool) => tool.name)).toEqual(['mcp_invoke', 'mcp_schema']);
-    expect(result.systemPrompt).not.toContain('mcp__skills__load_skill');
-    expect(result.systemPrompt).toContain('Servidores MCP (indice)');
-  });
+      expect(result.externalTools.map((tool) => tool.name)).toEqual(['mcp_invoke', 'mcp_schema']);
+      expect(result.systemPrompt).not.toContain('mcp__skills__load_skill');
+      expect(result.systemPrompt).toContain('Servidores MCP (indice)');
+    },
+  );
 
   it.each(['agent-scoped', 'workflow', 'pipeline'] as const)(
     '%s respeita modo index global com meta-tools filtradas pela allowlist',
@@ -173,10 +175,12 @@ describe('Grok session config', () => {
       error: 'filho falhou',
     });
     const tool = allowed.externalTools.find((entry) => entry.name === 'lion_run_subagent')!;
-    await expect(tool.handler(
-      { agentId: 'child', prompt: 'x' },
-      { transportCorrelation: { kind: 'mcp-request-id', value: '91' } },
-    )).rejects.toThrow(/filho falhou/);
+    await expect(
+      tool.handler(
+        { agentId: 'child', prompt: 'x' },
+        { transportCorrelation: { kind: 'mcp-request-id', value: '91' } },
+      ),
+    ).rejects.toThrow(/filho falhou/);
     expect(dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         transportCorrelation: { kind: 'mcp-request-id', value: '91' },
@@ -192,12 +196,19 @@ describe('Grok session config', () => {
       argv: ['--tools', 'read_file,write_file', '--disable-web-search'],
       effectiveTools: ['read_file', 'write_file'],
     });
-    expect(buildGrokNativeToolPolicy(
-      'agent-scoped',
-      ['Read', 'Edit', 'Bash', 'Grep', 'Glob', 'WebSearch', 'WebFetch'],
-    )).toEqual({
+    expect(
+      buildGrokNativeToolPolicy('agent-scoped', ['Read', 'Edit', 'Bash', 'Grep', 'Glob', 'WebSearch', 'WebFetch']),
+    ).toEqual({
       argv: ['--tools', 'read_file,search_replace,run_terminal_cmd,grep,list_dir,web_search,web_fetch'],
-      effectiveTools: ['read_file', 'search_replace', 'run_terminal_cmd', 'grep', 'list_dir', 'web_search', 'web_fetch'],
+      effectiveTools: [
+        'read_file',
+        'search_replace',
+        'run_terminal_cmd',
+        'grep',
+        'list_dir',
+        'web_search',
+        'web_fetch',
+      ],
     });
     expect(buildGrokNativeToolPolicy('one-shot', ['Read'])).toEqual({
       argv: ['--tools', '', '--disable-web-search'],

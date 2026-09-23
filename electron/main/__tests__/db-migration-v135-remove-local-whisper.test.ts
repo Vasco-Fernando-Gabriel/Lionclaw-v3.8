@@ -36,17 +36,14 @@ describe('migration v135 - remove local Whisper', () => {
     (model) => {
       db = new Database(':memory:');
       db.exec('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
-      db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(
-        'voice_transcription_model',
+      db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('voice_transcription_model', model);
+
+      applyMigrationV135(db);
+      applyMigrationV135(db);
+
+      expect(db.prepare("SELECT value FROM settings WHERE key = 'voice_transcription_model'").pluck().get()).toBe(
         model,
       );
-
-      applyMigrationV135(db);
-      applyMigrationV135(db);
-
-      expect(
-        db.prepare("SELECT value FROM settings WHERE key = 'voice_transcription_model'").pluck().get(),
-      ).toBe(model);
     },
   );
 

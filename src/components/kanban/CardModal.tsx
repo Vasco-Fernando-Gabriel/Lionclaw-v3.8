@@ -2,16 +2,11 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { X, Paperclip, Pencil, Trash2, Archive, ArchiveRestore, Check } from 'lucide-react';
-import type { KanbanAttachment, KanbanCardDetail, KanbanCardPatch } from '@/types/kanban';
+import type { KanbanAttachment, KanbanCardDetail, KanbanCardEvent, KanbanCardPatch } from '@/types/kanban';
 import { KANBAN_COLUMNS } from '@/types/kanban';
 import { useKanbanStore } from '@/stores/kanban-store';
 import { AttachmentViewer } from './AttachmentViewer';
-import {
-  TYPE_BADGE_CLASS,
-  PRIORITY_BADGE_CLASS,
-  SEVERITY_BADGE_CLASS,
-  formatDateTime,
-} from './kanban-ui';
+import { TYPE_BADGE_CLASS, PRIORITY_BADGE_CLASS, SEVERITY_BADGE_CLASS, formatDateTime } from './kanban-ui';
 
 const EVENT_LABELS: Record<string, string> = {
   created: 'criou o card',
@@ -24,6 +19,11 @@ const EVENT_LABELS: Record<string, string> = {
   'attachment-added': 'anexou arquivo',
   'attachment-removed': 'removeu anexo',
 };
+
+function actorLabel(event: KanbanCardEvent): string {
+  if (event.actor !== 'lioncode') return event.actor;
+  return event.actorDetail ? `LionCode · ${event.actorDetail}` : 'LionCode';
+}
 
 interface CardModalProps {
   detail: KanbanCardDetail;
@@ -57,9 +57,7 @@ function EditableSection({
   return (
     <div className="mt-4">
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-[10.5px] uppercase tracking-wider text-zinc-500 font-semibold">
-          {label}
-        </span>
+        <span className="text-[10.5px] uppercase tracking-wider text-zinc-500 font-semibold">{label}</span>
         {!editing && (
           <button
             onClick={() => {
@@ -100,7 +98,8 @@ function EditableSection({
           </div>
         </div>
       ) : markdown ? (
-        <div className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 prose prose-invert prose-sm max-w-none
+        <div
+          className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 prose prose-invert prose-sm max-w-none
           prose-p:text-zinc-300 prose-p:leading-relaxed prose-headings:text-zinc-200
           prose-a:text-amber-500 prose-code:text-amber-400 prose-code:text-xs
           prose-li:text-zinc-300 prose-strong:text-zinc-100"
@@ -222,19 +221,27 @@ export function CardModal({ detail, onClose }: CardModalProps) {
                 {card.boardPrefix}-{card.localId}
               </span>
               {card.archived && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-700/60 text-zinc-400">
-                  arquivado
-                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-700/60 text-zinc-400">arquivado</span>
               )}
               <div className="flex gap-1.5">
                 {card.type && (
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${TYPE_BADGE_CLASS[card.type] ?? ''}`}>{card.type}</span>
+                  <span
+                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${TYPE_BADGE_CLASS[card.type] ?? ''}`}
+                  >
+                    {card.type}
+                  </span>
                 )}
                 {card.priority && (
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${PRIORITY_BADGE_CLASS[card.priority] ?? ''}`}>{card.priority}</span>
+                  <span
+                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${PRIORITY_BADGE_CLASS[card.priority] ?? ''}`}
+                  >
+                    {card.priority}
+                  </span>
                 )}
                 {card.severity && (
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${SEVERITY_BADGE_CLASS}`}>{card.severity}</span>
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${SEVERITY_BADGE_CLASS}`}>
+                    {card.severity}
+                  </span>
                 )}
               </div>
             </div>
@@ -267,7 +274,9 @@ export function CardModal({ detail, onClose }: CardModalProps) {
           {editingFields ? (
             <div className="space-y-3 bg-zinc-950 border border-zinc-800 rounded-lg p-3">
               <div>
-                <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">Título</label>
+                <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">
+                  Título
+                </label>
                 <input
                   type="text"
                   value={fieldsDraft.title ?? ''}
@@ -277,25 +286,35 @@ export function CardModal({ detail, onClose }: CardModalProps) {
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">Tipo</label>
+                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">
+                    Tipo
+                  </label>
                   {selectDraft('type', ['Bug', 'Feature', 'Débito técnico', 'Chore'])}
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">Prioridade</label>
+                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">
+                    Prioridade
+                  </label>
                   {selectDraft('priority', ['Crítica', 'Alta', 'Média', 'Baixa'])}
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">Complexidade</label>
+                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">
+                    Complexidade
+                  </label>
                   {selectDraft('complexity', ['Baixa', 'Média', 'Alta'])}
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">Severidade</label>
+                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">
+                    Severidade
+                  </label>
                   {selectDraft('severity', ['S1', 'S2', 'S3', 'S4'])}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">Início</label>
+                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">
+                    Início
+                  </label>
                   <input
                     type="date"
                     value={fieldsDraft.startDate ?? ''}
@@ -304,7 +323,9 @@ export function CardModal({ detail, onClose }: CardModalProps) {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">Limite</label>
+                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">
+                    Limite
+                  </label>
                   <input
                     type="date"
                     value={fieldsDraft.dueDate ?? ''}
@@ -315,7 +336,9 @@ export function CardModal({ detail, onClose }: CardModalProps) {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">Commit / PR</label>
+                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">
+                    Commit / PR
+                  </label>
                   <input
                     type="text"
                     value={fieldsDraft.commitUrl ?? ''}
@@ -324,7 +347,9 @@ export function CardModal({ detail, onClose }: CardModalProps) {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">Documento</label>
+                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1">
+                    Documento
+                  </label>
                   <input
                     type="text"
                     value={fieldsDraft.docRef ?? ''}
@@ -378,11 +403,46 @@ export function CardModal({ detail, onClose }: CardModalProps) {
           {/* Secoes de texto (edicao inline por secao) */}
           {(
             [
-              { key: 'problem', label: 'Problema que resolve', value: card.problem, markdown: false, applies: true, save: (v: string | null) => patchCard({ problem: v }) },
-              { key: 'acceptanceCriteria', label: 'Critério de aceite', value: card.acceptanceCriteria, markdown: false, applies: true, save: (v: string | null) => patchCard({ acceptanceCriteria: v }) },
-              { key: 'reproduction', label: 'Reprodução (bug)', value: card.reproduction, markdown: false, applies: card.type === 'Bug', save: (v: string | null) => patchCard({ reproduction: v }) },
-              { key: 'acceptanceTests', label: 'Testes de aceite (feature)', value: card.acceptanceTests, markdown: false, applies: card.type === 'Feature', save: (v: string | null) => patchCard({ acceptanceTests: v }) },
-              { key: 'body', label: 'Corpo', value: card.body, markdown: true, applies: true, save: (v: string | null) => patchCard({ body: v }) },
+              {
+                key: 'problem',
+                label: 'Problema que resolve',
+                value: card.problem,
+                markdown: false,
+                applies: true,
+                save: (v: string | null) => patchCard({ problem: v }),
+              },
+              {
+                key: 'acceptanceCriteria',
+                label: 'Critério de aceite',
+                value: card.acceptanceCriteria,
+                markdown: false,
+                applies: true,
+                save: (v: string | null) => patchCard({ acceptanceCriteria: v }),
+              },
+              {
+                key: 'reproduction',
+                label: 'Reprodução (bug)',
+                value: card.reproduction,
+                markdown: false,
+                applies: card.type === 'Bug',
+                save: (v: string | null) => patchCard({ reproduction: v }),
+              },
+              {
+                key: 'acceptanceTests',
+                label: 'Testes de aceite (feature)',
+                value: card.acceptanceTests,
+                markdown: false,
+                applies: card.type === 'Feature',
+                save: (v: string | null) => patchCard({ acceptanceTests: v }),
+              },
+              {
+                key: 'body',
+                label: 'Corpo',
+                value: card.body,
+                markdown: true,
+                applies: true,
+                save: (v: string | null) => patchCard({ body: v }),
+              },
             ] as const
           )
             .filter((s) => s.applies)
@@ -424,9 +484,7 @@ export function CardModal({ detail, onClose }: CardModalProps) {
 
           {/* Anexos */}
           <div className="mt-5">
-            <span className="text-[10.5px] uppercase tracking-wider text-zinc-500 font-semibold">
-              Anexos
-            </span>
+            <span className="text-[10.5px] uppercase tracking-wider text-zinc-500 font-semibold">Anexos</span>
             <div className="flex flex-wrap gap-2 mt-1.5">
               {attachments.map((att) => (
                 <span
@@ -461,9 +519,7 @@ export function CardModal({ detail, onClose }: CardModalProps) {
 
           {/* Timeline */}
           <div className="mt-5">
-            <span className="text-[10.5px] uppercase tracking-wider text-zinc-500 font-semibold">
-              Histórico
-            </span>
+            <span className="text-[10.5px] uppercase tracking-wider text-zinc-500 font-semibold">Histórico</span>
             <div className="border-l-2 border-zinc-800 ml-1 pl-3.5 mt-2 space-y-2.5">
               {events.map((ev) => (
                 <div key={ev.id} className="relative text-xs text-zinc-500">
@@ -473,12 +529,10 @@ export function CardModal({ detail, onClose }: CardModalProps) {
                     {ev.fromColumn && ev.toColumn ? ` ${ev.fromColumn} -> ${ev.toColumn}` : ''}
                   </span>
                   {' · '}
-                  <span className="text-amber-500">{ev.actor}</span>
+                  <span className="text-amber-500">{actorLabel(ev)}</span>
                   {' · '}
                   {formatDateTime(ev.createdAt)}
-                  {ev.reason && (
-                    <p className="text-zinc-600 break-all">motivo: {ev.reason}</p>
-                  )}
+                  {ev.reason && <p className="text-zinc-600 break-all">motivo: {ev.reason}</p>}
                 </div>
               ))}
             </div>
@@ -503,12 +557,10 @@ export function CardModal({ detail, onClose }: CardModalProps) {
           />
           <button
             onClick={() => {
-              void store
-                .moveCard(card.boardPrefix, card.localId, moveTo, moveReason.trim() || null)
-                .then(() => {
-                  setMoveReason('');
-                  void store.refreshOpenCard();
-                });
+              void store.moveCard(card.boardPrefix, card.localId, moveTo, moveReason.trim() || null).then(() => {
+                setMoveReason('');
+                void store.refreshOpenCard();
+              });
             }}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-200 hover:bg-zinc-800 transition-colors"
           >

@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const MINIMAX_TOKEN_PLAN_DEFAULTS: ReadonlyArray<readonly [string, string]> = [
   ['orchestrator_minimax_api_key_ref', ''],
 ];

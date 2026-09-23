@@ -50,8 +50,9 @@ export function VoiceSelector({ selectedVoiceId, onSelect }: VoiceSelectorProps)
     }
 
     setPlayingId(voice.voice_id);
-    window.lionclaw.voice.speak('Ola! Eu sou uma voz da ElevenLabs. Prazer em conhecer voce!', voice.voice_id)
-      .then(result => {
+    window.lionclaw.voice
+      .speak('Ola! Eu sou uma voz da ElevenLabs. Prazer em conhecer voce!', voice.voice_id)
+      .then((result) => {
         const mimeType = result.format === 'opus' ? 'audio/ogg' : 'audio/mpeg';
         const audio = new Audio(`data:${mimeType};base64,${result.base64}`);
         audio.onended = () => setPlayingId(null);
@@ -71,17 +72,13 @@ export function VoiceSelector({ selectedVoiceId, onSelect }: VoiceSelectorProps)
   }
 
   if (error) {
-    return (
-      <div className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
-        {error}
-      </div>
-    );
+    return <div className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{error}</div>;
   }
 
   return (
     <div className="space-y-1.5 max-h-64 overflow-y-auto">
       <p className="text-xs text-zinc-500 mb-2">Voz padrao</p>
-      {voices.map(voice => (
+      {voices.map((voice) => (
         <div
           key={voice.voice_id}
           onClick={() => onSelect(voice.voice_id)}
@@ -92,9 +89,7 @@ export function VoiceSelector({ selectedVoiceId, onSelect }: VoiceSelectorProps)
           }`}
         >
           <div className="flex items-center gap-2">
-            {selectedVoiceId === voice.voice_id && (
-              <Check size={14} className="text-amber-500" />
-            )}
+            {selectedVoiceId === voice.voice_id && <Check size={14} className="text-amber-500" />}
             <div>
               <p className="text-sm text-zinc-200">{voice.name}</p>
               <p className="text-[10px] text-zinc-500">
@@ -103,7 +98,10 @@ export function VoiceSelector({ selectedVoiceId, onSelect }: VoiceSelectorProps)
             </div>
           </div>
           <button
-            onClick={(e) => { e.stopPropagation(); playPreview(voice); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              playPreview(voice);
+            }}
             className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-400 hover:text-amber-400 transition-colors"
             title="Ouvir preview"
           >

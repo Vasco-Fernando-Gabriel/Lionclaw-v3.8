@@ -1,12 +1,7 @@
-
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import {
-  getHarnessProject,
-  getPipelinePhaseMetricsRows,
-  mergePipelinePhaseMetricsMetadata,
-} from '../db';
+import { getHarnessProject, getPipelinePhaseMetricsRows, mergePipelinePhaseMetricsMetadata } from '../db';
 import { createLogger } from '../logger';
 
 const logger = createLogger('usage-sanity');
@@ -24,10 +19,7 @@ interface UsageEntry {
   output: number;
 }
 
-async function collectTranscriptFile(
-  file: string,
-  byId: Map<string, UsageEntry>,
-): Promise<void> {
+async function collectTranscriptFile(file: string, byId: Map<string, UsageEntry>): Promise<void> {
   let content: string;
   try {
     content = await fs.promises.readFile(file, 'utf-8');
@@ -44,20 +36,13 @@ async function collectTranscriptFile(
       continue;
     }
     if (!rec || typeof rec !== 'object') continue;
-    const message = (rec as Record<string, unknown>)['message'] as
-      | Record<string, unknown>
-      | undefined;
+    const message = (rec as Record<string, unknown>)['message'] as Record<string, unknown> | undefined;
     const usage = message?.['usage'] as Record<string, unknown> | undefined;
     if (!usage || typeof usage !== 'object') continue;
     const num = (k: string): number =>
-      typeof usage[k] === 'number' && Number.isFinite(usage[k] as number)
-        ? (usage[k] as number)
-        : 0;
+      typeof usage[k] === 'number' && Number.isFinite(usage[k] as number) ? (usage[k] as number) : 0;
     const rawId = message?.['id'];
-    const id =
-      typeof rawId === 'string' && rawId.length > 0
-        ? rawId
-        : `synthetic:${file}:${++syntheticSeq}`;
+    const id = typeof rawId === 'string' && rawId.length > 0 ? rawId : `synthetic:${file}:${++syntheticSeq}`;
     const prev = byId.get(id) ?? { input: 0, cacheRead: 0, cacheCreation: 0, output: 0 };
     byId.set(id, {
       input: Math.max(prev.input, num('input_tokens')),
@@ -68,24 +53,19 @@ async function collectTranscriptFile(
   }
 }
 
-async function transcriptFilesForSession(
-  projectDir: string,
-  sessionId: string,
-): Promise<string[]> {
+async function transcriptFilesForSession(projectDir: string, sessionId: string): Promise<string[]> {
   const files: string[] = [];
   const main = path.join(projectDir, `${sessionId}.jsonl`);
   try {
     await fs.promises.access(main);
     files.push(main);
-  } catch {
-  }
+  } catch {}
   const subagentsDir = path.join(projectDir, sessionId, 'subagents');
   try {
     for (const entry of await fs.promises.readdir(subagentsDir)) {
       if (entry.endsWith('.jsonl')) files.push(path.join(subagentsDir, entry));
     }
-  } catch {
-  }
+  } catch {}
   return files;
 }
 
@@ -101,18 +81,14 @@ export interface UsageSanityWarning {
   divergencePct: number;
 }
 
-export async function runUsageSanityCheck(
-  projectId: string,
-  opts?: UsageSanityOptions,
-): Promise<UsageSanityWarning[]> {
+export async function runUsageSanityCheck(projectId: string, opts?: UsageSanityOptions): Promise<UsageSanityWarning[]> {
   const warnings: UsageSanityWarning[] = [];
   try {
     await new Promise<void>((resolve) => setImmediate(resolve));
     const project = getHarnessProject(projectId);
     if (!project) return warnings;
     const rows = getPipelinePhaseMetricsRows(projectId);
-    const root =
-      opts?.claudeProjectsRoot ?? path.join(os.homedir(), '.claude', 'projects');
+    const root = opts?.claudeProjectsRoot ?? path.join(os.homedir(), '.claude', 'projects');
 
     for (const row of rows) {
       const meta = (row.metadata ?? {}) as Record<string, unknown>;
@@ -146,15 +122,12 @@ export async function runUsageSanityCheck(
       }
       const dbTokens = row.inputTokens + row.outputTokens;
 
-      const divergence =
-        dbTokens > 0 ? (transcriptTokens - dbTokens) / dbTokens : transcriptTokens > 0 ? Infinity : 0;
+      const divergence = dbTokens > 0 ? (transcriptTokens - dbTokens) / dbTokens : transcriptTokens > 0 ? Infinity : 0;
       const overThreshold = Math.abs(divergence) > USAGE_SANITY_THRESHOLD;
       const partialRead = missingSessionIds.length > 0 && divergence < 0;
       if (!overThreshold || partialRead) continue;
 
-      const divergencePct = Number.isFinite(divergence)
-        ? Math.round(divergence * 1000) / 10
-        : null;
+      const divergencePct = Number.isFinite(divergence) ? Math.round(divergence * 1000) / 10 : null;
       const warning: UsageSanityWarning = {
         phaseNumber: row.phaseNumber,
         sprintIndex: row.sprintIndex,

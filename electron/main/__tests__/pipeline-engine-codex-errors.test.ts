@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
 
@@ -16,16 +15,25 @@ const capturedEvents: Array<{ channel: string; data: unknown }> = [];
 
 vi.mock('electron', () => ({
   BrowserWindow: {
-    getAllWindows: vi.fn(() => [{
-      isDestroyed: () => false,
-      webContents: { send: (channel: string, data: unknown) => capturedEvents.push({ channel, data }) },
-    }]),
+    getAllWindows: vi.fn(() => [
+      {
+        isDestroyed: () => false,
+        webContents: { send: (channel: string, data: unknown) => capturedEvents.push({ channel, data }) },
+      },
+    ]),
   },
   app: { on: vi.fn() },
 }));
 
-vi.mock('fs', () => ({ default: { existsSync: vi.fn().mockReturnValue(false), readFileSync: vi.fn().mockReturnValue('') }, existsSync: vi.fn().mockReturnValue(false), readFileSync: vi.fn().mockReturnValue('') }));
-vi.mock('path', () => ({ default: { join: (...args: string[]) => args.join('/') }, join: (...args: string[]) => args.join('/') }));
+vi.mock('fs', () => ({
+  default: { existsSync: vi.fn().mockReturnValue(false), readFileSync: vi.fn().mockReturnValue('') },
+  existsSync: vi.fn().mockReturnValue(false),
+  readFileSync: vi.fn().mockReturnValue(''),
+}));
+vi.mock('path', () => ({
+  default: { join: (...args: string[]) => args.join('/') },
+  join: (...args: string[]) => args.join('/'),
+}));
 vi.mock('os', () => ({ default: { homedir: () => '/home/user' }, homedir: () => '/home/user' }));
 
 vi.mock('../db', () => ({
@@ -86,7 +94,6 @@ import { HarnessEngine } from '../harness-engine';
 import type { AgentExecutionResult } from '../agent-runtime/types';
 import type { CodexSession } from '../codex-runtime/types';
 
-
 function makeEngine() {
   const harnessInstance = new HarnessEngine({} as never);
   return new PipelineEngine(() => null, harnessInstance as never);
@@ -119,7 +126,6 @@ function makeSpawnOpts(projectId = 'proj-test') {
     abortController: new AbortController(),
   };
 }
-
 
 describe('PipelineEngine.spawnAgent — Codex error handling (Sprint 9)', () => {
   beforeEach(() => {
@@ -179,9 +185,7 @@ describe('PipelineEngine.spawnAgent — Codex error handling (Sprint 9)', () => 
     const engine = makeEngine();
     const opts = makeSpawnOpts();
 
-    await expect(
-      engine.spawnAgent('my-codex-agent', 'do stuff', opts),
-    ).rejects.toThrow(CodexUnavailableError);
+    await expect(engine.spawnAgent('my-codex-agent', 'do stuff', opts)).rejects.toThrow(CodexUnavailableError);
 
     const errorEvent = capturedEvents.find((e) => e.channel === 'pipeline:error');
     expect(errorEvent).toBeDefined();
@@ -200,8 +204,10 @@ describe('PipelineEngine.spawnAgent — Codex error handling (Sprint 9)', () => 
     });
 
     const engine = makeEngine();
-    await expect(engine.spawnAgent('my-kimi-agent', 'do stuff', makeSpawnOpts()))
-      .rejects.toMatchObject({ name: 'PipelinePausedError', reason: 'kimi-auth' });
+    await expect(engine.spawnAgent('my-kimi-agent', 'do stuff', makeSpawnOpts())).rejects.toMatchObject({
+      name: 'PipelinePausedError',
+      reason: 'kimi-auth',
+    });
 
     expect(capturedEvents).toContainEqual({
       channel: 'pipeline:auth-required',
@@ -216,9 +222,7 @@ describe('PipelineEngine.spawnAgent — Codex error handling (Sprint 9)', () => 
     const engine = makeEngine();
     const opts = makeSpawnOpts();
 
-    await expect(
-      engine.spawnAgent('my-cloud-agent', 'do stuff', opts),
-    ).rejects.toThrow('Some generic error');
+    await expect(engine.spawnAgent('my-cloud-agent', 'do stuff', opts)).rejects.toThrow('Some generic error');
 
     expect(capturedEvents.find((e) => e.channel === 'pipeline:auth-required')).toBeUndefined();
   });
@@ -267,7 +271,9 @@ describe('PipelineEngine.spawnAgent — Codex error handling (Sprint 9)', () => 
     });
 
     const engine = makeEngine();
-    const getStateInternal = (engine as unknown as { getState: (id: string) => { codexSessions: Map<string, CodexSession> } }).getState.bind(engine);
+    const getStateInternal = (
+      engine as unknown as { getState: (id: string) => { codexSessions: Map<string, CodexSession> } }
+    ).getState.bind(engine);
     const state = getStateInternal('proj-test');
 
     const opts = makeSpawnOpts();
@@ -284,7 +290,9 @@ describe('PipelineEngine.spawnAgent — Codex error handling (Sprint 9)', () => 
     const session2: CodexSession = { threadId: 'th2', send: vi.fn(), reply: vi.fn(), close: vi.fn() };
 
     const engine = makeEngine();
-    const getStateInternal = (engine as unknown as { getState: (id: string) => { codexSessions: Map<string, CodexSession> } }).getState.bind(engine);
+    const getStateInternal = (
+      engine as unknown as { getState: (id: string) => { codexSessions: Map<string, CodexSession> } }
+    ).getState.bind(engine);
     const state = getStateInternal('proj-test');
     state.codexSessions.set('agent-a:3', session1);
     state.codexSessions.set('agent-b:3', session2);
@@ -296,7 +304,6 @@ describe('PipelineEngine.spawnAgent — Codex error handling (Sprint 9)', () => 
     expect(state.codexSessions.size).toBe(0);
   });
 });
-
 
 function getEngineState(engine: PipelineEngine, projectId: string) {
   return (
@@ -428,9 +435,9 @@ describe('SC-1 — PipelineEngine.spawnAgent codex session recovery (Pilar C)', 
     const engine = makeEngine();
     seedCachedSession(engine);
 
-    await expect(
-      engine.spawnAgent('my-codex-agent', 'follow-up', makeRetryOpts()),
-    ).rejects.toThrow(CodexUnavailableError);
+    await expect(engine.spawnAgent('my-codex-agent', 'follow-up', makeRetryOpts())).rejects.toThrow(
+      CodexUnavailableError,
+    );
 
     expect(executeAgent).toHaveBeenCalledTimes(2);
     const errorEvent = capturedEvents.find((e) => e.channel === 'pipeline:error');
@@ -445,9 +452,7 @@ describe('SC-1 — PipelineEngine.spawnAgent codex session recovery (Pilar C)', 
     seedCachedSession(engine);
     const opts = makeRetryOpts();
 
-    await expect(
-      engine.spawnAgent('my-codex-agent', 'follow-up', opts),
-    ).rejects.toThrow(CodexUnavailableError);
+    await expect(engine.spawnAgent('my-codex-agent', 'follow-up', opts)).rejects.toThrow(CodexUnavailableError);
 
     expect(executeAgent).toHaveBeenCalledTimes(1);
     expect(opts.rebuildPromptOnRetry).not.toHaveBeenCalled();
@@ -486,9 +491,7 @@ describe('SC-1 — PipelineEngine.spawnAgent codex session recovery (Pilar C)', 
     seedCachedSession(engine);
     const opts = makeRetryOpts();
 
-    await expect(
-      engine.spawnAgent('my-codex-agent', 'follow-up', opts),
-    ).rejects.toBeInstanceOf(PipelinePausedError);
+    await expect(engine.spawnAgent('my-codex-agent', 'follow-up', opts)).rejects.toBeInstanceOf(PipelinePausedError);
 
     expect(executeAgent).toHaveBeenCalledTimes(1);
     expect(opts.rebuildPromptOnRetry).not.toHaveBeenCalled();
@@ -528,9 +531,7 @@ describe('SC-1 — PipelineEngine.spawnAgent codex session recovery (Pilar C)', 
     expect(result.output).toBe('done');
     expect(capturedEvents.find((e) => e.channel === 'pipeline:error')).toBeUndefined();
   });
-
 });
-
 
 describe('SC-1 — isTransientCodexSessionError / buildCodexResumePrompt', () => {
   beforeEach(() => {

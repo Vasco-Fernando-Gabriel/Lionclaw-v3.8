@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 interface ServerRow {
@@ -13,10 +12,7 @@ interface ServerRow {
   index_mode: 'tools' | 'server';
 }
 
-function serverRow(
-  id: string,
-  visibleTo: 'all' | 'codex-lion-only' = 'all',
-): ServerRow {
+function serverRow(id: string, visibleTo: 'all' | 'codex-lion-only' = 'all'): ServerRow {
   return {
     id,
     name: `Server ${id}`,
@@ -51,7 +47,10 @@ vi.mock('../db', () => ({
       },
       run: () => undefined,
     }),
-    transaction: (fn: (...a: unknown[]) => unknown) => (...a: unknown[]) => fn(...a),
+    transaction:
+      (fn: (...a: unknown[]) => unknown) =>
+      (...a: unknown[]) =>
+        fn(...a),
   }),
   getSetting: (key: string) => state.settings.get(key),
 }));
@@ -72,23 +71,15 @@ import { getMCPConfigForAgent } from '../mcp-manager';
 import { TOOL_SCRIPT_HELPER_ID } from '../mcp-risk-patterns';
 import type { ChatFeatureToggles, OrchestratorRuntime } from '../../../src/types';
 
-type McpConfig = Record<
-  string,
-  { command: string; args: string[]; env?: Record<string, string> }
->;
+type McpConfig = Record<string, { command: string; args: string[]; env?: Record<string, string> }>;
 
 const TOKEN_ENV = 'LIONCLAW_HELPER_TOKEN';
 const PIPELINE_ID = 'lionclaw-pipeline-control';
-const TS_ID = TOOL_SCRIPT_HELPER_ID; // 'lionclaw-toolscript'
+const TS_ID = TOOL_SCRIPT_HELPER_ID;
 
 const DESKTOP_CAPS: ChatFeatureToggles = { pipelineControl: true, dynamicWorkflows: true };
 
-const CHAT_SPAWN_SURFACES: OrchestratorRuntime[] = [
-  'claude-sdk',
-  'claude-compat-sdk',
-  'kimi-sdk',
-  'lion-sdk',
-];
+const CHAT_SPAWN_SURFACES: OrchestratorRuntime[] = ['claude-sdk', 'claude-compat-sdk', 'kimi-sdk', 'lion-sdk'];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -106,7 +97,6 @@ beforeEach(() => {
 function tokenOf(config: McpConfig | undefined, id: string): string | undefined {
   return config?.[id]?.env?.[TOKEN_ENV];
 }
-
 
 describe('turno desktop (capabilities presente): toolscript always-on com token', () => {
   for (const surface of CHAT_SPAWN_SURFACES) {
@@ -146,7 +136,6 @@ describe('turno desktop (capabilities presente): toolscript always-on com token'
   });
 });
 
-
 describe('invariante Fase A (S4/S5): gated helpers SEM token em kimi/lion', () => {
   for (const surface of ['kimi-sdk', 'lion-sdk'] as const) {
     it(`${surface}: pipeline-control presente SEM token; toolscript presente COM token`, async () => {
@@ -160,7 +149,6 @@ describe('invariante Fase A (S4/S5): gated helpers SEM token em kimi/lion', () =
     });
   }
 });
-
 
 describe('lanes sem turn-context (capabilities undefined): toolscript AUSENTE (S3c)', () => {
   for (const surface of CHAT_SPAWN_SURFACES) {
@@ -183,7 +171,6 @@ describe('lanes sem turn-context (capabilities undefined): toolscript AUSENTE (S
     expect(Object.keys(config ?? {})).not.toContain(TS_ID);
   });
 });
-
 
 describe('fullCatalog:true (wrapper central) — excecao deliberada do filtro S3c', () => {
   it('capabilities undefined + fullCatalog:true -> toolscript COMPOE (re-valida por turno no invoke)', async () => {

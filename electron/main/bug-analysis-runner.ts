@@ -1,13 +1,8 @@
-
 import fs from 'fs';
 import path from 'path';
 import { createLogger } from './logger';
 import { emitIPC } from './pipeline-shared/ipc-emitter';
-import {
-  insertBugAnalysisAgentStatus,
-  updateBugAnalysisAgentStatus,
-  savePipelinePhaseMetrics,
-} from './db';
+import { insertBugAnalysisAgentStatus, updateBugAnalysisAgentStatus, savePipelinePhaseMetrics } from './db';
 import { resolveAgentQueryConfig } from './agent-config-resolver';
 import { runWithConcurrencyLimit } from './security-audit-runner';
 import { rethrowPipelinePause } from './pipeline-engine/provider-auth';
@@ -16,21 +11,15 @@ import type { AgentConfig } from '../../src/types';
 import type { AgentExecutionResult } from './agent-runtime/types';
 import type { PipelineEngine } from './pipeline-engine';
 import type { BugContext } from './bug-paths';
-import {
-  BUG_ROOT_CAUSE_ANALYST_ID,
-  BUG_CONTEXT_HISTORIAN_ID,
-  BUG_HYPOTHESIS_REFUTER_ID,
-} from './seed-agents/index';
+import { BUG_ROOT_CAUSE_ANALYST_ID, BUG_CONTEXT_HISTORIAN_ID, BUG_HYPOTHESIS_REFUTER_ID } from './seed-agents/index';
 
 const logger = createLogger('bug-analysis-runner');
-
 
 export const BUG_ANALYSIS_PHASE = 2;
 
 export const BUG_ANALYSIS_PHASE_NAME = 'Analise Paralela';
 
 export const BUG_ANALYSIS_AGGREGATE_AGENT_ID = 'bug-analysis-multi';
-
 
 export interface BugAnalysisAgentDef {
   agentId: string;
@@ -41,8 +30,8 @@ export interface BugAnalysisAgentDef {
 
 export const BUG_ANALYSIS_AGENTS: BugAnalysisAgentDef[] = [
   { agentId: BUG_ROOT_CAUSE_ANALYST_ID, name: 'Root Cause Analyst', slug: 'root-cause', order: 1 },
-  { agentId: BUG_CONTEXT_HISTORIAN_ID,  name: 'Context Historian',  slug: 'historian',  order: 2 },
-  { agentId: BUG_HYPOTHESIS_REFUTER_ID, name: 'Hypothesis Refuter', slug: 'refuter',    order: 3 },
+  { agentId: BUG_CONTEXT_HISTORIAN_ID, name: 'Context Historian', slug: 'historian', order: 2 },
+  { agentId: BUG_HYPOTHESIS_REFUTER_ID, name: 'Hypothesis Refuter', slug: 'refuter', order: 3 },
 ];
 
 export function resolveBugAnalysisOutputPath(
@@ -50,12 +39,14 @@ export function resolveBugAnalysisOutputPath(
   order: BugAnalysisAgentDef['order'],
 ): string {
   switch (order) {
-    case 1: return ctx.analise01Path;
-    case 2: return ctx.analise02Path;
-    case 3: return ctx.analise03Path;
+    case 1:
+      return ctx.analise01Path;
+    case 2:
+      return ctx.analise02Path;
+    case 3:
+      return ctx.analise03Path;
   }
 }
-
 
 export interface BuildBugAnalysisPromptArgs {
   projectPath: string;
@@ -84,7 +75,6 @@ ${graphBlock}
 - Responda EXATAMENTE nas secoes definidas no seu systemPrompt, em markdown.
 - TODA afirmacao sobre o codigo tem file:line.`;
 }
-
 
 interface AgentRunResult {
   output: string;
@@ -125,7 +115,6 @@ export interface BugAnalysisRunResult {
   failed: Array<{ agentId: string; name: string; error: string }>;
 }
 
-
 export class BugAnalysisRunner {
   private readonly maxConcurrent = 3;
 
@@ -149,8 +138,8 @@ export class BugAnalysisRunner {
     if (diagnosticoContent.trim().length === 0) {
       throw new Error(
         `Diagnostico do bug ausente ou vazio em ${bugCtx.diagnosticoPath}. ` +
-        `A fase 2 nao roda sem o diagnostico da fase 1. ` +
-        `Resete a fase 1 e conclua o Bug Discovery antes de seguir.`,
+          `A fase 2 nao roda sem o diagnostico da fase 1. ` +
+          `Resete a fase 1 e conclua o Bug Discovery antes de seguir.`,
       );
     }
 
@@ -217,7 +206,7 @@ export class BugAnalysisRunner {
           additionalFilesAfterStart: tracker.filesRead.size,
           toolCallsCount: tracker.toolCallsCount,
           costUsd: extras?.costUsd ?? 0,
-          durationMs: extras?.durationMs ?? (Date.now() - agentStartedAt.getTime()),
+          durationMs: extras?.durationMs ?? Date.now() - agentStartedAt.getTime(),
           findingsCount: undefined,
           model: extras?.model ?? tracker.model,
           runtime: tracker.runtime,
@@ -349,10 +338,7 @@ export class BugAnalysisRunner {
       });
 
       callbacks?.onText?.(`[${agentDef.name}] concluido.`);
-      logger.info(
-        { projectId, runId, agentId: agentDef.agentId, outputPath },
-        'Bug analysis agent completed',
-      );
+      logger.info({ projectId, runId, agentId: agentDef.agentId, outputPath }, 'Bug analysis agent completed');
 
       savePipelinePhaseMetrics({
         projectId,
@@ -416,12 +402,7 @@ export class BugAnalysisRunner {
       });
     };
 
-    await runWithConcurrencyLimit(
-      BUG_ANALYSIS_AGENTS,
-      this.maxConcurrent,
-      runAgent,
-      abortController,
-    );
+    await runWithConcurrencyLimit(BUG_ANALYSIS_AGENTS, this.maxConcurrent, runAgent, abortController);
 
     callbacks?.onDone?.();
     emitIPC('pipeline:stream', {
@@ -430,9 +411,7 @@ export class BugAnalysisRunner {
       type: 'done',
     });
 
-    const writtenPaths = [...writtenByOrder.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([, p]) => p);
+    const writtenPaths = [...writtenByOrder.entries()].sort((a, b) => a[0] - b[0]).map(([, p]) => p);
 
     logger.info(
       { projectId, runId, written: writtenPaths.length, failed: failed.length },

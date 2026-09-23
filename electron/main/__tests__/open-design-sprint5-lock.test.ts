@@ -1,9 +1,7 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-
 
 vi.mock('../open-design/config', () => ({
   getOpenDesignConfig: vi.fn(),
@@ -45,7 +43,6 @@ vi.mock('../pipeline-shared/ipc-emitter', () => ({
   emitIPC: vi.fn(),
 }));
 
-
 import * as configMod from '../open-design/config';
 import * as snapshotMod from '../open-design/snapshot';
 import * as validatorMod from '../open-design/validator';
@@ -53,7 +50,6 @@ import * as ipcMod from '../pipeline-shared/ipc-emitter';
 import * as dbMod from '../db';
 import { lock } from '../open-design/lock';
 import { destructiveUnlock } from '../open-design/escape-hatch';
-
 
 function createSnapshotDir(runDir: string) {
   const snapshotDir = path.join(runDir, 'open-design', 'snapshots', 'latest');
@@ -67,12 +63,20 @@ function createSnapshotDir(runDir: string) {
   );
   fs.writeFileSync(
     path.join(snapshotDir, 'design-contract.json'),
-    JSON.stringify({ version: '1.0', screens: [], components: [], dataRequirements: [], apiExpectations: [], deltas: [], navigation: { primary: [] }, visual: { direction: '', density: 'balanced', tokens: { colors: {}, typography: {}, spacing: {}, radii: {} } } }),
+    JSON.stringify({
+      version: '1.0',
+      screens: [],
+      components: [],
+      dataRequirements: [],
+      apiExpectations: [],
+      deltas: [],
+      navigation: { primary: [] },
+      visual: { direction: '', density: 'balanced', tokens: { colors: {}, typography: {}, spacing: {}, radii: {} } },
+    }),
     'utf-8',
   );
   return snapshotDir;
 }
-
 
 describe('lock() happy path', () => {
   let tmpDir: string;
@@ -159,7 +163,6 @@ describe('lock() happy path', () => {
   });
 });
 
-
 describe('lock() rejection path', () => {
   let tmpDir: string;
 
@@ -237,16 +240,13 @@ describe('lock() rejection path', () => {
     const db = (dbMod.getDb as ReturnType<typeof vi.fn>).mock.results[0]?.value as {
       prepare: ReturnType<typeof vi.fn>;
     };
-    const runCalls = (db.prepare.mock.results as unknown as Array<{ value: { run: ReturnType<typeof vi.fn> } }>).flatMap(
-      (r) => r.value.run.mock.calls,
-    );
-    const updateCall = runCalls.find((args: unknown[]) =>
-      args.includes('test-project-id'),
-    );
+    const runCalls = (
+      db.prepare.mock.results as unknown as Array<{ value: { run: ReturnType<typeof vi.fn> } }>
+    ).flatMap((r) => r.value.run.mock.calls);
+    const updateCall = runCalls.find((args: unknown[]) => args.includes('test-project-id'));
     expect(updateCall).toBeDefined();
   });
 });
-
 
 describe('destructiveUnlock() happy path', () => {
   let tmpDir: string;
@@ -258,16 +258,8 @@ describe('destructiveUnlock() happy path', () => {
     fs.mkdirSync(artifactDir, { recursive: true });
 
     fs.writeFileSync(path.join(artifactDir, 'index.html'), '<html></html>', 'utf-8');
-    fs.writeFileSync(
-      path.join(snapshotDir, 'design-contract.json'),
-      '{}',
-      'utf-8',
-    );
-    fs.writeFileSync(
-      path.join(snapshotDir, 'design-lock-report.md'),
-      '# Report',
-      'utf-8',
-    );
+    fs.writeFileSync(path.join(snapshotDir, 'design-contract.json'), '{}', 'utf-8');
+    fs.writeFileSync(path.join(snapshotDir, 'design-lock-report.md'), '# Report', 'utf-8');
     fs.writeFileSync(
       path.join(snapshotDir, 'manifest.json'),
       JSON.stringify({
@@ -301,9 +293,7 @@ describe('destructiveUnlock() happy path', () => {
     const result = await destructiveUnlock('test-project-id', 'DESBLOQUEAR DESIGN');
     if (!('ok' in result) || !result.ok) throw new Error('expected ok');
     expect(fs.existsSync(result.archivePath)).toBe(true);
-    expect(
-      fs.existsSync(path.join(result.archivePath, 'artifact', 'index.html')),
-    ).toBe(true);
+    expect(fs.existsSync(path.join(result.archivePath, 'artifact', 'index.html'))).toBe(true);
   });
 
   it('writes archived-state.json in the revision dir', async () => {
@@ -311,9 +301,7 @@ describe('destructiveUnlock() happy path', () => {
     if (!('ok' in result) || !result.ok) throw new Error('expected ok');
     const archivedStatePath = path.join(result.archivePath, 'archived-state.json');
     expect(fs.existsSync(archivedStatePath)).toBe(true);
-    const state = JSON.parse(
-      fs.readFileSync(archivedStatePath, 'utf-8'),
-    ) as Record<string, unknown>;
+    const state = JSON.parse(fs.readFileSync(archivedStatePath, 'utf-8')) as Record<string, unknown>;
     expect(state.designRevisionId).toBe(result.designRevisionId);
     expect(state.projectId).toBe('test-project-id');
   });
@@ -348,7 +336,6 @@ describe('destructiveUnlock() happy path', () => {
     expect(fs.existsSync(path.join(snapshotDir, 'manifest.json'))).toBe(false);
   });
 });
-
 
 describe('destructiveUnlock() invalid confirmation', () => {
   it('returns error: invalid-confirmation for wrong phrase', async () => {

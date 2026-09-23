@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { store, getSetting, setSetting } = vi.hoisted(() => {
@@ -88,7 +87,7 @@ describe('vision settings round-trip', () => {
 
   it('settings:get realinha modelo incoerente com o provider salvo', async () => {
     store.set('vision_provider', 'anthropic');
-    store.set('vision_model', 'gpt-5.5'); // modelo de OUTRO provider
+    store.set('vision_model', 'gpt-5.5');
     const s = await callGet();
     expect(s.visionProvider).toBe('anthropic');
     expect(s.visionModel).toBe('claude-opus-4-8');

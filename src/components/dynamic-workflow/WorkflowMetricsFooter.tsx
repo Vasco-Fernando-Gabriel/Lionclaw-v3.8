@@ -61,9 +61,7 @@ export interface WorkflowRunMetricsTotals {
   model: string | null;
 }
 
-export function aggregateRunMetrics(
-  nodeRuns: DynamicWorkflowNodeRun[],
-): WorkflowRunMetricsTotals {
+export function aggregateRunMetrics(nodeRuns: DynamicWorkflowNodeRun[]): WorkflowRunMetricsTotals {
   const totals: WorkflowRunMetricsTotals = {
     inputTokens: 0,
     outputTokens: 0,
@@ -120,18 +118,14 @@ export function WorkflowMetricsFooter({
     );
   }
 
-  const dimmed =
-    totals.inputTokens === 0 && totals.outputTokens === 0 && totals.costUsd === 0;
+  const dimmed = totals.inputTokens === 0 && totals.outputTokens === 0 && totals.costUsd === 0;
   const inputStr = formatTokens(totals.inputTokens);
   const outputStr = formatTokens(totals.outputTokens);
-  const costStr =
-    (totals.estimatedPartialCount > 0 ? '~' : '') + formatCost(totals.costUsd);
+  const costStr = (totals.estimatedPartialCount > 0 ? '~' : '') + formatCost(totals.costUsd);
   const toolStr = String(totals.toolUses);
-  const timerStr =
-    isStreaming && runStartedAtMs != null ? liveElapsed : formatTimer(totals.durationMs);
+  const timerStr = isStreaming && runStartedAtMs != null ? liveElapsed : formatTimer(totals.durationMs);
   const modelStr = totals.model ?? '-';
-  const totalStr =
-    (totals.estimatedPartialCount > 0 ? '~' : '') + formatCost(totalCostUsd);
+  const totalStr = (totals.estimatedPartialCount > 0 ? '~' : '') + formatCost(totalCostUsd);
 
   return (
     <div className="flex items-center gap-2 border-t border-zinc-800 px-4 py-1.5 bg-zinc-950/60 shrink-0">
@@ -162,22 +156,18 @@ export function WorkflowMetricsFooter({
       <div className="flex-1" />
 
       <span className="text-zinc-700 text-[10px] font-mono">total:</span>
-      <span className="text-white font-bold text-[10px] font-mono">
-        {totalStr}
-      </span>
+      <span className="text-white font-bold text-[10px] font-mono">{totalStr}</span>
       {totals.estimatedPartialCount > 0 && totals.unknownCostCount === 0 && (
         <span className="text-[10px] text-zinc-600 font-mono ml-1">
-          (custo aproximado{totals.estimatedPartialReasons.size > 0
-            ? `: ${[...totals.estimatedPartialReasons]
-                .map((r) => COST_STATUS_REASON_LABELS[r])
-                .join(', ')}`
-            : ''})
+          (custo aproximado
+          {totals.estimatedPartialReasons.size > 0
+            ? `: ${[...totals.estimatedPartialReasons].map((r) => COST_STATUS_REASON_LABELS[r]).join(', ')}`
+            : ''}
+          )
         </span>
       )}
       {totals.unknownCostCount > 0 && (
-        <span className="text-zinc-500 text-[10px] font-mono">
-          ({totals.unknownCostCount} com custo nao estimado)
-        </span>
+        <span className="text-zinc-500 text-[10px] font-mono">({totals.unknownCostCount} com custo nao estimado)</span>
       )}
 
       {onExpandMetrics !== undefined && (

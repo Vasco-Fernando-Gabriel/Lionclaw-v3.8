@@ -1,4 +1,3 @@
-
 import {
   resolveGitRoot,
   detectCodexWindowsIssues,
@@ -20,11 +19,7 @@ export interface OfficialPreFlightResult {
   actionableCount?: number;
 }
 
-export function runOfficialPreFlight(
-  cwd: string,
-  projectId?: string,
-  agentId?: string,
-): OfficialPreFlightResult {
+export function runOfficialPreFlight(cwd: string, projectId?: string, agentId?: string): OfficialPreFlightResult {
   if (process.platform !== 'win32') {
     return { status: 'not-windows' };
   }
@@ -47,10 +42,7 @@ export function runOfficialPreFlight(
   ) {
     if (actionableCount === 0) {
       officialPreparedRepos.add(repoRoot);
-      logger.info(
-        { projectId, repoRoot },
-        'official codex auto-prep skipped: no actionable issues remain',
-      );
+      logger.info({ projectId, repoRoot }, 'official codex auto-prep skipped: no actionable issues remain');
     } else {
       const result = runPrep(repoRoot);
       if (result.applied) {
@@ -61,10 +53,7 @@ export function runOfficialPreFlight(
           'official codex auto-prep applied silently',
         );
       } else {
-        logger.warn(
-          { projectId, repoRoot, reason: result.reason },
-          'official codex auto-prep skipped',
-        );
+        logger.warn({ projectId, repoRoot, reason: result.reason }, 'official codex auto-prep skipped');
       }
     }
   }

@@ -1,9 +1,7 @@
-
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-
 
 vi.mock('../open-design/config', () => ({
   getOpenDesignConfig: vi.fn(),
@@ -17,10 +15,7 @@ vi.mock('../db', () => ({
 
 import * as configMod from '../open-design/config';
 
-
-import {
-  DEVELOPMENT_V2_PIPELINE_PHASES,
-} from '../../../src/types/pipeline';
+import { DEVELOPMENT_V2_PIPELINE_PHASES } from '../../../src/types/pipeline';
 
 describe('Sprint 7 smoke 1 — DEVELOPMENT_V2_PIPELINE_PHASES contract', () => {
   it('has exactly 17 phases', () => {
@@ -74,27 +69,22 @@ describe('Sprint 7 smoke 1 — DEVELOPMENT_V2_PIPELINE_PHASES contract', () => {
   });
 
   it('phases 1,3,5,8,9,10,11,13,15 are conversation', () => {
-    const conversationPhases = DEVELOPMENT_V2_PIPELINE_PHASES
-      .filter((p) => p.type === 'conversation')
-      .map((p) => p.number);
+    const conversationPhases = DEVELOPMENT_V2_PIPELINE_PHASES.filter((p) => p.type === 'conversation').map(
+      (p) => p.number,
+    );
     expect(conversationPhases.sort((a, b) => a - b)).toEqual([1, 3, 5, 8, 9, 10, 11, 13, 15]);
   });
 
   it('phases 2,4,6,7,12,14 are auto', () => {
-    const autoPhases = DEVELOPMENT_V2_PIPELINE_PHASES
-      .filter((p) => p.type === 'auto')
-      .map((p) => p.number);
+    const autoPhases = DEVELOPMENT_V2_PIPELINE_PHASES.filter((p) => p.type === 'auto').map((p) => p.number);
     expect(autoPhases.sort((a, b) => a - b)).toEqual([2, 4, 6, 7, 12, 14]);
   });
 
   it('phases 16,17 are loop', () => {
-    const loopPhases = DEVELOPMENT_V2_PIPELINE_PHASES
-      .filter((p) => p.type === 'loop')
-      .map((p) => p.number);
+    const loopPhases = DEVELOPMENT_V2_PIPELINE_PHASES.filter((p) => p.type === 'loop').map((p) => p.number);
     expect(loopPhases.sort((a, b) => a - b)).toEqual([16, 17]);
   });
 });
-
 
 describe('Sprint 7 smoke 2 — getResetablePhases post-lock excludes phase 4', () => {
   it('DEVELOPMENT_V2_RESETABLE_PHASES_AFTER_LOCK does NOT contain phase 4', async () => {
@@ -120,7 +110,6 @@ describe('Sprint 7 smoke 2 — getResetablePhases post-lock excludes phase 4', (
     expect(resetableSet.has(4)).toBe(false);
   });
 });
-
 
 describe('Sprint 7 smoke 3 — validateLock rule 10.2.10 (story sem screen)', () => {
   let tmpDir: string;
@@ -162,12 +151,7 @@ ${JSON.stringify(minimalContract)}
 
     fs.writeFileSync(path.join(artifactDir, 'index.html'), htmlContent, 'utf-8');
 
-    fs.writeFileSync(
-      path.join(snapshotDir, 'design-contract.json'),
-      JSON.stringify(minimalContract),
-      'utf-8',
-    );
-
+    fs.writeFileSync(path.join(snapshotDir, 'design-contract.json'), JSON.stringify(minimalContract), 'utf-8');
 
     const { storyRequiresUI } = await import('../open-design/validator');
 
@@ -208,11 +192,7 @@ ${JSON.stringify(minimalContract)}
       `<html><body><script id="lionclaw-design-contract" type="application/json">${JSON.stringify(minimalContract)}</script></body></html>`,
       'utf-8',
     );
-    fs.writeFileSync(
-      path.join(snapshotDir, 'design-contract.json'),
-      JSON.stringify(minimalContract),
-      'utf-8',
-    );
+    fs.writeFileSync(path.join(snapshotDir, 'design-contract.json'), JSON.stringify(minimalContract), 'utf-8');
 
     const projectGuess = path.resolve(tmpDir, '../../../../');
     const storiesCandidate = path.join(projectGuess, 'stories-requisitos.md');
@@ -236,8 +216,7 @@ ${JSON.stringify(minimalContract)}
       try {
         fs.accessSync(projectGuess, fs.constants.W_OK);
         canWrite = true;
-      } catch {
-      }
+      } catch {}
     }
 
     if (!canWrite) {
@@ -254,11 +233,14 @@ ${JSON.stringify(minimalContract)}
       expect(rule10Problems.length).toBeGreaterThan(0);
       expect(rule10Problems[0].item).toContain('US-01');
     } finally {
-      try { fs.rmSync(storiesCandidate); } catch { /* ignore */ }
+      try {
+        fs.rmSync(storiesCandidate);
+      } catch {
+        /* ignore */
+      }
     }
   });
 });
-
 
 describe('Sprint 7 smoke 4 — validateLock rule 10.2.3/10.2.4 (screen/menu sem story)', () => {
   let tmpDir: string;
@@ -283,7 +265,7 @@ describe('Sprint 7 smoke 4 — validateLock rule 10.2.3/10.2.4 (screen/menu sem 
         {
           id: 'screen-relatorios',
           title: 'Relatorios',
-          userStoryIds: [],    // EMPTY => 10.2.3
+          userStoryIds: [], // EMPTY => 10.2.3
           actions: [],
           dataRequirementIds: [],
           states: [],
@@ -306,11 +288,7 @@ describe('Sprint 7 smoke 4 — validateLock rule 10.2.3/10.2.4 (screen/menu sem 
       `<html><body><script id="lionclaw-design-contract" type="application/json">${JSON.stringify(contractWithOrphanScreen)}</script></body></html>`,
       'utf-8',
     );
-    fs.writeFileSync(
-      path.join(snapshotDir, 'design-contract.json'),
-      JSON.stringify(contractWithOrphanScreen),
-      'utf-8',
-    );
+    fs.writeFileSync(path.join(snapshotDir, 'design-contract.json'), JSON.stringify(contractWithOrphanScreen), 'utf-8');
 
     (configMod.getOpenDesignConfig as ReturnType<typeof vi.fn>).mockReturnValue({
       runDir: tmpDir,
@@ -343,7 +321,7 @@ describe('Sprint 7 smoke 4 — validateLock rule 10.2.3/10.2.4 (screen/menu sem 
             id: 'nav-financeiro',
             label: 'Financeiro',
             targetScreenId: 'screen-financeiro',
-            userStoryIds: [],   // EMPTY => 10.2.4
+            userStoryIds: [], // EMPTY => 10.2.4
           },
         ],
       },
@@ -363,11 +341,7 @@ describe('Sprint 7 smoke 4 — validateLock rule 10.2.3/10.2.4 (screen/menu sem 
       `<html><body><script id="lionclaw-design-contract" type="application/json">${JSON.stringify(contractWithOrphanMenu)}</script></body></html>`,
       'utf-8',
     );
-    fs.writeFileSync(
-      path.join(snapshotDir, 'design-contract.json'),
-      JSON.stringify(contractWithOrphanMenu),
-      'utf-8',
-    );
+    fs.writeFileSync(path.join(snapshotDir, 'design-contract.json'), JSON.stringify(contractWithOrphanMenu), 'utf-8');
 
     (configMod.getOpenDesignConfig as ReturnType<typeof vi.fn>).mockReturnValue({
       runDir: tmpDir,
@@ -416,7 +390,9 @@ describe('Sprint 7 smoke 4 — validateLock rule 10.2.3/10.2.4 (screen/menu sem 
     });
 
     (configMod.getOpenDesignConfig as ReturnType<typeof vi.fn>).mockReturnValue({
-      runDir: tmpDir, pipelineDocsId: '', locked: false,
+      runDir: tmpDir,
+      pipelineDocsId: '',
+      locked: false,
     });
 
     const { validateLock } = await import('../open-design/validator');
@@ -428,7 +404,9 @@ describe('Sprint 7 smoke 4 — validateLock rule 10.2.3/10.2.4 (screen/menu sem 
 
     vi.clearAllMocks();
     (configMod.getOpenDesignConfig as ReturnType<typeof vi.fn>).mockReturnValue({
-      runDir: tmpDir, pipelineDocsId: '', locked: false,
+      runDir: tmpDir,
+      pipelineDocsId: '',
+      locked: false,
     });
 
     const secondAttempt = await validateLock('test-project-id');
@@ -436,7 +414,6 @@ describe('Sprint 7 smoke 4 — validateLock rule 10.2.3/10.2.4 (screen/menu sem 
     expect(secondAttempt.problems).toHaveLength(0);
   });
 });
-
 
 describe('Sprint 7 smoke 5 — resolveRunDir returns canonical path', () => {
   afterEach(() => {
@@ -470,7 +447,6 @@ describe('Sprint 7 smoke 5 — resolveRunDir returns canonical path', () => {
     expect(resolveRunDir('missing-project-id')).toBeNull();
   });
 });
-
 
 describe('Sprint 7 smoke 6 — sprint-validator briefing contains touchesUI rule', () => {
   it('getDevV2Briefing for sprint-validator includes touchesUI=true requirement', async () => {
@@ -523,10 +499,13 @@ describe('Sprint 7 smoke 6 — sprint-validator briefing contains touchesUI rule
         touchesUI: true,
         affectedScreenIds: [],
         affectedComponentIds: [],
-        designArtifactPath: '/project/.lionclaw/pipelines/development-v2/run1/open-design/snapshots/latest/artifact/index.html',
+        designArtifactPath:
+          '/project/.lionclaw/pipelines/development-v2/run1/open-design/snapshots/latest/artifact/index.html',
       },
     });
     expect(briefing).not.toBeNull();
-    expect(briefing).toContain('/project/.lionclaw/pipelines/development-v2/run1/open-design/snapshots/latest/artifact/index.html');
+    expect(briefing).toContain(
+      '/project/.lionclaw/pipelines/development-v2/run1/open-design/snapshots/latest/artifact/index.html',
+    );
   });
 });

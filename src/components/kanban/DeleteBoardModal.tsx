@@ -48,8 +48,8 @@ export function DeleteBoardModal({ board, onClose }: DeleteBoardModalProps) {
         </div>
         <div className="px-6 pb-5 space-y-4">
           <p className="text-sm text-zinc-400 leading-relaxed">
-            O quadro <span className="text-zinc-200 font-medium">{board.name}</span> e seus{' '}
-            {totalCards} cards, com histórico e anexos, serão apagados de verdade. Não há desfazer.
+            O quadro <span className="text-zinc-200 font-medium">{board.name}</span> e seus {totalCards} cards, com
+            histórico e anexos, serão apagados de verdade. Não há desfazer.
           </p>
           <div>
             <label className="block text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5">

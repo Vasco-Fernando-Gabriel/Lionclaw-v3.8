@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -17,17 +16,13 @@ function grabBlock(source: string, name: string): string {
 }
 
 function grabMarker(source: string, name: string): string {
-  const match = source.match(new RegExp("const " + name + " = '([^']*)';"));
+  const match = source.match(new RegExp('const ' + name + " = '([^']*)';"));
   if (!match) throw new Error('marcador ' + name + ' nao encontrado');
   return match[1];
 }
 
-const V101_SOURCE = readMigration(
-  'v101-dynamic-workflow-planner-respects-spec.ts',
-);
-const V108_SOURCE = readMigration(
-  'v108-dynamic-workflow-planner-writeset-integration.ts',
-);
+const V101_SOURCE = readMigration('v101-dynamic-workflow-planner-respects-spec.ts');
+const V108_SOURCE = readMigration('v108-dynamic-workflow-planner-writeset-integration.ts');
 
 describe('migration v108 dynamic-workflow planner writeSetHint integracao (R10, sem DB)', () => {
   it('a cadeia compoe: o V108.OLD_BLOCK e a linha writeSetHint que a V101 introduziu', () => {

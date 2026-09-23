@@ -1,11 +1,5 @@
 import { create } from 'zustand';
-import type {
-  KnowledgeSource,
-  KnowledgeAgentConfig,
-  KBSearchResult,
-  BenchmarkResult,
-  ChunkStrategy,
-} from '@/types';
+import type { KnowledgeSource, KnowledgeAgentConfig, KBSearchResult, BenchmarkResult, ChunkStrategy } from '@/types';
 
 interface KnowledgeState {
   sources: KnowledgeSource[];
@@ -17,7 +11,14 @@ interface KnowledgeState {
   isSearching: boolean;
   isUploading: boolean;
   uploadProgress: { stage: string; progress: number } | null;
-  benchmarkProgress: { stage: string; strategy?: string; mode?: string; current: number; total: number; done?: boolean } | null;
+  benchmarkProgress: {
+    stage: string;
+    strategy?: string;
+    mode?: string;
+    current: number;
+    total: number;
+    done?: boolean;
+  } | null;
 
   loadSources: (agentId: string) => Promise<void>;
   loadAllSources: (agentIds: string[]) => Promise<void>;

@@ -12,7 +12,12 @@ interface VoiceActivityFeedProps {
     input: unknown;
     status: 'running' | 'done' | 'error' | 'stopped';
   }>;
-  currentUsage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheCreationTokens?: number } | null;
+  currentUsage: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens?: number;
+    cacheCreationTokens?: number;
+  } | null;
   lastError: string | null;
   turnElapsedMs: number;
   maxTurnMs: number;
@@ -80,18 +85,19 @@ export function VoiceActivityFeed({
             {state === 'listening' || state === 'recording' ? <Mic size={15} /> : null}
             {state === 'thinking' || state === 'transcribing' ? <Loader2 size={15} className="animate-spin" /> : null}
             {state === 'speaking' ? <AudioLines size={15} /> : null}
-            {!['listening', 'recording', 'thinking', 'transcribing', 'speaking'].includes(state) ? <CircleDot size={15} /> : null}
+            {!['listening', 'recording', 'thinking', 'transcribing', 'speaking'].includes(state) ? (
+              <CircleDot size={15} />
+            ) : null}
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-zinc-100">{status}</p>
-            <p className="truncate text-[11px] text-zinc-500">
-              {DETAIL_LABELS[state]}
-            </p>
+            <p className="truncate text-[11px] text-zinc-500">{DETAIL_LABELS[state]}</p>
           </div>
         </div>
         {currentUsage && (
           <div className="shrink-0 rounded-md border border-zinc-800 bg-zinc-950/60 px-2 py-1 text-[10px] text-zinc-500">
-            {currentUsage.inputTokens.toLocaleString('pt-BR')} in / {currentUsage.outputTokens.toLocaleString('pt-BR')} out
+            {currentUsage.inputTokens.toLocaleString('pt-BR')} in / {currentUsage.outputTokens.toLocaleString('pt-BR')}{' '}
+            out
           </div>
         )}
       </div>
@@ -137,7 +143,8 @@ export function VoiceActivityFeed({
             Resposta
           </div>
           <p className="line-clamp-3 text-xs leading-relaxed text-zinc-300">
-            {responsePreview || (isStreaming ? 'Aguardando primeira resposta...' : 'O preview do agente aparece durante o streaming.')}
+            {responsePreview ||
+              (isStreaming ? 'Aguardando primeira resposta...' : 'O preview do agente aparece durante o streaming.')}
           </p>
         </div>
       </div>

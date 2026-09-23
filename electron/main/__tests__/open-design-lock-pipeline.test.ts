@@ -1,9 +1,7 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-
 
 vi.mock('../open-design/config', () => ({
   getOpenDesignConfig: vi.fn(),
@@ -45,7 +43,6 @@ vi.mock('../pipeline-shared/ipc-emitter', () => ({
   emitIPC: vi.fn(),
 }));
 
-
 import * as configMod from '../open-design/config';
 import * as snapshotMod from '../open-design/snapshot';
 import * as validatorMod from '../open-design/validator';
@@ -81,7 +78,6 @@ function createSnapshotDir(runDir: string): string {
   );
   return snapshotDir;
 }
-
 
 describe('Sprint 4 — lock() shape & persistence', () => {
   let tmpDir: string;
@@ -206,7 +202,7 @@ describe('Sprint 4 — lock() rejection persists lockReportPath', () => {
     const result = await lock('test-project-id');
     if (!('ok' in result) || result.ok) throw new Error('expected ok:false');
     expect(result.lockReportPath).toContain('design-lock-report.md');
-    expect(result.reportPath).toBe(result.lockReportPath); // legacy alias
+    expect(result.reportPath).toBe(result.lockReportPath);
     expect(result.report.ok).toBe(false);
     expect(result.report.problems.length).toBeGreaterThan(0);
   });
@@ -225,12 +221,8 @@ describe('Sprint 4 — lock() rejection persists lockReportPath', () => {
   });
 });
 
-
 describe('Sprint 4 — lock.ts negative invariants (static)', () => {
-  const lockSrc = fs.readFileSync(
-    path.resolve(__dirname, '..', 'open-design', 'lock.ts'),
-    'utf-8',
-  );
+  const lockSrc = fs.readFileSync(path.resolve(__dirname, '..', 'open-design', 'lock.ts'), 'utf-8');
 
   function stripComments(src: string): string {
     const withoutBlock = src.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -262,14 +254,8 @@ describe('Sprint 4 — lock.ts negative invariants (static)', () => {
 });
 
 describe('Sprint 4 — public preload removal (static)', () => {
-  const preloadSrc = fs.readFileSync(
-    path.resolve(__dirname, '..', '..', 'preload', 'index.ts'),
-    'utf-8',
-  );
-  const typesSrc = fs.readFileSync(
-    path.resolve(__dirname, '..', '..', '..', 'src', 'types', 'index.ts'),
-    'utf-8',
-  );
+  const preloadSrc = fs.readFileSync(path.resolve(__dirname, '..', '..', 'preload', 'index.ts'), 'utf-8');
+  const typesSrc = fs.readFileSync(path.resolve(__dirname, '..', '..', '..', 'src', 'types', 'index.ts'), 'utf-8');
 
   it('`window.lionclaw.openDesign.lock:` no longer registered in preload (SPEC L858-869)', () => {
     expect(preloadSrc).not.toMatch(/ipcRenderer\.invoke\(['"]open-design:lock['"]/);

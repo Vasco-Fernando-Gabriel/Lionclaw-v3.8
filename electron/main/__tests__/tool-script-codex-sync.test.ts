@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
@@ -31,9 +30,7 @@ vi.mock('../codex-sdk/mcp-wrapper-generator', () => ({
 
 vi.mock('fs', () => {
   const promises = {
-    readFile: vi.fn().mockRejectedValue(
-      Object.assign(new Error('ENOENT'), { code: 'ENOENT' }),
-    ),
+    readFile: vi.fn().mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' })),
     mkdir: vi.fn().mockResolvedValue(undefined),
     writeFile: vi.fn().mockResolvedValue(undefined),
     rename: vi.fn().mockResolvedValue(undefined),
@@ -45,10 +42,7 @@ import { syncCodexMcpConfig } from '../codex-sdk/mcp-config-sync';
 import { TOOL_SCRIPT_HELPER_ID } from '../mcp-risk-patterns';
 import { CHAT_GATED_HELPER_IDS } from '../helper-identity';
 
-function mcpServer(
-  id: string,
-  envKeys: string[] = [],
-): Record<string, unknown> {
+function mcpServer(id: string, envKeys: string[] = []): Record<string, unknown> {
   return {
     id,
     name: `Server ${id}`,

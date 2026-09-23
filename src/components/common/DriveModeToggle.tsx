@@ -1,4 +1,3 @@
-
 interface DriveModeToggleProps {
   mode: 'semi' | 'full';
   disabled?: boolean;
@@ -32,9 +31,7 @@ export function DriveModeToggle({ mode, disabled = false, onChange, size = 'md' 
           }}
           title={MODE_TITLE[m]}
           className={`${pad} font-medium rounded-md transition-colors disabled:cursor-not-allowed ${
-            m === mode
-              ? 'bg-amber-600 text-white'
-              : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+            m === mode ? 'bg-amber-600 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
           }`}
         >
           {m}

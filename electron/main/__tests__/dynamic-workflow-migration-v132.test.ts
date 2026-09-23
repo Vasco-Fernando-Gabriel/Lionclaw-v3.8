@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -25,7 +24,7 @@ describe('migration v132 - remocao do budget do prompt do builder (R10, sem DB)'
   it('R10 metade 2: a V132 troca a LINHA antiga pela nova, guardada por LIKE (preserva customizacao)', () => {
     expect(V132_SOURCE).toContain(OLD_LINE);
     expect(V132_SOURCE).toContain(NEW_LINE);
-    expect(V132_SOURCE).toContain("SET system_prompt = replace(system_prompt, ?, ?)");
+    expect(V132_SOURCE).toContain('SET system_prompt = replace(system_prompt, ?, ?)');
     expect(V132_SOURCE).toContain("WHERE id = 'dynamic-workflow-builder'");
     expect(V132_SOURCE).toMatch(/LIKE '%' \|\| \? \|\| '%'/);
     expect(V132_SOURCE).not.toContain('SET id');

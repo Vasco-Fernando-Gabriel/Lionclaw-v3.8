@@ -13,7 +13,6 @@ import { lionClawLogoUrl } from '@/assets/lionclaw-logo';
 import { StreamTimeline } from '@/components/common/StreamTimeline';
 import { timelineFromPersisted } from '@/lib/stream-timeline';
 
-
 interface MessageBubbleProps {
   role: 'user' | 'assistant';
   content: string;
@@ -23,14 +22,7 @@ interface MessageBubbleProps {
   attachments?: ChatAttachment[];
 }
 
-function MessageBubble({
-  role,
-  content,
-  toolCalls,
-  isStreaming = false,
-  timeline,
-  attachments,
-}: MessageBubbleProps) {
+function MessageBubble({ role, content, toolCalls, isStreaming = false, timeline, attachments }: MessageBubbleProps) {
   const isUser = role === 'user';
   const timelineBlocks = timeline ?? timelineFromPersisted(content, toolCalls, 'pipeline-message');
 
@@ -50,9 +42,7 @@ function MessageBubble({
 
       <div
         className={`rounded-xl px-4 py-3 text-sm max-w-[85%] min-w-0 overflow-hidden ${
-          isUser
-            ? 'bg-amber-600 text-white'
-            : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
+          isUser ? 'bg-amber-600 text-white' : 'bg-zinc-900 text-zinc-300 border border-zinc-800'
         }`}
       >
         {isUser ? (
@@ -61,24 +51,28 @@ function MessageBubble({
               <div className="space-y-1.5 mb-2">
                 {attachments.filter((a) => a.type === 'image').length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
-                    {attachments.filter((a) => a.type === 'image').map((att) => (
-                      <img
-                        key={att.id}
-                        src={att.preview ?? `data:${att.mimeType};base64,${att.data}`}
-                        alt={att.filename}
-                        className="w-20 h-20 object-cover rounded-lg border border-amber-500/30"
-                      />
-                    ))}
+                    {attachments
+                      .filter((a) => a.type === 'image')
+                      .map((att) => (
+                        <img
+                          key={att.id}
+                          src={att.preview ?? `data:${att.mimeType};base64,${att.data}`}
+                          alt={att.filename}
+                          className="w-20 h-20 object-cover rounded-lg border border-amber-500/30"
+                        />
+                      ))}
                   </div>
                 )}
-                {attachments.filter((a) => a.type === 'audio').map((att) => (
-                  <AudioPlayer
-                    key={att.id}
-                    audioBase64={att.data}
-                    mimeType={att.mimeType}
-                    label={att.preview || 'Audio enviado'}
-                  />
-                ))}
+                {attachments
+                  .filter((a) => a.type === 'audio')
+                  .map((att) => (
+                    <AudioPlayer
+                      key={att.id}
+                      audioBase64={att.data}
+                      mimeType={att.mimeType}
+                      label={att.preview || 'Audio enviado'}
+                    />
+                  ))}
               </div>
             )}
             {content && <p className="whitespace-pre-wrap">{content}</p>}
@@ -96,7 +90,9 @@ function MessageBubble({
                   </>
                 )}
               />
-            ) : isStreaming ? <AgentThinking /> : null}
+            ) : isStreaming ? (
+              <AgentThinking />
+            ) : null}
           </div>
         )}
       </div>
@@ -105,7 +101,6 @@ function MessageBubble({
 }
 
 const MemoizedMessageBubble = memo(MessageBubble);
-
 
 function EmptyState({ isStreaming }: { isStreaming: boolean }) {
   return (
@@ -120,15 +115,12 @@ function EmptyState({ isStreaming }: { isStreaming: boolean }) {
   );
 }
 
-
 const REPORT_PHASES = new Set([3, 9]);
 
 function CollapsibleReport({ messages }: { messages: PipelineMessage[] }) {
   const [expanded, setExpanded] = useState(false);
 
-  const reportMessage = messages.find(
-    (m) => m.role === 'assistant' && m.content.trim().length > 80,
-  );
+  const reportMessage = messages.find((m) => m.role === 'assistant' && m.content.trim().length > 80);
 
   if (!reportMessage) return null;
 
@@ -147,17 +139,13 @@ function CollapsibleReport({ messages }: { messages: PipelineMessage[] }) {
             )}
             <span className="font-medium text-zinc-300">Relatorio do Validador</span>
           </div>
-          <span className="text-[10px] text-zinc-600">
-            {expanded ? 'Recolher' : 'Expandir'}
-          </span>
+          <span className="text-[10px] text-zinc-600">{expanded ? 'Recolher' : 'Expandir'}</span>
         </button>
 
         {expanded && (
           <div className="mt-1.5 px-3 py-3 rounded-lg bg-zinc-900/60 border border-zinc-800 text-xs text-zinc-400 max-h-64 overflow-y-auto">
             <div className="chat-markdown">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {reportMessage.content}
-              </ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{reportMessage.content}</ReactMarkdown>
             </div>
           </div>
         )}
@@ -166,18 +154,13 @@ function CollapsibleReport({ messages }: { messages: PipelineMessage[] }) {
   );
 }
 
-
 interface PipelineChatViewProps {
   showInput: boolean;
   isPaused?: boolean;
   readOnly?: boolean;
 }
 
-export function PipelineChatView({
-  showInput,
-  isPaused = false,
-  readOnly = false,
-}: PipelineChatViewProps) {
+export function PipelineChatView({ showInput, isPaused = false, readOnly = false }: PipelineChatViewProps) {
   const {
     getCurrentMessages,
     streamContent,
@@ -218,9 +201,12 @@ export function PipelineChatView({
     });
   }, [messages, streamTimeline]);
 
-  useEffect(() => () => {
-    if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!isStreaming && textareaRef.current) {
@@ -229,7 +215,7 @@ export function PipelineChatView({
   }, [isStreaming, currentPhase]);
 
   const processImageFile = useCallback((file: File) => {
-    if (file.size > 20 * 1024 * 1024) return; // 20 MB limit
+    if (file.size > 20 * 1024 * 1024) return;
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
@@ -248,8 +234,13 @@ export function PipelineChatView({
         const maxSize = 200;
         let w = img.width;
         let h = img.height;
-        if (w > h) { h = (h / w) * maxSize; w = maxSize; }
-        else { w = (w / h) * maxSize; h = maxSize; }
+        if (w > h) {
+          h = (h / w) * maxSize;
+          w = maxSize;
+        } else {
+          w = (w / h) * maxSize;
+          h = maxSize;
+        }
         canvas.width = w;
         canvas.height = h;
         canvas.getContext('2d')?.drawImage(img, 0, 0, w, h);
@@ -340,41 +331,45 @@ export function PipelineChatView({
     });
   };
 
-  const handleAudioReady = useCallback((audioBase64: string, transcription: string) => {
-    const att: ChatAttachment = {
-      id: crypto.randomUUID(),
-      type: 'audio',
-      data: audioBase64,
-      mimeType: 'audio/webm',
-      filename: 'audio.webm',
-      size: Math.ceil(audioBase64.length * 0.75),
-      preview: transcription || undefined,
-    };
-    const text = transcription || '[Audio]';
-    void sendMessage(text, [att]);
-  }, [sendMessage]);
+  const handleAudioReady = useCallback(
+    (audioBase64: string, transcription: string) => {
+      const att: ChatAttachment = {
+        id: crypto.randomUUID(),
+        type: 'audio',
+        data: audioBase64,
+        mimeType: 'audio/webm',
+        filename: 'audio.webm',
+        size: Math.ceil(audioBase64.length * 0.75),
+        preview: transcription || undefined,
+      };
+      const text = transcription || '[Audio]';
+      void sendMessage(text, [att]);
+    },
+    [sendMessage],
+  );
 
   const removeAttachment = (id: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   };
 
-  const showStreamBubble = !isViewingHistory && (
-    streamTimeline.length > 0 ||
-    isStreaming
-  );
+  const showStreamBubble = !isViewingHistory && (streamTimeline.length > 0 || isStreaming);
 
   const isEmpty = messages.length === 0 && !showStreamBubble;
 
   const showReport =
     !isViewingHistory &&
     currentPhase !== null &&
-    (REPORT_PHASES.has(currentPhase) ||
-      (pipelineType === 'development-v2' && currentPhase === 12));
+    (REPORT_PHASES.has(currentPhase) || (pipelineType === 'development-v2' && currentPhase === 12));
 
   const viewPhaseForDoc = displayPhase;
   const hasPhaseDoc = viewPhaseForDoc !== null && phaseDocuments[viewPhaseForDoc] != null;
 
-  const canSend = (input.trim().length > 0 || attachments.length > 0) && !isStreaming && !isPaused && !isViewingHistory && !isAutoPhase;
+  const canSend =
+    (input.trim().length > 0 || attachments.length > 0) &&
+    !isStreaming &&
+    !isPaused &&
+    !isViewingHistory &&
+    !isAutoPhase;
 
   return (
     <div
@@ -388,9 +383,7 @@ export function PipelineChatView({
         <div className="flex items-center justify-between gap-2 px-4 py-2 shrink-0 bg-amber-500/10 border-b border-amber-500/30">
           <div className="flex items-center gap-2">
             <History size={13} className="text-amber-400 shrink-0" />
-            <span className="text-xs font-medium text-amber-300">
-              Visualizando historico - Fase {viewingPhase}
-            </span>
+            <span className="text-xs font-medium text-amber-300">Visualizando historico - Fase {viewingPhase}</span>
           </div>
           <div className="flex items-center gap-2">
             {hasPhaseDoc && viewPhaseForDoc !== null && (
@@ -422,9 +415,7 @@ export function PipelineChatView({
       )}
 
       {/* Phases 3, 9 — Collapsible validator report */}
-      {showReport && (
-        <CollapsibleReport messages={messages} />
-      )}
+      {showReport && <CollapsibleReport messages={messages} />}
 
       {/* Drag-and-drop overlay hint */}
       {isDraggingOver && (
@@ -503,7 +494,10 @@ export function PipelineChatView({
 
             <div className="flex items-end gap-2 bg-zinc-900 rounded-xl border border-zinc-800 px-3 py-2 focus-within:border-amber-500/40 transition-colors">
               {/* File picker */}
-              <label className={`cursor-pointer shrink-0 self-center transition-colors ${isStreaming || isPaused ? 'opacity-30 pointer-events-none' : 'text-zinc-500 hover:text-zinc-300'}`} title="Anexar imagem ou audio">
+              <label
+                className={`cursor-pointer shrink-0 self-center transition-colors ${isStreaming || isPaused ? 'opacity-30 pointer-events-none' : 'text-zinc-500 hover:text-zinc-300'}`}
+                title="Anexar imagem ou audio"
+              >
                 <Paperclip size={16} />
                 <input
                   type="file"
@@ -522,10 +516,7 @@ export function PipelineChatView({
               </label>
 
               {/* Voice recorder */}
-              <VoiceRecorder
-                onAudioReady={handleAudioReady}
-                disabled={isStreaming || isPaused}
-              />
+              <VoiceRecorder onAudioReady={handleAudioReady} disabled={isStreaming || isPaused} />
 
               <textarea
                 ref={textareaRef}
@@ -537,10 +528,10 @@ export function PipelineChatView({
                   isAutoPhase
                     ? 'Esta fase nao aceita mensagens (auto). Aguarde o agente.'
                     : isStreaming
-                    ? 'Aguardando agente...'
-                    : isPaused
-                    ? 'Pipeline pausado...'
-                    : 'Mensagem para o pipeline...'
+                      ? 'Aguardando agente...'
+                      : isPaused
+                        ? 'Pipeline pausado...'
+                        : 'Mensagem para o pipeline...'
                 }
                 rows={1}
                 disabled={isStreaming || isPaused || isAutoPhase}

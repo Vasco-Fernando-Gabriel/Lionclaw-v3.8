@@ -1,9 +1,4 @@
-
-import type {
-  RepoGraphTurnSample,
-  RepoGraphSavingsGroup,
-  RepoGraphSavingsMetrics,
-} from './types';
+import type { RepoGraphTurnSample, RepoGraphSavingsGroup, RepoGraphSavingsMetrics } from './types';
 
 export const REPO_GRAPH_METRICS_MIN_TURNS = 50;
 
@@ -40,16 +35,12 @@ export function computeRepoGraphSavings(
 ): RepoGraphSavingsMetrics {
   const withRepo = summarizeGroup(withRepoTurns);
   const withoutRepo = summarizeGroup(withoutRepoTurns);
-  const windowMet =
-    withRepo.turns >= REPO_GRAPH_METRICS_MIN_TURNS &&
-    withoutRepo.turns >= REPO_GRAPH_METRICS_MIN_TURNS;
+  const windowMet = withRepo.turns >= REPO_GRAPH_METRICS_MIN_TURNS && withoutRepo.turns >= REPO_GRAPH_METRICS_MIN_TURNS;
 
   return {
     withRepo,
     withoutRepo,
-    toolCallsSavingsPct: windowMet
-      ? savingsPct(withRepo.avgToolCalls, withoutRepo.avgToolCalls)
-      : null,
+    toolCallsSavingsPct: windowMet ? savingsPct(withRepo.avgToolCalls, withoutRepo.avgToolCalls) : null,
     tokensSavingsPct: windowMet ? savingsPct(withRepo.avgTokens, withoutRepo.avgTokens) : null,
     minTurnsWindow: REPO_GRAPH_METRICS_MIN_TURNS,
     windowMet,

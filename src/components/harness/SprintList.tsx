@@ -13,17 +13,9 @@ interface SprintListProps {
   providerAuthCheckpoint?: HarnessProviderAuthCheckpoint;
 }
 
-type HarnessActionResult =
-  | void
-  | { error: string }
-  | { ok: true }
-  | { ok: false; message: string };
+type HarnessActionResult = void | { error: string } | { ok: true } | { ok: false; message: string };
 
-export function SprintList({
-  projectId,
-  projectStatus,
-  providerAuthCheckpoint,
-}: SprintListProps) {
+export function SprintList({ projectId, projectStatus, providerAuthCheckpoint }: SprintListProps) {
   const [sprints, setSprints] = useState<HarnessSprint[]>([]);
   const [loading, setLoading] = useState(true);
   const [showRegenerate, setShowRegenerate] = useState(false);
@@ -31,14 +23,15 @@ export function SprintList({
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { plannerStream, isPlannerActive, appendStream, clearPlannerStream } = useHarnessStore();
-  const canResumeAfterAuth = providerAuthCheckpoint?.ownerKind === 'harness'
-    && (projectStatus === 'paused'
-      || (projectStatus === 'running' && providerAuthCheckpoint.claimState === 'claimed'));
-  const providerLabel = providerAuthCheckpoint?.provider === 'grok'
-    ? 'Grok Build'
-    : providerAuthCheckpoint?.provider === 'kimi'
-      ? 'Kimi'
-      : 'Codex';
+  const canResumeAfterAuth =
+    providerAuthCheckpoint?.ownerKind === 'harness' &&
+    (projectStatus === 'paused' || (projectStatus === 'running' && providerAuthCheckpoint.claimState === 'claimed'));
+  const providerLabel =
+    providerAuthCheckpoint?.provider === 'grok'
+      ? 'Grok Build'
+      : providerAuthCheckpoint?.provider === 'kimi'
+        ? 'Kimi'
+        : 'Codex';
 
   useEffect(() => {
     let cancelled = false;
@@ -137,11 +130,7 @@ export function SprintList({
           <span>Planner trabalhando...</span>
         </div>
         <div className="h-[calc(100vh-260px)]">
-          <AgentStreamPanel
-            label="Planner"
-            stream={plannerStream}
-            isActive={isPlannerActive}
-          />
+          <AgentStreamPanel label="Planner" stream={plannerStream} isActive={isPlannerActive} />
         </div>
       </div>
     );
@@ -173,9 +162,7 @@ export function SprintList({
                 Regenerar
               </button>
               <button
-                onClick={() =>
-                  handleAction(() => window.lionclaw.harness.approveSprints(projectId), 'Aprovar')
-                }
+                onClick={() => handleAction(() => window.lionclaw.harness.approveSprints(projectId), 'Aprovar')}
                 disabled={actionPending !== null}
                 className="px-4 py-1.5 text-sm rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
@@ -193,9 +180,7 @@ export function SprintList({
 
           {projectStatus === 'ready' && (
             <button
-              onClick={() =>
-                handleAction(() => window.lionclaw.harness.run(projectId), 'Executar')
-              }
+              onClick={() => handleAction(() => window.lionclaw.harness.run(projectId), 'Executar')}
               disabled={actionPending !== null}
               className="px-4 py-1.5 text-sm rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -215,10 +200,7 @@ export function SprintList({
               <button
                 onClick={() =>
                   handleAction(
-                    () => window.lionclaw.harness.resumeAfterAuth(
-                      projectId,
-                      providerAuthCheckpoint.provider,
-                    ),
+                    () => window.lionclaw.harness.resumeAfterAuth(projectId, providerAuthCheckpoint.provider),
                     'Retomar autenticacao',
                   )
                 }
@@ -235,9 +217,7 @@ export function SprintList({
                 )}
               </button>
               <button
-                onClick={() =>
-                  handleAction(() => window.lionclaw.harness.abort(projectId), 'Abortar')
-                }
+                onClick={() => handleAction(() => window.lionclaw.harness.abort(projectId), 'Abortar')}
                 disabled={actionPending !== null}
                 className="px-4 py-1.5 text-sm rounded-lg border border-red-900 text-red-400 hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
@@ -251,49 +231,45 @@ export function SprintList({
                 )}
               </button>
             </>
-          ) : projectStatus === 'paused' && (
-            <>
-              <button
-                onClick={() =>
-                  handleAction(() => window.lionclaw.harness.resume(projectId), 'Retomar')
-                }
-                disabled={actionPending !== null}
-                className="px-4 py-1.5 text-sm rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {actionPending === 'Retomar' ? (
-                  <span className="flex items-center gap-1.5">
-                    <Loader2 size={12} className="animate-spin" />
-                    Retomando...
-                  </span>
-                ) : (
-                  'Retomar'
-                )}
-              </button>
-              <button
-                onClick={() =>
-                  handleAction(() => window.lionclaw.harness.abort(projectId), 'Abortar')
-                }
-                disabled={actionPending !== null}
-                className="px-4 py-1.5 text-sm rounded-lg border border-red-900 text-red-400 hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {actionPending === 'Abortar' ? (
-                  <span className="flex items-center gap-1.5">
-                    <Loader2 size={12} className="animate-spin" />
-                    Abortando...
-                  </span>
-                ) : (
-                  'Abortar'
-                )}
-              </button>
-            </>
+          ) : (
+            projectStatus === 'paused' && (
+              <>
+                <button
+                  onClick={() => handleAction(() => window.lionclaw.harness.resume(projectId), 'Retomar')}
+                  disabled={actionPending !== null}
+                  className="px-4 py-1.5 text-sm rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {actionPending === 'Retomar' ? (
+                    <span className="flex items-center gap-1.5">
+                      <Loader2 size={12} className="animate-spin" />
+                      Retomando...
+                    </span>
+                  ) : (
+                    'Retomar'
+                  )}
+                </button>
+                <button
+                  onClick={() => handleAction(() => window.lionclaw.harness.abort(projectId), 'Abortar')}
+                  disabled={actionPending !== null}
+                  className="px-4 py-1.5 text-sm rounded-lg border border-red-900 text-red-400 hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {actionPending === 'Abortar' ? (
+                    <span className="flex items-center gap-1.5">
+                      <Loader2 size={12} className="animate-spin" />
+                      Abortando...
+                    </span>
+                  ) : (
+                    'Abortar'
+                  )}
+                </button>
+              </>
+            )
           )}
         </div>
       )}
 
       {actionError && (
-        <p className="text-xs text-red-400 bg-red-900/10 border border-red-900/30 rounded px-3 py-2">
-          {actionError}
-        </p>
+        <p className="text-xs text-red-400 bg-red-900/10 border border-red-900/30 rounded px-3 py-2">{actionError}</p>
       )}
 
       {/* Sprint cards */}
@@ -303,9 +279,7 @@ export function SprintList({
         ))}
       </div>
 
-      {showRegenerate && (
-        <RegenerateModal projectId={projectId} onClose={() => setShowRegenerate(false)} />
-      )}
+      {showRegenerate && <RegenerateModal projectId={projectId} onClose={() => setShowRegenerate(false)} />}
     </div>
   );
 }

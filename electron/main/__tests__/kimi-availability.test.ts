@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import os from 'os';
 import path from 'path';
@@ -83,9 +82,7 @@ function managedConfig(options: { oauth?: boolean; baseUrl?: string; model?: str
     `[models."${model}"]`,
     'provider = "managed:kimi-code"',
     'capabilities = [ "thinking", "always_thinking", "tool_use" ]',
-    ...(model === 'kimi-code/k3'
-      ? ['support_efforts = [ "low", "high", "max" ]', 'default_effort = "max"']
-      : []),
+    ...(model === 'kimi-code/k3' ? ['support_efforts = [ "low", "high", "max" ]', 'default_effort = "max"'] : []),
     '',
   ].join('\n');
 }
@@ -231,10 +228,12 @@ describe('isKimiAvailable authMode (SPEC-011 §7)', () => {
     wireDedicatedConfig(before);
     const first = inspectKimiManagedConfig();
 
-    wireDedicatedConfig(before.replace(
-      'capabilities = [ "thinking", "always_thinking", "tool_use" ]',
-      'capabilities = [ "thinking", "always_thinking", "tool_use", "future_capability" ]',
-    ));
+    wireDedicatedConfig(
+      before.replace(
+        'capabilities = [ "thinking", "always_thinking", "tool_use" ]',
+        'capabilities = [ "thinking", "always_thinking", "tool_use", "future_capability" ]',
+      ),
+    );
     const second = inspectKimiManagedConfig();
 
     expect(first.managedProviderVerified).toBe(true);
@@ -391,18 +390,20 @@ describe('detectKimiLogin config.toml fallback when SDK throws (ITEM 2 / S6)', (
 
   it('aceita campos internos criados pelo login oficial junto ao OAuth', async () => {
     makeSdkThrow();
-    wireConfigPresent([
-      '[providers."managed:kimi-code"]',
-      'base_url = "https://api.kimi.com/coding/v1"',
-      'api_key = "sk-byok"',
-      '',
-      '[providers."managed:kimi-code".oauth]',
-      'access_token = "tok-123"',
-      '',
-      '[models."kimi-code/kimi-for-coding"]',
-      'provider = "managed:kimi-code"',
-      'capabilities = [ "thinking", "always_thinking", "tool_use" ]',
-    ].join('\n'));
+    wireConfigPresent(
+      [
+        '[providers."managed:kimi-code"]',
+        'base_url = "https://api.kimi.com/coding/v1"',
+        'api_key = "sk-byok"',
+        '',
+        '[providers."managed:kimi-code".oauth]',
+        'access_token = "tok-123"',
+        '',
+        '[models."kimi-code/kimi-for-coding"]',
+        'provider = "managed:kimi-code"',
+        'capabilities = [ "thinking", "always_thinking", "tool_use" ]',
+      ].join('\n'),
+    );
 
     await expect(isKimiAvailable('kimi-code/kimi-for-coding')).resolves.toMatchObject({
       authenticated: true,

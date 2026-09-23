@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const capturedSessions: Array<{ systemPrompt: string }> = [];
@@ -15,7 +14,7 @@ vi.mock('../../db', () => ({
   ]),
   getAllAgents: vi.fn(() => []),
   getAgent: vi.fn(() => undefined),
-  getSetting: vi.fn((key: string) => key === 'mcp_prompt_mode' ? 'full' : undefined),
+  getSetting: vi.fn((key: string) => (key === 'mcp_prompt_mode' ? 'full' : undefined)),
   getCompletedDocsCount: vi.fn(() => 0),
   getPermissionBypass: () => false,
 }));
@@ -55,10 +54,7 @@ vi.mock('../../codex-agent-tools', () => ({
 }));
 
 import { createChatCodexSession } from '../session';
-import {
-  buildAlwaysOnChatHelpersSection,
-  buildPipelineControlSection,
-} from '../../prompt-builder';
+import { buildAlwaysOnChatHelpersSection, buildPipelineControlSection } from '../../prompt-builder';
 import { CODEX_SDK_SYSTEM_PROMPT_V2 } from '../prompt';
 
 function countOccurrences(haystack: string, needle: string): number {
@@ -94,9 +90,7 @@ describe('I6/W6 - prompt final do Codex contem a secao de pipeline UMA vez', () 
 
     const section = buildPipelineControlSection();
     expect(countOccurrences(finalPrompt, section)).toBe(1);
-    expect(
-      countOccurrences(finalPrompt, '## Dirigir Pipelines (tools pipeline-control)'),
-    ).toBe(1);
+    expect(countOccurrences(finalPrompt, '## Dirigir Pipelines (tools pipeline-control)')).toBe(1);
   });
 
   it('as tools pipeline_* continuam descobriveis no prompt final (via secao canonica)', async () => {
@@ -119,9 +113,7 @@ describe('I6/W6 - prompt final do Codex contem a secao de pipeline UMA vez', () 
   });
 
   it('CODEX_SDK_SYSTEM_PROMPT_V2 nao duplica o bloco de anuncio das pipeline_*', async () => {
-    expect(CODEX_SDK_SYSTEM_PROMPT_V2).not.toContain(
-      'Driving LionClaw pipelines via the',
-    );
+    expect(CODEX_SDK_SYSTEM_PROMPT_V2).not.toContain('Driving LionClaw pipelines via the');
     expect(CODEX_SDK_SYSTEM_PROMPT_V2).not.toContain('pipeline_list()');
 
     await createChatCodexSession({ sessionId: 's3', model: 'gpt-5.5' });

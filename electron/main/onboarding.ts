@@ -103,19 +103,14 @@ function extractUserMdFromProfileMessage(message: string): {
 
   const fromProfile = message.slice(profileStart).trim();
   const agentInstructionMatch = fromProfile.match(/\n\s*seu nome\b/i);
-  const userMd = (agentInstructionMatch
-    ? fromProfile.slice(0, agentInstructionMatch.index)
-    : fromProfile
-  ).trim();
+  const userMd = (agentInstructionMatch ? fromProfile.slice(0, agentInstructionMatch.index) : fromProfile).trim();
 
   if (userMd.length < 400) return null;
   if (!userMd.includes('## Dados basicos')) return null;
   if (!userMd.includes('## Perfil profissional')) return null;
   if (!/^- Nome:\s*\S+/im.test(userMd)) return null;
 
-  const agentInstruction = agentInstructionMatch
-    ? fromProfile.slice(agentInstructionMatch.index).trim()
-    : '';
+  const agentInstruction = agentInstructionMatch ? fromProfile.slice(agentInstructionMatch.index).trim() : '';
   return { userMd, agentInstruction };
 }
 
@@ -265,10 +260,7 @@ export function completeOnboardingFromPersistedProfile(callbacks: OnboardingCall
   return true;
 }
 
-export function completeOnboardingFromUserProfileMessage(
-  userMessage: string,
-  callbacks: OnboardingCallbacks,
-): boolean {
+export function completeOnboardingFromUserProfileMessage(userMessage: string, callbacks: OnboardingCallbacks): boolean {
   const profile = extractUserProfileMessage(userMessage);
   if (!profile) return false;
 
@@ -290,9 +282,7 @@ export function completeOnboardingFromConversationMessages(
   currentUserMessage: string,
   callbacks: OnboardingCallbacks,
 ): boolean {
-  const allMessages = messages.some(
-    (msg) => msg.role === 'user' && msg.content === currentUserMessage,
-  )
+  const allMessages = messages.some((msg) => msg.role === 'user' && msg.content === currentUserMessage)
     ? messages
     : [...messages, { role: 'user', content: currentUserMessage }];
   const userMessages = allMessages.filter((msg) => msg.role === 'user');
@@ -305,9 +295,7 @@ export function completeOnboardingFromConversationMessages(
   const afterProfile = userMessages.slice(profileIndex + 1);
   const agentName = [...afterProfile]
     .reverse()
-    .map((msg) => normalizePersonalityMessage(msg.content)
-      ? null
-      : extractAgentNameFromShortMessage(msg.content))
+    .map((msg) => (normalizePersonalityMessage(msg.content) ? null : extractAgentNameFromShortMessage(msg.content)))
     .find((name): name is string => Boolean(name));
   if (!agentName) return false;
 

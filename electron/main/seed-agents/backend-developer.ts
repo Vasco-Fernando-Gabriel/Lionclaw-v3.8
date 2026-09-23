@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { GIT_RESTRICTIONS_BLOCK } from './_shared/git-restrictions';
 
@@ -9,7 +8,7 @@ export const backendDeveloper: Omit<AgentConfig, 'sortOrder'> = {
   name: 'Desenvolvedor Backend',
   description:
     'Use quando precisar construir APIs server-side, microsserviços e sistemas backend que exijam arquitetura robusta, planejamento de escalabilidade e implementação pronta para produção',
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'enabled' as const,
   thinkingBudget: 10000,

@@ -9,7 +9,4 @@ export function parseGatewayToolArgsTransport(value: unknown): unknown {
   }
 }
 
-export const gatewayToolArgsSchema = z.preprocess(
-  parseGatewayToolArgsTransport,
-  z.record(z.string(), z.unknown()),
-);
+export const gatewayToolArgsSchema = z.preprocess(parseGatewayToolArgsTransport, z.record(z.string(), z.unknown()));

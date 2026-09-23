@@ -35,15 +35,14 @@ vi.mock('@/stores/pipeline-store', () => {
 
 vi.mock('@/hooks/useActiveProjectState', () => ({
   useActiveProjectState: <T,>(selector: (s: FakeProjectState) => T): T | null =>
-    (fake.project ? selector(fake.project) : null),
+    fake.project ? selector(fake.project) : null,
 }));
 
 let PhaseActionButtons: typeof import('@/components/pipeline/PhaseActionButtons').PhaseActionButtons;
 let container: HTMLDivElement;
 let root: Root;
 
-const makeApproveSpy = () =>
-  vi.fn(async (_metadata?: Record<string, unknown>): Promise<void> => undefined);
+const makeApproveSpy = () => vi.fn(async (_metadata?: Record<string, unknown>): Promise<void> => undefined);
 let approveSpy: ReturnType<typeof makeApproveSpy>;
 
 const GENERIC_HINT = 'em Aprovar para avancar';
@@ -93,7 +92,12 @@ function buttons(): HTMLButtonElement[] {
 
 function clickByText(text: string): void {
   const btn = buttons().find((b) => (b.textContent ?? '').includes(text));
-  if (!btn) throw new Error(`botao "${text}" nao encontrado; havia: ${buttons().map((b) => b.textContent).join(' | ')}`);
+  if (!btn)
+    throw new Error(
+      `botao "${text}" nao encontrado; havia: ${buttons()
+        .map((b) => b.textContent)
+        .join(' | ')}`,
+    );
   act(() => {
     btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
   });

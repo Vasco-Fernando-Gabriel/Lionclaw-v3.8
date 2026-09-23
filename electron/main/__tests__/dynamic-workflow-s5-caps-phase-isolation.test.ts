@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import {
   createWorkflowHostApi,
@@ -29,7 +28,6 @@ import type { NodeRunResult, RunNodeAgentInput } from '../dynamic-workflows/work
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
 
 type Axes = NonNullable<ReturnType<NonNullable<HostApiRunContext['resolveAgentAxes']>>>;
 
@@ -258,7 +256,6 @@ async function expectFatal(p: Promise<unknown>, code: string, contains?: string)
   if (contains) expect((caught as WorkflowHostFatalError).message).toContain(contains);
 }
 
-
 describe('S5 (C) caps anti-runaway (claude-code only)', () => {
   it('constantes exportadas com os valores da SPEC (1000 nodes / 4096 itens)', () => {
     expect(WORKFLOW_IMPLICIT_NODE_CAP).toBe(1000);
@@ -267,7 +264,7 @@ describe('S5 (C) caps anti-runaway (claude-code only)', () => {
 
   it('estourar o teto de nodes implicitos por run -> fatal implicit-node-cap-exceeded claro', async () => {
     const h = makeHarness();
-    const ctx = makeCtx({ maxImplicitNodesPerRun: 2 }); // override de teste (sem 1000 nodes reais)
+    const ctx = makeCtx({ maxImplicitNodesPerRun: 2 });
     const api = createWorkflowHostApi(ctx, h.deps);
     await api.phase('Build');
     await api.agent({ agentType: 'a-reader', label: 'n1', prompt: 'p1' } as never);
@@ -306,9 +303,7 @@ describe('S5 (C) caps anti-runaway (claude-code only)', () => {
     );
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
-
 });
-
 
 describe('S5 (D) agent(prompt, { phase }) por chamada (claude-code)', () => {
   it('fase inexistente e registrada on-the-fly e o node nasce nela, SEM mudar a fase corrente', async () => {
@@ -361,7 +356,6 @@ describe('S5 (D) agent(prompt, { phase }) por chamada (claude-code)', () => {
   });
 });
 
-
 describe('S5 (E) agent({ isolation }) rejeitado no claude-code', () => {
   it('isolation em qualquer valor -> fatal isolation-unsupported ANTES do dispatch', async () => {
     const h = makeHarness();
@@ -386,5 +380,4 @@ describe('S5 (E) agent({ isolation }) rejeitado no claude-code', () => {
     expect(JSON.parse(String(out))).toEqual({ node: 'cc:Build:ok:0' });
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
-
 });

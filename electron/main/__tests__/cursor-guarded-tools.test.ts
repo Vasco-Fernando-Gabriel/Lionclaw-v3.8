@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -15,9 +14,10 @@ interface GuardCall {
   input: Record<string, unknown>;
 }
 
-function makeGuard(
-  decide: (toolName: string, input: Record<string, unknown>) => PermissionResult,
-): { guard: CanUseTool; calls: GuardCall[] } {
+function makeGuard(decide: (toolName: string, input: Record<string, unknown>) => PermissionResult): {
+  guard: CanUseTool;
+  calls: GuardCall[];
+} {
   const calls: GuardCall[] = [];
   const guard: CanUseTool = async (toolName, input) => {
     calls.push({ toolName, input });
@@ -37,7 +37,10 @@ function ctx(signal?: AbortSignal): CursorToolDispatchContext {
   return { signal: signal ?? new AbortController().signal };
 }
 
-function invoke(toolName: string, args: Record<string, unknown>): {
+function invoke(
+  toolName: string,
+  args: Record<string, unknown>,
+): {
   executionId: string;
   toolName: string;
   args: Record<string, unknown>;
@@ -100,10 +103,7 @@ describe('extraRoots — workspace conectado da sessao de chat', () => {
       canUseTool: guard,
       extraRoots: [repo],
     });
-    const out = await toolset.handlers['lion_glob']!(
-      invoke('lion_glob', { pattern: '**/*.ts', path: repo }),
-      ctx(),
-    );
+    const out = await toolset.handlers['lion_glob']!(invoke('lion_glob', { pattern: '**/*.ts', path: repo }), ctx());
     expect(out).toContain('index.ts');
   });
 
@@ -119,10 +119,7 @@ describe('extraRoots — workspace conectado da sessao de chat', () => {
       extraRoots: [repo],
     });
     await expect(
-      toolset.handlers['lion_read']!(
-        invoke('lion_read', { file_path: path.join(fora, 'secreto.txt') }),
-        ctx(),
-      ),
+      toolset.handlers['lion_read']!(invoke('lion_read', { file_path: path.join(fora, 'secreto.txt') }), ctx()),
     ).rejects.toThrow(/fora das raizes permitidas/);
   });
 
@@ -140,10 +137,7 @@ describe('extraRoots — workspace conectado da sessao de chat', () => {
       deniedRoots: [denied],
     });
     await expect(
-      toolset.handlers['lion_read']!(
-        invoke('lion_read', { file_path: path.join(denied, 'r.md') }),
-        ctx(),
-      ),
+      toolset.handlers['lion_read']!(invoke('lion_read', { file_path: path.join(denied, 'r.md') }), ctx()),
     ).rejects.toThrow(/PROTEGIDA/);
   });
 });
@@ -155,10 +149,7 @@ describe('lion_read / lion_list — leitura confinada', () => {
     const { guard, calls } = makeGuard(allowAll);
     const toolset = buildCursorGuardedToolset({ cwd: root, canUseTool: guard });
 
-    const out = await toolset.handlers['lion_read']!(
-      invoke('lion_read', { file_path: 'a.txt' }),
-      ctx(),
-    );
+    const out = await toolset.handlers['lion_read']!(invoke('lion_read', { file_path: 'a.txt' }), ctx());
     expect(out).toContain('linha1');
     expect(calls[0]?.toolName).toBe('Read');
   });
@@ -184,10 +175,7 @@ describe('lion_read / lion_list — leitura confinada', () => {
     const toolset = buildCursorGuardedToolset({ cwd: root, canUseTool: guard });
 
     await expect(
-      toolset.handlers['lion_read']!(
-        invoke('lion_read', { file_path: path.join(outside, 'secret.txt') }),
-        ctx(),
-      ),
+      toolset.handlers['lion_read']!(invoke('lion_read', { file_path: path.join(outside, 'secret.txt') }), ctx()),
     ).rejects.toThrow(/fora das raizes permitidas/);
     await expect(
       toolset.handlers['lion_read']!(
@@ -207,9 +195,9 @@ describe('lion_read / lion_list — leitura confinada', () => {
     const out = await toolset.handlers['lion_list']!(invoke('lion_list', {}), ctx());
     expect(out).toContain('sub');
     expect(out).toContain('f.txt');
-    await expect(
-      toolset.handlers['lion_list']!(invoke('lion_list', { path: os.tmpdir() }), ctx()),
-    ).rejects.toThrow(/fora das raizes permitidas/);
+    await expect(toolset.handlers['lion_list']!(invoke('lion_list', { path: os.tmpdir() }), ctx())).rejects.toThrow(
+      /fora das raizes permitidas/,
+    );
   });
 });
 
@@ -222,10 +210,7 @@ describe('lion_glob / lion_grep — busca confinada', () => {
     const { guard, calls } = makeGuard(allowAll);
     const toolset = buildCursorGuardedToolset({ cwd: root, canUseTool: guard });
 
-    const out = await toolset.handlers['lion_glob']!(
-      invoke('lion_glob', { pattern: '**/*.ts' }),
-      ctx(),
-    );
+    const out = await toolset.handlers['lion_glob']!(invoke('lion_glob', { pattern: '**/*.ts' }), ctx());
     expect(out).toContain('x.ts');
     expect(out).not.toContain('y.md');
     expect(calls[0]?.toolName).toBe('Glob');
@@ -238,10 +223,7 @@ describe('lion_glob / lion_grep — busca confinada', () => {
     const { guard, calls } = makeGuard(allowAll);
     const toolset = buildCursorGuardedToolset({ cwd: root, canUseTool: guard });
 
-    const all = await toolset.handlers['lion_grep']!(
-      invoke('lion_grep', { pattern: 'alvoUnico' }),
-      ctx(),
-    );
+    const all = await toolset.handlers['lion_grep']!(invoke('lion_grep', { pattern: 'alvoUnico' }), ctx());
     expect(all).toContain('a.ts:1:');
     expect(all).toContain('b.md:1:');
     expect(calls[0]?.toolName).toBe('Grep');
@@ -253,10 +235,7 @@ describe('lion_glob / lion_grep — busca confinada', () => {
     expect(filtered).toContain('a.ts:1:');
     expect(filtered).not.toContain('b.md');
 
-    const none = await toolset.handlers['lion_grep']!(
-      invoke('lion_grep', { pattern: 'naoExisteNadaAssim' }),
-      ctx(),
-    );
+    const none = await toolset.handlers['lion_grep']!(invoke('lion_grep', { pattern: 'naoExisteNadaAssim' }), ctx());
     expect(none).toContain('Nenhum resultado');
   });
 
@@ -267,15 +246,11 @@ describe('lion_glob / lion_grep — busca confinada', () => {
     const { guard, calls } = makeGuard(allowAll);
     const toolset = buildCursorGuardedToolset({ cwd: root, canUseTool: guard });
 
-    const absolutePatterns = [
-      outside.replace(/\\/g, '/') + '/**/*.key',
-      'C:/Users/**/*.key',
-      '/etc/**',
-    ];
+    const absolutePatterns = [outside.replace(/\\/g, '/') + '/**/*.key', 'C:/Users/**/*.key', '/etc/**'];
     for (const pattern of absolutePatterns) {
-      await expect(
-        toolset.handlers['lion_glob']!(invoke('lion_glob', { pattern }), ctx()),
-      ).rejects.toThrow(/pattern absoluto nao e permitido/);
+      await expect(toolset.handlers['lion_glob']!(invoke('lion_glob', { pattern }), ctx())).rejects.toThrow(
+        /pattern absoluto nao e permitido/,
+      );
     }
     expect(calls).toHaveLength(0);
   });
@@ -288,9 +263,9 @@ describe('lion_glob / lion_grep — busca confinada', () => {
     const toolset = buildCursorGuardedToolset({ cwd: root, canUseTool: guard });
 
     for (const pattern of ['../**/*.txt', '../' + path.basename(outside) + '/*.txt', 'a/../../**']) {
-      await expect(
-        toolset.handlers['lion_glob']!(invoke('lion_glob', { pattern }), ctx()),
-      ).rejects.toThrow(/segmento "\.\." nao e permitido/);
+      await expect(toolset.handlers['lion_glob']!(invoke('lion_glob', { pattern }), ctx())).rejects.toThrow(
+        /segmento "\.\." nao e permitido/,
+      );
     }
   });
 
@@ -299,10 +274,7 @@ describe('lion_glob / lion_grep — busca confinada', () => {
     const { guard } = makeGuard(allowAll);
     const toolset = buildCursorGuardedToolset({ cwd: root, canUseTool: guard });
     await expect(
-      toolset.handlers['lion_grep']!(
-        invoke('lion_grep', { pattern: 'x', path: os.tmpdir() }),
-        ctx(),
-      ),
+      toolset.handlers['lion_grep']!(invoke('lion_grep', { pattern: 'x', path: os.tmpdir() }), ctx()),
     ).rejects.toThrow(/fora das raizes permitidas/);
   });
 });
@@ -311,17 +283,12 @@ describe('lion_write / lion_edit — policy composta ANTES de agir', () => {
   it('deny do guard vira erro com a mensagem real e NADA e escrito', async () => {
     const root = makeRoot();
     const { guard, calls } = makeGuard((toolName) =>
-      toolName === 'Write'
-        ? { behavior: 'deny', message: 'fora do writeSet do node' }
-        : { behavior: 'allow' },
+      toolName === 'Write' ? { behavior: 'deny', message: 'fora do writeSet do node' } : { behavior: 'allow' },
     );
     const toolset = buildCursorGuardedToolset({ cwd: root, canUseTool: guard });
 
     await expect(
-      toolset.handlers['lion_write']!(
-        invoke('lion_write', { file_path: 'hack.txt', content: 'x' }),
-        ctx(),
-      ),
+      toolset.handlers['lion_write']!(invoke('lion_write', { file_path: 'hack.txt', content: 'x' }), ctx()),
     ).rejects.toThrow(/Permissao negada \(Write\): fora do writeSet do node/);
     expect(fs.existsSync(path.join(root, 'hack.txt'))).toBe(false);
     expect(calls[0]).toEqual({
@@ -358,10 +325,7 @@ describe('lion_write / lion_edit — policy composta ANTES de agir', () => {
     const toolset = buildCursorGuardedToolset({ cwd: root, canUseTool: guard });
     const target = path.join(outside, 'hack.txt');
     await expect(
-      toolset.handlers['lion_write']!(
-        invoke('lion_write', { file_path: target, content: 'x' }),
-        ctx(),
-      ),
+      toolset.handlers['lion_write']!(invoke('lion_write', { file_path: target, content: 'x' }), ctx()),
     ).rejects.toThrow(/fora das raizes permitidas/);
     expect(fs.existsSync(target)).toBe(false);
   });
@@ -392,10 +356,7 @@ describe('lion_write / lion_edit — policy composta ANTES de agir', () => {
     expect(fs.readFileSync(file, 'utf8')).toBe('cc bb dd');
 
     await expect(
-      toolset.handlers['lion_edit']!(
-        invoke('lion_edit', { file_path: 'e.txt', old_string: 'zzz' }),
-        ctx(),
-      ),
+      toolset.handlers['lion_edit']!(invoke('lion_edit', { file_path: 'e.txt', old_string: 'zzz' }), ctx()),
     ).rejects.toThrow(/old_string nao encontrado/);
   });
 });
@@ -406,9 +367,10 @@ describe('consultGuard — contrato CanUseTool do Agent SDK 0.3 (D11)', () => {
     requestId: string | undefined;
   }
 
-  function makeGuardWithOptions(
-    decide: () => PermissionResult | null,
-  ): { guard: CanUseTool; seen: GuardOptionsSeen[] } {
+  function makeGuardWithOptions(decide: () => PermissionResult | null): {
+    guard: CanUseTool;
+    seen: GuardOptionsSeen[];
+  } {
     const seen: GuardOptionsSeen[] = [];
     const guard: CanUseTool = async (_toolName, _input, options) => {
       seen.push({ toolUseID: options.toolUseID, requestId: options.requestId });
@@ -434,10 +396,7 @@ describe('consultGuard — contrato CanUseTool do Agent SDK 0.3 (D11)', () => {
     const { guard, seen } = makeGuardWithOptions(() => null);
     const toolset = buildCursorGuardedToolset({ cwd: root, canUseTool: guard });
     await expect(
-      toolset.handlers['lion_write']!(
-        invoke('lion_write', { file_path: 'novo.txt', content: 'nunca' }),
-        ctx(),
-      ),
+      toolset.handlers['lion_write']!(invoke('lion_write', { file_path: 'novo.txt', content: 'nunca' }), ctx()),
     ).rejects.toThrow(/Permissao negada \(Write\): policy sem decisao/);
     expect(seen).toHaveLength(1);
     expect(fs.existsSync(path.join(root, 'novo.txt'))).toBe(false);
@@ -462,9 +421,9 @@ describe('consultGuard — contrato CanUseTool do Agent SDK 0.3 (D11)', () => {
     fs.writeFileSync(path.join(root, 'a.txt'), 'x');
     const { guard } = makeGuardWithOptions(() => ({ behavior: 'deny', message: 'leitura vetada' }));
     const toolset = buildCursorGuardedToolset({ cwd: root, canUseTool: guard });
-    await expect(
-      toolset.handlers['lion_read']!(invoke('lion_read', { file_path: 'a.txt' }), ctx()),
-    ).rejects.toThrow(/Permissao negada \(Read\): leitura vetada/);
+    await expect(toolset.handlers['lion_read']!(invoke('lion_read', { file_path: 'a.txt' }), ctx())).rejects.toThrow(
+      /Permissao negada \(Read\): leitura vetada/,
+    );
   });
 });
 
@@ -481,7 +440,9 @@ describe('lion_shell — spawn cancelavel, nunca execSync', () => {
 
     await expect(
       toolset.handlers['lion_shell']!(
-        invoke('lion_shell', { command: `node -e "require('fs').writeFileSync('${marker.replace(/\\/g, '/')}','ran')"` }),
+        invoke('lion_shell', {
+          command: `node -e "require('fs').writeFileSync('${marker.replace(/\\/g, '/')}','ran')"`,
+        }),
         ctx(),
       ),
     ).rejects.toThrow(/Permissao negada \(Bash\)/);
@@ -552,7 +513,9 @@ describe('lion_shell — spawn cancelavel, nunca execSync', () => {
     controller.abort();
     await expect(
       toolset.handlers['lion_shell']!(
-        invoke('lion_shell', { command: `node -e "require('fs').writeFileSync('${marker.replace(/\\/g, '/')}','ran')"` }),
+        invoke('lion_shell', {
+          command: `node -e "require('fs').writeFileSync('${marker.replace(/\\/g, '/')}','ran')"`,
+        }),
         ctx(controller.signal),
       ),
     ).rejects.toThrow(/session-aborted/);
@@ -601,20 +564,33 @@ describe('gate final r2 — includeShell:false e deniedRoots estrutural', () => 
   it('escrita/edicao sob a raiz negada e bloqueada MESMO com o guard permitindo (relativo e ".." absoluto)', async () => {
     const { root, rulesFile, toolset } = makeDeniedSetup();
     const relative = path
-      .join('runtime', 'cursor-chat-workspaces', 'desktop', 'hash-b', '.cursor', 'rules', 'lionclaw-identity.internal.mdc')
+      .join(
+        'runtime',
+        'cursor-chat-workspaces',
+        'desktop',
+        'hash-b',
+        '.cursor',
+        'rules',
+        'lionclaw-identity.internal.mdc',
+      )
       .replace(/\\/g, '/');
     await expect(
-      toolset.handlers['lion_write']!(
-        invoke('lion_write', { file_path: relative, content: 'INJETADO' }),
-        ctx(),
-      ),
+      toolset.handlers['lion_write']!(invoke('lion_write', { file_path: relative, content: 'INJETADO' }), ctx()),
     ).rejects.toThrow(/raiz PROTEGIDA/);
-    const dotted = path.join(root, 'qualquer', '..', 'runtime', 'cursor-chat-workspaces', 'desktop', 'hash-b', '.cursor', 'rules', 'x.mdc');
+    const dotted = path.join(
+      root,
+      'qualquer',
+      '..',
+      'runtime',
+      'cursor-chat-workspaces',
+      'desktop',
+      'hash-b',
+      '.cursor',
+      'rules',
+      'x.mdc',
+    );
     await expect(
-      toolset.handlers['lion_write']!(
-        invoke('lion_write', { file_path: dotted, content: 'INJETADO' }),
-        ctx(),
-      ),
+      toolset.handlers['lion_write']!(invoke('lion_write', { file_path: dotted, content: 'INJETADO' }), ctx()),
     ).rejects.toThrow(/raiz PROTEGIDA/);
     await expect(
       toolset.handlers['lion_edit']!(
@@ -627,30 +603,24 @@ describe('gate final r2 — includeShell:false e deniedRoots estrutural', () => 
 
   it('leitura/listagem sob a raiz negada e bloqueada (conteudo das rules nunca vaza)', async () => {
     const { denied, rulesFile, toolset } = makeDeniedSetup();
-    await expect(
-      toolset.handlers['lion_read']!(invoke('lion_read', { file_path: rulesFile }), ctx()),
-    ).rejects.toThrow(/raiz PROTEGIDA/);
-    await expect(
-      toolset.handlers['lion_list']!(invoke('lion_list', { path: denied }), ctx()),
-    ).rejects.toThrow(/raiz PROTEGIDA/);
+    await expect(toolset.handlers['lion_read']!(invoke('lion_read', { file_path: rulesFile }), ctx())).rejects.toThrow(
+      /raiz PROTEGIDA/,
+    );
+    await expect(toolset.handlers['lion_list']!(invoke('lion_list', { path: denied }), ctx())).rejects.toThrow(
+      /raiz PROTEGIDA/,
+    );
   });
 
   it('glob e grep na raiz do cwd NAO devolvem nada de dentro da raiz negada', async () => {
     const { root, toolset } = makeDeniedSetup();
     fs.writeFileSync(path.join(root, 'legit.mdc'), 'IDENTIDADE legitima fora da raiz negada', 'utf8');
 
-    const globOut = await toolset.handlers['lion_glob']!(
-      invoke('lion_glob', { pattern: '**/*.mdc' }),
-      ctx(),
-    );
+    const globOut = await toolset.handlers['lion_glob']!(invoke('lion_glob', { pattern: '**/*.mdc' }), ctx());
     expect(globOut).toContain('legit.mdc');
     expect(globOut).not.toContain('lionclaw-identity.internal.mdc');
     expect(globOut).not.toContain('vazavel.mdc');
 
-    const grepOut = await toolset.handlers['lion_grep']!(
-      invoke('lion_grep', { pattern: 'IDENTIDADE' }),
-      ctx(),
-    );
+    const grepOut = await toolset.handlers['lion_grep']!(invoke('lion_grep', { pattern: 'IDENTIDADE' }), ctx());
     expect(grepOut).toContain('legit.mdc');
     expect(grepOut).not.toContain('SESSAO B');
   });

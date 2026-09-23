@@ -1,7 +1,6 @@
 import type Database from 'better-sqlite3';
 import { DYNAMIC_WORKFLOW_SPRINT_MERGE_STATUSES } from '../../../src/types/dynamic-workflow';
 
-
 function checkIn(column: string, values: readonly string[]): string {
   return `CHECK (${column} IN (${values.map((v) => `'${v}'`).join(', ')}))`;
 }
@@ -21,8 +20,7 @@ export function applyMigrationV93(db: Database.Database): void {
   for (const alter of V93_SPRINT_WORKTREE_ALTERS) {
     try {
       db.exec(alter);
-    } catch {
-    }
+    } catch {}
   }
 }
 

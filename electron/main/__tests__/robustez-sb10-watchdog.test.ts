@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createWatchdog, WATCHDOG_TIMEOUT_MS } from '../agent-runtime/watchdog';
 import { TypedProviderError } from '../agent-runtime/llm-error';

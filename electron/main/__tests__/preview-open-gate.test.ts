@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -22,6 +21,10 @@ vi.mock('electron', () => ({
 
 const getActiveChatSessionMock = vi.fn<() => { id: string } | null>(() => ({
   id: 'chat-1',
+}));
+vi.mock('../in-flight-desktop-session', () => ({
+  getInFlightDesktopSession: () => getActiveChatSessionMock()?.id ?? null,
+  setInFlightDesktopSession: () => {},
 }));
 vi.mock('../db', () => ({
   getAllAgents: vi.fn(() => []),
@@ -53,9 +56,9 @@ vi.mock('../pipeline-drive-coordinator', () => ({
 }));
 
 type GuardDecision = { behavior: 'allow' | 'deny'; message?: string };
-const guardMock = vi.fn<
-  (tool: string, input: Record<string, unknown>) => Promise<GuardDecision>
->(async () => ({ behavior: 'allow' }));
+const guardMock = vi.fn<(tool: string, input: Record<string, unknown>) => Promise<GuardDecision>>(async () => ({
+  behavior: 'allow',
+}));
 vi.mock('../permission-guard', () => ({
   createPermissionGuard: () => guardMock,
 }));
@@ -93,6 +96,7 @@ const agentCtx: JsonRpcContext = {
 };
 const TARGET = '/Users/user/proj/dist/index.html';
 let activeTurn: ActiveChatTurnFixture;
+const activeBinding = () => ({ sessionId: activeTurn.sessionId, turnId: activeTurn.turnId });
 
 beforeEach(() => {
   activeTurn = bindActiveDesktopTurn();
@@ -124,11 +128,14 @@ describe('I8 — camada 2: gates de caller e permissao no dispatch', () => {
       { authenticatedHelper: false },
       { authenticatedHelper: true, serverId: 'lionclaw-telegram' },
     ]) {
-      const res = await dispatch({ getWindow: () => null, connection }, {
-        method: 'preview_open',
-        id: 99,
-        params: { target: TARGET },
-      });
+      const res = await dispatch(
+        { getWindow: () => null, connection },
+        {
+          method: 'preview_open',
+          id: 99,
+          params: { ...activeBinding(), target: TARGET },
+        },
+      );
       expect(res.error?.message).toMatch(/nao autenticada como lionclaw-preview/i);
     }
     expect(previewOpenCoreMock).not.toHaveBeenCalled();
@@ -138,7 +145,7 @@ describe('I8 — camada 2: gates de caller e permissao no dispatch', () => {
     const res = await dispatch(ctx, {
       method: 'preview_open',
       id: 1,
-      params: { target: TARGET },
+      params: { ...activeBinding(), target: TARGET },
     });
     expect(res.error).toBeUndefined();
     expect(res.result).toEqual({ opened: true, kind: 'file', target: TARGET });
@@ -154,24 +161,28 @@ describe('I8 — camada 2: gates de caller e permissao no dispatch', () => {
       const inner = await dispatch(ctx, {
         method: 'preview_open',
         id: 10,
-        params: { target: TARGET },
+        params: { ...activeBinding(), target: TARGET },
       });
       innerRefused = !!inner.error;
       return { ok: true, summary: 'done' };
     });
 
-    await handleCallAgent(agentCtx, { agent_id: 'sub-1', task: 'abrir preview' });
+    await handleCallAgent(agentCtx, {
+      agent_id: 'sub-1',
+      task: 'abrir preview',
+      binding: { lane: 'desktop', ...activeBinding() },
+    });
 
     expect(innerRefused).toBe(true);
     expect(previewOpenCoreMock).not.toHaveBeenCalled();
   });
 
   it('sem sessao de chat ativa: { error }, core nunca alcancado', async () => {
-    getActiveChatSessionMock.mockReturnValue(null);
+    activeTurn.dispose();
     const res = await dispatch(ctx, {
       method: 'preview_open',
       id: 2,
-      params: { target: TARGET },
+      params: { ...activeBinding(), target: TARGET },
     });
     expect(res.result).toBeUndefined();
     expect(res.error).toBeDefined();
@@ -184,7 +195,7 @@ describe('I8 — camada 2: gates de caller e permissao no dispatch', () => {
     const res = await dispatch(ctx, {
       method: 'preview_open',
       id: 3,
-      params: { target: TARGET },
+      params: { ...activeBinding(), target: TARGET },
     });
     expect(res.error).toBeDefined();
     expect(res.error?.message).toMatch(/negada pelo gate de permissao/i);
@@ -192,11 +203,15 @@ describe('I8 — camada 2: gates de caller e permissao no dispatch', () => {
   });
 
   it('gate liberado apos o subagente terminar (orquestrador volta a abrir preview)', async () => {
-    await handleCallAgent(agentCtx, { agent_id: 'sub-1', task: 'algo' });
+    await handleCallAgent(agentCtx, {
+      agent_id: 'sub-1',
+      task: 'algo',
+      binding: { lane: 'desktop', ...activeBinding() },
+    });
     const res = await dispatch(ctx, {
       method: 'preview_open',
       id: 4,
-      params: { target: TARGET },
+      params: { ...activeBinding(), target: TARGET },
     });
     expect(res.error).toBeUndefined();
     expect(previewOpenCoreMock).toHaveBeenCalledTimes(1);
@@ -213,7 +228,7 @@ describe('telegram_notify — identidade e confirmação real de envio', () => {
     const res = await dispatch(ctx, {
       method: 'telegram_notify',
       id: 20,
-      params: { message: 'ola' },
+      params: { ...activeBinding(), message: 'ola' },
     });
     expect(res.error?.message).toMatch(/lionclaw-telegram/);
     expect(sendTelegramNotificationMock).not.toHaveBeenCalled();
@@ -224,7 +239,7 @@ describe('telegram_notify — identidade e confirmação real de envio', () => {
     const res = await dispatch(telegramCtx, {
       method: 'telegram_notify',
       id: 21,
-      params: { message: 'ola' },
+      params: { ...activeBinding(), message: 'ola' },
     });
     expect(res.result).toMatchObject({ sent: false, reason: 'send-failed' });
   });
@@ -234,7 +249,7 @@ describe('telegram_notify — identidade e confirmação real de envio', () => {
     const res = await dispatch(telegramCtx, {
       method: 'telegram_notify',
       id: 22,
-      params: { message: 'ola' },
+      params: { ...activeBinding(), message: 'ola' },
     });
     expect(res.result).toEqual({ sent: true });
   });

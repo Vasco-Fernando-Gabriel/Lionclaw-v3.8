@@ -1,18 +1,17 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const CLOUD_ARCHITECT_ID = 'cloud-architect';
 
 export const cloudArchitect: Omit<AgentConfig, 'sortOrder'> = {
   id: CLOUD_ARCHITECT_ID,
-  name: "Arquiteto de Nuvem",
-  description: "Use quando precisar projetar, avaliar ou otimizar arquiteturas de infraestrutura em nuvem em escala",
-  model: "claude-opus-4-8",
+  name: 'Arquiteto de Nuvem',
+  description: 'Use quando precisar projetar, avaliar ou otimizar arquiteturas de infraestrutura em nuvem em escala',
+  model: 'claude-opus-5-5',
   effort: 'medium' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,
   maxToolRounds: 5,
-  allowedTools: ["Read","Write","Edit","Bash","Glob","Grep"],
+  allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
   mcpServers: [],
   isActive: true,
   skills: [],

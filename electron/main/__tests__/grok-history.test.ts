@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildGrokHistoryPreamble,
-  GROK_HISTORY_MAX_CHARS,
-  GROK_HISTORY_MAX_TURNS,
-} from '../grok-sdk/history';
+import { buildGrokHistoryPreamble, GROK_HISTORY_MAX_CHARS, GROK_HISTORY_MAX_TURNS } from '../grok-sdk/history';
 import type { ChatMessage } from '../../../src/types';
 
 function message(id: number, role: ChatMessage['role'], content: string): ChatMessage {

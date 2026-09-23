@@ -3,10 +3,7 @@ import path from 'path';
 import { createLogger } from './logger';
 import { getSecret } from './secrets-vault';
 import { getSetting } from './db';
-import {
-  DEFAULT_VOICE_TRANSCRIPTION_MODEL,
-  isVoiceTranscriptionModel,
-} from '../../src/constants/transcription-models';
+import { DEFAULT_VOICE_TRANSCRIPTION_MODEL, isVoiceTranscriptionModel } from '../../src/constants/transcription-models';
 import type { VoiceTranscriptionModel } from '../../src/types';
 
 const logger = createLogger('voice-engine');
@@ -28,15 +25,10 @@ const MIME_TYPES: Record<AudioFormat, string> = {
 
 function getVoiceTranscriptionModel(): VoiceTranscriptionModel {
   const configured = getSetting('voice_transcription_model') || '';
-  return isVoiceTranscriptionModel(configured)
-    ? configured
-    : DEFAULT_VOICE_TRANSCRIPTION_MODEL;
+  return isVoiceTranscriptionModel(configured) ? configured : DEFAULT_VOICE_TRANSCRIPTION_MODEL;
 }
 
-export async function transcribeAudio(
-  audioBase64: string,
-  format: AudioFormat = 'webm',
-): Promise<string> {
+export async function transcribeAudio(audioBase64: string, format: AudioFormat = 'webm'): Promise<string> {
   const audioBuffer = Buffer.from(audioBase64, 'base64');
   return transcribeAudioBuffer(audioBuffer, {
     format,
@@ -82,7 +74,7 @@ async function transcribeAudioBuffer(
     throw new Error(`OpenAI STT failed: ${response.status} ${response.statusText}`);
   }
 
-  const result = await response.json() as { text?: string };
+  const result = (await response.json()) as { text?: string };
   logger.info({ model, textLength: result.text?.length }, 'OpenAI transcription complete');
   return result.text || '';
 }

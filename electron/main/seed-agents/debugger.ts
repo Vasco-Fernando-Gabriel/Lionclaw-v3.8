@@ -1,18 +1,18 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const DEBUGGER_ID = 'debugger';
 
 export const debuggerAgent: Omit<AgentConfig, 'sortOrder'> = {
   id: DEBUGGER_ID,
-  name: "Depurador",
-  description: "Use quando precisar diagnosticar e corrigir bugs, identificar causas raiz de falhas ou analisar logs de erro e stack traces para resolver problemas",
-  model: "claude-opus-4-8",
+  name: 'Depurador',
+  description:
+    'Use quando precisar diagnosticar e corrigir bugs, identificar causas raiz de falhas ou analisar logs de erro e stack traces para resolver problemas',
+  model: 'claude-opus-5-5',
   effort: 'medium' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,
   maxToolRounds: 5,
-  allowedTools: ["Read","Write","Edit","Bash","Glob","Grep","WebSearch"],
+  allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch'],
   mcpServers: [],
   isActive: true,
   skills: [],

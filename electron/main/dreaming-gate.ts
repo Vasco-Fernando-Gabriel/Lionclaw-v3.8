@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -11,12 +10,7 @@ import type { UserSection } from './memory-pipeline/user-profile';
 
 const logger = createLogger('dreaming-gate');
 
-
-export type MemorySection =
-  | 'decisoes_ativas'
-  | 'workarounds'
-  | 'estado_de_projetos'
-  | 'referencias_externas';
+export type MemorySection = 'decisoes_ativas' | 'workarounds' | 'estado_de_projetos' | 'referencias_externas';
 
 export interface GateInputItem {
   kind: 'add' | 'remove';
@@ -25,12 +19,12 @@ export interface GateInputItem {
 
 export interface GateOutputApplyItem {
   section: MemorySection;
-  text: string; // texto final (gate pode reformatar para incluir [YYYY-MM-DD])
+  text: string;
 }
 
 export interface UserCandidateItem {
   action: 'add' | 'remove';
-  section: string; // dica (texto livre do summarizer)
+  section: string;
   fact: string;
 }
 
@@ -41,7 +35,7 @@ export interface GateOutputUserAddItem {
 
 export interface GateOutputQuarantineItem {
   text: string;
-  reason: string; // por que ficou em quarentena (regra violada)
+  reason: string;
   proposed_section?: MemorySection;
 }
 
@@ -59,8 +53,8 @@ export interface DreamingGateResult {
   };
   quarantine: GateOutputQuarantineItem[];
   discarded: GateOutputDiscardedItem[];
-  report: string; // markdown pronto para escrever no dreaming-report
-  failSafeTriggered: boolean; // true se gate caiu no fail-safe
+  report: string;
+  failSafeTriggered: boolean;
   failSafeReason?: 'timeout' | 'json_parse_error' | 'llm_error' | 'skill_md_missing';
 }
 
@@ -68,8 +62,8 @@ export interface DreamingGateInput {
   candidates: GateInputItem[];
   userCandidates?: UserCandidateItem[];
   currentMemoryMd: string;
-  currentUserMd: string; // leitura anti-duplicata; AUDITAVEL quando ha userCandidates (12.2)
-  conversationExcerpt: string; // trecho do que foi compactado, para contexto
+  currentUserMd: string;
+  conversationExcerpt: string;
 }
 
 export type LlmInvoker = (prompt: string) => Promise<string>;
@@ -85,7 +79,6 @@ export function resolveDreamingTimeoutMs(): number {
   const raw = Number.parseInt(getSetting('dreaming_timeout_ms') || '', 10);
   return Number.isFinite(raw) && raw > 0 ? raw : DREAMING_TIMEOUT_MS;
 }
-
 
 interface LlmGateOutput {
   apply: {
@@ -116,7 +109,6 @@ function jaccardTokenSimilarity(a: string, b: string): number {
 }
 
 const ACCOUNTING_JACCARD_THRESHOLD = 0.5;
-
 
 function buildFailSafeResult(
   candidates: GateInputItem[],
@@ -151,9 +143,7 @@ function buildFailSafeResult(
   ].join('\n');
 
   return {
-    apply: hasUserCandidates
-      ? { add: [], remove: [], userAdd: [], userRemove: [] }
-      : { add: [], remove: [] },
+    apply: hasUserCandidates ? { add: [], remove: [], userAdd: [], userRemove: [] } : { add: [], remove: [] },
     quarantine,
     discarded: [],
     report,
@@ -163,21 +153,17 @@ function buildFailSafeResult(
 }
 
 function buildSuccessReport(output: LlmGateOutput): string {
-  const addLines = output.apply.add.length > 0
-    ? output.apply.add.map((i) => `- [${i.section}] ${i.text}`).join('\n')
-    : '_nenhuma_';
+  const addLines =
+    output.apply.add.length > 0 ? output.apply.add.map((i) => `- [${i.section}] ${i.text}`).join('\n') : '_nenhuma_';
 
-  const removeLines = output.apply.remove.length > 0
-    ? output.apply.remove.map((l) => `- ${l}`).join('\n')
-    : '_nenhuma_';
+  const removeLines =
+    output.apply.remove.length > 0 ? output.apply.remove.map((l) => `- ${l}`).join('\n') : '_nenhuma_';
 
-  const quarantineLines = output.quarantine.length > 0
-    ? output.quarantine.map((q) => `- ${q.text} _(${q.reason})_`).join('\n')
-    : '_nenhuma_';
+  const quarantineLines =
+    output.quarantine.length > 0 ? output.quarantine.map((q) => `- ${q.text} _(${q.reason})_`).join('\n') : '_nenhuma_';
 
-  const discardedLines = output.discarded.length > 0
-    ? output.discarded.map((d) => `- ${d.text} _(${d.reason})_`).join('\n')
-    : '_nenhuma_';
+  const discardedLines =
+    output.discarded.length > 0 ? output.discarded.map((d) => `- ${d.text} _(${d.reason})_`).join('\n') : '_nenhuma_';
 
   const parts = [
     `# Dreaming Gate - Relatorio de Compactacao`,
@@ -190,28 +176,18 @@ function buildSuccessReport(output: LlmGateOutput): string {
   ];
 
   if (output.apply.userAdd !== undefined || output.apply.userRemove !== undefined) {
-    const userAddLines = (output.apply.userAdd ?? []).length > 0
-      ? (output.apply.userAdd ?? []).map((i) => `- [${i.section}] ${i.text}`).join('\n')
-      : '_nenhuma_';
-    const userRemoveLines = (output.apply.userRemove ?? []).length > 0
-      ? (output.apply.userRemove ?? []).map((l) => `- ${l}`).join('\n')
-      : '_nenhuma_';
-    parts.push(
-      `### Adicionar (USER.md)`,
-      userAddLines,
-      `### Remover (USER.md)`,
-      userRemoveLines,
-    );
+    const userAddLines =
+      (output.apply.userAdd ?? []).length > 0
+        ? (output.apply.userAdd ?? []).map((i) => `- [${i.section}] ${i.text}`).join('\n')
+        : '_nenhuma_';
+    const userRemoveLines =
+      (output.apply.userRemove ?? []).length > 0
+        ? (output.apply.userRemove ?? []).map((l) => `- ${l}`).join('\n')
+        : '_nenhuma_';
+    parts.push(`### Adicionar (USER.md)`, userAddLines, `### Remover (USER.md)`, userRemoveLines);
   }
 
-  parts.push(
-    ``,
-    `## Quarentena`,
-    quarantineLines,
-    ``,
-    `## Descartados`,
-    discardedLines,
-  );
+  parts.push(``, `## Quarentena`, quarantineLines, ``, `## Descartados`, discardedLines);
   return parts.join('\n');
 }
 
@@ -251,19 +227,13 @@ Adicione ao objeto "apply" do JSON de saida os campos:
 "userAccounting": [ { "candidateId": "c1", "destination": "userAdd" | "userRemove" | "quarantine" | "discarded" } ]`;
 }
 
-function buildPrompt(
-  skillMd: string,
-  input: DreamingGateInput,
-): string {
-  const candidatesText = input.candidates
-    .map((c, i) => `${i + 1}. [${c.kind.toUpperCase()}] ${c.text}`)
-    .join('\n');
+function buildPrompt(skillMd: string, input: DreamingGateInput): string {
+  const candidatesText = input.candidates.map((c, i) => `${i + 1}. [${c.kind.toUpperCase()}] ${c.text}`).join('\n');
 
   const excerptTruncated = input.conversationExcerpt.slice(0, 8000);
   const today = formatToday();
 
-  const hasUserCandidates =
-    input.userCandidates !== undefined && input.userCandidates.length > 0;
+  const hasUserCandidates = input.userCandidates !== undefined && input.userCandidates.length > 0;
   const userBlock = hasUserCandidates ? buildUserRulesBlock(input.userCandidates!) : '';
 
   return `[GATE_INSTRUCTIONS]
@@ -332,7 +302,6 @@ Regras:
 - Retorne JSON puro, sem markdown, sem comentarios.${userBlock}`;
 }
 
-
 export async function runDreamingGate(
   input: DreamingGateInput,
   options?: RunDreamingGateOptions,
@@ -344,19 +313,23 @@ export async function runDreamingGate(
   let skillMd: string;
   try {
     if (!fs.existsSync(skillPath)) {
-      logger.warn(
-        { skillPath, candidates: input.candidates.length },
-        'dreaming_gate_failed: skill_md_missing',
+      logger.warn({ skillPath, candidates: input.candidates.length }, 'dreaming_gate_failed: skill_md_missing');
+      return buildFailSafeResult(
+        input.candidates,
+        'skill_md_missing',
+        `SKILL.md nao encontrado em ${skillPath}`,
+        input.userCandidates,
       );
-      return buildFailSafeResult(input.candidates, 'skill_md_missing', `SKILL.md nao encontrado em ${skillPath}`, input.userCandidates);
     }
     skillMd = fs.readFileSync(skillPath, 'utf-8').trim();
     if (!skillMd) {
-      logger.warn(
-        { skillPath, candidates: input.candidates.length },
-        'dreaming_gate_failed: skill_md_missing (vazio)',
+      logger.warn({ skillPath, candidates: input.candidates.length }, 'dreaming_gate_failed: skill_md_missing (vazio)');
+      return buildFailSafeResult(
+        input.candidates,
+        'skill_md_missing',
+        `SKILL.md vazio em ${skillPath}`,
+        input.userCandidates,
       );
-      return buildFailSafeResult(input.candidates, 'skill_md_missing', `SKILL.md vazio em ${skillPath}`, input.userCandidates);
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -364,7 +337,12 @@ export async function runDreamingGate(
       { skillPath, err, candidates: input.candidates.length },
       'dreaming_gate_failed: skill_md_missing (erro de IO)',
     );
-    return buildFailSafeResult(input.candidates, 'skill_md_missing', `Erro ao ler SKILL.md: ${msg}`, input.userCandidates);
+    return buildFailSafeResult(
+      input.candidates,
+      'skill_md_missing',
+      `Erro ao ler SKILL.md: ${msg}`,
+      input.userCandidates,
+    );
   }
 
   const prompt = buildPrompt(skillMd, input);
@@ -372,10 +350,7 @@ export async function runDreamingGate(
   let rawResponse: string;
   try {
     const timeoutPromise = new Promise<never>((_, reject) => {
-      const id = setTimeout(
-        () => reject(new Error('dreaming_gate_timeout')),
-        timeoutMs,
-      );
+      const id = setTimeout(() => reject(new Error('dreaming_gate_timeout')), timeoutMs);
       if (typeof id === 'object' && 'unref' in id) {
         (id as NodeJS.Timeout).unref();
       }
@@ -385,16 +360,10 @@ export async function runDreamingGate(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg === 'dreaming_gate_timeout') {
-      logger.warn(
-        { timeoutMs, candidates: input.candidates.length },
-        'dreaming_gate_failed: timeout',
-      );
+      logger.warn({ timeoutMs, candidates: input.candidates.length }, 'dreaming_gate_failed: timeout');
       return buildFailSafeResult(input.candidates, 'timeout', `timeout apos ${timeoutMs}ms`, input.userCandidates);
     }
-    logger.warn(
-      { err, candidates: input.candidates.length },
-      'dreaming_gate_failed: llm_error',
-    );
+    logger.warn({ err, candidates: input.candidates.length }, 'dreaming_gate_failed: llm_error');
     return buildFailSafeResult(input.candidates, 'llm_error', msg, input.userCandidates);
   }
 
@@ -536,9 +505,7 @@ export async function runDreamingGate(
         norm.length > 0 &&
         pool.some(
           (t) =>
-            t.includes(norm) ||
-            norm.includes(t) ||
-            jaccardTokenSimilarity(t, norm) >= ACCOUNTING_JACCARD_THRESHOLD,
+            t.includes(norm) || norm.includes(t) || jaccardTokenSimilarity(t, norm) >= ACCOUNTING_JACCARD_THRESHOLD,
         );
       if (!accounted) {
         output.quarantine.push({ text: candidate.fact, reason: 'unaccounted_by_gate' });
@@ -562,29 +529,15 @@ export async function runDreamingGate(
   };
 }
 
-
 export async function saveDreamingReport(result: DreamingGateResult): Promise<string> {
   const now = new Date();
   const pad = (n: number, len = 2) => String(n).padStart(len, '0');
-  const datePart = [
-    now.getFullYear(),
-    pad(now.getMonth() + 1),
-    pad(now.getDate()),
-  ].join('-');
-  const timePart = [
-    pad(now.getHours()),
-    pad(now.getMinutes()),
-    pad(now.getSeconds()),
-  ].join('');
+  const datePart = [now.getFullYear(), pad(now.getMonth() + 1), pad(now.getDate())].join('-');
+  const timePart = [pad(now.getHours()), pad(now.getMinutes()), pad(now.getSeconds())].join('');
   const randomSuffix = randomUUID();
 
   const filename = `${datePart}_${timePart}_${randomSuffix}_compaction-dreaming-report.md`;
-  const dir = path.join(
-    getLionClawHome(),
-    'workspaces',
-    'lionclaw',
-    'dreaming-reports',
-  );
+  const dir = path.join(getLionClawHome(), 'workspaces', 'lionclaw', 'dreaming-reports');
 
   fs.mkdirSync(dir, { recursive: true });
 

@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'child_process';
 import fs from 'fs';
@@ -33,7 +32,6 @@ describe('S8 isolation: frozen paths byte-identical (T17)', () => {
       expect(empty, `frozen path changed:\n${diff.slice(0, 4000)}`).toBe(true);
     });
   }
-
 });
 
 describe('S8 isolation: no public runtime-union mutation (T17)', () => {
@@ -42,17 +40,14 @@ describe('S8 isolation: no public runtime-union mutation (T17)', () => {
     const src = fs.readFileSync(typesPath, 'utf8');
     expect(src).not.toMatch(/runtime:\s*'cloud'[^\n]*'codex-official'/);
     expect(src).toMatch(/runtime:\s*'cloud'[^\n]*'codex'/);
-    const driverTypes = fs.readFileSync(
-      path.join(REPO_ROOT, 'electron/main/codex-runtime/types.ts'),
-      'utf8',
-    );
+    const driverTypes = fs.readFileSync(path.join(REPO_ROOT, 'electron/main/codex-runtime/types.ts'), 'utf8');
     expect(driverTypes).toContain("'official-app-server'");
   });
 
   it('the S7-owned codex-runtime package is the ONLY S8 surface (factory resolves official)', () => {
     const factoryPath = path.join(REPO_ROOT, 'electron/main/codex-runtime/factory.ts');
     const factory = fs.readFileSync(factoryPath, 'utf8');
-    expect(factory).toContain("official-app-server");
+    expect(factory).toContain('official-app-server');
     expect(factory).toContain('OfficialAppServerDriver');
     expect(factory).toContain('OfficialAppServerDriver');
   });

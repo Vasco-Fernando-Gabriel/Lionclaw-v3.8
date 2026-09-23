@@ -1,10 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import {
-  minimalInternalRuntimeEnv,
-  resolveInternalNodeBinary,
-  resolvePackagedMcpEntry,
-} from './distribution-runtime';
+import { minimalInternalRuntimeEnv, resolveInternalNodeBinary, resolvePackagedMcpEntry } from './distribution-runtime';
 
 export interface McpEntryResolutionOptions {
   resourcesPath?: string | null;
@@ -32,10 +28,10 @@ function validateMcpPath(id: string, relativeEntry: string): string[] {
   }
   const segments = relativeEntry.split(/[\\/]+/);
   if (
-    relativeEntry.length === 0
-    || path.isAbsolute(relativeEntry)
-    || /^[a-zA-Z]:/.test(relativeEntry)
-    || segments.some((segment) => segment === '' || segment === '.' || segment === '..')
+    relativeEntry.length === 0 ||
+    path.isAbsolute(relativeEntry) ||
+    /^[a-zA-Z]:/.test(relativeEntry) ||
+    segments.some((segment) => segment === '' || segment === '.' || segment === '..')
   ) {
     throw new Error(`entrypoint MCP relativo invalido: ${relativeEntry}`);
   }
@@ -63,9 +59,7 @@ export function resolveMcpServerEntry(
 ): McpEntryResolution {
   const entrySegments = validateMcpPath(id, relativeEntry);
   const repoRoot = path.resolve(__dirname, '../..');
-  const resourcesPath = options.resourcesPath === undefined
-    ? defaultResourcesPath()
-    : options.resourcesPath;
+  const resourcesPath = options.resourcesPath === undefined ? defaultResourcesPath() : options.resourcesPath;
   const packaged = options.packaged ?? defaultPackaged();
   if (packaged) {
     try {
@@ -75,22 +69,20 @@ export function resolveMcpServerEntry(
       });
       return { entryPath, candidates: [entryPath] };
     } catch (error) {
-      throw new Error(
-        `MCP packaged ${id} inválido: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      throw new Error(`MCP packaged ${id} inválido: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  const hasExplicitDevelopmentRoots = options.devOutputRoot !== undefined
-    || options.sourceRoot !== undefined
-    || options.appPath !== undefined
-    || options.cwd !== undefined
-    || options.resourcesPath !== undefined;
+  const hasExplicitDevelopmentRoots =
+    options.devOutputRoot !== undefined ||
+    options.sourceRoot !== undefined ||
+    options.appPath !== undefined ||
+    options.cwd !== undefined ||
+    options.resourcesPath !== undefined;
   if (!hasExplicitDevelopmentRoots) {
     try {
       const entryPath = resolvePackagedMcpEntry(id, { packaged: false });
       return { entryPath, candidates: [entryPath] };
-    } catch {
-    }
+    } catch {}
   }
   const roots = [
     resourcesPath ? path.join(resourcesPath, 'mcp-servers') : null,
@@ -103,13 +95,14 @@ export function resolveMcpServerEntry(
   const uniqueRoots = roots.filter((root, index) => roots.indexOf(root) === index);
   const candidates = uniqueRoots.map((root) => path.join(root, id, ...entrySegments));
   const exists = options.exists ?? fs.existsSync;
-  const entryPath = candidates.find((candidate) => {
-    try {
-      return exists(candidate);
-    } catch {
-      return false;
-    }
-  }) ?? null;
+  const entryPath =
+    candidates.find((candidate) => {
+      try {
+        return exists(candidate);
+      } catch {
+        return false;
+      }
+    }) ?? null;
   return { entryPath, candidates };
 }
 

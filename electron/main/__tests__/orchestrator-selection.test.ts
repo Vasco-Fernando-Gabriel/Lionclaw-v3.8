@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -54,7 +53,7 @@ describe('Rule #1: triple completo -> settings; incompleto -> orchestrator_uncon
       orchestrator_provider: 'anthropic',
       orchestrator_model: 'claude-opus-4-7',
     });
-    const sel = await resolveOrchestratorSelection({ surface: 'main-chat' });
+    const sel = await resolveOrchestratorSelection({ surface: 'default' });
     expect(sel.runtime).toBe('claude-sdk');
     expect(sel.provider).toBe('anthropic');
     expect(sel.model).toBe('claude-opus-4-7');
@@ -65,16 +64,14 @@ describe('Rule #1: triple completo -> settings; incompleto -> orchestrator_uncon
     setSettings({
       default_model: 'gpt-5.5',
     });
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 
   it('throws orchestrator_unconfigured (missingField runtime) when settings table is empty', async () => {
     setSettings({});
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).rejects.toMatchObject({
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toMatchObject({
       code: 'orchestrator_unconfigured',
       missingField: 'runtime',
     });
@@ -82,9 +79,7 @@ describe('Rule #1: triple completo -> settings; incompleto -> orchestrator_uncon
 
   it('throws with missingField provider when only runtime is set', async () => {
     setSettings({ orchestrator_runtime: 'claude-sdk' });
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).rejects.toMatchObject({
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toMatchObject({
       code: 'orchestrator_unconfigured',
       missingField: 'provider',
     });
@@ -96,15 +91,12 @@ describe('Rule #1: triple completo -> settings; incompleto -> orchestrator_uncon
       orchestrator_provider: 'anthropic',
       orchestrator_model: '',
     });
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).rejects.toMatchObject({
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toMatchObject({
       code: 'orchestrator_unconfigured',
       missingField: 'model',
     });
   });
 });
-
 
 describe('Rule #2: requestedModel cross-runtime validation', () => {
   it('accepts requestedModel that belongs to the resolved runtime', async () => {
@@ -114,7 +106,7 @@ describe('Rule #2: requestedModel cross-runtime validation', () => {
       orchestrator_model: 'claude-opus-4-7',
     });
     const sel = await resolveOrchestratorSelection({
-      surface: 'main-chat',
+      surface: 'default',
       requestedModel: 'claude-opus-4-8',
     });
     expect(sel.model).toBe('claude-opus-4-8');
@@ -129,7 +121,7 @@ describe('Rule #2: requestedModel cross-runtime validation', () => {
     });
     await expect(
       resolveOrchestratorSelection({
-        surface: 'main-chat',
+        surface: 'default',
         requestedModel: 'gpt-5.5', // codex slug under a claude-sdk runtime
       }),
     ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
@@ -146,13 +138,12 @@ describe('Rule #2: requestedModel cross-runtime validation', () => {
 
     await expect(
       resolveOrchestratorSelection({
-        surface: 'main-chat',
+        surface: 'default',
         requestedModel: 'glm-5.2',
       }),
     ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
   });
 });
-
 
 describe('Rule #3: agentModel sobrescreve o MODELO, nunca o runtime (source agent)', () => {
   it('usa agentModel como model com source agent, mantendo runtime/provider dos settings', async () => {
@@ -162,7 +153,7 @@ describe('Rule #3: agentModel sobrescreve o MODELO, nunca o runtime (source agen
       orchestrator_model: 'claude-opus-4-7',
     });
     const sel = await resolveOrchestratorSelection({
-      surface: 'main-chat',
+      surface: 'default',
       agentModel: 'claude-sonnet-4-6',
     });
     expect(sel.runtime).toBe('claude-sdk');
@@ -178,7 +169,7 @@ describe('Rule #3: agentModel sobrescreve o MODELO, nunca o runtime (source agen
       orchestrator_model: 'claude-opus-4-7',
     });
     const sel = await resolveOrchestratorSelection({
-      surface: 'main-chat',
+      surface: 'default',
       agentModel: undefined,
     });
     expect(sel.model).toBe('claude-opus-4-7');
@@ -192,7 +183,7 @@ describe('Rule #3: agentModel sobrescreve o MODELO, nunca o runtime (source agen
       orchestrator_model: 'claude-opus-4-7',
     });
     const sel = await resolveOrchestratorSelection({
-      surface: 'main-chat',
+      surface: 'default',
       agentModel: 'gpt-5.5',
     });
     expect(sel.runtime).toBe('claude-sdk');
@@ -209,7 +200,7 @@ describe('Rule #3: agentModel sobrescreve o MODELO, nunca o runtime (source agen
     });
     await expect(
       resolveOrchestratorSelection({
-        surface: 'main-chat',
+        surface: 'default',
         agentModel: 'glm-4.7',
       }),
     ).resolves.toMatchObject({ runtime: 'claude-sdk', model: 'glm-4.7', source: 'agent' });
@@ -222,7 +213,7 @@ describe('Rule #3: agentModel sobrescreve o MODELO, nunca o runtime (source agen
       orchestrator_model: 'claude-opus-4-7',
     });
     const sel = await resolveOrchestratorSelection({
-      surface: 'main-chat',
+      surface: 'default',
       requestedModel: 'claude-opus-4-8',
       agentModel: 'claude-sonnet-4-6',
     });
@@ -239,7 +230,7 @@ describe('Rule #3: agentModel sobrescreve o MODELO, nunca o runtime (source agen
     });
     mockedGetSecret.mockResolvedValue('sk-zai-abc');
     const sel = await resolveOrchestratorSelection({
-      surface: 'main-chat',
+      surface: 'default',
       agentModel: 'glm-4.6',
     });
     expect(sel.runtime).toBe('claude-compat-sdk');
@@ -248,7 +239,6 @@ describe('Rule #3: agentModel sobrescreve o MODELO, nunca o runtime (source agen
     expect(sel.source).toBe('agent');
   });
 });
-
 
 describe('Rule #4: Z.ai requires Vault API key', () => {
   it('resolves the apiKey from the vault when the ref + value are set', async () => {
@@ -259,7 +249,7 @@ describe('Rule #4: Z.ai requires Vault API key', () => {
       orchestrator_zai_api_key_ref: 'ZAI_KEY',
     });
     mockedGetSecret.mockResolvedValueOnce('sk-zai-xyz');
-    const sel = await resolveOrchestratorSelection({ surface: 'main-chat' });
+    const sel = await resolveOrchestratorSelection({ surface: 'default' });
     expect(sel.apiKey).toBe('sk-zai-xyz');
     expect(sel.baseUrl).toBe('https://api.z.ai/api/anthropic');
   });
@@ -270,9 +260,9 @@ describe('Rule #4: Z.ai requires Vault API key', () => {
       orchestrator_provider: 'zai',
       orchestrator_model: 'glm-4.7',
     });
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 
   it('throws when the vault value is missing for the configured ref', async () => {
@@ -283,12 +273,11 @@ describe('Rule #4: Z.ai requires Vault API key', () => {
       orchestrator_zai_api_key_ref: 'ZAI_KEY',
     });
     mockedGetSecret.mockResolvedValueOnce(null);
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 });
-
 
 describe('Rule #4 (SPEC-004 §5.4): MiniMax claude-compat resolver', () => {
   it('resolves MiniMax selection (baseUrl + apiKey) when setting + vault are populated', async () => {
@@ -299,7 +288,7 @@ describe('Rule #4 (SPEC-004 §5.4): MiniMax claude-compat resolver', () => {
       orchestrator_minimax_api_key_ref: 'ORCHESTRATOR_MINIMAX_API_KEY',
     });
     mockedGetSecret.mockResolvedValueOnce('mx-fake-token');
-    const sel = await resolveOrchestratorSelection({ surface: 'main-chat' });
+    const sel = await resolveOrchestratorSelection({ surface: 'default' });
     expect(sel.runtime).toBe('claude-compat-sdk');
     expect(sel.provider).toBe('minimax');
     expect(sel.model).toBe('MiniMax-M2.7');
@@ -313,12 +302,12 @@ describe('Rule #4 (SPEC-004 §5.4): MiniMax claude-compat resolver', () => {
       orchestrator_provider: 'minimax',
       orchestrator_model: 'MiniMax-M2.7',
     });
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).rejects.toThrowError(/Settings > External Providers/);
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toThrowError(
+      /Settings > External Providers/,
+    );
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 
   it('throws with "reconecte" hint when minimax vault has no value for the ref', async () => {
@@ -329,9 +318,7 @@ describe('Rule #4 (SPEC-004 §5.4): MiniMax claude-compat resolver', () => {
       orchestrator_minimax_api_key_ref: 'ORCHESTRATOR_MINIMAX_API_KEY',
     });
     mockedGetSecret.mockResolvedValue(null);
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).rejects.toThrowError(/reconecte/i);
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toThrowError(/reconecte/i);
   });
 
   it('Z.ai regression: selection shape is identical to the legacy hardcoded resolver', async () => {
@@ -342,7 +329,7 @@ describe('Rule #4 (SPEC-004 §5.4): MiniMax claude-compat resolver', () => {
       orchestrator_zai_api_key_ref: 'ORCHESTRATOR_ZAI_API_KEY',
     });
     mockedGetSecret.mockResolvedValueOnce('sk-zai-regression');
-    const sel = await resolveOrchestratorSelection({ surface: 'main-chat' });
+    const sel = await resolveOrchestratorSelection({ surface: 'default' });
     expect(sel).toMatchObject({
       runtime: 'claude-compat-sdk',
       provider: 'zai',
@@ -354,7 +341,6 @@ describe('Rule #4 (SPEC-004 §5.4): MiniMax claude-compat resolver', () => {
   });
 });
 
-
 describe('Rule #5: lion-sdk requires baseUrl from settings', () => {
   it('resolves the Ollama baseUrl when configured', async () => {
     setSettings({
@@ -363,7 +349,7 @@ describe('Rule #5: lion-sdk requires baseUrl from settings', () => {
       orchestrator_model: 'llama3.1:8b',
       orchestrator_ollama_base_url: 'http://localhost:11434',
     });
-    const sel = await resolveOrchestratorSelection({ surface: 'main-chat' });
+    const sel = await resolveOrchestratorSelection({ surface: 'default' });
     expect(sel.baseUrl).toBe('http://localhost:11434');
   });
 
@@ -374,7 +360,7 @@ describe('Rule #5: lion-sdk requires baseUrl from settings', () => {
       orchestrator_model: 'qwen2.5-coder',
       orchestrator_lmstudio_base_url: 'http://localhost:1234',
     });
-    const sel = await resolveOrchestratorSelection({ surface: 'main-chat' });
+    const sel = await resolveOrchestratorSelection({ surface: 'default' });
     expect(sel.baseUrl).toBe('http://localhost:1234');
   });
 
@@ -384,12 +370,11 @@ describe('Rule #5: lion-sdk requires baseUrl from settings', () => {
       orchestrator_provider: 'ollama',
       orchestrator_model: 'llama3.1:8b',
     });
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 });
-
 
 describe('Rule #6: openai-compatible additionally requires Vault API key', () => {
   it('resolves both baseUrl and apiKey when fully configured', async () => {
@@ -401,7 +386,7 @@ describe('Rule #6: openai-compatible additionally requires Vault API key', () =>
       orchestrator_openai_compat_api_key_ref: 'DEEPSEEK_KEY',
     });
     mockedGetSecret.mockResolvedValueOnce('sk-deepseek-xyz');
-    const sel = await resolveOrchestratorSelection({ surface: 'main-chat' });
+    const sel = await resolveOrchestratorSelection({ surface: 'default' });
     expect(sel.baseUrl).toBe('https://api.deepseek.com');
     expect(sel.apiKey).toBe('sk-deepseek-xyz');
   });
@@ -415,9 +400,9 @@ describe('Rule #6: openai-compatible additionally requires Vault API key', () =>
       orchestrator_openai_compat_api_key_ref: 'DEEPSEEK_KEY',
     });
     mockedGetSecret.mockResolvedValueOnce(null);
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 
   it('throws when the API key ref is not configured at all', async () => {
@@ -427,12 +412,11 @@ describe('Rule #6: openai-compatible additionally requires Vault API key', () =>
       orchestrator_model: 'deepseek-chat',
       orchestrator_openai_compat_base_url: 'https://api.deepseek.com',
     });
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 });
-
 
 describe('Rule #7: resolver rejects non-main-chat surfaces', () => {
   it('throws when invoked with a surface other than "main-chat"', async () => {
@@ -453,12 +437,11 @@ describe('Rule #7: resolver rejects non-main-chat surfaces', () => {
       orchestrator_provider: 'anthropic',
       orchestrator_model: 'claude-opus-4-7',
     });
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).resolves.toMatchObject({ runtime: 'claude-sdk' });
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).resolves.toMatchObject({
+      runtime: 'claude-sdk',
+    });
   });
 });
-
 
 describe('inferRuntimeFromModel / isModelInRuntime', () => {
   it('maps claude-* to claude-sdk and rejects under codex-sdk', () => {
@@ -498,7 +481,6 @@ describe('inferRuntimeFromModel / isModelInRuntime', () => {
   });
 });
 
-
 describe('lion-sdk / vertex-ai resolver', () => {
   it('throws InvalidOrchestratorSelectionError when vault ref is missing', async () => {
     setSettings({
@@ -507,9 +489,9 @@ describe('lion-sdk / vertex-ai resolver', () => {
       orchestrator_model: 'gemini-3-flash-preview',
       orchestrator_vertex_api_key_ref: '',
     });
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 
   it('throws InvalidOrchestratorSelectionError when vault secret is missing', async () => {
@@ -520,9 +502,9 @@ describe('lion-sdk / vertex-ai resolver', () => {
       orchestrator_vertex_api_key_ref: 'ORCHESTRATOR_VERTEX_API_KEY',
     });
     mockedGetSecret.mockResolvedValue(null);
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 
   it('populates apiKey + default authMode api-key without location/project', async () => {
@@ -536,14 +518,14 @@ describe('lion-sdk / vertex-ai resolver', () => {
       orchestrator_vertex_auth_mode: '',
     });
     mockedGetSecret.mockResolvedValue('fake-google-key');
-    const sel = await resolveOrchestratorSelection({ surface: 'main-chat' });
+    const sel = await resolveOrchestratorSelection({ surface: 'default' });
     expect(sel.runtime).toBe('lion-sdk');
     expect(sel.provider).toBe('vertex-ai');
     expect(sel.apiKey).toBe('fake-google-key');
     expect(sel.vertexLocation).toBeUndefined();
     expect(sel.vertexProjectId).toBeUndefined();
     expect(sel.vertexAuthMode).toBe('api-key');
-    expect(sel.baseUrl).toBeUndefined(); // NO baseUrl required for Vertex
+    expect(sel.baseUrl).toBeUndefined();
   });
 
   it('ignores legacy location and projectId settings in API-key mode', async () => {
@@ -557,7 +539,7 @@ describe('lion-sdk / vertex-ai resolver', () => {
       orchestrator_vertex_auth_mode: 'api-key',
     });
     mockedGetSecret.mockResolvedValue('fake-google-key');
-    const sel = await resolveOrchestratorSelection({ surface: 'main-chat' });
+    const sel = await resolveOrchestratorSelection({ surface: 'default' });
     expect(sel.vertexLocation).toBeUndefined();
     expect(sel.vertexProjectId).toBeUndefined();
   });
@@ -570,9 +552,7 @@ describe('lion-sdk / vertex-ai resolver', () => {
       orchestrator_vertex_api_key_ref: 'ORCHESTRATOR_VERTEX_API_KEY',
     });
     mockedGetSecret.mockResolvedValue('fake-google-key');
-    await expect(
-      resolveOrchestratorSelection({ surface: 'main-chat' }),
-    ).rejects.toMatchObject({
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toMatchObject({
       code: 'orchestrator_unconfigured',
       missingField: 'model',
     });
@@ -585,27 +565,23 @@ describe('lion-sdk / vertex-ai resolver', () => {
       orchestrator_model: 'llama3.1:8b',
       orchestrator_ollama_base_url: 'http://localhost:11434',
     });
-    const sel = await resolveOrchestratorSelection({ surface: 'main-chat' });
+    const sel = await resolveOrchestratorSelection({ surface: 'default' });
     expect(sel.vertexLocation).toBeUndefined();
     expect(sel.vertexProjectId).toBeUndefined();
     expect(sel.vertexAuthMode).toBeUndefined();
   });
 });
 
-
 describe('resolveSubscriptionSelectionFor', () => {
   it('claude-sdk/anthropic: returns selection without apiKey/baseUrl', async () => {
     setSettings({});
-    const sel = await resolveSubscriptionSelectionFor(
-      'claude-sdk',
-      'anthropic',
-      'claude-opus-4-7',
-    );
+    const sel = await resolveSubscriptionSelectionFor('claude-sdk', 'anthropic', 'claude-opus-4-7');
     expect(sel).toEqual({
       runtime: 'claude-sdk',
       provider: 'anthropic',
       model: 'claude-opus-4-7',
       source: 'request',
+      effort: 'high',
     });
     expect(sel.apiKey).toBeUndefined();
     expect(sel.baseUrl).toBeUndefined();
@@ -617,11 +593,7 @@ describe('resolveSubscriptionSelectionFor', () => {
       orchestrator_zai_api_key_ref: 'ORCHESTRATOR_ZAI_API_KEY',
     });
     mockedGetSecret.mockResolvedValueOnce('sk-zai-compaction');
-    const sel = await resolveSubscriptionSelectionFor(
-      'claude-compat-sdk',
-      'zai',
-      'glm-4.7',
-    );
+    const sel = await resolveSubscriptionSelectionFor('claude-compat-sdk', 'zai', 'glm-4.7');
     expect(sel.runtime).toBe('claude-compat-sdk');
     expect(sel.provider).toBe('zai');
     expect(sel.model).toBe('glm-4.7');
@@ -635,11 +607,7 @@ describe('resolveSubscriptionSelectionFor', () => {
       orchestrator_minimax_api_key_ref: 'ORCHESTRATOR_MINIMAX_API_KEY',
     });
     mockedGetSecret.mockResolvedValueOnce('mx-compaction-token');
-    const sel = await resolveSubscriptionSelectionFor(
-      'claude-compat-sdk',
-      'minimax',
-      'MiniMax-M2.7',
-    );
+    const sel = await resolveSubscriptionSelectionFor('claude-compat-sdk', 'minimax', 'MiniMax-M2.7');
     expect(sel.runtime).toBe('claude-compat-sdk');
     expect(sel.provider).toBe('minimax');
     expect(sel.model).toBe('MiniMax-M2.7');
@@ -650,21 +618,17 @@ describe('resolveSubscriptionSelectionFor', () => {
 
   it('claude-compat-sdk/zai: throws when the api key ref is NOT in the vault', async () => {
     setSettings({});
-    await expect(
-      resolveSubscriptionSelectionFor('claude-compat-sdk', 'zai', 'glm-4.7'),
-    ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
-    await expect(
-      resolveSubscriptionSelectionFor('claude-compat-sdk', 'zai', 'glm-4.7'),
-    ).rejects.toThrowError(/nao configurada/i);
+    await expect(resolveSubscriptionSelectionFor('claude-compat-sdk', 'zai', 'glm-4.7')).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
+    await expect(resolveSubscriptionSelectionFor('claude-compat-sdk', 'zai', 'glm-4.7')).rejects.toThrowError(
+      /nao configurada/i,
+    );
   });
 
   it('kimi-sdk/kimi: returns valid selection without apiKey/baseUrl', async () => {
     setSettings({});
-    const sel = await resolveSubscriptionSelectionFor(
-      'kimi-sdk',
-      'kimi',
-      'kimi-code/kimi-for-coding',
-    );
+    const sel = await resolveSubscriptionSelectionFor('kimi-sdk', 'kimi', 'kimi-code/kimi-for-coding');
     expect(sel).toEqual({
       runtime: 'kimi-sdk',
       provider: 'kimi',
@@ -684,6 +648,7 @@ describe('resolveSubscriptionSelectionFor', () => {
       provider: 'codex',
       model: 'gpt-5.5',
       source: 'request',
+      effort: 'high',
     });
     expect(sel.apiKey).toBeUndefined();
     expect(sel.baseUrl).toBeUndefined();
@@ -692,16 +657,16 @@ describe('resolveSubscriptionSelectionFor', () => {
 
   it('throws for a cross-runtime model id (glm-4.7 under codex-sdk)', async () => {
     setSettings({});
-    await expect(
-      resolveSubscriptionSelectionFor('codex-sdk', 'codex', 'glm-4.7'),
-    ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    await expect(resolveSubscriptionSelectionFor('codex-sdk', 'codex', 'glm-4.7')).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 
   it('throws for the non-subscription lion-sdk runtime', async () => {
     setSettings({});
-    await expect(
-      resolveSubscriptionSelectionFor('lion-sdk', 'ollama', 'llama3.1:8b'),
-    ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    await expect(resolveSubscriptionSelectionFor('lion-sdk', 'ollama', 'llama3.1:8b')).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 
   it('does NOT read orchestrator_runtime/provider/model from settings', async () => {
@@ -710,11 +675,7 @@ describe('resolveSubscriptionSelectionFor', () => {
       orchestrator_provider: 'codex',
       orchestrator_model: 'gpt-5.5',
     });
-    const sel = await resolveSubscriptionSelectionFor(
-      'claude-sdk',
-      'anthropic',
-      'claude-opus-4-8',
-    );
+    const sel = await resolveSubscriptionSelectionFor('claude-sdk', 'anthropic', 'claude-opus-4-8');
     expect(sel.runtime).toBe('claude-sdk');
     expect(sel.provider).toBe('anthropic');
     expect(sel.model).toBe('claude-opus-4-8');

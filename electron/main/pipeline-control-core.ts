@@ -1,30 +1,31 @@
-
 import {
   getHarnessProject,
   listHarnessProjects,
   getPipelinePhaseMessagesAsChatHistory,
-  getActiveChatSession,
   getDriveState,
+  getDriveSessionId,
+  getOpenLaneSessionById,
   isDriveEngaged,
 } from './db';
 import { createPipelineProject, type CreatablePipelineType } from './pipeline-create';
 import { getPipelineEngineRef } from './pipeline-engine-ref';
 import { getPipelineDriveCoordinator } from './pipeline-drive-coordinator';
+import { driveOwnerOfProject, driveHolderOfSession } from './drive-lock';
+import { buildDriveOwnedByOtherLaneMessage, buildLaneBusyMessage, dbLaneMessagesDeps } from './drive-lane-messages';
+import { buildDriveStateChangedEvent } from './drive-state-event';
+import { pushAssistantMessage } from './chat-push';
 import { pipelineEventBus } from './pipeline-event-bus';
 import { emitIPC } from './pipeline-shared/ipc-emitter';
 import { ensureProjectLock } from './pipeline-shared/lock';
-const tryBeginBackgroundWorkStart = (_lane: string): (() => void) | null => () => {};
-const UPDATE_MAINTENANCE_START_REFUSED_MESSAGE =
-  'Manutencao de atualizacao em andamento.';
+const tryBeginBackgroundWorkStart =
+  (_lane: string): (() => void) | null =>
+  () => {};
+const UPDATE_MAINTENANCE_START_REFUSED_MESSAGE = 'Manutencao de atualizacao em andamento.';
 
 import { textProbe } from './pipeline-shared/text-probe';
-import {
-  conversationPhasesOf,
-  getPhaseNumberForAgent,
-  getPhasesForProject,
-} from '../../src/types/pipeline';
+import { conversationPhasesOf, getPhaseNumberForAgent, getPhasesForProject } from '../../src/types/pipeline';
 import type { PipelinePhaseNumber } from '../../src/types/pipeline';
-import type { HarnessProject } from '../../src/types';
+import type { HarnessProject, DriveState, DriveStateChangedEvent } from '../../src/types';
 import { resolveBugPhaseDocument } from './bug-paths';
 import { createLogger } from './logger';
 
@@ -43,12 +44,10 @@ export const PIPELINE_TYPES = [
 
 export type PipelineControlType = (typeof PIPELINE_TYPES)[number];
 
-export type ControlResult =
-  | { ok: true; value: unknown }
-  | { ok: false; error: string };
+export type ControlResult = { ok: true; value: unknown } | { ok: false; error: string; code?: string };
 
-function fail(error: string): ControlResult {
-  return { ok: false, error };
+function fail(error: string, code?: string): ControlResult {
+  return { ok: false, error, ...(code ? { code } : {}) };
 }
 
 function done(value: unknown): ControlResult {
@@ -67,10 +66,7 @@ export function resolvePendingQuestion(
     for (let i = history.length - 1; i >= 0; i--) {
       const m = history[i];
       if (m && m.role === 'assistant' && typeof m.content === 'string' && m.content.trim().length > 0) {
-        logger.debug(
-          { projectId, phase, probe: textProbe(m.content) },
-          '(F8) resolvePendingQuestion saida',
-        );
+        logger.debug({ projectId, phase, probe: textProbe(m.content) }, '(F8) resolvePendingQuestion saida');
         return m.content;
       }
     }
@@ -79,7 +75,6 @@ export function resolvePendingQuestion(
   }
   return null;
 }
-
 
 export interface PhaseChangedCacheEntry {
   phase: number | null;
@@ -90,12 +85,7 @@ export interface PhaseChangedCacheEntry {
 const phaseChangedCache = new Map<string, PhaseChangedCacheEntry>();
 let phaseCacheCleanups: Array<() => void> | null = null;
 
-const PHASE_CACHE_TERMINAL_STATUSES = new Set<string>([
-  'done',
-  'failed',
-  'aborted',
-  'pipeline-completed',
-]);
+const PHASE_CACHE_TERMINAL_STATUSES = new Set<string>(['done', 'failed', 'aborted', 'pipeline-completed']);
 
 export function startPipelineControlPhaseCache(): void {
   if (phaseCacheCleanups) return;
@@ -127,16 +117,13 @@ export function getCachedPhaseChanged(projectId: string): PhaseChangedCacheEntry
 
 export function _resetPipelineControlPhaseCacheForTesting(): void {
   if (process.env['NODE_ENV'] !== 'test' && !process.env['VITEST']) {
-    throw new Error(
-      '_resetPipelineControlPhaseCacheForTesting can only be called in test environment',
-    );
+    throw new Error('_resetPipelineControlPhaseCacheForTesting can only be called in test environment');
   }
   if (phaseCacheCleanups) {
     for (const off of phaseCacheCleanups) {
       try {
         off();
-      } catch {
-      }
+      } catch {}
     }
   }
   phaseCacheCleanups = null;
@@ -159,8 +146,7 @@ export async function awaitNextPause(
       for (const off of cleanups) {
         try {
           off();
-        } catch {
-        }
+        } catch {}
       }
       resolve(result);
     };
@@ -220,17 +206,60 @@ export async function awaitNextPause(
   });
 }
 
+export type PipelineCaller = { sessionId: string | null; lane: string };
 
-export function pipelineListCore(): ControlResult {
+const READ_ALL_CALLER: PipelineCaller = { sessionId: null, lane: 'telegram' };
+
+export function assertPipeVisibleToLane(
+  _action: string,
+  projectId: string,
+  caller: PipelineCaller,
+): { error: string; code: 'drive_owned_by_other_lane' } | null {
+  if (caller.lane !== 'desktop') return null;
+  const owner = driveOwnerOfProject(projectId) ?? (isDriveEngaged(projectId) ? getDriveSessionId(projectId) : null);
+  if (owner === null || owner === caller.sessionId) return null;
+  return {
+    error: buildDriveOwnedByOtherLaneMessage(projectId, owner, dbLaneMessagesDeps),
+    code: 'drive_owned_by_other_lane',
+  };
+}
+
+export function buildDriveSummary(
+  projectId: string,
+  caller: PipelineCaller,
+): {
+  status: DriveState['status'];
+  sessionId: string | null;
+  laneBadge: number | null;
+  laneTitle: string | null;
+  ownedByThisLane: boolean;
+} | null {
+  const drive = getDriveState(projectId);
+  if (!drive) return null;
+  const sessionId = getDriveSessionId(projectId);
+  const lane = sessionId ? getOpenLaneSessionById(sessionId) : null;
+  return {
+    status: drive.status,
+    sessionId,
+    laneBadge: lane?.laneBadge ?? null,
+    laneTitle: lane?.title ?? null,
+    ownedByThisLane: caller.sessionId !== null && caller.sessionId === sessionId,
+  };
+}
+
+export function pipelineListCore(caller: PipelineCaller = READ_ALL_CALLER): ControlResult {
   try {
     const projects = listHarnessProjects();
-    const rows = projects.map((p) => ({
-      id: p.id,
-      name: p.name,
-      pipelineType: p.pipelineType ?? 'development',
-      status: p.status,
-      currentPhase: p.pipelineCurrentPhase ?? p.pipelineStartPhase ?? null,
-    }));
+    const rows = projects
+      .filter((p) => !assertPipeVisibleToLane('pipeline_list', p.id, caller))
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        pipelineType: p.pipelineType ?? 'development',
+        status: p.status,
+        currentPhase: p.pipelineCurrentPhase ?? p.pipelineStartPhase ?? null,
+        drive: buildDriveSummary(p.id, caller),
+      }));
     return done(rows);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -247,16 +276,10 @@ export function resolvePhaseGateContract(
   if (type === 'bug' && phase === getPhaseNumberForAgent(type, 'bug-solution-consolidator')) {
     return { requiredMetadata: ['action'], options: ['approve-plan', 'close-pipeline'] };
   }
-  if (
-    type === 'architecture-review' &&
-    phase === getPhaseNumberForAgent(type, 'architecture-target-triage')
-  ) {
+  if (type === 'architecture-review' && phase === getPhaseNumberForAgent(type, 'architecture-target-triage')) {
     return { requiredMetadata: ['selectedCandidateId'], options: [] };
   }
-  if (
-    type === 'development-v2' &&
-    phase === getPhaseNumberForAgent(type, 'open-design-studio')
-  ) {
+  if (type === 'development-v2' && phase === getPhaseNumberForAgent(type, 'open-design-studio')) {
     return { requiredMetadata: ['action'], options: ['lock-and-continue'] };
   }
   return undefined;
@@ -286,9 +309,11 @@ function resolveGateDocumentPath(project: HarnessProject, phase: number): string
   }
 }
 
-export function pipelineInspectCore(id: string): ControlResult {
+export function pipelineInspectCore(id: string, caller: PipelineCaller = READ_ALL_CALLER): ControlResult {
   try {
     if (!id) return fail('Erro: id obrigatorio');
+    const denial = assertPipeVisibleToLane('pipeline_inspect', id, caller);
+    if (denial) return fail(denial.error, denial.code);
     const project = getHarnessProject(id);
     if (!project) {
       return fail(`Erro: pipeline "${id}" nao encontrado`);
@@ -299,17 +324,14 @@ export function pipelineInspectCore(id: string): ControlResult {
     const isTerminal =
       (project.pipelineCurrentPhase === null || project.pipelineCurrentPhase === undefined) &&
       terminalStatuses.has(project.status);
-    const phase = isTerminal
-      ? null
-      : project.pipelineCurrentPhase ?? project.pipelineStartPhase ?? live?.phase ?? 1;
-    const status = isTerminal ? project.status : live?.status ?? project.status;
-    const pendingQuestion = phase === null
-      ? null
-      : resolvePendingQuestion(id, project.pipelineType, phase);
+    const phase = isTerminal ? null : (project.pipelineCurrentPhase ?? project.pipelineStartPhase ?? live?.phase ?? 1);
+    const status = isTerminal ? project.status : (live?.status ?? project.status);
+    const pendingQuestion = phase === null ? null : resolvePendingQuestion(id, project.pipelineType, phase);
 
-    const phaseDef = phase === null
-      ? undefined
-      : getPhasesForProject({ pipelineType: project.pipelineType }).find((p) => p.number === phase);
+    const phaseDef =
+      phase === null
+        ? undefined
+        : getPhasesForProject({ pipelineType: project.pipelineType }).find((p) => p.number === phase);
     const gate = phase === null ? undefined : resolvePhaseGateContract(project.pipelineType, phase);
     const runId = resolveRunId(project);
     const gateDocumentPath = phase === null ? undefined : resolveGateDocumentPath(project, phase);
@@ -323,6 +345,7 @@ export function pipelineInspectCore(id: string): ControlResult {
       projectPath: project.projectPath,
       specPath: project.specPath || null,
       pendingQuestion,
+      drive: buildDriveSummary(project.id, caller),
       ...(phaseDef ? { phaseName: phaseDef.name, phaseType: phaseDef.type } : {}),
       ...(gate ? { gate } : {}),
       ...(runId ? { runId } : {}),
@@ -341,6 +364,7 @@ export interface PipelineCreateInput {
   name: string;
   brief: string;
   drive?: DriveMode;
+  driveSessionId: string | null;
 }
 
 export type DriveMode = 'semi' | 'full';
@@ -348,23 +372,23 @@ export type DriveMode = 'semi' | 'full';
 export function engageOrchestratorDrive(
   projectId: string,
   mode: DriveMode,
-): { ok: true; sessionId: string } | { ok: false; error: string } {
+  sessionId: string | null,
+): { ok: true; sessionId: string } | { ok: false; error: string; code?: string } {
   const coordinator = getPipelineDriveCoordinator();
   if (!coordinator) {
     return { ok: false, error: 'coordenador de drive nao inicializado' };
   }
-  const sessionId = getActiveChatSession()?.id;
   if (!sessionId) {
     return {
       ok: false,
       error:
-        'nenhuma sessao de chat ativa para dirigir o pipeline. Abra/foque um chat e tente de novo.',
+        'turn_binding_required: nenhum turno de chat em voo para dirigir o pipeline. Chame a tool de dentro de um turno do orquestrador.',
     };
   }
   maybeResumePipelineBeforeEngage(projectId);
   const result = coordinator.startDrive(projectId, sessionId, mode);
   if (!result.ok) {
-    return { ok: false, error: result.error };
+    return { ok: false, error: result.error, code: result.code };
   }
   return { ok: true, sessionId };
 }
@@ -375,8 +399,7 @@ function maybeResumePipelineBeforeEngage(projectId: string): void {
     if (!engine) return;
     const dbStatus = getHarnessProject(projectId)?.status;
     const liveStatus = engine.getCurrentPhase(projectId)?.status ?? null;
-    const needsResume =
-      dbStatus === 'interrupted' || dbStatus === 'paused' || liveStatus === 'paused';
+    const needsResume = dbStatus === 'interrupted' || dbStatus === 'paused' || liveStatus === 'paused';
     if (!needsResume) return;
     ensureProjectLock(projectId);
     logger.info(
@@ -397,27 +420,51 @@ function maybeResumePipelineBeforeEngage(projectId: string): void {
   }
 }
 
+export const PROJECT_LOCK_BUSY_MESSAGE = 'Pipeline ja rodando neste projeto';
+
+export function projectLockBusyMessage(projectId: string): string {
+  try {
+    const sessionId = getDriveSessionId(projectId);
+    if (!sessionId || !isDriveEngaged(projectId)) return PROJECT_LOCK_BUSY_MESSAGE;
+    const badge = getOpenLaneSessionById(sessionId)?.laneBadge ?? null;
+    if (badge === null) return PROJECT_LOCK_BUSY_MESSAGE;
+    return `${PROJECT_LOCK_BUSY_MESSAGE}, dirigido pela Lane ${badge}`;
+  } catch {
+    return PROJECT_LOCK_BUSY_MESSAGE;
+  }
+}
+
 function runStartAndEngageInBackground(
   engine: NonNullable<ReturnType<typeof getPipelineEngineRef>>,
   projectId: string,
   drive: DriveMode | undefined,
+  driveSessionId: string | null,
 ): void {
   void (async () => {
     const startRes = await engine.startPipeline(projectId, 1);
     if (startRes && typeof startRes === 'object' && 'error' in startRes) {
+      const startError = (startRes as { error: string }).error;
       logger.error(
-        { projectId, error: (startRes as { error: string }).error },
+        {
+          projectId,
+          error: startError === PROJECT_LOCK_BUSY_MESSAGE ? projectLockBusyMessage(projectId) : startError,
+        },
         'pipeline_create (background): pipeline criado mas nao iniciou',
       );
-      return; // sem start nao ha o que dirigir; o inspect mostra o estado real
+      return;
     }
     if (drive) {
-      const engaged = engageOrchestratorDrive(projectId, drive);
+      const engaged = engageOrchestratorDrive(projectId, drive, driveSessionId);
       if (!engaged.ok) {
         logger.warn(
           { projectId, mode: drive, error: engaged.error },
           'pipeline_create (background): pipeline iniciado mas drive nao engatou',
         );
+        if (driveSessionId) {
+          pushAssistantMessage(driveSessionId, engaged.error);
+          const event: DriveStateChangedEvent = buildDriveStateChangedEvent(projectId, getDriveState(projectId));
+          emitIPC('drive:state-changed', event);
+        }
       }
     }
   })().catch((err: unknown) => {
@@ -439,7 +486,7 @@ export async function pipelineCreateCore(input: PipelineCreateInput): Promise<Co
 }
 
 async function pipelineCreateCoreWithLease(input: PipelineCreateInput): Promise<ControlResult> {
-  const { projectPath, pipelineType, name, brief, drive } = input;
+  const { projectPath, pipelineType, name, brief, drive, driveSessionId } = input;
   try {
     if (!projectPath || !name || !pipelineType) {
       return fail('Erro: projectPath, name e pipelineType sao obrigatorios');
@@ -454,6 +501,12 @@ async function pipelineCreateCoreWithLease(input: PipelineCreateInput): Promise<
     if (!engine) {
       return fail('Erro: PipelineEngine nao inicializado');
     }
+    if (drive && driveSessionId) {
+      const holder = driveHolderOfSession(driveSessionId);
+      if (holder !== null) {
+        return fail(buildLaneBusyMessage(holder, driveSessionId, dbLaneMessagesDeps), 'lane_busy');
+      }
+    }
     const project = createPipelineProject({
       name,
       description: brief,
@@ -462,7 +515,7 @@ async function pipelineCreateCoreWithLease(input: PipelineCreateInput): Promise<
       pipelineType: pipelineType as CreatablePipelineType,
     });
 
-    runStartAndEngageInBackground(engine, project.id, drive);
+    runStartAndEngageInBackground(engine, project.id, drive, driveSessionId);
 
     return done({
       id: project.id,
@@ -482,7 +535,7 @@ async function pipelineCreateCoreWithLease(input: PipelineCreateInput): Promise<
   }
 }
 
-export function pipelineDriveCore(id: string, mode: DriveMode): ControlResult {
+export function pipelineDriveCore(id: string, mode: DriveMode, driveSessionId: string | null): ControlResult {
   try {
     if (!id) return fail('Erro: id obrigatorio');
     if (mode !== 'semi' && mode !== 'full') {
@@ -491,9 +544,9 @@ export function pipelineDriveCore(id: string, mode: DriveMode): ControlResult {
     if (!getHarnessProject(id)) {
       return fail(`Erro: pipeline "${id}" nao encontrado`);
     }
-    const engaged = engageOrchestratorDrive(id, mode);
+    const engaged = engageOrchestratorDrive(id, mode, driveSessionId);
     if (!engaged.ok) {
-      return fail(`Erro ao iniciar o drive do pipeline "${id}": ${engaged.error}`);
+      return fail(engaged.error, engaged.code);
     }
     return done({ id, driving: true, mode, sessionId: engaged.sessionId });
   } catch (err) {
@@ -516,7 +569,6 @@ export function notifyPipelineMessagesUpdated(projectId: string, phase: number):
     );
   }
 }
-
 
 export function driveConductBlocked(projectId: string): string | null {
   const drive = getDriveState(projectId);
@@ -677,8 +729,7 @@ function buildApproveResult(
   const closed =
     projectAfter !== null &&
     projectAfter !== undefined &&
-    (projectAfter.pipelineCurrentPhase === null ||
-      projectAfter.pipelineCurrentPhase === undefined) &&
+    (projectAfter.pipelineCurrentPhase === null || projectAfter.pipelineCurrentPhase === undefined) &&
     terminalStatuses.has(projectAfter.status);
   if (closed && projectAfter) {
     return done({
@@ -686,9 +737,7 @@ function buildApproveResult(
       approved: true,
       action,
       closed: true,
-      ...(projectAfter.config?.bug?.outcome
-        ? { outcome: projectAfter.config.bug.outcome }
-        : {}),
+      ...(projectAfter.config?.bug?.outcome ? { outcome: projectAfter.config.bug.outcome } : {}),
       phase: null,
       liveStatus: projectAfter.status,
       advanced: false,
@@ -719,10 +768,7 @@ function buildApproveResult(
   });
 }
 
-export async function pipelineApproveCore(
-  id: string,
-  metadata?: Record<string, unknown>,
-): Promise<ControlResult> {
+export async function pipelineApproveCore(id: string, metadata?: Record<string, unknown>): Promise<ControlResult> {
   const releaseUpdateLease = tryBeginBackgroundWorkStart('pipeline-approve');
   if (releaseUpdateLease === null) return fail(UPDATE_MAINTENANCE_START_REFUSED_MESSAGE);
   try {
@@ -732,10 +778,7 @@ export async function pipelineApproveCore(
   }
 }
 
-async function pipelineApproveCoreWithLease(
-  id: string,
-  metadata?: Record<string, unknown>,
-): Promise<ControlResult> {
+async function pipelineApproveCoreWithLease(id: string, metadata?: Record<string, unknown>): Promise<ControlResult> {
   try {
     if (!id) return fail('Erro: id obrigatorio');
     const engine = getPipelineEngineRef();
@@ -751,8 +794,7 @@ async function pipelineApproveCoreWithLease(
 
     const pipelineType = project.pipelineType ?? 'development';
     const live = engine.getCurrentPhase(id);
-    const phaseBefore =
-      live?.phase ?? project.pipelineCurrentPhase ?? project.pipelineStartPhase ?? 1;
+    const phaseBefore = live?.phase ?? project.pipelineCurrentPhase ?? project.pipelineStartPhase ?? 1;
     const cached = getCachedPhaseChanged(id);
 
     const sprintValidatorPhase = getPhaseNumberForAgent(pipelineType, 'sprint-validator');
@@ -804,8 +846,7 @@ async function pipelineApproveCoreWithLease(
       const driveEngaged = isDriveEngaged(id);
       if (driveEngaged && metadata?.['action'] === 'lock-and-continue') {
         return fail(
-          'Design Lock e gate humano: o dono valida e trava na UI; voce sera ' +
-            'acordado quando a fase avancar',
+          'Design Lock e gate humano: o dono valida e trava na UI; voce sera ' + 'acordado quando a fase avancar',
         );
       }
       if (metadata?.['action'] !== 'lock-and-continue') {
@@ -816,10 +857,7 @@ async function pipelineApproveCoreWithLease(
         );
       }
     }
-    if (
-      pipelineType === 'bug' &&
-      phaseBefore === getPhaseNumberForAgent(pipelineType, 'bug-solution-consolidator')
-    ) {
+    if (pipelineType === 'bug' && phaseBefore === getPhaseNumberForAgent(pipelineType, 'bug-solution-consolidator')) {
       const action = metadata?.['action'];
       if (action !== 'approve-plan' && action !== 'close-pipeline') {
         const gateDoc = resolveGateDocumentPath(project, phaseBefore);
@@ -836,8 +874,7 @@ async function pipelineApproveCoreWithLease(
     }
 
     const pendingQuestion = resolvePendingQuestion(id, pipelineType, phaseBefore);
-    const gateOpenCached =
-      cached !== null && (cached.awaitingUser || cached.status === 'awaiting-dev-confirmation');
+    const gateOpenCached = cached !== null && (cached.awaitingUser || cached.status === 'awaiting-dev-confirmation');
     if (live?.status === 'running' && pendingQuestion === null && !gateOpenCached) {
       return fail(
         `pipeline_approve: a fase ${phaseBefore} esta "running" SEM pergunta pendente nem gate aberto - ` +
@@ -846,11 +883,7 @@ async function pipelineApproveCoreWithLease(
       );
     }
 
-    await awaitAcceptanceWithGrace(
-      Promise.resolve(engine.approvePhase(id, metadata)),
-      id,
-      'approve-phase',
-    );
+    await awaitAcceptanceWithGrace(Promise.resolve(engine.approvePhase(id, metadata)), id, 'approve-phase');
     return buildApproveResult(engine, id, phaseBefore, 'approve-phase');
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -935,9 +968,7 @@ export interface DesignSessionConfigRequest {
   designSystemId?: string;
 }
 
-export async function designSessionConfigCore(
-  req: DesignSessionConfigRequest,
-): Promise<ControlResult> {
+export async function designSessionConfigCore(req: DesignSessionConfigRequest): Promise<ControlResult> {
   const { id, agentId, model, reasoning, designSystemId } = req;
   try {
     if (!id) {

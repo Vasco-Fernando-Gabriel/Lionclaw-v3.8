@@ -1,18 +1,18 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const PIPE2_DESIGN_PLANNER_ID = 'pipe2-design-planner';
 
 export const pipe2DesignPlanner: Omit<AgentConfig, 'sortOrder'> = {
   id: PIPE2_DESIGN_PLANNER_ID,
-  name: "Pipe2 Design Planner",
-  description: "Planeja telas, navegacao, vocabulário de dominio, estados e dados fake antes do LionDesign gerar o artifact visual.",
-  model: "claude-opus-4-8",
+  name: 'Pipe2 Design Planner',
+  description:
+    'Planeja telas, navegacao, vocabulário de dominio, estados e dados fake antes do LionDesign gerar o artifact visual.',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,
   maxToolRounds: 0,
-  allowedTools: ["Read","Write","Edit","Glob","Grep","Bash"],
+  allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash'],
   mcpServers: [],
   isActive: true,
   skills: [],

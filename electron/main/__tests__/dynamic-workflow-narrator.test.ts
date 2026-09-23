@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import {
   WorkflowNarrator,
@@ -9,10 +8,7 @@ import {
   type WorkflowNarratorDeps,
   type NarrateFn,
 } from '../dynamic-workflows/workflow-narrator';
-import {
-  dynamicWorkflowNarrator,
-  DYNAMIC_WORKFLOW_NARRATOR_ID,
-} from '../seed-agents/dynamic-workflow-narrator';
+import { dynamicWorkflowNarrator, DYNAMIC_WORKFLOW_NARRATOR_ID } from '../seed-agents/dynamic-workflow-narrator';
 import type { DynamicWorkflowEvent } from '../../../src/types/dynamic-workflow';
 
 const STREAM_CHANNEL = 'dynamic-workflow:stream';
@@ -43,13 +39,12 @@ function makeNarrator(opts?: { narrate?: NarrateFn; insertMessage?: WorkflowNarr
   let nowMs = 1_000_000;
   const narrate: ReturnType<typeof vi.fn> = opts?.narrate
     ? (vi.fn(opts.narrate) as ReturnType<typeof vi.fn>)
-    : (vi.fn<NarrateFn>(async () => ({ text: 'Implementando a feature agora.' })) as ReturnType<
-        typeof vi.fn
-      >);
+    : (vi.fn<NarrateFn>(async () => ({ text: 'Implementando a feature agora.' })) as ReturnType<typeof vi.fn>);
   const emit = vi.fn();
-  const insertMessage = opts?.insertMessage !== undefined
-    ? (vi.fn(opts.insertMessage) as ReturnType<typeof vi.fn>)
-    : (vi.fn() as ReturnType<typeof vi.fn>);
+  const insertMessage =
+    opts?.insertMessage !== undefined
+      ? (vi.fn(opts.insertMessage) as ReturnType<typeof vi.fn>)
+      : (vi.fn() as ReturnType<typeof vi.fn>);
   const deps: WorkflowNarratorDeps = {
     narrate: narrate as unknown as NarrateFn,
     emit,
@@ -65,10 +60,7 @@ const signal = new AbortController().signal;
 describe('WorkflowNarrator - decisao (throttle + marco)', () => {
   it('narra o primeiro marco e faz broadcast do chunk narrator', async () => {
     const h = makeNarrator();
-    await h.narrator.narrateMark(
-      { runId: 'run-1', eventType: 'node-started', recentEvents: [] },
-      signal,
-    );
+    await h.narrator.narrateMark({ runId: 'run-1', eventType: 'node-started', recentEvents: [] }, signal);
     expect(h.narrate).toHaveBeenCalledTimes(1);
     expect(h.emit).toHaveBeenCalledTimes(1);
     const [channel, chunk] = h.emit.mock.calls[0] as [string, Record<string, unknown>];
@@ -89,74 +81,44 @@ describe('WorkflowNarrator - decisao (throttle + marco)', () => {
 
   it('marco normal dentro da janela de throttle NAO narra de novo', async () => {
     const h = makeNarrator();
-    await h.narrator.narrateMark(
-      { runId: 'run-1', eventType: 'node-started', recentEvents: [] },
-      signal,
-    );
+    await h.narrator.narrateMark({ runId: 'run-1', eventType: 'node-started', recentEvents: [] }, signal);
     h.setNow(1_000_000 + NARRATOR_MIN_INTERVAL_MS - 1);
-    await h.narrator.narrateMark(
-      { runId: 'run-1', eventType: 'node-completed', recentEvents: [] },
-      signal,
-    );
+    await h.narrator.narrateMark({ runId: 'run-1', eventType: 'node-completed', recentEvents: [] }, signal);
     expect(h.narrate).toHaveBeenCalledTimes(1);
   });
 
   it('apos a janela, marco normal narra de novo', async () => {
     const h = makeNarrator();
-    await h.narrator.narrateMark(
-      { runId: 'run-1', eventType: 'node-started', recentEvents: [] },
-      signal,
-    );
+    await h.narrator.narrateMark({ runId: 'run-1', eventType: 'node-started', recentEvents: [] }, signal);
     h.setNow(1_000_000 + NARRATOR_MIN_INTERVAL_MS + 1);
-    await h.narrator.narrateMark(
-      { runId: 'run-1', eventType: 'node-completed', recentEvents: [] },
-      signal,
-    );
+    await h.narrator.narrateMark({ runId: 'run-1', eventType: 'node-completed', recentEvents: [] }, signal);
     expect(h.narrate).toHaveBeenCalledTimes(2);
   });
 
   it('marco FORTE (gate/falha) fura o throttle', async () => {
     const h = makeNarrator();
-    await h.narrator.narrateMark(
-      { runId: 'run-1', eventType: 'node-started', recentEvents: [] },
-      signal,
-    );
-    await h.narrator.narrateMark(
-      { runId: 'run-1', eventType: 'node-failed', recentEvents: [] },
-      signal,
-    );
+    await h.narrator.narrateMark({ runId: 'run-1', eventType: 'node-started', recentEvents: [] }, signal);
+    await h.narrator.narrateMark({ runId: 'run-1', eventType: 'node-failed', recentEvents: [] }, signal);
     expect(h.narrate).toHaveBeenCalledTimes(2);
   });
 
   it('throttle e POR RUN (runs distintos nao se bloqueiam)', async () => {
     const h = makeNarrator();
-    await h.narrator.narrateMark(
-      { runId: 'run-A', eventType: 'node-started', recentEvents: [] },
-      signal,
-    );
-    await h.narrator.narrateMark(
-      { runId: 'run-B', eventType: 'node-started', recentEvents: [] },
-      signal,
-    );
+    await h.narrator.narrateMark({ runId: 'run-A', eventType: 'node-started', recentEvents: [] }, signal);
+    await h.narrator.narrateMark({ runId: 'run-B', eventType: 'node-started', recentEvents: [] }, signal);
     expect(h.narrate).toHaveBeenCalledTimes(2);
   });
 
   it('evento fora dos marcos conhecidos NAO narra', async () => {
     const h = makeNarrator();
-    await h.narrator.narrateMark(
-      { runId: 'run-1', eventType: 'autonomy-changed', recentEvents: [] },
-      signal,
-    );
+    await h.narrator.narrateMark({ runId: 'run-1', eventType: 'autonomy-changed', recentEvents: [] }, signal);
     expect(h.narrate).not.toHaveBeenCalled();
     expect(h.emit).not.toHaveBeenCalled();
   });
 
   it('texto vazio do modelo NAO faz broadcast', async () => {
     const h = makeNarrator({ narrate: vi.fn<NarrateFn>(async () => ({ text: '   ' })) });
-    await h.narrator.narrateMark(
-      { runId: 'run-1', eventType: 'node-started', recentEvents: [] },
-      signal,
-    );
+    await h.narrator.narrateMark({ runId: 'run-1', eventType: 'node-started', recentEvents: [] }, signal);
     expect(h.emit).not.toHaveBeenCalled();
   });
 });
@@ -166,10 +128,7 @@ describe('WorkflowNarrator - best-effort (nunca derruba o run)', () => {
     const emit = vi.fn();
     const narrator = new WorkflowNarrator({ emit });
     expect(narrator.enabled).toBe(false);
-    await narrator.narrateMark(
-      { runId: 'run-1', eventType: 'node-started', recentEvents: [] },
-      signal,
-    );
+    await narrator.narrateMark({ runId: 'run-1', eventType: 'node-started', recentEvents: [] }, signal);
     expect(emit).not.toHaveBeenCalled();
   });
 
@@ -180,10 +139,7 @@ describe('WorkflowNarrator - best-effort (nunca derruba o run)', () => {
       }),
     });
     await expect(
-      h.narrator.narrateMark(
-        { runId: 'run-1', eventType: 'node-failed', recentEvents: [] },
-        signal,
-      ),
+      h.narrator.narrateMark({ runId: 'run-1', eventType: 'node-failed', recentEvents: [] }, signal),
     ).resolves.toBeUndefined();
     expect(h.emit).not.toHaveBeenCalled();
   });
@@ -240,10 +196,7 @@ describe('WorkflowNarrator - SM-32 (persiste + best-effort)', () => {
     h.emit.mockImplementation((..._args: unknown[]) => {
       order.push('emit');
     });
-    await h.narrator.narrateMark(
-      { runId: 'run-1', eventType: 'node-started', recentEvents: [] },
-      signal,
-    );
+    await h.narrator.narrateMark({ runId: 'run-1', eventType: 'node-started', recentEvents: [] }, signal);
     expect(order).toEqual(['emit', 'persist']);
   });
 
@@ -254,10 +207,7 @@ describe('WorkflowNarrator - SM-32 (persiste + best-effort)', () => {
       },
     });
     await expect(
-      h.narrator.narrateMark(
-        { runId: 'run-1', eventType: 'node-started', recentEvents: [] },
-        signal,
-      ),
+      h.narrator.narrateMark({ runId: 'run-1', eventType: 'node-started', recentEvents: [] }, signal),
     ).resolves.toBeUndefined();
     expect(h.emit).toHaveBeenCalledTimes(1);
   });
@@ -268,10 +218,7 @@ describe('WorkflowNarrator - SM-32 (persiste + best-effort)', () => {
       narrate: async () => ({ text: 'narracao sem persist' }),
       emit,
     });
-    await narrator.narrateMark(
-      { runId: 'run-1', eventType: 'node-started', recentEvents: [] },
-      signal,
-    );
+    await narrator.narrateMark({ runId: 'run-1', eventType: 'node-started', recentEvents: [] }, signal);
     expect(emit).toHaveBeenCalledTimes(1);
     const [, chunk] = emit.mock.calls[0] as [string, Record<string, unknown>];
     expect(chunk.content).toBe('narracao sem persist');
@@ -281,10 +228,7 @@ describe('WorkflowNarrator - SM-32 (persiste + best-effort)', () => {
     const h = makeNarrator({
       narrate: async () => ({ text: '   ' }),
     });
-    await h.narrator.narrateMark(
-      { runId: 'run-1', eventType: 'node-started', recentEvents: [] },
-      signal,
-    );
+    await h.narrator.narrateMark({ runId: 'run-1', eventType: 'node-started', recentEvents: [] }, signal);
     expect(h.emit).not.toHaveBeenCalled();
     expect(h.insertMessage).not.toHaveBeenCalled();
   });

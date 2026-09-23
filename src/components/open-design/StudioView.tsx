@@ -4,7 +4,6 @@ import type { BootstrapResult } from '@/types/open-design';
 import { usePipelineStore } from '@/stores/pipeline-store';
 import { useOpenDesignStore } from '@/stores/open-design-store';
 
-
 interface StudioViewProps {
   bootstrap: BootstrapResult;
   projectId: string;
@@ -25,12 +24,8 @@ export function StudioView({ bootstrap, projectId }: StudioViewProps) {
   const [error, setError] = useState<string | null>(null);
   const placeholderRef = useRef<HTMLDivElement | null>(null);
 
-  const lockRejection = usePipelineStore(
-    (s) => s.projectStates.get(projectId)?.openDesignLockRejection ?? null,
-  );
-  const currentPhase = usePipelineStore(
-    (s) => s.projectStates.get(projectId)?.currentPhase ?? null,
-  );
+  const lockRejection = usePipelineStore((s) => s.projectStates.get(projectId)?.openDesignLockRejection ?? null);
+  const currentPhase = usePipelineStore((s) => s.projectStates.get(projectId)?.currentPhase ?? null);
 
   useEffect(() => {
     if (lockRejection) setLocking(false);
@@ -147,7 +142,8 @@ export function StudioView({ bootstrap, projectId }: StudioViewProps) {
           <AlertTriangle size={14} className="text-amber-300 mt-0.5 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-[11px] font-semibold text-amber-200 mb-1">
-              Design Lock recusado ({lockRejection.problemCount} pendencia{lockRejection.problemCount === 1 ? '' : 's'}).
+              Design Lock recusado ({lockRejection.problemCount} pendencia{lockRejection.problemCount === 1 ? '' : 's'}
+              ).
             </p>
             <ul className="text-[11px] text-amber-100 space-y-1.5 mb-2">
               {lockRejection.problems.map((p, i) => (
@@ -157,9 +153,8 @@ export function StudioView({ bootstrap, projectId }: StudioViewProps) {
               ))}
             </ul>
             <p className="text-[10px] text-amber-300/70">
-              O LionClaw pode direcionar o agente do LionDesign para corrigir o
-              contract e tentar travar novamente. Relatorio completo:{' '}
-              <span className="font-mono break-all">{lockRejection.lockReportPath}</span>
+              O LionClaw pode direcionar o agente do LionDesign para corrigir o contract e tentar travar novamente.
+              Relatorio completo: <span className="font-mono break-all">{lockRejection.lockReportPath}</span>
             </p>
             <button
               type="button"
@@ -173,9 +168,7 @@ export function StudioView({ bootstrap, projectId }: StudioViewProps) {
           </div>
           <button
             type="button"
-            onClick={() =>
-              usePipelineStore.getState()._setProjectState(projectId, { openDesignLockRejection: null })
-            }
+            onClick={() => usePipelineStore.getState()._setProjectState(projectId, { openDesignLockRejection: null })}
             className="text-[11px] text-amber-200 hover:text-amber-50 underline shrink-0"
           >
             Fechar
@@ -188,11 +181,7 @@ export function StudioView({ bootstrap, projectId }: StudioViewProps) {
         cima desta div via `setViewBounds`. A div em si fica vazia — o conteudo
         visual vem do processo separado.
       */}
-      <div
-        ref={placeholderRef}
-        className="flex-1 w-full bg-zinc-900"
-        aria-label="LionDesign Studio"
-      />
+      <div ref={placeholderRef} className="flex-1 w-full bg-zinc-900" aria-label="LionDesign Studio" />
     </div>
   );
 }

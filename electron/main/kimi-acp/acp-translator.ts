@@ -1,4 +1,3 @@
-
 import type { CliStreamCallbacks, CliAgenticResponse } from '../agent-runtime/cli-agentic/contract';
 import type { AcpSessionUpdate } from './types';
 
@@ -65,7 +64,7 @@ export function translateSessionUpdate(
         }
       }
       acc.toolUses += 1;
-      cb?.onToolUse?.(title);
+      cb?.onToolUse?.(title, update.toolCallId);
       return;
     }
 
@@ -78,19 +77,12 @@ export function translateSessionUpdate(
       }
       if (update.status === 'completed') {
         const name =
-          (update.toolCallId ? acc.toolNameById.get(update.toolCallId) : undefined) ??
-          update.title ??
-          'tool';
+          (update.toolCallId ? acc.toolNameById.get(update.toolCallId) : undefined) ?? update.title ?? 'tool';
         const stashedInput =
-          (update.toolCallId ? acc.rawInputById.get(update.toolCallId) : undefined) ??
-          update.rawInput;
+          (update.toolCallId ? acc.rawInputById.get(update.toolCallId) : undefined) ?? update.rawInput;
         const input = stashedInput ?? update.rawOutput;
-        cb?.onToolUseComplete?.(name, input);
-        cb?.onToolUseIO?.(
-          name,
-          stashedInput,
-          update.rawOutput ?? update.content?.text,
-        );
+        cb?.onToolUseComplete?.(name, input, update.toolCallId);
+        cb?.onToolUseIO?.(name, stashedInput, update.rawOutput ?? update.content?.text, update.toolCallId);
         return;
       }
       return;

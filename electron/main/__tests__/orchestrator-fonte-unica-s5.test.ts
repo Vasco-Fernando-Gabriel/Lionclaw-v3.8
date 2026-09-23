@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import type { BrowserWindow } from 'electron';
 import type { CliAgenticResponse, CliStreamCallbacks } from '../agent-runtime/cli-agentic/contract';
@@ -11,7 +10,6 @@ import {
   estimateStrongFloor,
   CODEX_PRESET_TOKENS,
 } from '../agent-runtime/context-measure';
-
 
 const insertMessage = vi.fn((): number => 1);
 const insertAuditEntry = vi.fn((): void => {});
@@ -27,9 +25,7 @@ const getSessionMessagesAfterFence = vi.fn((): Array<Record<string, unknown>> =>
 ]);
 const getEnabledTools = vi.fn((): string[] => []);
 const getSessionMessages = vi.fn((): Array<Record<string, unknown>> => []);
-const getSetting = vi.fn((key: string): string | undefined =>
-  key === 'onboarding_completed' ? 'true' : undefined,
-);
+const getSetting = vi.fn((key: string): string | undefined => (key === 'onboarding_completed' ? 'true' : undefined));
 const getTurnIndexForUserMessage = vi.fn((): number => 1);
 const getLatestUserTurnIndex = vi.fn((): number => 0);
 const getSession = vi.fn((): Record<string, unknown> | null => null);
@@ -85,12 +81,7 @@ vi.mock('../onboarding', () => ({
   completeOnboardingFromPersistedProfile: vi.fn(() => false),
 }));
 
-
-let sessionSendImpl: (
-  prompt: string,
-  cb: CliStreamCallbacks,
-  signal: AbortSignal,
-) => Promise<CliAgenticResponse>;
+let sessionSendImpl: (prompt: string, cb: CliStreamCallbacks, signal: AbortSignal) => Promise<CliAgenticResponse>;
 let lastPrompt = '';
 const sessionClose = vi.fn(async () => {});
 
@@ -122,7 +113,6 @@ vi.mock('../repo-graph/validate-root', () => ({
 vi.mock('../repo-graph/minimal-context', () => ({
   prefetchRepoGraphTurnContext: vi.fn(async () => null),
 }));
-
 
 function collectStream(): {
   getWindow: () => BrowserWindow | null;
@@ -186,7 +176,6 @@ beforeEach(async () => {
   cronLane.currentAbortController = null;
 });
 
-
 describe('pending_seed universal (SPEC 3.4)', () => {
   it('kimi: seed vira preambulo do prompt e clearSessionPendingSeed roda no sucesso', async () => {
     getSession.mockReturnValue({ id: 'sess-s5', title: 't', type: 'chat', pendingSeed: 'RESUMO-SEED' });
@@ -234,7 +223,9 @@ describe('pending_seed universal (SPEC 3.4)', () => {
     await executeKimiSdkQuery('cancele', makeOptions(), getWindow, undefined, kimiSelection());
     expect(clearSessionPendingSeed).not.toHaveBeenCalled();
 
-    sessionSendImpl = async () => { throw new Error('provider caiu'); };
+    sessionSendImpl = async () => {
+      throw new Error('provider caiu');
+    };
     await executeKimiSdkQuery('tente', makeOptions(), getWindow, undefined, kimiSelection());
     expect(clearSessionPendingSeed).not.toHaveBeenCalled();
   });
@@ -264,7 +255,6 @@ describe('pending_seed universal (SPEC 3.4)', () => {
     expect(clearSessionPendingSeed).not.toHaveBeenCalled();
   });
 });
-
 
 describe('corte de historia por compactedUpToMessageId (SPEC 3.4)', () => {
   const history = [
@@ -315,7 +305,6 @@ describe('corte de historia por compactedUpToMessageId (SPEC 3.4)', () => {
     expect(lastPrompt).toContain('MSG-NOVA-3');
   });
 });
-
 
 describe('usage/custo por turno (SPEC 3.5)', () => {
   it('codex: persiste runtime e proveniencia equivalente da assinatura', async () => {
@@ -386,13 +375,7 @@ describe('usage/custo por turno (SPEC 3.5)', () => {
     const { getWindow } = collectStream();
     await executeKimiSdkQuery('use a tool', makeOptions(), getWindow, undefined, kimiSelection());
 
-    expect(insertMessage).not.toHaveBeenCalledWith(
-      'sess-s5',
-      'assistant',
-      '',
-      expect.anything(),
-      expect.anything(),
-    );
+    expect(insertMessage).not.toHaveBeenCalledWith('sess-s5', 'assistant', '', expect.anything(), expect.anything());
     expect(updateSessionTokens).toHaveBeenCalledWith('sess-s5', 100, 40, 0.42, {
       costStatus: 'known',
       tokenStatus: 'reported',
@@ -421,9 +404,9 @@ describe('Kimi: contrato de erro das lanes', () => {
 
     const { executeKimiSdkQuery } = await import('../kimi-sdk/index');
     const { getWindow } = collectStream();
-    await expect(
-      executeKimiSdkQuery('oi', makeOptions(), getWindow, telegramLane, kimiSelection()),
-    ).rejects.toBe(failure);
+    await expect(executeKimiSdkQuery('oi', makeOptions(), getWindow, telegramLane, kimiSelection())).rejects.toBe(
+      failure,
+    );
     expect(telegramLane.currentAbortController).toBeNull();
   });
 
@@ -447,14 +430,11 @@ describe('Kimi: contrato de erro das lanes', () => {
 
     const { executeKimiSdkQuery } = await import('../kimi-sdk/index');
     const { getWindow } = collectStream();
-    await expect(
-      executeKimiSdkQuery('oi', makeOptions(), getWindow, cronLane, kimiSelection()),
-    ).rejects.toBe(failure);
+    await expect(executeKimiSdkQuery('oi', makeOptions(), getWindow, cronLane, kimiSelection())).rejects.toBe(failure);
     expect(sessionClose).toHaveBeenCalledOnce();
     expect(cronLane.currentAbortController).toBeNull();
   });
 });
-
 
 describe('contador ativo: SET absoluto por estimativa chars/4 (fonte-unica)', () => {
   it('kimi: sucesso do turno SETA o contador ativo = usage real reconciliado (CTX-FINAL)', async () => {
@@ -466,7 +446,7 @@ describe('contador ativo: SET absoluto por estimativa chars/4 (fonte-unica)', ()
     await executeKimiSdkQuery('pergunta viva', makeOptions(), getWindow, undefined, kimiSelection());
 
     const canonical = normalizeUsage(kimiResponse('x').usage, 'anthropic');
-    const esperado = canonicalPromptTokens(canonical) + canonical.outputTokens; // 107 + 40
+    const esperado = canonicalPromptTokens(canonical) + canonical.outputTokens;
     expect(setSessionActiveContextTokens).toHaveBeenCalledWith('sess-s5', esperado);
     expect(esperado).toBeGreaterThan(0);
   });

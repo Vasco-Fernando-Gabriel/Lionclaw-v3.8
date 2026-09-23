@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
 
@@ -15,10 +14,12 @@ const capturedEvents: Array<{ channel: string; data: unknown }> = [];
 
 vi.mock('electron', () => ({
   BrowserWindow: {
-    getAllWindows: vi.fn(() => [{
-      isDestroyed: () => false,
-      webContents: { send: (channel: string, data: unknown) => capturedEvents.push({ channel, data }) },
-    }]),
+    getAllWindows: vi.fn(() => [
+      {
+        isDestroyed: () => false,
+        webContents: { send: (channel: string, data: unknown) => capturedEvents.push({ channel, data }) },
+      },
+    ]),
   },
   app: { on: vi.fn() },
 }));
@@ -32,13 +33,24 @@ function fsReadFileSync(p: string): string {
   return fsState.specContent;
 }
 vi.mock('fs', () => ({
-  default: { existsSync: vi.fn().mockReturnValue(true), readFileSync: vi.fn((p: string) => fsReadFileSync(p)), writeFileSync: vi.fn() },
+  default: {
+    existsSync: vi.fn().mockReturnValue(true),
+    readFileSync: vi.fn((p: string) => fsReadFileSync(p)),
+    writeFileSync: vi.fn(),
+  },
   existsSync: vi.fn().mockReturnValue(true),
   readFileSync: vi.fn((p: string) => fsReadFileSync(p)),
   writeFileSync: vi.fn(),
 }));
-vi.mock('path', () => ({ default: { join: (...args: string[]) => args.join('/') }, join: (...args: string[]) => args.join('/') }));
-vi.mock('os', () => ({ default: { homedir: () => '/home/user', tmpdir: () => '/tmp' }, homedir: () => '/home/user', tmpdir: () => '/tmp' }));
+vi.mock('path', () => ({
+  default: { join: (...args: string[]) => args.join('/') },
+  join: (...args: string[]) => args.join('/'),
+}));
+vi.mock('os', () => ({
+  default: { homedir: () => '/home/user', tmpdir: () => '/tmp' },
+  homedir: () => '/home/user',
+  tmpdir: () => '/tmp',
+}));
 
 vi.mock('../db', () => ({
   getHarnessProject: vi.fn(),
@@ -110,7 +122,6 @@ interface PhaseStateLike {
   currentSprintIndex: number;
 }
 
-
 function makeEngine() {
   const harnessInstance = new HarnessEngine({} as never);
   return new PipelineEngine(() => null, harnessInstance as never);
@@ -120,8 +131,14 @@ function makeSpawnResult() {
   return {
     output: 'ok',
     metrics: {
-      inputTokens: 10, outputTokens: 5, cacheReadTokens: 0, cacheCreationTokens: 0,
-      toolUses: 0, apiRequests: 1, costUsd: 0.0001, durationMs: 10,
+      inputTokens: 10,
+      outputTokens: 5,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      toolUses: 0,
+      apiRequests: 1,
+      costUsd: 0.0001,
+      durationMs: 10,
     },
     model: 'claude-sonnet-4-6',
     runtime: 'cloud' as const,
@@ -176,7 +193,6 @@ function findPhaseChanged(status: string): Array<Record<string, unknown>> {
     .filter((d) => d['status'] === status);
 }
 
-
 describe('SPEC-007 phase 12: runDevV2Phase12SpecGeneration (auto loop)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -194,9 +210,11 @@ describe('SPEC-007 phase 12: runDevV2Phase12SpecGeneration (auto loop)', () => {
     spySpawnAgent(engine, calls);
     const state = getState(engine, 'proj-12');
 
-    await (engine as unknown as {
-      runDevV2Phase12SpecGeneration: (id: string, p: unknown, s: unknown) => Promise<void>;
-    }).runDevV2Phase12SpecGeneration('proj-12', makeLockedDevV2Project(), state);
+    await (
+      engine as unknown as {
+        runDevV2Phase12SpecGeneration: (id: string, p: unknown, s: unknown) => Promise<void>;
+      }
+    ).runDevV2Phase12SpecGeneration('proj-12', makeLockedDevV2Project(), state);
 
     expect(calls.length).toBeGreaterThanOrEqual(2);
     expect(calls[0].agentId).toBe(PIPE2_SPEC_BUILDER_ID);
@@ -213,9 +231,11 @@ describe('SPEC-007 phase 12: runDevV2Phase12SpecGeneration (auto loop)', () => {
     spySpawnAgent(engine, calls);
     const state = getState(engine, 'proj-12');
 
-    await (engine as unknown as {
-      runDevV2Phase12SpecGeneration: (id: string, p: unknown, s: unknown) => Promise<void>;
-    }).runDevV2Phase12SpecGeneration('proj-12', makeLockedDevV2Project(), state);
+    await (
+      engine as unknown as {
+        runDevV2Phase12SpecGeneration: (id: string, p: unknown, s: unknown) => Promise<void>;
+      }
+    ).runDevV2Phase12SpecGeneration('proj-12', makeLockedDevV2Project(), state);
 
     const validatorCall = calls.find((c) => c.agentId === PIPE2_SPEC_VALIDATOR_ID);
     expect(validatorCall).toBeDefined();
@@ -230,8 +250,7 @@ describe('SPEC-007 phase 12: runDevV2Phase12SpecGeneration (auto loop)', () => {
   });
 
   it('6. on FAIL, round 2 builder receives the spec-validation.md content', async () => {
-    fsState.validationReportContent =
-      '# Validation\n\n## Status: FAIL\n\n[MISS] tela de login ausente na SPEC\n';
+    fsState.validationReportContent = '# Validation\n\n## Status: FAIL\n\n[MISS] tela de login ausente na SPEC\n';
     (getHarnessProject as Mock).mockReturnValue(makeLockedDevV2Project());
 
     const engine = makeEngine();
@@ -239,9 +258,11 @@ describe('SPEC-007 phase 12: runDevV2Phase12SpecGeneration (auto loop)', () => {
     spySpawnAgent(engine, calls);
     const state = getState(engine, 'proj-12');
 
-    await (engine as unknown as {
-      runDevV2Phase12SpecGeneration: (id: string, p: unknown, s: unknown) => Promise<void>;
-    }).runDevV2Phase12SpecGeneration('proj-12', makeLockedDevV2Project(), state);
+    await (
+      engine as unknown as {
+        runDevV2Phase12SpecGeneration: (id: string, p: unknown, s: unknown) => Promise<void>;
+      }
+    ).runDevV2Phase12SpecGeneration('proj-12', makeLockedDevV2Project(), state);
 
     const builderCalls = calls.filter((c) => c.agentId === PIPE2_SPEC_BUILDER_ID);
     expect(builderCalls.length).toBeGreaterThanOrEqual(2);
@@ -258,13 +279,16 @@ describe('SPEC-007 phase 12: runDevV2Phase12SpecGeneration (auto loop)', () => {
     const engine = makeEngine();
     const calls: SpawnCall[] = [];
     spySpawnAgent(engine, calls);
-    (engine as unknown as { handleDevV2Phase12SpecReview: Mock }).handleDevV2Phase12SpecReview =
-      vi.fn(async () => {}) as unknown as Mock;
+    (engine as unknown as { handleDevV2Phase12SpecReview: Mock }).handleDevV2Phase12SpecReview = vi.fn(
+      async () => {},
+    ) as unknown as Mock;
     const state = getState(engine, 'proj-12');
 
-    await (engine as unknown as {
-      runDevV2Phase12SpecGeneration: (id: string, p: unknown, s: unknown) => Promise<void>;
-    }).runDevV2Phase12SpecGeneration('proj-12', makeLockedDevV2Project(), state);
+    await (
+      engine as unknown as {
+        runDevV2Phase12SpecGeneration: (id: string, p: unknown, s: unknown) => Promise<void>;
+      }
+    ).runDevV2Phase12SpecGeneration('proj-12', makeLockedDevV2Project(), state);
 
     const builderCalls = calls.filter((c) => c.agentId === PIPE2_SPEC_BUILDER_ID);
     const loopValidatorCalls = calls.filter((c) => c.agentId === PIPE2_SPEC_VALIDATOR_ID);
@@ -282,9 +306,11 @@ describe('SPEC-007 phase 12: runDevV2Phase12SpecGeneration (auto loop)', () => {
     (engine as unknown as { advanceToNextPhase: Mock }).advanceToNextPhase = advanceSpy as unknown as Mock;
     const state = getState(engine, 'proj-12');
 
-    await (engine as unknown as {
-      runDevV2Phase12SpecGeneration: (id: string, p: unknown, s: unknown) => Promise<void>;
-    }).runDevV2Phase12SpecGeneration('proj-12', makeLockedDevV2Project(), state);
+    await (
+      engine as unknown as {
+        runDevV2Phase12SpecGeneration: (id: string, p: unknown, s: unknown) => Promise<void>;
+      }
+    ).runDevV2Phase12SpecGeneration('proj-12', makeLockedDevV2Project(), state);
 
     const reviews = findPhaseChanged('awaiting-spec-review');
     expect(reviews.length).toBeGreaterThanOrEqual(1);
@@ -299,7 +325,6 @@ describe('SPEC-007 phase 12: runDevV2Phase12SpecGeneration (auto loop)', () => {
   });
 });
 
-
 describe('SPEC-007 phase 12: approval advances to phase 13', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -311,7 +336,7 @@ describe('SPEC-007 phase 12: approval advances to phase 13', () => {
 
     const engine = makeEngine();
     const advanceSpy = vi.fn(async (_id: string, s: PhaseStateLike) => {
-      s.currentPhase = s.currentPhase + 1; // mirror the real +1 to assert -> 13
+      s.currentPhase = s.currentPhase + 1;
     });
     (engine as unknown as { advanceToNextPhase: Mock }).advanceToNextPhase = advanceSpy as unknown as Mock;
 
@@ -329,7 +354,6 @@ describe('SPEC-007 phase 12: approval advances to phase 13', () => {
   });
 });
 
-
 describe('SPEC-007 phase 12: manual message routing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -340,9 +364,7 @@ describe('SPEC-007 phase 12: manual message routing', () => {
     (getHarnessProject as Mock).mockReturnValue(makeLockedDevV2Project());
 
     const engine = makeEngine();
-    const reviewSpy = vi.fn(
-      async (_projectId: string, _message: string): Promise<void> => {},
-    );
+    const reviewSpy = vi.fn(async (_projectId: string, _message: string): Promise<void> => {});
     (engine as unknown as { handleDevV2Phase12SpecReview: Mock }).handleDevV2Phase12SpecReview =
       reviewSpy as unknown as Mock;
 

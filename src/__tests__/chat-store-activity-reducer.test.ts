@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { upsertActivity, flattenBlocksToActivities } from '@/stores/chat-store';
 import type { LiveActivity, LiveActivityEvent, ActivityTurnBlock } from '@/types';
 
-
 function startEvent(over: Partial<LiveActivityEvent> = {}): LiveActivityEvent {
   return {
     id: 't1',
@@ -24,12 +23,15 @@ describe('upsertActivity reducer (chat-store)', () => {
   });
 
   it('start->update->end preserva changed:false, exitCode:0, durationMs:0 e tokens:0 (nao apagados pelo merge ??)', () => {
-    let activities = upsertActivity([], startEvent({
-      changed: false,
-      exitCode: 0,
-      durationMs: 0,
-      tokens: { input: 0, output: 0 },
-    }));
+    let activities = upsertActivity(
+      [],
+      startEvent({
+        changed: false,
+        exitCode: 0,
+        durationMs: 0,
+        tokens: { input: 0, output: 0 },
+      }),
+    );
 
     activities = upsertActivity(activities, {
       id: 't1',
@@ -100,9 +102,7 @@ describe('flattenBlocksToActivities (hidratacao)', () => {
   }
 
   it('STORE-4: item hidratado com status running vira stopped (nunca esta vivo)', () => {
-    const out = flattenBlocksToActivities([
-      block([{ id: 'a', kind: 'subagent', label: 'sub', status: 'running' }]),
-    ]);
+    const out = flattenBlocksToActivities([block([{ id: 'a', kind: 'subagent', label: 'sub', status: 'running' }])]);
     expect(out).toHaveLength(1);
     expect(out[0].status).toBe('stopped');
   });

@@ -1,4 +1,3 @@
-
 export const COST_STATUS_REASON_ORDER = [
   'cache-write-not-reported',
   'long-context-unpriced',
@@ -12,9 +11,7 @@ export const COST_STATUS_REASON_LABELS: Record<CostStatusReason, string> = {
   'child-usage-unknown': 'usage de subagentes desconhecido',
 };
 
-export function mergeCostStatusReasons(
-  ...lists: Array<readonly string[] | undefined>
-): CostStatusReason[] {
+export function mergeCostStatusReasons(...lists: Array<readonly string[] | undefined>): CostStatusReason[] {
   const seen = new Set<string>();
   for (const list of lists) for (const r of list ?? []) seen.add(r);
   return COST_STATUS_REASON_ORDER.filter((r) => seen.has(r));
@@ -31,8 +28,7 @@ export function encodeCostStatusReasonsIntoMetricsMetadata(
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         base = parsed as Record<string, unknown>;
       }
-    } catch {
-    }
+    } catch {}
   }
   base['costStatusReasons'] = mergeCostStatusReasons(reasons);
   return JSON.stringify(base);
@@ -47,7 +43,6 @@ export function decodeCostStatusReasonsFromMetricsMetadata(
     if (Array.isArray(parsed?.costStatusReasons)) {
       return mergeCostStatusReasons(parsed.costStatusReasons as string[]);
     }
-  } catch {
-  }
+  } catch {}
   return [];
 }

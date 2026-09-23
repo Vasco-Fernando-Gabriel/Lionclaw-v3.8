@@ -1,4 +1,3 @@
-
 import { createLogger } from '../logger';
 import { getHarnessProject } from '../db';
 import { getSessionConfig, setSessionConfig } from './session-config';

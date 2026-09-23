@@ -19,15 +19,14 @@ function formatDuration(ms: number): string {
 }
 
 export function AuditFinalSummaryView() {
-  const auditAgents = useActiveProjectState(s => s.auditAgents) ?? new Map<string, AuditAgentState>();
-  const list = Array.from(auditAgents.values())
-    .sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
+  const auditAgents = useActiveProjectState((s) => s.auditAgents) ?? new Map<string, AuditAgentState>();
+  const list = Array.from(auditAgents.values()).sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
 
   const totalFiles = list.reduce((acc, a) => acc + a.filesAnalyzed, 0);
   const totalExtras = list
-    .filter(a => a.runtime !== 'codex')
+    .filter((a) => a.runtime !== 'codex')
     .reduce((acc, a) => acc + a.additionalFilesAfterStart, 0);
-  const allCodex = list.length > 0 && list.every(a => a.runtime === 'codex');
+  const allCodex = list.length > 0 && list.every((a) => a.runtime === 'codex');
   const totalFindings = list.reduce((acc, a) => acc + (a.findingsCount ?? 0), 0);
   const totalCost = list.reduce((acc, a) => acc + a.costUsd, 0);
   const totalDuration = list.reduce((acc, a) => acc + a.durationMs, 0);
@@ -55,13 +54,15 @@ export function AuditFinalSummaryView() {
             </tr>
           </thead>
           <tbody>
-            {list.map(a => (
+            {list.map((a) => (
               <tr key={a.agentId} className="text-zinc-300 border-b border-zinc-800/40">
                 <td className="pr-4 py-2">
                   <span className="flex items-center gap-2">
                     {a.name}
                     {a.status === 'failed' && (
-                      <span className="text-[9px] uppercase tracking-wider bg-red-900/40 text-red-300 px-1 py-0.5 rounded">falhou</span>
+                      <span className="text-[9px] uppercase tracking-wider bg-red-900/40 text-red-300 px-1 py-0.5 rounded">
+                        falhou
+                      </span>
                     )}
                   </span>
                 </td>
@@ -69,7 +70,11 @@ export function AuditFinalSummaryView() {
                 <td className="pr-4 py-2 font-mono text-right">{a.filesAnalyzed}</td>
                 <td
                   className="pr-4 py-2 font-mono text-right"
-                  title={a.runtime === 'codex' ? 'Metrica de extras nao disponivel para runtime Codex (sem tool Read tipado)' : undefined}
+                  title={
+                    a.runtime === 'codex'
+                      ? 'Metrica de extras nao disponivel para runtime Codex (sem tool Read tipado)'
+                      : undefined
+                  }
                 >
                   {a.runtime === 'codex' ? '—' : a.additionalFilesAfterStart}
                 </td>

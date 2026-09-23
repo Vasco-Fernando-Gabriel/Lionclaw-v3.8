@@ -1,4 +1,3 @@
-
 import { describe, it, expect, afterAll } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -21,9 +20,7 @@ const WS: PolicyWorkspace = {
   cwd: '/tmp/run-1/worktree',
 };
 
-function resolved(
-  over: Partial<ResolvedAgentPolicyConfig> = {},
-): ResolvedAgentPolicyConfig {
+function resolved(over: Partial<ResolvedAgentPolicyConfig> = {}): ResolvedAgentPolicyConfig {
   return {
     allowedTools: ['Read', 'Grep', 'Glob'],
     mcpServers: [],
@@ -83,10 +80,7 @@ describe('deriveNodeExecutionPolicy - MCP pos-resolucao (8.3, risco 16/17)', () 
   it('so o servidor concedido sobrevive a intersecao por ID de chave', () => {
     const policy = deriveNodeExecutionPolicy(
       resolved({
-        mcpServers: [
-          { 'knowledge-base': { command: 'node' } },
-          { 'repo-graph': { command: 'node' } },
-        ],
+        mcpServers: [{ 'knowledge-base': { command: 'node' } }, { 'repo-graph': { command: 'node' } }],
       }),
       grants({ allowedMcpServers: ['repo-graph'] }),
       WS,
@@ -108,9 +102,7 @@ describe('deriveNodeExecutionPolicy - MCP pos-resolucao (8.3, risco 16/17)', () 
       WS,
       'canUseTool',
     );
-    expect(policy.allowedMcpTools).toEqual([
-      'mcp__repo-graph__repo_graph_search',
-    ]);
+    expect(policy.allowedMcpTools).toEqual(['mcp__repo-graph__repo_graph_search']);
   });
 
   it('allowedMcpTools vazio = todas as tools dos servidores concedidos (sem refinamento)', () => {
@@ -187,12 +179,7 @@ describe('deriveNodeExecutionPolicy - rotas laterais sempre removidas (AC-20)', 
 
 describe('deriveNodeExecutionPolicy - guard-gated nunca auto-aprovado (8.3, entrada S08)', () => {
   it('deniedTools sempre carrega Bash/Write/Edit + Task/Agent', () => {
-    const policy = deriveNodeExecutionPolicy(
-      resolved(),
-      grants(),
-      WS,
-      'canUseTool',
-    );
+    const policy = deriveNodeExecutionPolicy(resolved(), grants(), WS, 'canUseTool');
     for (const t of GUARD_GATED_TOOL_NAMES) {
       expect(policy.deniedTools).toContain(t);
     }
@@ -244,12 +231,7 @@ describe('deriveNodeExecutionPolicy - guard-gated nunca auto-aprovado (8.3, entr
     );
     expect(policy.allowBash).toBe(true);
     expect(policy.allowNetwork).toBe(true);
-    expect(policy.allowedCommands).toEqual([
-      'npm run typecheck',
-      'npm run test',
-      'npm install',
-      'npm ci',
-    ]);
+    expect(policy.allowedCommands).toEqual(['npm run typecheck', 'npm run test', 'npm install', 'npm ci']);
   });
 
   it('SM-39: read-only NUNCA recebe allowNetwork mesmo se o node pediu', () => {
@@ -338,7 +320,6 @@ describe('defaults deny-by-default (8.3)', () => {
   });
 });
 
-
 const AGENT_AXES = {
   'a-writer': {
     access: 'workspace-write',
@@ -379,12 +360,7 @@ function resolvedFor(agentType: keyof typeof AGENT_AXES): ResolvedAgentPolicyCon
 
 describe('F1e enforcement: node implicito read-only (a-reader) nega Write/Edit/Bash', () => {
   it('deriveNodeExecutionPolicy(read-only) -> allowBash false, commands [], guard-gated negadas', () => {
-    const policy = deriveNodeExecutionPolicy(
-      resolvedFor('a-reader'),
-      implicitGrants('a-reader'),
-      WS,
-      'canUseTool',
-    );
+    const policy = deriveNodeExecutionPolicy(resolvedFor('a-reader'), implicitGrants('a-reader'), WS, 'canUseTool');
     expect(policy.access).toBe('read-only');
     expect(policy.allowBash).toBe(false);
     expect(policy.allowedCommands).toEqual([]);
@@ -394,12 +370,7 @@ describe('F1e enforcement: node implicito read-only (a-reader) nega Write/Edit/B
   });
 
   it('canUseTool composto NEGA Write, Edit e Bash (incondicional, independe do prompt)', () => {
-    const policy = deriveNodeExecutionPolicy(
-      resolvedFor('a-reader'),
-      implicitGrants('a-reader'),
-      WS,
-      'canUseTool',
-    );
+    const policy = deriveNodeExecutionPolicy(resolvedFor('a-reader'), implicitGrants('a-reader'), WS, 'canUseTool');
     const guard = new WorkflowPathGuard({ workspaceRoot: WS.workspaceRoot });
     const canUse = createComposedCanUseTool(policy, guard);
 
@@ -413,12 +384,7 @@ describe('F1e enforcement: node implicito read-only (a-reader) nega Write/Edit/B
 
 describe('F1e enforcement: node implicito workspace-write (a-writer) permite + filtra allowlist', () => {
   it('deriveNodeExecutionPolicy(workspace-write+bash) -> allowBash true, commands do agentType preservados', () => {
-    const policy = deriveNodeExecutionPolicy(
-      resolvedFor('a-writer'),
-      implicitGrants('a-writer'),
-      WS,
-      'canUseTool',
-    );
+    const policy = deriveNodeExecutionPolicy(resolvedFor('a-writer'), implicitGrants('a-writer'), WS, 'canUseTool');
     expect(policy.access).toBe('workspace-write');
     expect(policy.allowBash).toBe(true);
     expect(policy.allowedCommands).toEqual(['npm test', 'npm run build']);
@@ -428,12 +394,7 @@ describe('F1e enforcement: node implicito workspace-write (a-writer) permite + f
   });
 
   it('canUseTool composto PERMITE Write/Edit dentro do path guard e NEGA fora', () => {
-    const policy = deriveNodeExecutionPolicy(
-      resolvedFor('a-writer'),
-      implicitGrants('a-writer'),
-      WS,
-      'canUseTool',
-    );
+    const policy = deriveNodeExecutionPolicy(resolvedFor('a-writer'), implicitGrants('a-writer'), WS, 'canUseTool');
     const guard = new WorkflowPathGuard({ workspaceRoot: WS.workspaceRoot });
     const canUse = createComposedCanUseTool(policy, guard);
 
@@ -443,12 +404,7 @@ describe('F1e enforcement: node implicito workspace-write (a-writer) permite + f
   });
 
   it('canUseTool composto PERMITE so os comandos Bash da allowlist do agentType e NEGA fora', () => {
-    const policy = deriveNodeExecutionPolicy(
-      resolvedFor('a-writer'),
-      implicitGrants('a-writer'),
-      WS,
-      'canUseTool',
-    );
+    const policy = deriveNodeExecutionPolicy(resolvedFor('a-writer'), implicitGrants('a-writer'), WS, 'canUseTool');
     const guard = new WorkflowPathGuard({ workspaceRoot: WS.workspaceRoot });
     const canUse = createComposedCanUseTool(policy, guard);
 
@@ -463,12 +419,7 @@ describe('F1e enforcement: node implicito workspace-write (a-writer) permite + f
 
 describe('F1e enforcement: allowNetwork e audit-only, nunca enforcement (nao quebra)', () => {
   it('writer com allowNetwork: policy carrega a flag mas o canUseTool nao a consulta', () => {
-    const policy = deriveNodeExecutionPolicy(
-      resolvedFor('a-writer'),
-      implicitGrants('a-writer'),
-      WS,
-      'canUseTool',
-    );
+    const policy = deriveNodeExecutionPolicy(resolvedFor('a-writer'), implicitGrants('a-writer'), WS, 'canUseTool');
     expect(policy.allowNetwork).toBe(true);
     const guard = new WorkflowPathGuard({ workspaceRoot: WS.workspaceRoot });
     const canUse = createComposedCanUseTool(policy, guard);
@@ -491,7 +442,6 @@ describe('F1e enforcement: allowNetwork e audit-only, nunca enforcement (nao que
     expect(canUse({ toolName: 'Bash', input: { command: 'npm test' } }).behavior).toBe('deny');
   });
 });
-
 
 const tmpRoots: string[] = [];
 function mkTmpRoot(): string {
@@ -555,9 +505,7 @@ describe('WorkflowPathGuard - protected paths e writeSet (8.5/8.6)', () => {
       workspaceRoot: root,
       protectedPaths: ['electron/main/pipeline-engine/**', '*.lock'],
     });
-    const res = guard.checkWrite(
-      path.join(root, 'electron', 'main', 'pipeline-engine', 'index.ts'),
-    );
+    const res = guard.checkWrite(path.join(root, 'electron', 'main', 'pipeline-engine', 'index.ts'));
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.reason).toBe('protected-path');
   });

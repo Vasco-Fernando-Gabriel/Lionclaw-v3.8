@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const PREVIOUS_MODEL = 'claude-fable-5';
 const NEW_MODEL = 'claude-fable-5-1';
 

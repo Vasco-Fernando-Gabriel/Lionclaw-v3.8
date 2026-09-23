@@ -54,15 +54,13 @@ function main() {
   if (!fs.existsSync(sourcePackageJson)) {
     throw new Error(
       `pacote @colbymchenry/codegraph-${target} não instalado em node_modules. ` +
-      'Rode `npm install` na raiz do repo antes deste script.',
+        'Rode `npm install` na raiz do repo antes deste script.',
     );
   }
   const sourceVersion = JSON.parse(fs.readFileSync(sourcePackageJson, 'utf8')).version;
 
   const destRoot = path.join(REPO_ROOT, 'out', 'codegraph', target);
-  const manifestPath = path.join(
-    REPO_ROOT, 'out', 'distribution', 'manifests', 'codegraph', `${target}.json`,
-  );
+  const manifestPath = path.join(REPO_ROOT, 'out', 'distribution', 'manifests', 'codegraph', `${target}.json`);
 
   if (fs.existsSync(manifestPath) && fs.existsSync(destRoot)) {
     try {
@@ -71,8 +69,7 @@ function main() {
         console.log(`CodeGraph runtime: atualizado (v${sourceVersion}, ${target})`);
         return;
       }
-    } catch {
-    }
+    } catch {}
   }
 
   console.log(`CodeGraph runtime: staging v${sourceVersion} para out/codegraph/${target}...`);
@@ -85,15 +82,12 @@ function main() {
   });
 
   const files = walkClosure(destRoot);
-  const requiredEntrypoints = [
-    target.startsWith('win32-') ? 'node.exe' : 'node',
-    'lib/dist/bin/codegraph.js',
-  ];
+  const requiredEntrypoints = [target.startsWith('win32-') ? 'node.exe' : 'node', 'lib/dist/bin/codegraph.js'];
   for (const required of requiredEntrypoints) {
     if (!files.some((entry) => entry.path === required)) {
       throw new Error(
         `closure do CodeGraph sem o entrypoint esperado: ${required} ` +
-        `(layout do pacote @colbymchenry/codegraph-${target} mudou?)`,
+          `(layout do pacote @colbymchenry/codegraph-${target} mudou?)`,
       );
     }
   }

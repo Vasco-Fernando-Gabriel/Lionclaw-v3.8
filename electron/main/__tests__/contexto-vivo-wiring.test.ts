@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -98,9 +97,7 @@ describe('contexto-vivo §8 — compat: fence (compactacao E reset-sem-compactac
   });
 
   it('regra por CONDICAO do reset (§3.6): shouldContinueSession === false OU pendingSeed presente', () => {
-    expect(compatSrc).toContain(
-      'const threadRecreated = !shouldContinueSession || pendingSeed !== null;',
-    );
+    expect(compatSrc).toContain('const threadRecreated = !shouldContinueSession || pendingSeed !== null;');
   });
 
   it('seed/rolling_summary contam no historico sem dupla contagem (um OU outro)', () => {
@@ -141,20 +138,16 @@ describe('contexto-vivo §8 — regime efemero (kimi/codex): turno 2 nao carrega
     expect(contractSrc).toMatch(
       /onToolUseIO\?: \(tool: string, input: unknown, output: unknown, toolCallId\?: string\) => void;/,
     );
-    expect(contractSrc).toMatch(
-      /onToolUseComplete\?: \(tool: string, input: unknown, toolCallId\?: string\) => void;/,
-    );
+    expect(contractSrc).toMatch(/onToolUseComplete\?: \(tool: string, input: unknown, toolCallId\?: string\) => void;/);
     expect(acpTranslatorSrc).toContain('cb?.onToolUseIO?.(');
     expect(kimiSessionSrc).toContain('onToolUseIO: callbacks.onToolUseIO');
     expect(kimiSrc).toMatch(
-      /onToolUseIO: \(tool: string, input: unknown, output: unknown\) => \{/,
+      /onToolUseIO: \(tool: string, input: unknown, output: unknown, toolCallId\?: string\) => \{/,
     );
   });
 
   it('codex legacy: PISO por-turno SEM args (gap aceito §4) — so o result alimenta o contador', () => {
-    expect(codexSrc).toMatch(
-      /agenticTurnTokens \+= estimateAgenticContentTokens\(result\);/,
-    );
+    expect(codexSrc).toMatch(/agenticTurnTokens \+= estimateAgenticContentTokens\(result\);/);
     expect(codexSrc).not.toContain('onToolUseIO');
     expect(codexSessionSrc).toContain('onContextMeta');
     expect(codexSessionSrc).toContain("await import('../mcp-manager')");
@@ -162,7 +155,7 @@ describe('contexto-vivo §8 — regime efemero (kimi/codex): turno 2 nao carrega
 
   it('codex oficial INTOCADO: tokenUsage.last (response.lastUsage) segue a fonte preferida', () => {
     expect(codexSrc).toContain('response.lastUsage');
-    expect(codexSrc).toMatch(/normalizeUsage\(response\.lastUsage, "codex"\)/);
+    expect(codexSrc).toMatch(/normalizeUsage\(response\.lastUsage, 'codex'\)/);
   });
 });
 
@@ -203,9 +196,7 @@ describe('contexto-vivo §8 — invariantes (byte-identicos por regra)', () => {
 
   it('compat: ordem das fontes intacta — lastMainUsage > resultUsage (turno simples) > PISO', () => {
     expect(compatSrc).toContain('const singleRequestTurn = mainRequestCount <= 1;');
-    expect(compatSrc).toMatch(
-      /singleRequestTurn && resultUsage\s*\?\s*normalizeUsage\(resultUsage, 'anthropic'\)/,
-    );
+    expect(compatSrc).toMatch(/singleRequestTurn && resultUsage\s*\?\s*normalizeUsage\(resultUsage, 'anthropic'\)/);
     expect(compatSrc).toMatch(
       /reconcileActiveContext\(\s*realPromptTokens,\s*realOutputTokens,\s*compatContextEstimate,?\s*\)/,
     );

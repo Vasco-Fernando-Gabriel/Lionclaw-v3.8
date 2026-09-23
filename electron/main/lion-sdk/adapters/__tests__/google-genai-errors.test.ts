@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { normalizeGoogleGenAiError } from '../google-genai-errors';
 
@@ -32,17 +31,13 @@ describe('normalizeGoogleGenAiError', () => {
       status: 404,
       message: `model not found at ${SECRET_LOCATION}`,
     });
-    expect(r.userMessage).toBe(
-      'This Gemini model is not available for this key, project, or location.',
-    );
+    expect(r.userMessage).toBe('This Gemini model is not available for this key, project, or location.');
     assertNoLeak(r.userMessage);
   });
 
   it('case 2b: "not found" textual hint without status -> model not available', () => {
     const r = normalizeGoogleGenAiError({ message: 'MODEL NOT FOUND' });
-    expect(r.userMessage).toBe(
-      'This Gemini model is not available for this key, project, or location.',
-    );
+    expect(r.userMessage).toBe('This Gemini model is not available for this key, project, or location.');
   });
 
   it('case 3: HTTP 429 -> quota exceeded', () => {
@@ -74,9 +69,7 @@ describe('normalizeGoogleGenAiError', () => {
       code: 'INVALID_ARGUMENT',
       message: `INVALID_ARGUMENT: bad tool schema parameters at projects/${SECRET_PROJECT}`,
     });
-    expect(r.userMessage).toBe(
-      'Gemini rejected a tool schema. Check adapter schema conversion logs.',
-    );
+    expect(r.userMessage).toBe('Gemini rejected a tool schema. Check adapter schema conversion logs.');
     assertNoLeak(r.userMessage);
   });
 
@@ -150,9 +143,7 @@ describe('normalizeGoogleGenAiError', () => {
     const r = normalizeGoogleGenAiError({
       error: { code: 'INVALID_ARGUMENT', status: 400, message: 'bad tool schema' },
     });
-    expect(r.userMessage).toBe(
-      'Gemini rejected a tool schema. Check adapter schema conversion logs.',
-    );
+    expect(r.userMessage).toBe('Gemini rejected a tool schema. Check adapter schema conversion logs.');
     expect(r.code).toBe('INVALID_ARGUMENT');
     expect(r.status).toBe(400);
   });

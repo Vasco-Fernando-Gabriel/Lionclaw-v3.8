@@ -75,13 +75,7 @@ vi.mock('../secrets-vault', () => ({
   getSecret: state.getSecret,
 }));
 
-import {
-  estimateIngestFile,
-  extractAudio,
-  ingestFile,
-  processIngestJob,
-  resumeIngestJob,
-} from '../graph-ingest';
+import { estimateIngestFile, extractAudio, ingestFile, processIngestJob, resumeIngestJob } from '../graph-ingest';
 import { registerMgraphHandlers } from '../ipc/mgraph';
 
 const tempPaths: string[] = [];
@@ -120,9 +114,7 @@ describe('Knowledge rejeita vídeo antes de qualquer mutação', () => {
       fs.writeFileSync(source, 'canary');
       const copySpy = vi.spyOn(fs, 'copyFileSync');
 
-      await expect(ingestFile(source, 'documento.txt')).rejects.toThrow(
-        'Ingestão de vídeo não é suportada',
-      );
+      await expect(ingestFile(source, 'documento.txt')).rejects.toThrow('Ingestão de vídeo não é suportada');
       expect(copySpy).not.toHaveBeenCalled();
       expect(state.insertIngestJob).not.toHaveBeenCalled();
       expect(state.updateIngestJob).not.toHaveBeenCalled();
@@ -152,21 +144,22 @@ describe('Knowledge rejeita vídeo antes de qualquer mutação', () => {
       notesUpdated: 0,
     });
 
-    await expect(resumeIngestJob('video-job')).rejects.toThrow(
-      'Ingestão de vídeo não é suportada',
-    );
+    await expect(resumeIngestJob('video-job')).rejects.toThrow('Ingestão de vídeo não é suportada');
     expect(state.updateIngestJob).not.toHaveBeenCalled();
   });
 
   it('fila rejeita vídeo antes de apagar o arquivo do job', async () => {
     const dir = tempDir();
     const queued = path.join(dir, 'job.json');
-    fs.writeFileSync(queued, JSON.stringify({
-      type: 'file',
-      content: path.join(dir, 'payload.mp4'),
-      title: 'anotacoes.txt',
-      timestamp: new Date(0).toISOString(),
-    }));
+    fs.writeFileSync(
+      queued,
+      JSON.stringify({
+        type: 'file',
+        content: path.join(dir, 'payload.mp4'),
+        title: 'anotacoes.txt',
+        timestamp: new Date(0).toISOString(),
+      }),
+    );
 
     await processIngestJob(queued);
 
@@ -219,7 +212,6 @@ describe('áudio permanece funcional e limitado', () => {
       expect.objectContaining({ method: 'POST' }),
     );
   });
-
 });
 
 describe('limite de arquivo e autoritativo no backend', () => {

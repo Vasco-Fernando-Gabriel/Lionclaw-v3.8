@@ -18,20 +18,14 @@ export class FakeGrokAcpTransport implements GrokAcpTransport {
   readonly responses: Array<{ id: unknown; result: unknown }> = [];
   killed = false;
   private readonly notifications = new Set<(value: GrokAcpNotification) => void>();
-  private readonly serverRequests = new Set<(
-    id: unknown,
-    method: string,
-    params: Record<string, unknown>,
-  ) => void>();
+  private readonly serverRequests = new Set<(id: unknown, method: string, params: Record<string, unknown>) => void>();
   private readonly errors = new Set<(error: Error) => void>();
 
   constructor(private readonly script: FakeGrokScript = {}) {}
 
   async request(method: string, params?: unknown, options: GrokAcpRequestOptions = {}): Promise<unknown> {
     this.requests.push({ method, params });
-    const operation = Promise.resolve(this.script.onRequest
-      ? this.script.onRequest(method, params, this)
-      : {});
+    const operation = Promise.resolve(this.script.onRequest ? this.script.onRequest(method, params, this) : {});
     if (options.timeoutMs === undefined && options.signal === undefined) return operation;
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -86,9 +80,7 @@ export class FakeGrokAcpTransport implements GrokAcpTransport {
     return () => this.notifications.delete(handler);
   }
 
-  onServerRequest(
-    handler: (id: unknown, method: string, params: Record<string, unknown>) => void,
-  ): () => void {
+  onServerRequest(handler: (id: unknown, method: string, params: Record<string, unknown>) => void): () => void {
     this.serverRequests.add(handler);
     return () => this.serverRequests.delete(handler);
   }

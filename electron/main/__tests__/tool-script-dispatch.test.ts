@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -69,28 +68,14 @@ import {
   type ToolScriptToolCallAudit,
 } from '../tool-script/tool-script-dispatch';
 import { buildToolScriptEnv, isDeniedEnvKey } from '../tool-script/tool-script-env';
-import type {
-  ToolScriptDispatchContext,
-  ToolScriptRpcDispatcher,
-} from '../tool-script/tool-script-types';
+import type { ToolScriptDispatchContext, ToolScriptRpcDispatcher } from '../tool-script/tool-script-types';
 import { runToolScript } from '../tool-script/tool-script-engine';
 import type { McpInvokeRequest } from '../mcp-invoke';
-import {
-  requestActionConfirmation,
-  resolveConfirmation,
-} from '../permission-guard';
-import {
-  registerChatCapabilityTurn,
-  __resetChatCapabilityContextForTests,
-} from '../chat-capability-context';
-
+import { requestActionConfirmation, resolveConfirmation } from '../permission-guard';
+import { registerChatCapabilityTurn, __resetChatCapabilityContextForTests } from '../chat-capability-context';
 
 function resolveTestPython(): string {
-  for (const candidate of [
-    '/opt/homebrew/bin/python3',
-    '/usr/local/bin/python3',
-    '/usr/bin/python3',
-  ]) {
+  for (const candidate of ['/opt/homebrew/bin/python3', '/usr/local/bin/python3', '/usr/bin/python3']) {
     if (fs.existsSync(candidate)) return candidate;
   }
   return 'python3';
@@ -121,9 +106,7 @@ function isProcessDead(pid: number): boolean {
 
 let testCwd: string;
 
-function makeCtx(
-  overrides: Partial<ToolScriptDispatchContext> = {},
-): ToolScriptDispatchContext {
+function makeCtx(overrides: Partial<ToolScriptDispatchContext> = {}): ToolScriptDispatchContext {
   return {
     sessionId: 'sess-disp',
     turnId: 'turn-disp',
@@ -137,9 +120,7 @@ function makeCtx(
   };
 }
 
-function makeDispatcher(
-  overrides: Partial<CreateToolScriptDispatcherInput> = {},
-): ToolScriptRpcDispatcher {
+function makeDispatcher(overrides: Partial<CreateToolScriptDispatcherInput> = {}): ToolScriptRpcDispatcher {
   return createToolScriptDispatcher({
     code: 'from lionclaw_tools import run_command, write_file, mcp_invoke',
     getWindow: () => null,
@@ -172,13 +153,10 @@ afterEach(() => {
   fs.rmSync(testCwd, { recursive: true, force: true });
 });
 
-
 describe('gate server-side do nome da tool', () => {
   it('tool desconhecida e rejeitada sem executar', async () => {
     const dispatcher = makeDispatcher();
-    await expect(call(dispatcher, 'tool_inventada', {})).rejects.toThrow(
-      /desconhecida ou desabilitada/,
-    );
+    await expect(call(dispatcher, 'tool_inventada', {})).rejects.toThrow(/desconhecida ou desabilitada/);
   });
 
   it('tool conhecida mas FORA do enabled set e rejeitada sem efeito', async () => {
@@ -187,13 +165,12 @@ describe('gate server-side do nome da tool', () => {
       enabledTools: ['read_file'],
     });
     const alvo = path.join(testCwd, 'nunca.txt');
-    await expect(
-      call(dispatcher, 'write_file', { path: alvo, content: 'x' }),
-    ).rejects.toThrow(/desconhecida ou desabilitada/);
+    await expect(call(dispatcher, 'write_file', { path: alvo, content: 'x' })).rejects.toThrow(
+      /desconhecida ou desabilitada/,
+    );
     expect(fs.existsSync(alvo)).toBe(false);
   });
 });
-
 
 describe('file ops via executeLocalTool (executor REAL, cwd temp)', () => {
   it('write_file -> read_file -> edit -> grep -> search_files encadeiam pelo mapeamento', async () => {
@@ -228,19 +205,13 @@ describe('file ops via executeLocalTool (executor REAL, cwd temp)', () => {
 
   it('path fora do cwd e bloqueado pela validacao do executor (erro vira throw)', async () => {
     const dispatcher = makeDispatcher();
-    await expect(
-      call(dispatcher, 'read_file', { path: '/etc/hosts' }),
-    ).rejects.toThrow(/fora da raiz do projeto/);
+    await expect(call(dispatcher, 'read_file', { path: '/etc/hosts' })).rejects.toThrow(/fora da raiz do projeto/);
   });
 
   it('argumento obrigatorio ausente e erro claro sem executar', async () => {
     const dispatcher = makeDispatcher();
-    await expect(call(dispatcher, 'read_file', {})).rejects.toThrow(
-      /read_file: argumento obrigatorio/,
-    );
-    await expect(call(dispatcher, 'grep', {})).rejects.toThrow(
-      /grep: argumento obrigatorio/,
-    );
+    await expect(call(dispatcher, 'read_file', {})).rejects.toThrow(/read_file: argumento obrigatorio/);
+    await expect(call(dispatcher, 'grep', {})).rejects.toThrow(/grep: argumento obrigatorio/);
   });
 
   it('read_file de conteudo binario (byte NUL) da erro claro, nao mojibake (B.2.1)', async () => {
@@ -252,16 +223,13 @@ describe('file ops via executeLocalTool (executor REAL, cwd temp)', () => {
       path.join(testCwd, 'imagem.png'),
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x1a, 0x0a, 0x00, 0xff]),
     );
-    await expect(call(dispatcher, 'read_file', { path: 'imagem.png' })).rejects.toThrow(
-      /binario nao suportado/,
-    );
+    await expect(call(dispatcher, 'read_file', { path: 'imagem.png' })).rejects.toThrow(/binario nao suportado/);
 
     fs.writeFileSync(path.join(testCwd, 'texto.txt'), 'ola mundo\nacentos: cao\n');
     const lido = await call(dispatcher, 'read_file', { path: 'texto.txt' });
     expect(lido).toContain('ola mundo');
   });
 });
-
 
 describe('run_command assincrono', () => {
   it('roda um comando simples e devolve o stdout', async () => {
@@ -295,9 +263,7 @@ describe('run_command assincrono', () => {
       overrides: { runCommandTimeoutMs: 300 },
     });
     const inicio = Date.now();
-    await expect(
-      call(dispatcher, 'run_command', { command: 'sleep 5' }),
-    ).rejects.toThrow(/timeout de 300ms/);
+    await expect(call(dispatcher, 'run_command', { command: 'sleep 5' })).rejects.toThrow(/timeout de 300ms/);
     expect(Date.now() - inicio).toBeLessThan(3_000);
   });
 
@@ -323,9 +289,7 @@ describe('run_command assincrono', () => {
     abortController.abort();
     const dispatcher = makeDispatcher({ abortSignal: abortController.signal });
     const marker = path.join(testCwd, 'nunca-roda.txt');
-    await expect(
-      call(dispatcher, 'run_command', { command: `touch ${marker}` }),
-    ).rejects.toThrow(/abortado/);
+    await expect(call(dispatcher, 'run_command', { command: `touch ${marker}` })).rejects.toThrow(/abortado/);
     await sleep(100);
     expect(fs.existsSync(marker)).toBe(false);
   });
@@ -344,7 +308,6 @@ describe('run_command assincrono', () => {
     }
   });
 });
-
 
 describe('AC-B7: anti-recursao', () => {
   it('serverId direto lionclaw-toolscript e rejeitado sem executar', async () => {
@@ -383,7 +346,6 @@ describe('AC-B7: anti-recursao', () => {
     ).rejects.toThrow(/recursivo bloqueado/);
   });
 });
-
 
 describe('mcp_invoke propaga o McpInvocationContext do turno', () => {
   it('monta o McpInvokeRequest completo (surface chat, ids do turno, escopo)', async () => {
@@ -428,7 +390,6 @@ describe('mcp_invoke propaga o McpInvocationContext do turno', () => {
     ).rejects.toThrow(/erro do servidor remoto/);
   });
 });
-
 
 describe('AC-B6: capability gate em ENFORCE dentro do script', () => {
   it('Pipeline=false bloqueia mcp_invoke(lionclaw-pipeline-control) sem spawn', async () => {
@@ -484,17 +445,11 @@ describe('AC-B6: capability gate em ENFORCE dentro do script', () => {
       allowedServerIds: ['gmail'],
     });
     await expect(
-      call(
-        dispatcher,
-        'mcp_invoke',
-        { server_id: 'youtube', tool_name: 'search_videos', args: {} },
-        ctx,
-      ),
+      call(dispatcher, 'mcp_invoke', { server_id: 'youtube', tool_name: 'search_videos', args: {} }, ctx),
     ).rejects.toThrow(/fora do escopo desta sessao/);
     expect(setupMock).not.toHaveBeenCalled();
   });
 });
-
 
 describe('AC-B5: env sem segredos nos DOIS canais (e2e com o motor do S1)', () => {
   it('run_command(env) e os.environ nao expoem chaves; PATH/HOME presentes', async () => {
@@ -560,7 +515,6 @@ describe('AC-B5: env sem segredos nos DOIS canais (e2e com o motor do S1)', () =
   }, 30_000);
 });
 
-
 describe('seam de auditoria onToolCall', () => {
   it('emite uma entrada por RPC com displayName real (ok e falha)', async () => {
     const entries: ToolScriptToolCallAudit[] = [];
@@ -606,7 +560,6 @@ describe('seam de auditoria onToolCall', () => {
     expect(saida).toBe('resiliente\n');
   });
 });
-
 
 describe('buildToolScriptEnv / isDeniedEnvKey (B.7)', () => {
   it('remove chaves-armadilha e preserva operacionais', () => {
@@ -703,7 +656,6 @@ describe('buildToolScriptEnv / isDeniedEnvKey (B.7)', () => {
   });
 });
 
-
 describe('requestActionConfirmation (export aditivo, mecanismo REAL)', () => {
   function makeWindow(): { win: BrowserWindow; send: ReturnType<typeof vi.fn> } {
     const send = vi.fn();
@@ -762,28 +714,24 @@ describe('requestActionConfirmation (export aditivo, mecanismo REAL)', () => {
   });
 });
 
-
 describe('classifyToolScriptCode', () => {
   it('so read-only -> nao mutante; mutante habilitada no codigo -> mutante', () => {
     expect(
-      classifyToolScriptCode(
-        'from lionclaw_tools import read_file, grep\nprint(read_file("/x"))',
-        ['read_file', 'grep', 'run_command'],
-      ),
-    ).toEqual({ mutating: false, matchedTools: [] });
-
-    expect(
-      classifyToolScriptCode('from lionclaw_tools import run_command', [
+      classifyToolScriptCode('from lionclaw_tools import read_file, grep\nprint(read_file("/x"))', [
         'read_file',
+        'grep',
         'run_command',
       ]),
-    ).toEqual({ mutating: true, matchedTools: ['run_command'] });
+    ).toEqual({ mutating: false, matchedTools: [] });
+
+    expect(classifyToolScriptCode('from lionclaw_tools import run_command', ['read_file', 'run_command'])).toEqual({
+      mutating: true,
+      matchedTools: ['run_command'],
+    });
   });
 
   it('tool mutante DESABILITADA nao classifica; word boundary evita falso match', () => {
-    expect(
-      classifyToolScriptCode('run_command("x")', ['read_file']).mutating,
-    ).toBe(false);
+    expect(classifyToolScriptCode('run_command("x")', ['read_file']).mutating).toBe(false);
     expect(classifyToolScriptCode('print("edited")', ['edit']).mutating).toBe(false);
     expect(classifyToolScriptCode('edit("a", "b", "c")', ['edit']).mutating).toBe(true);
   });

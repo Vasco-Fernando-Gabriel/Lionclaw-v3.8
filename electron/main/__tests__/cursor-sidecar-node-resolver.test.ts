@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -213,15 +212,13 @@ describe('resolveCursorSidecarEntry', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cursor-entry-'));
     const bundle = path.join(dir, 'sidecar.cjs');
     fs.writeFileSync(bundle, '// bundle');
-    expect(
-      resolveCursorSidecarEntry({ candidates: [path.join(dir, 'nao-existe.cjs'), bundle] }),
-    ).toBe(bundle);
+    expect(resolveCursorSidecarEntry({ candidates: [path.join(dir, 'nao-existe.cjs'), bundle] })).toBe(bundle);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it('bundle ausente: erro cita npm run build:cursor-sidecar', () => {
-    expect(() =>
-      resolveCursorSidecarEntry({ candidates: ['/nao/existe/sidecar.cjs'] }),
-    ).toThrow(/build:cursor-sidecar/);
+    expect(() => resolveCursorSidecarEntry({ candidates: ['/nao/existe/sidecar.cjs'] })).toThrow(
+      /build:cursor-sidecar/,
+    );
   });
 });

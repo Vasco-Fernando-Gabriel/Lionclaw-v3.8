@@ -14,7 +14,6 @@ export interface SmokeTestResult {
   durationMs: number;
 }
 
-
 function spawnCommand(
   cmd: string,
   args: string[],
@@ -80,16 +79,13 @@ function truncate(str: string, maxLen: number): string {
   return str.slice(0, maxLen) + '\n...(truncated)';
 }
 
-
-async function runTypecheck(
-  projectPath: string,
-): Promise<SmokeTestResult['typecheck']> {
+async function runTypecheck(projectPath: string): Promise<SmokeTestResult['typecheck']> {
   try {
     const tsconfigExists = fs.existsSync(path.join(projectPath, 'tsconfig.json'));
     const pkg = readPackageJson(projectPath);
     const deps = {
-      ...(pkg?.['dependencies'] as Record<string, unknown> | undefined ?? {}),
-      ...(pkg?.['devDependencies'] as Record<string, unknown> | undefined ?? {}),
+      ...((pkg?.['dependencies'] as Record<string, unknown> | undefined) ?? {}),
+      ...((pkg?.['devDependencies'] as Record<string, unknown> | undefined) ?? {}),
     };
     const hasTypescript = 'typescript' in deps;
 
@@ -101,12 +97,7 @@ async function runTypecheck(
       };
     }
 
-    const { exitCode, output } = await spawnCommand(
-      'npx',
-      ['tsc', '--noEmit'],
-      projectPath,
-      120_000,
-    );
+    const { exitCode, output } = await spawnCommand('npx', ['tsc', '--noEmit'], projectPath, 120_000);
 
     const matches = output.match(/error TS\d+:/g);
     const errorCount = matches ? matches.length : 0;
@@ -122,10 +113,7 @@ async function runTypecheck(
   }
 }
 
-
-async function runLint(
-  projectPath: string,
-): Promise<SmokeTestResult['lint']> {
+async function runLint(projectPath: string): Promise<SmokeTestResult['lint']> {
   try {
     const pkg = readPackageJson(projectPath);
     const scripts = getScripts(pkg);
@@ -134,12 +122,7 @@ async function runLint(
       return { available: false, ok: true, warnings: 0, errors: 0, output: '' };
     }
 
-    const { exitCode, output } = await spawnCommand(
-      'npm',
-      ['run', 'lint'],
-      projectPath,
-      120_000,
-    );
+    const { exitCode, output } = await spawnCommand('npm', ['run', 'lint'], projectPath, 120_000);
 
     const truncated = truncate(output, 4000);
 
@@ -159,10 +142,7 @@ async function runLint(
   }
 }
 
-
-async function runTests(
-  projectPath: string,
-): Promise<SmokeTestResult['tests']> {
+async function runTests(projectPath: string): Promise<SmokeTestResult['tests']> {
   try {
     const pkg = readPackageJson(projectPath);
     const scripts = getScripts(pkg);
@@ -171,25 +151,12 @@ async function runTests(
       return { available: false, passed: 0, failed: 0, output: '' };
     }
 
-    const first = await spawnCommand(
-      'npm',
-      ['test', '--', '--run'],
-      projectPath,
-      180_000,
-    );
+    const first = await spawnCommand('npm', ['test', '--', '--run'], projectPath, 180_000);
 
     let finalOutput = first.output;
 
-    if (
-      first.exitCode !== 0 &&
-      /unknown\s+option|unrecognized/i.test(first.output)
-    ) {
-      const second = await spawnCommand(
-        'npm',
-        ['test'],
-        projectPath,
-        180_000,
-      );
+    if (first.exitCode !== 0 && /unknown\s+option|unrecognized/i.test(first.output)) {
+      const second = await spawnCommand('npm', ['test'], projectPath, 180_000);
       finalOutput = second.output;
     }
 
@@ -210,32 +177,14 @@ async function runTests(
   }
 }
 
-
 const IMPORT_RE = /(?:^|\n)\s*import\s+[^'"]*['"](\.\.?\/[^'"]+)['"]/g;
-const EXPORT_RE =
-  /(?:^|\n)\s*(?:export\s+\*\s+from|export\s+\{[^}]*\}\s+from)\s*['"](\.\.?\/[^'"]+)['"]/g;
+const EXPORT_RE = /(?:^|\n)\s*(?:export\s+\*\s+from|export\s+\{[^}]*\}\s+from)\s*['"](\.\.?\/[^'"]+)['"]/g;
 
-const SKIP_DIRS = new Set([
-  'node_modules',
-  'dist',
-  'build',
-  '.git',
-  '.lionclaw',
-  'out',
-]);
+const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', '.git', '.lionclaw', 'out']);
 
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx'];
 
-const RESOLVE_EXTENSIONS = [
-  '',
-  '.ts',
-  '.tsx',
-  '.js',
-  '.jsx',
-  '/index.ts',
-  '/index.tsx',
-  '/index.js',
-];
+const RESOLVE_EXTENSIONS = ['', '.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.tsx', '/index.js'];
 
 function resolveImport(fromDir: string, importPath: string): boolean {
   for (const ext of RESOLVE_EXTENSIONS) {
@@ -245,12 +194,7 @@ function resolveImport(fromDir: string, importPath: string): boolean {
   return false;
 }
 
-function collectSourceFiles(
-  dir: string,
-  results: string[],
-  count: { value: number },
-  limit: number,
-): void {
+function collectSourceFiles(dir: string, results: string[], count: { value: number }, limit: number): void {
   if (count.value >= limit) return;
 
   let entries: fs.Dirent[];
@@ -274,9 +218,7 @@ function collectSourceFiles(
   }
 }
 
-function checkBrokenImports(
-  projectPath: string,
-): Array<{ file: string; importPath: string }> {
+function checkBrokenImports(projectPath: string): Array<{ file: string; importPath: string }> {
   const broken: Array<{ file: string; importPath: string }> = [];
 
   try {
@@ -322,11 +264,7 @@ function checkBrokenImports(
   return broken;
 }
 
-
-function checkMissingFiles(
-  projectPath: string,
-  expectedFiles: string[],
-): string[] {
+function checkMissingFiles(projectPath: string, expectedFiles: string[]): string[] {
   const missing: string[] = [];
   for (const p of expectedFiles) {
     try {
@@ -341,11 +279,7 @@ function checkMissingFiles(
   return missing;
 }
 
-
-export async function runSmokeTest(
-  projectPath: string,
-  expectedFiles: string[],
-): Promise<SmokeTestResult> {
+export async function runSmokeTest(projectPath: string, expectedFiles: string[]): Promise<SmokeTestResult> {
   const startMs = Date.now();
 
   const [typecheck, lint, tests] = await Promise.all([
@@ -367,10 +301,7 @@ export async function runSmokeTest(
   };
 }
 
-export function writeSmokeTestReport(
-  result: SmokeTestResult,
-  outputPath: string,
-): void {
+export function writeSmokeTestReport(result: SmokeTestResult, outputPath: string): void {
   const durationSecs = (result.durationMs / 1000).toFixed(1);
 
   const typecheckStatus = result.typecheck.ok
@@ -386,25 +317,15 @@ export function writeSmokeTestReport(
       ? '(none)'
       : result.brokenImports.map((b) => `- ${b.file} -> "${b.importPath}"`).join('\n');
 
-  const missingList =
-    result.missingFiles.length === 0
-      ? '(none)'
-      : result.missingFiles.map((f) => `- ${f}`).join('\n');
+  const missingList = result.missingFiles.length === 0 ? '(none)' : result.missingFiles.map((f) => `- ${f}`).join('\n');
 
-  const typecheckOutputBlock =
-    result.typecheck.output.trim()
-      ? `\n\`\`\`\n${result.typecheck.output.trim()}\n\`\`\`\n`
-      : '';
+  const typecheckOutputBlock = result.typecheck.output.trim()
+    ? `\n\`\`\`\n${result.typecheck.output.trim()}\n\`\`\`\n`
+    : '';
 
-  const lintOutputBlock =
-    result.lint.output.trim()
-      ? `\n\`\`\`\n${result.lint.output.trim()}\n\`\`\`\n`
-      : '';
+  const lintOutputBlock = result.lint.output.trim() ? `\n\`\`\`\n${result.lint.output.trim()}\n\`\`\`\n` : '';
 
-  const testsOutputBlock =
-    result.tests.output.trim()
-      ? `\n\`\`\`\n${result.tests.output.trim()}\n\`\`\`\n`
-      : '';
+  const testsOutputBlock = result.tests.output.trim() ? `\n\`\`\`\n${result.tests.output.trim()}\n\`\`\`\n` : '';
 
   const content = [
     '# Smoke Test Report',

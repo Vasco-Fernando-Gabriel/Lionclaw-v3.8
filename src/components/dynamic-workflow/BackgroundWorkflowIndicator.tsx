@@ -6,7 +6,6 @@ import { useDynamicWorkflowStore } from '@/stores/dynamic-workflow-store';
 import { useStreamTimer } from '@/components/chat/useStreamTimer';
 import type { DynamicWorkflowRun, DynamicWorkflowRunStatus } from '@/types';
 
-
 const ACTIVE_RUN_STATUSES: ReadonlySet<DynamicWorkflowRunStatus> = new Set<DynamicWorkflowRunStatus>([
   'running',
   'paused',
@@ -26,17 +25,10 @@ export function parseRunStartedAt(startedAt: string | null | undefined): number 
   return Number.isNaN(ms) ? null : ms;
 }
 
-export function selectChatBoundActiveRuns(
-  runs: DynamicWorkflowRun[],
-  sessionId: string | null,
-): DynamicWorkflowRun[] {
+export function selectChatBoundActiveRuns(runs: DynamicWorkflowRun[], sessionId: string | null): DynamicWorkflowRun[] {
   if (!sessionId) return [];
-  const active = runs.filter(
-    (r) => r.chatSessionId === sessionId && ACTIVE_RUN_STATUSES.has(r.status),
-  );
-  active.sort(
-    (a, b) => (parseRunStartedAt(b.startedAt) ?? 0) - (parseRunStartedAt(a.startedAt) ?? 0),
-  );
+  const active = runs.filter((r) => r.chatSessionId === sessionId && ACTIVE_RUN_STATUSES.has(r.status));
+  active.sort((a, b) => (parseRunStartedAt(b.startedAt) ?? 0) - (parseRunStartedAt(a.startedAt) ?? 0));
   return active;
 }
 
@@ -60,10 +52,7 @@ export function BackgroundWorkflowIndicator() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const activeRuns = useMemo(
-    () => selectChatBoundActiveRuns(runs, currentSessionId),
-    [runs, currentSessionId],
-  );
+  const activeRuns = useMemo(() => selectChatBoundActiveRuns(runs, currentSessionId), [runs, currentSessionId]);
   const top: DynamicWorkflowRun | null = activeRuns[0] ?? null;
 
   const startedAtMs = top ? parseRunStartedAt(top.startedAt) : null;
@@ -85,8 +74,8 @@ export function BackgroundWorkflowIndicator() {
       }}
       title={
         awaiting
-          ? `O workflow aguarda voce. Clique para abrir o run.`
-          : `Workflow em andamento nesta conversa. Clique para abrir o run.`
+          ? `Workflow ${label}: aguarda voce. Clique para abrir o run.`
+          : `Workflow ${label}: em andamento nesta conversa. Clique para abrir o run.`
       }
       className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400 hover:bg-amber-500/20 transition-colors min-w-0"
     >
@@ -95,10 +84,6 @@ export function BackgroundWorkflowIndicator() {
       ) : (
         <Loader2 size={10} className="animate-spin shrink-0" aria-hidden="true" />
       )}
-      <span className="truncate max-w-[200px]">
-        {label}
-        {awaiting ? ' - aguardando voce' : ''}
-      </span>
       {elapsed ? <span className="font-mono tabular-nums shrink-0">{elapsed}</span> : null}
       {extraCount > 0 ? (
         <span

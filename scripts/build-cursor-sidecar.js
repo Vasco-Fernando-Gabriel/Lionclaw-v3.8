@@ -1,13 +1,9 @@
-
 const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
 
 const repoRoot = path.join(__dirname, '..');
-const entry = path.join(
-  repoRoot,
-  'electron', 'main', 'agent-runtime', 'cursor-sidecar', 'sidecar', 'entry.ts',
-);
+const entry = path.join(repoRoot, 'electron', 'main', 'agent-runtime', 'cursor-sidecar', 'sidecar', 'entry.ts');
 const srcDir = path.join(repoRoot, 'electron', 'main', 'agent-runtime', 'cursor-sidecar');
 const outDir = path.join(repoRoot, 'resources', 'cursor-sidecar');
 const outFile = path.join(outDir, 'sidecar.cjs');
@@ -53,7 +49,6 @@ async function bundle() {
   console.log(`[cursor-sidecar] bundle gerado: ${path.relative(repoRoot, outFile)}`);
 }
 
-
 function readPkg(dir) {
   return JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
 }
@@ -67,7 +62,7 @@ function resolvePkgDir(name, fromDirs) {
 }
 
 function collectClosure(rootPkgName) {
-  const resolved = new Map(); // name -> dir fisico
+  const resolved = new Map();
   const queue = [{ name: rootPkgName, parents: [repoRoot] }];
   while (queue.length > 0) {
     const { name, parents } = queue.shift();
@@ -101,8 +96,7 @@ function copyDeps() {
     copyDirSync(dir, path.join(destModules, ...name.split('/')));
   }
   console.log(
-    `[cursor-sidecar] closure fisica copiada (${closure.size} pacotes) para ` +
-      path.relative(repoRoot, destModules),
+    `[cursor-sidecar] closure fisica copiada (${closure.size} pacotes) para ` + path.relative(repoRoot, destModules),
   );
 }
 

@@ -1,4 +1,3 @@
-
 export const VALIDATOR_SCHEMA = {
   $schema: 'http://json-schema.org/draft-07/schema#',
   type: 'object',
@@ -36,7 +35,10 @@ export const REFUTE_SCHEMA = {
         required: ['ref', 'verdict', 'evidencia', 'severityConfirmada'],
         additionalProperties: false,
         properties: {
-          ref: { type: 'string', description: 'o id EXATO do finding cru sendo refutado (campo id do finding; nao o where)' },
+          ref: {
+            type: 'string',
+            description: 'o id EXATO do finding cru sendo refutado (campo id do finding; nao o where)',
+          },
           verdict: { type: 'string', enum: ['real', 'ruido'] },
           evidencia: { type: 'string' },
           severityConfirmada: { type: 'string', enum: ['P1', 'P2', 'P3'] },

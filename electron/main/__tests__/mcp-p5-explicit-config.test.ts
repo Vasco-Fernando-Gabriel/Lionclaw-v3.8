@@ -1,7 +1,5 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { OrchestratorSelection } from '../orchestrator-selection';
-
 
 interface ServerRow {
   id: string;
@@ -59,7 +57,10 @@ vi.mock('../db', () => ({
       },
       run: () => undefined,
     }),
-    transaction: (fn: (...a: unknown[]) => unknown) => (...a: unknown[]) => fn(...a),
+    transaction:
+      (fn: (...a: unknown[]) => unknown) =>
+      (...a: unknown[]) =>
+        fn(...a),
   }),
   createSession: vi.fn(),
   getActiveChatSession: vi.fn(() => null),
@@ -88,7 +89,6 @@ vi.mock('../logger', () => ({
 vi.mock('../app-version', () => ({ getAppVersion: () => '0.0.0-test' }));
 vi.mock('../pricing', () => ({ calculateCost: vi.fn(() => 0.5) }));
 
-
 const setupMCPsForSession = vi.fn(async (config: Record<string, unknown>) => ({
   client: { connections: Object.keys(config).map((serverId) => ({ serverId })) },
   tools: [],
@@ -97,20 +97,15 @@ const teardownMCPsForSession = vi.fn(async () => {});
 const callMCPTool = vi.fn(async () => ({ content: [{ type: 'text', text: 'drive ok' }] }));
 
 vi.mock('../mcp-tool-bridge', () => ({
-  setupMCPsForSession: (...a: unknown[]) =>
-    setupMCPsForSession(...(a as [Record<string, unknown>])),
+  setupMCPsForSession: (...a: unknown[]) => setupMCPsForSession(...(a as [Record<string, unknown>])),
   teardownMCPsForSession: (...a: unknown[]) => teardownMCPsForSession(...(a as [])),
   callMCPTool: (...a: unknown[]) => callMCPTool(...(a as [])),
 }));
 
-
-const guardDecision = vi.fn(
-  async (): Promise<{ behavior: 'allow' }> => ({ behavior: 'allow' }),
-);
+const guardDecision = vi.fn(async (): Promise<{ behavior: 'allow' }> => ({ behavior: 'allow' }));
 vi.mock('../permission-guard', () => ({
   createPermissionGuard: vi.fn(() => guardDecision),
 }));
-
 
 vi.mock('../skills', () => ({ listSkills: vi.fn(() => []) }));
 vi.mock('../title-generator', () => ({ ensureInitialSessionTitle: vi.fn() }));
@@ -174,7 +169,6 @@ vi.mock('../lion-sdk/runtime', () => ({
   runLionLoop: (...a: unknown[]) => runLionLoop(...(a as [CapturedLoopOpts])),
 }));
 
-
 import { getMCPConfigForAgent } from '../mcp-manager';
 import { MCP_GATEWAY_SERVER_ID } from '../mcp-display';
 import { executeLionSdkQuery } from '../lion-sdk/index';
@@ -188,10 +182,7 @@ const OLLAMA: OrchestratorSelection = {
   source: 'settings',
 };
 
-function serverRow(
-  id: string,
-  visibleTo: 'all' | 'codex-lion-only' = 'all',
-): ServerRow {
+function serverRow(id: string, visibleTo: 'all' | 'codex-lion-only' = 'all'): ServerRow {
   return {
     id,
     name: `Server ${id}`,
@@ -232,11 +223,7 @@ beforeEach(() => {
     ['mcp_prompt_mode', 'index'],
   ]);
   state.agents = new Map([['agent-p5', JSON.stringify(['google-drive'])]]);
-  state.servers = [
-    serverRow('google-drive'),
-    serverRow('shopify'),
-    serverRow('lionclaw-pipeline-control'),
-  ];
+  state.servers = [serverRow('google-drive'), serverRow('shopify'), serverRow('lionclaw-pipeline-control')];
   state.registry = [
     registryRow('google-drive', 'list_files', 'Lista arquivos do Drive'),
     registryRow('google-drive', 'delete_file', 'Apaga arquivo do Drive'),
@@ -248,7 +235,6 @@ beforeEach(() => {
 afterEach(() => {
   _resetMcpInvokeForTesting();
 });
-
 
 describe('AC-15 (a) — claude/compat: agente com mcpServers explicito fica DIRETO', () => {
   for (const surface of ['claude-sdk', 'claude-compat-sdk'] as const) {
@@ -275,7 +261,6 @@ describe('AC-15 (a) — claude/compat: agente com mcpServers explicito fica DIRE
     expect(broad!['google-drive']).toBeUndefined();
   });
 });
-
 
 describe('AC-15 (b) — lion: agente P5 mantem catalogo direto e allowlist exata', () => {
   it('prompt do agente P5 em modo index: catalogo DIRETO por server, sem o indice amplo', async () => {
@@ -313,7 +298,7 @@ describe('AC-15 (b) — lion: agente P5 mantem catalogo direto e allowlist exata
     expect(r.isError).toBe(true);
     expect(r.content).toContain('fora do escopo desta sessao');
     expect(r.content).toContain('google-drive');
-    expect(r.content).not.toContain('shopify,'); // nao lista o server bloqueado como permitido
+    expect(r.content).not.toContain('shopify,');
     expect(setupMCPsForSession).not.toHaveBeenCalled();
     expect(callMCPTool).not.toHaveBeenCalled();
   });

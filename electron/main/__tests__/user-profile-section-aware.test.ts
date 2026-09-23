@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import os from 'os';
 import path from 'path';
@@ -52,7 +51,7 @@ function todayTag(): string {
 }
 
 function countNonEmpty(content: string): number {
-  return content.split('\n').filter(l => l.trim().length > 0).length;
+  return content.split('\n').filter((l) => l.trim().length > 0).length;
 }
 
 beforeEach(() => {
@@ -169,9 +168,7 @@ describe('12.1 — estrutura canonica e formato de linha', () => {
     const content = readUser();
     expect(content).not.toContain('- Desenvolvedor [2026-01-01]');
     expect(content).toContain('- Nome: Breno');
-    const warned = warnSpy.mock.calls.some(c =>
-      String(c[1] ?? c[0]).includes('userRemove sem line-match exato'),
-    );
+    const warned = warnSpy.mock.calls.some((c) => String(c[1] ?? c[0]).includes('userRemove sem line-match exato'));
     expect(warned).toBe(true);
   });
 
@@ -257,7 +254,7 @@ describe('12.1 — poda deterministica com archive (AC-45)', () => {
     const identSection = content
       .slice(content.indexOf('## Identidade'), content.indexOf('## Perfil profissional'))
       .split('\n')
-      .filter(l => l.trim().startsWith('- '));
+      .filter((l) => l.trim().startsWith('- '));
     expect(identSection.length).toBeLessThanOrEqual(10);
     const fatosIdx = content.indexOf('## Fatos duraveis');
     expect(content.indexOf('- Chave11: valor11')).toBeGreaterThan(fatosIdx);
@@ -274,10 +271,7 @@ describe('12.1 — poda deterministica com archive (AC-45)', () => {
 
 describe('AC-46 — grep estatico: passo direto morreu', () => {
   it('memory-pipeline.ts nao contem mais a funcao updateUserProfile nem a aplicacao direta', () => {
-    const source = fs.readFileSync(
-      path.join(__dirname, '..', 'memory-pipeline.ts'),
-      'utf-8',
-    );
+    const source = fs.readFileSync(path.join(__dirname, '..', 'memory-pipeline.ts'), 'utf-8');
     expect(source).not.toMatch(/async function updateUserProfile\(/);
     expect(source).not.toMatch(/await updateUserProfile\(summary\.user_profile_updates\)/);
     expect(source).toContain('await updateUserProfileSectionAware({');

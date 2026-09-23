@@ -3,7 +3,6 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-
 vi.mock('../logger', () => ({
   createLogger: () => ({
     info: vi.fn(),
@@ -18,7 +17,11 @@ vi.mock('electron', () => ({
     getAppPath: () => '/tmp/lionclaw-test-approot',
     getPath: (_name: string) => '/tmp/lionclaw-test-userdata',
   },
-  BrowserWindow: class { static getAllWindows() { return []; } },
+  BrowserWindow: class {
+    static getAllWindows() {
+      return [];
+    }
+  },
   ipcMain: { on: vi.fn(), handle: vi.fn() },
 }));
 
@@ -73,15 +76,8 @@ import { getBootInstallStatus } from '../open-design/boot-installer';
 import * as manager from '../open-design/manager';
 import { createAdapter } from '../open-design/adapter-http';
 import { getPipelineDocsContext } from '../pipeline-paths';
-import {
-  buildInitialPrompt,
-  ensureSession,
-  __resetBootstrapForTests,
-} from '../open-design/bootstrap';
-import type {
-  OpenDesignConfig,
-  OpenDesignSessionConfig,
-} from '../../../src/types/open-design';
+import { buildInitialPrompt, ensureSession, __resetBootstrapForTests } from '../open-design/bootstrap';
+import type { OpenDesignConfig, OpenDesignSessionConfig } from '../../../src/types/open-design';
 
 const mockGetHarnessProject = vi.mocked(getHarnessProject);
 const mockUpdateHarnessProject = vi.mocked(updateHarnessProject);
@@ -127,7 +123,13 @@ interface FakeAdapter {
 }
 
 function makeFakeAdapter(): FakeAdapter {
-  const messages: Array<{ id: string; role: 'user' | 'assistant'; content: string; runId?: string; runStatus?: string }> = [];
+  const messages: Array<{
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    runId?: string;
+    runStatus?: string;
+  }> = [];
   return {
     health: vi.fn(async () => true),
     createProject: vi.fn(async () => ({ projectId: 'lionclaw-runabc', conversationId: 'conv_init' })),
@@ -136,11 +138,7 @@ function makeFakeAdapter(): FakeAdapter {
     startRun: vi.fn(async () => ({ runId: 'run_1' })),
     getAppConfig: vi.fn(async () => ({ config: {} })),
     updateAppConfig: vi.fn(async (payload) => ({ config: payload })),
-    startInitialRun: vi.fn(async (args: {
-      userMessageId: string;
-      assistantMessageId: string;
-      prompt: string;
-    }) => {
+    startInitialRun: vi.fn(async (args: { userMessageId: string; assistantMessageId: string; prompt: string }) => {
       messages.push({ id: args.userMessageId, role: 'user', content: args.prompt });
       messages.push({
         id: args.assistantMessageId,
@@ -412,9 +410,7 @@ describe('bootstrap.ensureSession', () => {
     expect(fake.startInitialRun).toHaveBeenCalledTimes(1);
     const promptArg = fake.startInitialRun.mock.calls[0]![0].prompt as string;
     const fileText = fs.readFileSync(PROMPT_PATH, 'utf8');
-    expect(promptArg).toBe(
-      `[Briefing automatico do LionClaw - pipeline Demo project]\n${fileText}`,
-    );
+    expect(promptArg).toBe(`[Briefing automatico do LionClaw - pipeline Demo project]\n${fileText}`);
     expect(fileText).not.toContain('[Briefing automatico do LionClaw');
     expect(mockSavePipelineMessage).not.toHaveBeenCalled();
     expect(promptArg).toMatch(/portugues brasileiro/i);
@@ -481,9 +477,7 @@ describe('bootstrap.ensureSession', () => {
     if ('error' in res) throw new Error('expected ok');
 
     const promptArg = fake.startInitialRun.mock.calls[0]![0].prompt as string;
-    expect(promptArg).toBe(
-      `[Briefing automatico do LionClaw - pipeline Demo project]\n${customPrompt}`,
-    );
+    expect(promptArg).toBe(`[Briefing automatico do LionClaw - pipeline Demo project]\n${customPrompt}`);
     expect(promptArg).not.toContain('- US-01: billing automatico');
   });
 
@@ -536,9 +530,7 @@ describe('bootstrap.ensureSession', () => {
     if ('error' in res) throw new Error('expected ok');
 
     const promptArg = fake.startInitialRun.mock.calls[0]![0].prompt as string;
-    expect(promptArg).toBe(
-      `[Briefing automatico do LionClaw - pipeline LionCron]\n${customPrompt}`,
-    );
+    expect(promptArg).toBe(`[Briefing automatico do LionClaw - pipeline LionCron]\n${customPrompt}`);
     expect(promptArg).toContain('Blueprint obrigatorio de produto: LionCron');
     expect(promptArg).toContain('Vocabulário obrigatorio de UI');
     expect(promptArg).toContain('GitHub PAT');
@@ -601,11 +593,8 @@ describe('bootstrap.ensureSession', () => {
     if ('error' in res) throw new Error('expected ok');
 
     expect(res.webUrl).not.toMatch(/\/conversations\//);
-    expect(res.webUrl).toMatch(
-      /http:\/\/127\.0\.0\.1:5175\/projects\/lionclaw-[a-z0-9-]+\?host=lionclaw&locale=pt-BR/,
-    );
+    expect(res.webUrl).toMatch(/http:\/\/127\.0\.0\.1:5175\/projects\/lionclaw-[a-z0-9-]+\?host=lionclaw&locale=pt-BR/);
   });
-
 
   it('A-AC1: prompt entregue NAO carrega heading de orientacoes do orquestrador (amarra revertida)', async () => {
     const fake = makeFakeAdapter();
@@ -637,7 +626,6 @@ describe('bootstrap.ensureSession', () => {
     expect(fake.startInitialRun).toHaveBeenCalledTimes(1);
   });
 
-
   it('W3-AC5: a primeira linha do prompt entregue tem o rotulo [Briefing automatico do LionClaw - pipeline <nome>]', async () => {
     const fake = makeFakeAdapter();
     mockCreateAdapter.mockReturnValue(fake as never);
@@ -664,9 +652,7 @@ describe('bootstrap.ensureSession', () => {
     if ('error' in res) throw new Error('expected ok');
 
     const delivered = fake.startInitialRun.mock.calls[0]![0].prompt as string;
-    expect(delivered.split('\n')[0]).toBe(
-      '[Briefing automatico do LionClaw - pipeline Demo project]',
-    );
+    expect(delivered.split('\n')[0]).toBe('[Briefing automatico do LionClaw - pipeline Demo project]');
     expect(delivered).not.toContain('## Orientacoes do orquestrador');
   });
 

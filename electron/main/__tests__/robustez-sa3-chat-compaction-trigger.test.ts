@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -13,12 +12,19 @@ const h = vi.hoisted(() => ({
   createSessionMock: vi.fn(),
   updateSessionStatusMock: vi.fn(),
   deleteRunsMock: vi.fn(),
-  transactionMock: vi.fn((fn: (...args: unknown[]) => unknown) => (...args: unknown[]) => fn(...args)),
+  transactionMock: vi.fn(
+    (fn: (...args: unknown[]) => unknown) =>
+      (...args: unknown[]) =>
+        fn(...args),
+  ),
   summarizeLightweightMock: vi.fn(),
   getContextWindowMock: vi.fn((_model: string, _provider?: string): number | undefined => undefined),
+  laneOrchestrator: null as { runtime: string; provider: string; model: string } | null,
 }));
 
 vi.mock('../db', () => ({
+  threadIdOf: (s: { id: string; sdkSessionId?: string | null }) => s.sdkSessionId ?? s.id,
+  getSessionOrchestrator: () => h.laneOrchestrator,
   getDb: vi.fn(() => ({
     prepare: (_sql: string) => ({
       get: () => undefined,
@@ -68,7 +74,6 @@ import {
 import { EmptyProviderResponseError } from '../agent-runtime/llm-error';
 import { estimateTokens } from '../token-estimator';
 
-
 function makeSession(overrides: Partial<ChatSession> = {}): ChatSession {
   return {
     id: 's1',
@@ -96,30 +101,37 @@ function makeMsg(id: number, role: 'user' | 'assistant' | 'system', content: str
 const OK_SUMMARY = { executiveSummary: 'resumo rolante novo' };
 
 function installKnownModel(windowTokens = 200_000): void {
+  h.laneOrchestrator = { runtime: 'claude-sdk', provider: 'anthropic', model: 'modelo-conhecido' };
   h.getSettingMock.mockImplementation((key: string) => {
     if (key === 'orchestrator_model') return 'modelo-conhecido';
     if (key === 'orchestrator_provider') return 'anthropic';
     return undefined;
   });
   h.getContextWindowMock.mockImplementation((model: string) =>
-    model === 'modelo-conhecido' ? windowTokens : undefined);
+    model === 'modelo-conhecido' ? windowTokens : undefined,
+  );
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   __resetChatCompactionGuardsForTests();
+  h.laneOrchestrator = null;
   h.getSettingMock.mockReturnValue(undefined);
   h.getSessionMessagesMock.mockReturnValue([]);
   h.getContextWindowMock.mockReturnValue(undefined);
-  h.transactionMock.mockImplementation((fn: (...args: unknown[]) => unknown) => (...args: unknown[]) => fn(...args));
+  h.transactionMock.mockImplementation(
+    (fn: (...args: unknown[]) => unknown) =>
+      (...args: unknown[]) =>
+        fn(...args),
+  );
   h.summarizeLightweightMock.mockResolvedValue(OK_SUMMARY);
 });
-
 
 describe('AC-A5 [INV] — gatilho pos-turno aditivo (SA-3)', () => {
   it('AC-A5: janela desconhecida (getContextWindow undefined) -> gatilho e no-op, sem crash', async () => {
     h.getSettingMock.mockImplementation((key: string) =>
-      key === 'orchestrator_model' ? 'modelo-desconhecido' : undefined);
+      key === 'orchestrator_model' ? 'modelo-desconhecido' : undefined,
+    );
     h.getContextWindowMock.mockReturnValue(undefined);
     h.getSessionMock.mockReturnValue(makeSession({ activeContextTokensEst: 999_999_999 }));
 
@@ -141,15 +153,18 @@ describe('AC-A5 [INV] — gatilho pos-turno aditivo (SA-3)', () => {
     expect(resolveChatCompactionTriggerPercent()).toBe(80);
 
     h.getSettingMock.mockImplementation((key: string) =>
-      key === 'orchestrator_compaction_threshold_percent' ? '90' : undefined);
+      key === 'orchestrator_compaction_threshold_percent' ? '90' : undefined,
+    );
     expect(resolveChatCompactionTriggerPercent()).toBe(90);
 
     h.getSettingMock.mockImplementation((key: string) =>
-      key === 'orchestrator_compaction_threshold_percent' ? '10' : undefined);
+      key === 'orchestrator_compaction_threshold_percent' ? '10' : undefined,
+    );
     expect(resolveChatCompactionTriggerPercent()).toBe(50);
 
     h.getSettingMock.mockImplementation((key: string) =>
-      key === 'orchestrator_compaction_threshold_percent' ? '99' : undefined);
+      key === 'orchestrator_compaction_threshold_percent' ? '99' : undefined,
+    );
     expect(resolveChatCompactionTriggerPercent()).toBe(95);
   });
 
@@ -160,10 +175,7 @@ describe('AC-A5 [INV] — gatilho pos-turno aditivo (SA-3)', () => {
   });
 
   it('AC-A5 [INV]: o hook no orchestrator e UNICO, pos-done, no caminho de SUCESSO (nunca no catch/retry)', () => {
-    const src = fs.readFileSync(
-      fileURLToPath(new URL('../orchestrator.ts', import.meta.url)),
-      'utf8',
-    );
+    const src = fs.readFileSync(fileURLToPath(new URL('../orchestrator.ts', import.meta.url)), 'utf8');
     const callMatches = src.match(/await maybeCompactChatSession\(/g) ?? [];
     expect(callMatches).toHaveLength(1);
 
@@ -177,10 +189,9 @@ describe('AC-A5 [INV] — gatilho pos-turno aditivo (SA-3)', () => {
   });
 });
 
-
 describe('AC-A6 — threshold + exclusao mutua (SA-3/V3)', () => {
   it('AC-A6: abaixo do threshold NAO dispara; acima dispara exatamente 1x', async () => {
-    installKnownModel(200_000); // threshold 160k
+    installKnownModel(200_000);
     h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'oi'), makeMsg(2, 'assistant', 'ola')]);
 
     h.getSessionMock.mockReturnValue(makeSession({ activeContextTokensEst: 159_999 }));
@@ -192,6 +203,20 @@ describe('AC-A6 — threshold + exclusao mutua (SA-3/V3)', () => {
     expect(h.summarizeLightweightMock).toHaveBeenCalledTimes(1);
   });
 
+  it('6.1: sessao em Clear (clearingSessions) NAO dispara a Compactacao mesmo acima do threshold', async () => {
+    const { clearingSessions, markSessionClearing } = await import('../clearing-sessions');
+    installKnownModel(200_000);
+    h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'oi'), makeMsg(2, 'assistant', 'ola')]);
+    h.getSessionMock.mockReturnValue(makeSession({ activeContextTokensEst: 160_000 }));
+    markSessionClearing('s1', 'running', 1);
+    try {
+      await maybeCompactChatSession('s1');
+      expect(h.summarizeLightweightMock).not.toHaveBeenCalled();
+    } finally {
+      clearingSessions.clear();
+    }
+  });
+
   it('toggle chat_auto_compaction_enabled=false: acima do threshold NAO dispara (no-op total)', async () => {
     h.getSettingMock.mockImplementation((key: string) => {
       if (key === 'chat_auto_compaction_enabled') return 'false';
@@ -199,8 +224,7 @@ describe('AC-A6 — threshold + exclusao mutua (SA-3/V3)', () => {
       if (key === 'orchestrator_provider') return 'anthropic';
       return undefined;
     });
-    h.getContextWindowMock.mockImplementation((model: string) =>
-      model === 'modelo-conhecido' ? 200_000 : undefined);
+    h.getContextWindowMock.mockImplementation((model: string) => (model === 'modelo-conhecido' ? 200_000 : undefined));
     h.getSessionMock.mockReturnValue(makeSession({ activeContextTokensEst: 199_000 }));
     h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'oi'), makeMsg(2, 'assistant', 'ola')]);
 
@@ -209,14 +233,14 @@ describe('AC-A6 — threshold + exclusao mutua (SA-3/V3)', () => {
   });
 
   it('toggle com valor "true" (ou ausente): comportamento ligado byte-identico', async () => {
+    installKnownModel(200_000);
     h.getSettingMock.mockImplementation((key: string) => {
       if (key === 'chat_auto_compaction_enabled') return 'true';
       if (key === 'orchestrator_model') return 'modelo-conhecido';
       if (key === 'orchestrator_provider') return 'anthropic';
       return undefined;
     });
-    h.getContextWindowMock.mockImplementation((model: string) =>
-      model === 'modelo-conhecido' ? 200_000 : undefined);
+    h.getContextWindowMock.mockImplementation((model: string) => (model === 'modelo-conhecido' ? 200_000 : undefined));
     h.getSessionMock.mockReturnValue(makeSession({ activeContextTokensEst: 199_000 }));
     h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'oi'), makeMsg(2, 'assistant', 'ola')]);
 
@@ -238,7 +262,10 @@ describe('AC-A6 — threshold + exclusao mutua (SA-3/V3)', () => {
 
     let resolveSummarize!: (v: typeof OK_SUMMARY) => void;
     h.summarizeLightweightMock.mockImplementation(
-      () => new Promise<typeof OK_SUMMARY>((res) => { resolveSummarize = res; }),
+      () =>
+        new Promise<typeof OK_SUMMARY>((res) => {
+          resolveSummarize = res;
+        }),
     );
 
     const events: string[] = [];
@@ -246,7 +273,7 @@ describe('AC-A6 — threshold + exclusao mutua (SA-3/V3)', () => {
 
     await new Promise((r) => setTimeout(r, 0));
     expect(h.summarizeLightweightMock).toHaveBeenCalledTimes(1);
-    expect(events).toEqual([]); // AINDA nao resolveu: a compactacao esta sendo aguardada
+    expect(events).toEqual([]);
     expect(h.setSessionCompactionStateMock).not.toHaveBeenCalled();
 
     events.push('summarize:done');
@@ -264,12 +291,15 @@ describe('AC-A6 — threshold + exclusao mutua (SA-3/V3)', () => {
 
     let resolveSummarize!: (v: typeof OK_SUMMARY) => void;
     h.summarizeLightweightMock.mockImplementation(
-      () => new Promise<typeof OK_SUMMARY>((res) => { resolveSummarize = res; }),
+      () =>
+        new Promise<typeof OK_SUMMARY>((res) => {
+          resolveSummarize = res;
+        }),
     );
 
     const first = maybeCompactChatSession('s1');
     await new Promise((r) => setTimeout(r, 0));
-    const second = maybeCompactChatSession('s1'); // em voo: guarda recusa
+    const second = maybeCompactChatSession('s1');
     await new Promise((r) => setTimeout(r, 0));
 
     expect(h.summarizeLightweightMock).toHaveBeenCalledTimes(1);
@@ -293,14 +323,10 @@ describe('AC-A6 — threshold + exclusao mutua (SA-3/V3)', () => {
   });
 });
 
-
 describe('AC-A7 — compactChatSessionInPlace (SA-4)', () => {
   it('AC-A7: mesma sessao continua (thread SDK nova + seed), messages intacta, contador reseta pro tamanho do seed', async () => {
     h.getSessionMock.mockReturnValue(makeSession());
-    h.getSessionMessagesMock.mockReturnValue([
-      makeMsg(1, 'user', 'oi'),
-      makeMsg(2, 'assistant', 'ola, tudo bem?'),
-    ]);
+    h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'oi'), makeMsg(2, 'assistant', 'ola, tudo bem?')]);
 
     const outcome = await compactChatSessionInPlace('s1');
 
@@ -325,10 +351,12 @@ describe('AC-A7 — compactChatSessionInPlace (SA-4)', () => {
   });
 
   it('delta pela fronteira: summarizeLightweight recebe sinceMessageId + priorSummary; fronteira avanca pra ultima', async () => {
-    h.getSessionMock.mockReturnValue(makeSession({
-      compactedUpToMessageId: 2,
-      rollingSummary: 'resumo anterior',
-    }));
+    h.getSessionMock.mockReturnValue(
+      makeSession({
+        compactedUpToMessageId: 2,
+        rollingSummary: 'resumo anterior',
+      }),
+    );
     h.getSessionMessagesMock.mockReturnValue([
       makeMsg(1, 'user', 'antigo'),
       makeMsg(2, 'assistant', 'antigo tambem'),
@@ -368,7 +396,6 @@ describe('AC-A7 — compactChatSessionInPlace (SA-4)', () => {
   });
 });
 
-
 describe('AC-A9 — falha do summarizer (best-effort + surfacing Pilar B)', () => {
   it('AC-A9: falha ABORTA sem re-seed (contexto intacto) e o outcome carrega COMPACT-EMPTY tipado', async () => {
     h.getSessionMock.mockReturnValue(makeSession());
@@ -407,12 +434,9 @@ describe('AC-A9 — falha do summarizer (best-effort + surfacing Pilar B)', () =
     );
 
     const chunks: StreamChunk[] = [];
-    await expect(
-      maybeCompactChatSession('s1', (c) => chunks.push(c)),
-    ).resolves.toBeUndefined(); // nunca lanca — o proximo turno nao e bloqueado
+    await expect(maybeCompactChatSession('s1', (c) => chunks.push(c))).resolves.toBeUndefined();
 
-    expect(chunks.filter((c) => c.type === 'compacting').map((c) => c.isCompacting))
-      .toEqual([true, false]);
+    expect(chunks.filter((c) => c.type === 'compacting').map((c) => c.isCompacting)).toEqual([true, false]);
     const errorChunks = chunks.filter((c) => c.type !== 'compacting');
     expect(errorChunks).toHaveLength(1);
     expect(errorChunks[0]).toMatchObject({ type: 'error', code: 'COMPACT-EMPTY' });
@@ -425,13 +449,28 @@ describe('AC-A9 — falha do summarizer (best-effort + surfacing Pilar B)', () =
     h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'oi'), makeMsg(2, 'assistant', 'ola')]);
 
     const chunks: StreamChunk[] = [];
-    await maybeCompactChatSession('s1', (c) => chunks.push(c));
+    await maybeCompactChatSession('s1', (c) => chunks.push(c), {
+      model: 'modelo-conhecido',
+      provider: 'anthropic',
+    });
 
     expect(chunks.map((c) => c.type)).toEqual(['compacting', 'compacting', 'context_usage']);
     expect(h.setSessionCompactionStateMock).toHaveBeenCalledTimes(1);
   });
-});
 
+  it('context_usage pos-Compactacao le a lane (colunas da sessao), nunca o setting global', async () => {
+    installKnownModel(200_000);
+    h.getSessionMock.mockReturnValue(makeSession({ activeContextTokensEst: 170_000 }));
+    h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'oi'), makeMsg(2, 'assistant', 'ola')]);
+
+    const chunks: StreamChunk[] = [];
+    await maybeCompactChatSession('s1', (c) => chunks.push(c));
+
+    expect(chunks.map((c) => c.type)).toEqual(['compacting', 'compacting', 'context_usage']);
+    expect(chunks[2]?.contextUsage?.contextWindowTokens).toBe(200_000);
+    expect(h.setSessionCompactionStateMock).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('AC-A9b — delta vazio e no-op (V11)', () => {
   it('AC-A9b: nada alem da fronteira -> no-op (boundary/seed/contador intactos; nenhuma escrita)', async () => {
@@ -460,10 +499,12 @@ describe('AC-A9b — delta vazio e no-op (V11)', () => {
 
   it('AC-A9b: gatilho acima do threshold com delta vazio nao emite erro nem escreve', async () => {
     installKnownModel(200_000);
-    h.getSessionMock.mockReturnValue(makeSession({
-      activeContextTokensEst: 170_000,
-      compactedUpToMessageId: 2,
-    }));
+    h.getSessionMock.mockReturnValue(
+      makeSession({
+        activeContextTokensEst: 170_000,
+        compactedUpToMessageId: 2,
+      }),
+    );
     h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'a'), makeMsg(2, 'assistant', 'b')]);
 
     const chunks: StreamChunk[] = [];
@@ -473,7 +514,6 @@ describe('AC-A9b — delta vazio e no-op (V11)', () => {
     expect(h.setSessionCompactionStateMock).not.toHaveBeenCalled();
   });
 });
-
 
 describe('buildChatCompactionSeed (D2)', () => {
   it('header + turnos verbatim em ordem; teto DURO <= target; mais recente sempre presente', () => {
@@ -506,8 +546,7 @@ describe('buildChatCompactionSeed (D2)', () => {
   it('target D2: default flat 50k lido do setting chat_compaction_target_tokens', async () => {
     expect(DEFAULT_CHAT_COMPACTION_TARGET_TOKENS).toBe(50_000);
 
-    h.getSettingMock.mockImplementation((key: string) =>
-      key === 'chat_compaction_target_tokens' ? '300' : undefined);
+    h.getSettingMock.mockImplementation((key: string) => (key === 'chat_compaction_target_tokens' ? '300' : undefined));
     h.getSessionMock.mockReturnValue(makeSession());
     h.getSessionMessagesMock.mockReturnValue([
       makeMsg(1, 'user', 'u'.repeat(10_000)),
@@ -521,7 +560,6 @@ describe('buildChatCompactionSeed (D2)', () => {
   });
 });
 
-
 describe('D13 — getChatCompactionThreshold(turnModel, sessionId) com teto absoluto em dw-drive-*', () => {
   it('sessao dw-drive-*: min(percentual da janela, 80.000 default); sessao normal segue o percentual', () => {
     installKnownModel(1_000_000);
@@ -531,6 +569,7 @@ describe('D13 — getChatCompactionThreshold(turnModel, sessionId) com teto abso
   });
 
   it('setting dynamic_workflow_drive_compaction_tokens valida vence o default; invalida cai no default', () => {
+    installKnownModel(1_000_000);
     const withSetting = (value: string | undefined) =>
       h.getSettingMock.mockImplementation((key: string) => {
         if (key === 'orchestrator_model') return 'modelo-conhecido';
@@ -539,7 +578,8 @@ describe('D13 — getChatCompactionThreshold(turnModel, sessionId) com teto abso
         return undefined;
       });
     h.getContextWindowMock.mockImplementation((model: string) =>
-      model === 'modelo-conhecido' ? 1_000_000 : undefined);
+      model === 'modelo-conhecido' ? 1_000_000 : undefined,
+    );
 
     withSetting('50000');
     expect(getChatCompactionThreshold(undefined, 'dw-drive-x')).toBe(50_000);
@@ -558,7 +598,8 @@ describe('D13 — getChatCompactionThreshold(turnModel, sessionId) com teto abso
 
   it('janela desconhecida continua desabilitando o gatilho tambem em dw-drive-*', () => {
     h.getSettingMock.mockImplementation((key: string) =>
-      key === 'orchestrator_model' ? 'modelo-desconhecido' : undefined);
+      key === 'orchestrator_model' ? 'modelo-desconhecido' : undefined,
+    );
     h.getContextWindowMock.mockReturnValue(undefined);
     expect(getChatCompactionThreshold(undefined, 'dw-drive-x')).toBeUndefined();
   });

@@ -1,8 +1,6 @@
-
 import { describe, it, expect } from 'vitest';
 import { parsePlannerOutput } from '../harness-planner';
 import type { SprintsJson } from '../harness-planner';
-
 
 function makeValidSprintsJson(overrides: Partial<SprintsJson> = {}): SprintsJson {
   return {
@@ -54,7 +52,6 @@ function makeValidSprintsJson(overrides: Partial<SprintsJson> = {}): SprintsJson
 const VALID_CODER_IDS = new Set(['backend-developer', 'frontend-developer', 'electron-pro']);
 const VALID_EVALUATOR_IDS = new Set(['harness-evaluator']);
 
-
 describe('parsePlannerOutput: wrapper unwrapping', () => {
   it('parses direct valid JSON without wrapper', () => {
     const raw = JSON.stringify(makeValidSprintsJson());
@@ -105,7 +102,6 @@ describe('parsePlannerOutput: wrapper unwrapping', () => {
     expect(() => parsePlannerOutput(wrapped)).toThrow(/Missing "project"/);
   });
 });
-
 
 describe('parsePlannerOutput: agent ID validation', () => {
   it('passes when coder_agent_id is valid', () => {
@@ -192,7 +188,7 @@ describe('parsePlannerOutput: agent ID validation', () => {
 
   it('parses with valid IDs and fixes metadata counts', () => {
     const json = makeValidSprintsJson();
-    json.metadata.total_sprints = 99; // Wrong count
+    json.metadata.total_sprints = 99;
     const raw = JSON.stringify(json);
     const result = parsePlannerOutput(raw, undefined, {
       coderIds: VALID_CODER_IDS,
@@ -202,7 +198,6 @@ describe('parsePlannerOutput: agent ID validation', () => {
     expect(result.metadata.total_features).toBe(1);
   });
 });
-
 
 describe('parsePlannerOutput: schema validation', () => {
   it('throws when "project" is missing', () => {

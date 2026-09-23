@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -12,6 +11,10 @@ vi.mock('../logger', () => ({
 
 const getActiveChatSessionMock = vi.fn<() => { id: string } | null>(() => ({
   id: 'chat-1',
+}));
+vi.mock('../in-flight-desktop-session', () => ({
+  getInFlightDesktopSession: () => getActiveChatSessionMock()?.id ?? null,
+  setInFlightDesktopSession: () => {},
 }));
 vi.mock('../db', () => ({
   getAllAgents: vi.fn(() => []),
@@ -34,6 +37,7 @@ const pipelineInspectCore = vi.fn(() => ({ ok: true, value: { id: 'p1' } }));
 const pipelineReplyCore = vi.fn(async () => ({ ok: true, value: { id: 'p1' } }));
 const pipelineEscalateCore = vi.fn(() => ({ ok: true, value: { id: 'p1' } }));
 vi.mock('../pipeline-control-core', () => ({
+  assertPipeVisibleToLane: vi.fn(() => null),
   isPipelineWriteAction: (a: string) =>
     new Set([
       'pipeline_create',
@@ -70,6 +74,7 @@ const agentCtx: JsonRpcContext = {
   connection: { authenticatedHelper: true, serverId: 'lionclaw-agents', connectionId: 'pipeline-caller-agent-test' },
 };
 let activeTurn: ActiveChatTurnFixture;
+const activeBinding = () => ({ sessionId: activeTurn.sessionId, turnId: activeTurn.turnId });
 
 beforeEach(() => {
   activeTurn = bindActiveDesktopTurn();
@@ -82,7 +87,7 @@ afterEach(() => activeTurn.dispose());
 
 describe('FX3 / TOOLS-2 — gate de caller (orquestrador-only)', () => {
   it('atende pipeline_list quando ha chat ativo e nenhum subagente em curso', async () => {
-    const res = await dispatch(ctx, { method: 'pipeline_list', id: 1 });
+    const res = await dispatch(ctx, { method: 'pipeline_list', id: 1, params: activeBinding() });
     expect(res.error).toBeUndefined();
     expect(res.result).toEqual(['ok']);
     expect(pipelineListCore).toHaveBeenCalledTimes(1);
@@ -92,7 +97,7 @@ describe('FX3 / TOOLS-2 — gate de caller (orquestrador-only)', () => {
     const res = await dispatch(ctx, {
       method: 'pipeline_reply',
       id: 6,
-      params: { id: 'p1', message: 'segue' },
+      params: { ...activeBinding(), id: 'p1', message: 'segue' },
     });
     expect(res.error).toBeUndefined();
     expect(pipelineReplyCore).toHaveBeenCalledTimes(1);
@@ -102,18 +107,18 @@ describe('FX3 / TOOLS-2 — gate de caller (orquestrador-only)', () => {
     const res = await dispatch(ctx, {
       method: 'pipeline_escalate',
       id: 7,
-      params: { id: 'p1', message: 'preciso do seu OK no PRD' },
+      params: { ...activeBinding(), id: 'p1', message: 'preciso do seu OK no PRD' },
     });
     expect(res.error).toBeUndefined();
     expect(pipelineEscalateCore).toHaveBeenCalledTimes(1);
   });
 
   it('recusa pipeline_escalate (WRITE) quando NAO ha sessao de chat ativa (subagente) - C-02', async () => {
-    getActiveChatSessionMock.mockReturnValue(null);
+    activeTurn.dispose();
     const res = await dispatch(ctx, {
       method: 'pipeline_escalate',
       id: 8,
-      params: { id: 'p1', message: 'sub tentou escalar' },
+      params: { ...activeBinding(), id: 'p1', message: 'sub tentou escalar' },
     });
     expect(res.result).toBeUndefined();
     expect(res.error).toBeDefined();
@@ -125,15 +130,15 @@ describe('FX3 / TOOLS-2 — gate de caller (orquestrador-only)', () => {
     const res = await dispatch(ctx, {
       method: 'pipeline_inspect',
       id: 2,
-      params: { id: 'p1' },
+      params: { ...activeBinding(), id: 'p1' },
     });
     expect(res.error).toBeUndefined();
     expect(pipelineInspectCore).toHaveBeenCalledTimes(1);
   });
 
   it('recusa pipeline_list (READ) quando NAO ha sessao de chat ativa', async () => {
-    getActiveChatSessionMock.mockReturnValue(null);
-    const res = await dispatch(ctx, { method: 'pipeline_list', id: 3 });
+    activeTurn.dispose();
+    const res = await dispatch(ctx, { method: 'pipeline_list', id: 3, params: activeBinding() });
     expect(res.result).toBeUndefined();
     expect(res.error).toBeDefined();
     expect(res.error?.message).toMatch(/orquestrador/i);
@@ -141,11 +146,11 @@ describe('FX3 / TOOLS-2 — gate de caller (orquestrador-only)', () => {
   });
 
   it('recusa pipeline_reply (WRITE) quando NAO ha sessao de chat ativa', async () => {
-    getActiveChatSessionMock.mockReturnValue(null);
+    activeTurn.dispose();
     const res = await dispatch(ctx, {
       method: 'pipeline_reply',
       id: 4,
-      params: { id: 'p1', message: 'oi' },
+      params: { ...activeBinding(), id: 'p1', message: 'oi' },
     });
     expect(res.error).toBeDefined();
     expect(pipelineReplyCore).not.toHaveBeenCalled();
@@ -154,18 +159,22 @@ describe('FX3 / TOOLS-2 — gate de caller (orquestrador-only)', () => {
   it('recusa pipeline_* (read E write) enquanto ha um dispatch de subagente EM CURSO', async () => {
     const innerResults: Array<{ method: string; refused: boolean }> = [];
     lionAgentDispatchMock.mockImplementation(async () => {
-      const listRes = await dispatch(ctx, { method: 'pipeline_list', id: 10 });
+      const listRes = await dispatch(ctx, { method: 'pipeline_list', id: 10, params: activeBinding() });
       innerResults.push({ method: 'pipeline_list', refused: !!listRes.error });
       const replyRes = await dispatch(ctx, {
         method: 'pipeline_reply',
         id: 11,
-        params: { id: 'p1', message: 'sub tentou' },
+        params: { ...activeBinding(), id: 'p1', message: 'sub tentou' },
       });
       innerResults.push({ method: 'pipeline_reply', refused: !!replyRes.error });
       return { ok: true, summary: 'done' };
     });
 
-    await handleCallAgent(agentCtx, { agent_id: 'sub-1', task: 'algo' });
+    await handleCallAgent(agentCtx, {
+      agent_id: 'sub-1',
+      task: 'algo',
+      binding: { lane: 'desktop', ...activeBinding() },
+    });
 
     expect(innerResults).toEqual([
       { method: 'pipeline_list', refused: true },
@@ -176,8 +185,12 @@ describe('FX3 / TOOLS-2 — gate de caller (orquestrador-only)', () => {
   });
 
   it('libera o gate apos o subagente terminar (orquestrador volta a poder dirigir)', async () => {
-    await handleCallAgent(agentCtx, { agent_id: 'sub-1', task: 'algo' });
-    const res = await dispatch(ctx, { method: 'pipeline_list', id: 20 });
+    await handleCallAgent(agentCtx, {
+      agent_id: 'sub-1',
+      task: 'algo',
+      binding: { lane: 'desktop', ...activeBinding() },
+    });
+    const res = await dispatch(ctx, { method: 'pipeline_list', id: 20, params: activeBinding() });
     expect(res.error).toBeUndefined();
     expect(pipelineListCore).toHaveBeenCalledTimes(1);
   });

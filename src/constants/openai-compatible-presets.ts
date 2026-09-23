@@ -1,10 +1,9 @@
-
 import type { OpenAiCompatiblePreset } from '../types';
 
 export interface OpenAiCompatiblePresetEntry {
   id: OpenAiCompatiblePreset;
   displayName: string;
-  baseUrl: string; // empty string for 'custom'
+  baseUrl: string;
   defaultModel?: string;
   models?: OpenAiCompatibleModelEntry[];
 }
@@ -194,8 +193,6 @@ export const OPENAI_COMPATIBLE_PRESETS: OpenAiCompatiblePresetEntry[] = [
   },
 ];
 
-export function getOpenAiCompatiblePreset(
-  id: OpenAiCompatiblePreset,
-): OpenAiCompatiblePresetEntry | undefined {
-  return OPENAI_COMPATIBLE_PRESETS.find(p => p.id === id);
+export function getOpenAiCompatiblePreset(id: OpenAiCompatiblePreset): OpenAiCompatiblePresetEntry | undefined {
+  return OPENAI_COMPATIBLE_PRESETS.find((p) => p.id === id);
 }

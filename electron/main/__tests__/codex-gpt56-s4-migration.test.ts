@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import { applyMigrationV134 } from '../db-migrations/v134-gpt56-codex-default';

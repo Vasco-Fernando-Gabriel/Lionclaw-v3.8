@@ -1,4 +1,3 @@
-
 import { emitIPC } from '../pipeline-shared/ipc-emitter';
 import { getHarnessSprints } from '../db';
 import { recordPipelineTimelineEvent } from './timeline-collector';

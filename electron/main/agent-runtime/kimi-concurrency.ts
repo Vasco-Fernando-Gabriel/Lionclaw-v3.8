@@ -1,4 +1,3 @@
-
 import { createLogger } from '../logger';
 
 const logger = createLogger('kimi-concurrency');
@@ -55,7 +54,6 @@ export function isKimiQuotaFailure(err: unknown): boolean {
   );
 }
 
-
 export interface KimiSlotRequest {
   signal?: AbortSignal;
   role?: 'parent' | 'child' | 'standalone';
@@ -101,24 +99,26 @@ function canAdmit(state: LeaseState): boolean {
 function saturatedByOwnAncestry(state: LeaseState): boolean {
   const executionDepth = state.executionDepth;
   if (
-    state.role !== 'child'
-    || state.rootExecutionId === undefined
-    || executionDepth === undefined
-    || activeLeases.size < KIMI_MAX_CONCURRENCY
-  ) return false;
-  return [...activeLeases].some((lease) => (
-    lease.rootExecutionId === state.rootExecutionId
-    && lease.executionDepth !== undefined
-    && lease.executionDepth < executionDepth
-    && lease.toolBearing
-  ));
+    state.role !== 'child' ||
+    state.rootExecutionId === undefined ||
+    executionDepth === undefined ||
+    activeLeases.size < KIMI_MAX_CONCURRENCY
+  )
+    return false;
+  return [...activeLeases].some(
+    (lease) =>
+      lease.rootExecutionId === state.rootExecutionId &&
+      lease.executionDepth !== undefined &&
+      lease.executionDepth < executionDepth &&
+      lease.toolBearing,
+  );
 }
 
 function makeRelease(state: LeaseState): () => void {
   activeLeases.add(state);
   let released = false;
   return () => {
-    if (released) return; // idempotent
+    if (released) return;
     released = true;
     activeLeases.delete(state);
     handOffToNextWaiter();
@@ -142,10 +142,10 @@ function handOffToNextWaiter(): void {
 }
 
 export function acquireKimiSlot(request: KimiSlotRequest | AbortSignal = {}): Promise<() => void> {
-  const options: KimiSlotRequest = typeof (request as AbortSignal).aborted === 'boolean'
-    && !('signal' in (request as KimiSlotRequest))
-    ? { signal: request as AbortSignal }
-    : request as KimiSlotRequest;
+  const options: KimiSlotRequest =
+    typeof (request as AbortSignal).aborted === 'boolean' && !('signal' in (request as KimiSlotRequest))
+      ? { signal: request as AbortSignal }
+      : (request as KimiSlotRequest);
   const signal = options.signal;
   const state: LeaseState = {
     role: options.role ?? 'standalone',
@@ -157,9 +157,11 @@ export function acquireKimiSlot(request: KimiSlotRequest | AbortSignal = {}): Pr
     return Promise.reject(new KimiConcurrencyError('kimi slot acquisition aborted'));
   }
   if (saturatedByOwnAncestry(state)) {
-    return Promise.reject(new KimiConcurrencyError(
-      'Kimi nested subagent cannot acquire a slot while its own tool-bearing ancestry saturates the pool.',
-    ));
+    return Promise.reject(
+      new KimiConcurrencyError(
+        'Kimi nested subagent cannot acquire a slot while its own tool-bearing ancestry saturates the pool.',
+      ),
+    );
   }
   if (canAdmit(state)) return Promise.resolve(makeRelease(state));
 

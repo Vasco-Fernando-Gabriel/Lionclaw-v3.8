@@ -102,18 +102,21 @@ export function ExecutionView({ projectId }: ExecutionViewProps) {
 
   useEffect(() => {
     if (currentSprint && coderStream.length === 0 && evaluatorStream.length === 0) {
-      window.lionclaw.harness.getStreamLog(projectId, currentSprint.id).then((logs) => {
-        if (logs.coder.length > 0) {
-          for (const entry of logs.coder) {
-            appendStream('coder', entry);
+      window.lionclaw.harness
+        .getStreamLog(projectId, currentSprint.id)
+        .then((logs) => {
+          if (logs.coder.length > 0) {
+            for (const entry of logs.coder) {
+              appendStream('coder', entry);
+            }
           }
-        }
-        if (logs.evaluator.length > 0) {
-          for (const entry of logs.evaluator) {
-            appendStream('evaluator', entry);
+          if (logs.evaluator.length > 0) {
+            for (const entry of logs.evaluator) {
+              appendStream('evaluator', entry);
+            }
           }
-        }
-      }).catch(() => {});
+        })
+        .catch(() => {});
     }
   }, [currentSprint, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -165,9 +168,7 @@ export function ExecutionView({ projectId }: ExecutionViewProps) {
               <span className="text-[10px] text-zinc-600">
                 rodada {currentSprint.roundsUsed}/{currentSprint.maxRounds}
               </span>
-              {isRunning && (
-                <span className="font-mono text-xs text-amber-400">{formatElapsed(elapsed)}</span>
-              )}
+              {isRunning && <span className="font-mono text-xs text-amber-400">{formatElapsed(elapsed)}</span>}
             </div>
           ) : (
             <span className="text-xs text-zinc-600 italic">Nenhum sprint em execucao</span>
@@ -180,11 +181,7 @@ export function ExecutionView({ projectId }: ExecutionViewProps) {
             disabled={actionPending !== null || !isRunning}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {actionPending === 'Pausar' ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : (
-              <Pause size={12} />
-            )}
+            {actionPending === 'Pausar' ? <Loader2 size={12} className="animate-spin" /> : <Pause size={12} />}
             Pausar
           </button>
 
@@ -193,11 +190,7 @@ export function ExecutionView({ projectId }: ExecutionViewProps) {
             disabled={actionPending !== null}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-red-900 text-red-400 hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {actionPending === 'Abortar' ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : (
-              <StopCircle size={12} />
-            )}
+            {actionPending === 'Abortar' ? <Loader2 size={12} className="animate-spin" /> : <StopCircle size={12} />}
             Abortar
           </button>
         </div>
@@ -211,23 +204,13 @@ export function ExecutionView({ projectId }: ExecutionViewProps) {
 
       {/* Split panels */}
       <div className="grid grid-cols-2 gap-2 flex-1 min-h-0">
-        <AgentStreamPanel
-          label="Coder"
-          stream={coderStream}
-          isActive={isCoderActive}
-        />
-        <AgentStreamPanel
-          label="Avaliador"
-          stream={evaluatorStream}
-          isActive={isEvaluatorActive}
-        />
+        <AgentStreamPanel label="Coder" stream={coderStream} isActive={isCoderActive} />
+        <AgentStreamPanel label="Avaliador" stream={evaluatorStream} isActive={isEvaluatorActive} />
       </div>
 
       {/* Round history */}
       <div className="shrink-0 border border-zinc-800 rounded-lg bg-zinc-900/60 px-3 py-2">
-        <p className="text-[10px] text-zinc-500 uppercase tracking-wide font-semibold mb-1">
-          Historico de rodadas
-        </p>
+        <p className="text-[10px] text-zinc-500 uppercase tracking-wide font-semibold mb-1">Historico de rodadas</p>
         <RoundHistory projectId={projectId} />
       </div>
     </div>

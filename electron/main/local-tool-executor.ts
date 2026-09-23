@@ -9,16 +9,7 @@ const logger = createLogger('local-tool-executor');
 
 const BASH_TIMEOUT_MS = 30_000;
 
-const BASH_BLOCKED_TERMS = [
-  'rm -rf',
-  'rm -r',
-  'sudo',
-  'mkfs',
-  'dd if=',
-  ':(){',
-  'chmod -R 777',
-  '> /dev/sd',
-] as const;
+const BASH_BLOCKED_TERMS = ['rm -rf', 'rm -r', 'sudo', 'mkfs', 'dd if=', ':(){', 'chmod -R 777', '> /dev/sd'] as const;
 
 export interface LocalToolResult {
   result: string;
@@ -29,18 +20,12 @@ type ToolImpl = (args: Record<string, unknown>, cwd: string) => Promise<LocalToo
 
 function validatePathInCwd(targetPath: string, cwd: string): LocalToolResult | null {
   const cwdResolved = path.resolve(cwd);
-  const targetResolved = path.isAbsolute(targetPath)
-    ? path.resolve(targetPath)
-    : path.resolve(cwdResolved, targetPath);
+  const targetResolved = path.isAbsolute(targetPath) ? path.resolve(targetPath) : path.resolve(cwdResolved, targetPath);
 
-  const inside = targetResolved === cwdResolved
-    || targetResolved.startsWith(cwdResolved + path.sep);
+  const inside = targetResolved === cwdResolved || targetResolved.startsWith(cwdResolved + path.sep);
 
   if (!inside) {
-    logger.warn(
-      { targetPath, targetResolved, cwd: cwdResolved },
-      'Tool blocked: path outside project root',
-    );
+    logger.warn({ targetPath, targetResolved, cwd: cwdResolved }, 'Tool blocked: path outside project root');
     return {
       result:
         `Error: path "${targetPath}" esta fora da raiz do projeto.\n` +
@@ -52,7 +37,6 @@ function validatePathInCwd(targetPath: string, cwd: string): LocalToolResult | n
 
   return null;
 }
-
 
 async function execRead(args: Record<string, unknown>, cwd: string): Promise<LocalToolResult> {
   const filePath = args.file_path as string | undefined;
@@ -223,7 +207,6 @@ async function execBash(args: Record<string, unknown>, cwd: string): Promise<Loc
   }
 }
 
-
 const TOOL_MAP: Record<string, ToolImpl> = {
   Read: (args, cwd) => execRead(args, cwd),
   Write: (args, cwd) => execWrite(args, cwd),
@@ -283,5 +266,7 @@ export async function executeToolDispatch(
     return callMCPTool(mcpClient, toolName, args);
   }
 
-  throw new Error(`executeToolDispatch: tool desconhecida "${toolName}". Builtin disponiveis: ${SUPPORTED_LOCAL_TOOLS.join(', ')}`);
+  throw new Error(
+    `executeToolDispatch: tool desconhecida "${toolName}". Builtin disponiveis: ${SUPPORTED_LOCAL_TOOLS.join(', ')}`,
+  );
 }

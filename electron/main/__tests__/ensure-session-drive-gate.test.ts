@@ -1,7 +1,5 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { IpcContext } from '../ipc/context';
-
 
 const ipcRegistry = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, ...args: unknown[]) => unknown>(),
@@ -9,10 +7,7 @@ const ipcRegistry = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   ipcMain: {
-    handle: (
-      channel: string,
-      fn: (event: unknown, ...args: unknown[]) => unknown,
-    ) => {
+    handle: (channel: string, fn: (event: unknown, ...args: unknown[]) => unknown) => {
       ipcRegistry.handlers.set(channel, fn);
     },
   },
@@ -58,7 +53,6 @@ vi.mock('../open-design/bootstrap', () => ({
   ensureSession: (id: string) => ensureSessionMock(id),
 }));
 
-
 import { registerOpenDesignHandlers } from '../ipc/open-design';
 
 const ctx: IpcContext = {
@@ -81,7 +75,6 @@ beforeEach(() => {
   isDriveEngagedMock.mockReturnValue(false);
   registerOpenDesignHandlers(ctx);
 });
-
 
 describe('open-design:ensure-session - gate blocked revertido (A2)', () => {
   it('A2: drive engajado + start pendente -> ensureSession roda, NUNCA { blocked }', async () => {
@@ -113,7 +106,6 @@ describe('open-design:ensure-session - gate blocked revertido (A2)', () => {
     expect(res).toMatchObject({ error: expect.stringContaining('daemon indisponivel') });
   });
 });
-
 
 describe('open-design:get-start-status - predicados canonicos do main (A2-bis)', () => {
   it('A-AC3b: drive engajado + start pendente -> { driveEngaged: true, startPending: true }', async () => {

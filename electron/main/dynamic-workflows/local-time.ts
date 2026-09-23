@@ -1,4 +1,3 @@
-
 const SQLITE_UTC_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/;
 
 export function parseUtcTimestamp(value: unknown): Date | null {

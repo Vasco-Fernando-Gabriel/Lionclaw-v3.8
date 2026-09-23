@@ -7,9 +7,10 @@ beforeAll(() => {
         getSessions: async () => [],
         getMessages: async () => [],
         deleteSession: async () => ({ success: false, error: 'db is locked' }),
-        compactSession: async () => ({
-          success: false,
-          reason: 'compaction_failed',
+        listOpenSessions: async () => [],
+        clear: async () => ({
+          ok: false,
+          code: 'COMPACT-SUMMARY-FAILED',
           error: 'summarizer returned empty response',
         }),
       },
@@ -29,7 +30,11 @@ beforeAll(() => {
 async function getStores() {
   const chat = await import('@/stores/chat-store');
   const toast = await import('@/stores/error-toast-store');
-  return { useChatStore: chat.useChatStore, useErrorToastStore: toast.useErrorToastStore };
+  return {
+    useChatStore: chat.useChatStore,
+    createThreadState: chat.createThreadState,
+    useErrorToastStore: toast.useErrorToastStore,
+  };
 }
 
 function flush(): Promise<void> {
@@ -37,21 +42,12 @@ function flush(): Promise<void> {
 }
 
 beforeEach(async () => {
-  const { useChatStore, useErrorToastStore } = await getStores();
+  const { useChatStore, useErrorToastStore, createThreadState } = await getStores();
   useErrorToastStore.getState().clearToasts();
   useChatStore.setState({
     currentSessionId: 's1',
-    messages: [],
-    streamingContent: '',
-    isStreaming: false,
-    streamTurnStartedAt: null,
-    submittedUserTurnCount: 0,
-    assistantTurnCount: 0,
-    assistantTurnEvents: [],
-    lastAssistantTurnEvent: null,
-    toolCalls: [],
-    artifacts: [],
-    activities: [],
+    threads: { s1: createThreadState({ hydrated: true }) },
+    streamingSessionIds: new Set(),
   });
 });
 
@@ -68,75 +64,85 @@ describe('AC-B8: falhas de deleteSession/compactSession no sink universal', () =
     expect(toasts[0].source).toBe('chat');
   });
 
-  it('AC-B8: compactSession que falha empurra toast no sink universal (antes: alert() no Sidebar)', async () => {
+  it('AC-B8: clearLane recusado pelo main empurra toast com a causa (D3, sem silencio)', async () => {
     const { useChatStore, useErrorToastStore } = await getStores();
 
-    const result = await useChatStore.getState().compactSession();
-    expect(result.success).toBe(false);
+    const result = await useChatStore.getState().clearLane('s1');
+    expect(result.ok).toBe(false);
 
     const toasts = useErrorToastStore.getState().toasts;
     expect(toasts).toHaveLength(1);
-    expect(toasts[0].title).toBe('Compactacao falhou');
+    expect(toasts[0].title).toBe('Clear recusado: sumarizador falhou');
     expect(toasts[0].code).toBe('LLM-EMPTY');
     expect(toasts[0].detail).toBe('summarizer returned empty response');
+    expect(toasts[0].source).toBe('chat');
   });
 
-  it('AC-B8: compactSession que LANCA (erro de IPC) tambem aparece no sink universal', async () => {
+  it('AC-B8: clearLane que LANCA (erro de IPC) tambem aparece no sink universal', async () => {
     const { useChatStore, useErrorToastStore } = await getStores();
     const w = (global as unknown as { window: { lionclaw: { chat: Record<string, unknown> } } }).window;
-    const original = w.lionclaw.chat.compactSession;
-    w.lionclaw.chat.compactSession = async () => {
+    const original = w.lionclaw.chat.clear;
+    w.lionclaw.chat.clear = async () => {
       throw new Error('IPC channel closed');
     };
     try {
-      const result = await useChatStore.getState().compactSession();
-      expect(result.success).toBe(false);
-      expect(result.reason).toBe('ipc_error');
+      const result = await useChatStore.getState().clearLane('s1');
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.code).toBe('clear_failed');
 
       const toasts = useErrorToastStore.getState().toasts;
       expect(toasts).toHaveLength(1);
-      expect(toasts[0].title).toBe('Compactacao falhou');
+      expect(toasts[0].title).toBe('Clear falhou');
     } finally {
-      w.lionclaw.chat.compactSession = original;
+      w.lionclaw.chat.clear = original;
     }
   });
 });
 
 describe('AC-B9b: turno vazio por falha de provider (chunk LLM-EMPTY do SB-2)', () => {
   it('AC-B9b: chunk error LLM-EMPTY encerra o turno com o fallback e NAO cria bolha muda', async () => {
-    const { useChatStore } = await getStores();
-    useChatStore.setState({ isStreaming: true, submittedUserTurnCount: 1, assistantTurnCount: 0 });
+    const { useChatStore, createThreadState } = await getStores();
+    useChatStore.setState({
+      threads: { s1: createThreadState({ isStreaming: true, submittedUserTurnCount: 1, assistantTurnCount: 0 }) },
+    });
 
     useChatStore.getState().handleStreamChunk({
       type: 'error',
+      sessionId: 's1',
       code: 'LLM-EMPTY',
       error: 'O agente terminou sem resposta.',
     });
 
-    const state = useChatStore.getState();
-    expect(state.isStreaming).toBe(false);
-    expect(state.lastAssistantTurnEvent?.status).toBe('error');
-    expect(state.lastAssistantTurnEvent?.error).toBe('O agente terminou sem resposta.');
-    expect(state.messages).toHaveLength(0);
+    const thread = useChatStore.getState().threads.s1;
+    expect(thread.isStreaming).toBe(false);
+    expect(thread.lastAssistantTurnEvent?.status).toBe('error');
+    expect(thread.lastAssistantTurnEvent?.error).toBe('O agente terminou sem resposta.');
+    expect(thread.messages).toHaveLength(0);
+    expect(thread.lastError?.code).toBe('LLM-EMPTY');
   });
 });
 
 describe('AC-B9c: turno vazio LEGITIMO (empty-ok) nao gera alarme falso', () => {
   it('AC-B9c: done sem chunk de erro NAO registra erro nem empurra toast', async () => {
-    const { useChatStore, useErrorToastStore } = await getStores();
+    const { useChatStore, useErrorToastStore, createThreadState } = await getStores();
     useChatStore.setState({
-      isStreaming: true,
-      streamingContent: '',
-      submittedUserTurnCount: 1,
-      assistantTurnCount: 0,
+      threads: {
+        s1: createThreadState({
+          isStreaming: true,
+          streamingContent: '',
+          submittedUserTurnCount: 1,
+          assistantTurnCount: 0,
+        }),
+      },
     });
 
     useChatStore.getState().handleStreamChunk({ type: 'done', sessionId: 's1' });
     await flush();
 
-    const state = useChatStore.getState();
-    expect(state.isStreaming).toBe(false);
-    expect(state.lastAssistantTurnEvent?.status ?? 'none').not.toBe('error');
+    const thread = useChatStore.getState().threads.s1;
+    expect(thread.isStreaming).toBe(false);
+    expect(thread.lastAssistantTurnEvent?.status ?? 'none').not.toBe('error');
+    expect(thread.lastError).toBeNull();
     expect(useErrorToastStore.getState().toasts).toHaveLength(0);
   });
 });

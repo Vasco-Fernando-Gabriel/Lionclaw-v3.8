@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -8,6 +7,10 @@ vi.mock('../logger', () => ({
 const getActiveChatSessionMock = vi.fn<() => { id: string } | null>(() => null);
 const getSessionActiveRepositoryMock = vi.fn((_sessionId: string) => null as unknown);
 const insertRepoGraphTurnUsageMock = vi.fn();
+vi.mock('../in-flight-desktop-session', () => ({
+  getInFlightDesktopSession: () => getActiveChatSessionMock()?.id ?? null,
+  setInFlightDesktopSession: () => {},
+}));
 vi.mock('../db', () => ({
   getAllAgents: vi.fn(() => []),
   insertAuditEntry: vi.fn(),
@@ -82,22 +85,22 @@ beforeEach(() => {
 describe('AC-1 — prompt sem secao repo-graph (inspecao)', () => {
   it('sem RepoChatContext do turno a secao e vazia e o prompt fica byte-identico', () => {
     const base = '# System prompt do orquestrador\n\nRegras...';
-    expect(getRepoGraphPromptSection()).toBe('');
-    expect(appendRepoGraphSection(base)).toBe(base);
+    expect(getRepoGraphPromptSection('sess-1')).toBe('');
+    expect(appendRepoGraphSection(base, 'sess-1')).toBe(base);
     for (const tool of SEVEN_TOOLS) {
-      expect(appendRepoGraphSection(base)).not.toContain(tool);
+      expect(appendRepoGraphSection(base, 'sess-1')).not.toContain(tool);
     }
   });
 
   it('COM repo ativo (ctx setado pelo hook F6) a secao entra com as 7 tools pelo nome exato', () => {
     setRepoGraphTurnSession('sess-1', 'claude-sdk');
-    setRepoGraphTurnContext({
+    setRepoGraphTurnContext('sess-1', {
       repositoryId: 'repo-1',
       canonicalRootPath: '/tmp/fake-repo',
       status: 'ready',
       statsResumo: '12 arquivos, 80 simbolos',
     });
-    const prompt = appendRepoGraphSection('# Base');
+    const prompt = appendRepoGraphSection('# Base', 'sess-1');
     expect(prompt.startsWith('# Base')).toBe(true);
     expect(prompt).toContain('/tmp/fake-repo');
     for (const tool of SEVEN_TOOLS) {
@@ -109,13 +112,13 @@ describe('AC-1 — prompt sem secao repo-graph (inspecao)', () => {
 
   it('graph stale tambem recebe a secao (stale NUNCA bloqueia, 3.5)', () => {
     setRepoGraphTurnSession('sess-1');
-    setRepoGraphTurnContext({
+    setRepoGraphTurnContext('sess-1', {
       repositoryId: 'repo-1',
       canonicalRootPath: '/tmp/fake-repo',
       status: 'stale',
       statsResumo: null,
     });
-    const section = getRepoGraphPromptSection();
+    const section = getRepoGraphPromptSection('sess-1');
     expect(section).not.toBe('');
     expect(section).toContain('STALE');
   });
@@ -134,9 +137,7 @@ describe('AC-1 — prompt sem secao repo-graph (inspecao)', () => {
     expect(summarizeRepoGraphStats(null)).toBeNull();
     expect(summarizeRepoGraphStats('nao-json')).toBeNull();
     expect(summarizeRepoGraphStats('{}')).toBeNull();
-    expect(summarizeRepoGraphStats('{"files":3,"nodes":10,"edges":20}')).toBe(
-      '3 arquivos, 10 simbolos, 20 relacoes',
-    );
+    expect(summarizeRepoGraphStats('{"files":3,"nodes":10,"edges":20}')).toBe('3 arquivos, 10 simbolos, 20 relacoes');
   });
 });
 
@@ -148,7 +149,7 @@ describe('AC-1 — zero chunk e turn_usage vazia (3 turnos simulados)', () => {
         const res = await dispatch(ctx, {
           method: 'repo_graph_search',
           id: turno,
-          params: { term: 'executeQuery' },
+          params: { sessionId: 'sess-sem-repo', term: 'executeQuery' },
         });
         expect(res.error).toBeUndefined();
         expect(res.result).toEqual({
@@ -168,10 +169,10 @@ describe('AC-1 — zero chunk e turn_usage vazia (3 turnos simulados)', () => {
     const res = await dispatch(ctx, {
       method: 'repo_graph_status',
       id: 9,
-      params: {},
+      params: { ...{ sessionId: 'sess-1' } },
     });
     expect(res.result).toEqual({
-      error: expect.stringContaining('nenhum repositorio ativo nesta conversa'),
+      error: expect.stringContaining('turn_binding_required'),
     });
     expect(insertRepoGraphTurnUsageMock).not.toHaveBeenCalled();
     expect(sendSpy).not.toHaveBeenCalled();

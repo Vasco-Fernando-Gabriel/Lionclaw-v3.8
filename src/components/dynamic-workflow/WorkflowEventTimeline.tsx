@@ -17,7 +17,6 @@ export interface TimelineFeedItem extends ComposerFeedItem {
   severity?: TimelineSeverity;
 }
 
-
 const HUMAN_LABELS: Record<string, string> = {
   'run-started': 'run iniciado',
   'run-paused': 'run pausado',
@@ -194,9 +193,7 @@ export function timelineItemFromEvent(
   const phaseId = ev.phaseId ?? (ev.type === 'phase-changed' ? str(payload?.phase) : null);
   const payloadLabel = str(payload?.label);
   const payloadAgent = str(payload?.agentId);
-  const nodeLabel = nodeId
-    ? payloadLabel ?? nameOf(nodeId) ?? payloadAgent ?? shortNodeId(nodeId)
-    : undefined;
+  const nodeLabel = nodeId ? (payloadLabel ?? nameOf(nodeId) ?? payloadAgent ?? shortNodeId(nodeId)) : undefined;
   return {
     id: `ev-${ev.id}`,
     kind: 'event',
@@ -224,7 +221,6 @@ export function buildTimelineFeed(
   }
   return events.slice(-limit).map((ev) => timelineItemFromEvent(ev, (id) => names.get(id) ?? null));
 }
-
 
 export interface WorkflowEventTimelineProps {
   feed: TimelineFeedItem[];
@@ -296,21 +292,13 @@ export function WorkflowEventTimeline({ feed, timeZone }: WorkflowEventTimelineP
   const rows = layoutTimelineRows(feed, timeZone);
 
   return (
-    <div
-      className="flex min-h-0 flex-1 flex-col border-t border-zinc-800 bg-zinc-950/40"
-      data-testid="event-timeline"
-    >
+    <div className="flex min-h-0 flex-1 flex-col border-t border-zinc-800 bg-zinc-950/40" data-testid="event-timeline">
       <div className="flex items-center gap-1.5 px-3 pt-2 pb-1 shrink-0">
         <ListEnd size={11} className="text-zinc-500 shrink-0" />
-        <span className="text-[10px] uppercase tracking-wide text-zinc-500 font-medium">
-          Linha do tempo
-        </span>
+        <span className="text-[10px] uppercase tracking-wide text-zinc-500 font-medium">Linha do tempo</span>
         <span className="font-mono text-[10px] text-zinc-500">{feed.length}</span>
       </div>
-      <div
-        className="min-h-0 flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-1"
-        data-testid="timeline-feed"
-      >
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-2 flex flex-col gap-1" data-testid="timeline-feed">
         {feed.length === 0 ? (
           <p className="text-[12px] text-zinc-400" data-testid="timeline-empty">
             Eventos e intervencoes do run aparecem aqui.
@@ -348,7 +336,7 @@ export function WorkflowEventTimeline({ feed, timeZone }: WorkflowEventTimelineP
                 key={row.key}
                 className={`flex items-start gap-2 text-[11px] ${rowTone(item)}`}
                 data-testid="timeline-item"
-                data-severity={item.kind === 'human' ? 'human' : item.severity ?? 'neutral'}
+                data-severity={item.kind === 'human' ? 'human' : (item.severity ?? 'neutral')}
               >
                 <span className="mt-0.5 shrink-0">
                   <SeverityIcon item={item} />

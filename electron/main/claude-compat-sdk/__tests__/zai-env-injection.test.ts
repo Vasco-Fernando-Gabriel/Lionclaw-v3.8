@@ -1,6 +1,4 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-
 
 const capturedQueryCalls: Array<{
   prompt: string;
@@ -12,35 +10,32 @@ let nextIteratorMessages: Array<Record<string, unknown>> | null = null;
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => {
   return {
-    query: vi.fn(
-      (args: { prompt: string; options: Record<string, unknown> }) => {
-        capturedQueryCalls.push({ prompt: args.prompt, options: args.options });
-        const iterator = {
-          [Symbol.asyncIterator]() {
-            const messages = nextIteratorMessages ?? [{ type: 'result' }];
-            let index = 0;
-            return {
-              async next() {
-                if (nextIteratorError) {
-                  const err = nextIteratorError;
-                  nextIteratorError = null;
-                  throw err;
-                }
-                if (index >= messages.length)
-                  return { value: undefined, done: true };
-                const value = messages[index];
-                index += 1;
-                return { value, done: false };
-              },
-            };
-          },
-          toggleMcpServer: vi.fn(async (name: string, enabled: boolean) => {
-            capturedToggleCalls.push({ name, enabled });
-          }),
-        };
-        return iterator;
-      },
-    ),
+    query: vi.fn((args: { prompt: string; options: Record<string, unknown> }) => {
+      capturedQueryCalls.push({ prompt: args.prompt, options: args.options });
+      const iterator = {
+        [Symbol.asyncIterator]() {
+          const messages = nextIteratorMessages ?? [{ type: 'result' }];
+          let index = 0;
+          return {
+            async next() {
+              if (nextIteratorError) {
+                const err = nextIteratorError;
+                nextIteratorError = null;
+                throw err;
+              }
+              if (index >= messages.length) return { value: undefined, done: true };
+              const value = messages[index];
+              index += 1;
+              return { value, done: false };
+            },
+          };
+        },
+        toggleMcpServer: vi.fn(async (name: string, enabled: boolean) => {
+          capturedToggleCalls.push({ name, enabled });
+        }),
+      };
+      return iterator;
+    }),
   };
 });
 
@@ -166,7 +161,6 @@ vi.mock('../../title-generator', () => ({
   generateSessionTitle: vi.fn(async () => {}),
 }));
 
-
 import { executeClaudeCompatSdkQuery } from '../index';
 import type { OrchestratorSelection } from '../../orchestrator-selection';
 import { makeScopedSdkSessionId } from '../../sdk-session-id';
@@ -188,9 +182,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-function makeSelection(
-  overrides: Partial<OrchestratorSelection> = {},
-): OrchestratorSelection {
+function makeSelection(overrides: Partial<OrchestratorSelection> = {}): OrchestratorSelection {
   return {
     runtime: 'claude-compat-sdk',
     provider: 'zai',
@@ -216,27 +208,17 @@ describe('executeClaudeCompatSdkQuery: env injection (SP-10.4)', () => {
     process.env.PATH = previousPath || '/usr/bin';
     try {
       const selection = makeSelection();
-      await executeClaudeCompatSdkQuery(
-        'oi',
-        { sessionId: 'test-session-001' },
-        makeGetWindow(),
-        undefined,
-        selection,
-      );
+      await executeClaudeCompatSdkQuery('oi', { sessionId: 'test-session-001' }, makeGetWindow(), undefined, selection);
 
       expect(capturedQueryCalls.length).toBe(1);
-      const env = (
-        capturedQueryCalls[0].options as { env?: Record<string, string> }
-      ).env;
+      const env = (capturedQueryCalls[0].options as { env?: Record<string, string> }).env;
 
       expect(env).toBeDefined();
       expect(env!.ANTHROPIC_BASE_URL).toBe('https://api.z.ai/api/anthropic');
       expect(env!.ANTHROPIC_AUTH_TOKEN).toBe('sk-zai-vault-stored-token');
       expect(env!.API_TIMEOUT_MS).toBe('3000000');
       expect(env!.PATH).toBe(process.env.PATH);
-      expect(capturedQueryCalls[0].options.pathToClaudeCodeExecutable).toBe(
-        '/tmp/claude-agent-sdk-cli.js',
-      );
+      expect(capturedQueryCalls[0].options.pathToClaudeCodeExecutable).toBe('/tmp/claude-agent-sdk-cli.js');
     } finally {
       process.env.PATH = previousPath;
     }
@@ -244,13 +226,7 @@ describe('executeClaudeCompatSdkQuery: env injection (SP-10.4)', () => {
 
   it('forwards selection.model (e.g. "glm-4.7") to query() options.model as-is', async () => {
     const selection = makeSelection({ model: 'glm-4.7' });
-    await executeClaudeCompatSdkQuery(
-      'oi',
-      { sessionId: 'test-session-002' },
-      makeGetWindow(),
-      undefined,
-      selection,
-    );
+    await executeClaudeCompatSdkQuery('oi', { sessionId: 'test-session-002' }, makeGetWindow(), undefined, selection);
 
     expect(capturedQueryCalls[0].options.model).toBe('glm-4.7');
   });
@@ -279,10 +255,7 @@ describe('executeClaudeCompatSdkQuery: env injection (SP-10.4)', () => {
     );
 
     expect(capturedQueryCalls[0].options.sessionId).toBe(
-      makeScopedSdkSessionId(
-        'claude-compat-sdk:zai:desktop',
-        'test-session-scoped-sdk-id',
-      ),
+      makeScopedSdkSessionId('claude-compat-sdk:zai:desktop', 'test-session-scoped-sdk-id'),
     );
   });
 
@@ -310,9 +283,7 @@ describe('executeClaudeCompatSdkQuery: env injection (SP-10.4)', () => {
 
   it('disables cached claude.ai SDK MCPs for Z.ai compat only', async () => {
     const { getCachedSDKMcpServers } = await import('../../mcp-discovery');
-    (
-      getCachedSDKMcpServers as unknown as ReturnType<typeof vi.fn>
-    ).mockReturnValueOnce([
+    (getCachedSDKMcpServers as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce([
       { name: 'claude.ai Notion', status: 'connected' },
       { name: 'claude.ai Excalidraw', status: 'connected' },
       { name: 'local-other', status: 'connected' },
@@ -343,30 +314,16 @@ describe('executeClaudeCompatSdkQuery: env injection (SP-10.4)', () => {
   it('uses the apiKey from selection when present and skips the vault read', async () => {
     const { getSecret } = await import('../../secrets-vault');
     const selection = makeSelection({ apiKey: 'sk-from-selection' });
-    await executeClaudeCompatSdkQuery(
-      'oi',
-      { sessionId: 'test-session-003' },
-      makeGetWindow(),
-      undefined,
-      selection,
-    );
+    await executeClaudeCompatSdkQuery('oi', { sessionId: 'test-session-003' }, makeGetWindow(), undefined, selection);
 
-    const env = (
-      capturedQueryCalls[0].options as { env?: Record<string, string> }
-    ).env;
+    const env = (capturedQueryCalls[0].options as { env?: Record<string, string> }).env;
     expect(env!.ANTHROPIC_AUTH_TOKEN).toBe('sk-from-selection');
     expect(getSecret).not.toHaveBeenCalled();
   });
 
   it('passes a different GLM slug through unchanged (no model rewriting)', async () => {
     const selection = makeSelection({ model: 'glm-5.1' });
-    await executeClaudeCompatSdkQuery(
-      'oi',
-      { sessionId: 'test-session-004' },
-      makeGetWindow(),
-      undefined,
-      selection,
-    );
+    await executeClaudeCompatSdkQuery('oi', { sessionId: 'test-session-004' }, makeGetWindow(), undefined, selection);
 
     expect(capturedQueryCalls[0].options.model).toBe('glm-5.1');
   });
@@ -386,9 +343,7 @@ describe('executeClaudeCompatSdkQuery: env injection (SP-10.4)', () => {
 
       expect(capturedQueryCalls.length).toBe(1);
       expect(capturedQueryCalls[0].options.model).toBe('glm-5.2');
-      const env = (
-        capturedQueryCalls[0].options as { env?: Record<string, string> }
-      ).env;
+      const env = (capturedQueryCalls[0].options as { env?: Record<string, string> }).env;
       expect(env!.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe('1000000');
     } finally {
       if (previous === undefined) delete process.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS;
@@ -406,9 +361,7 @@ describe('executeClaudeCompatSdkQuery: env injection (SP-10.4)', () => {
       selection,
     );
 
-    const env = (
-      capturedQueryCalls[0].options as { env?: Record<string, string> }
-    ).env;
+    const env = (capturedQueryCalls[0].options as { env?: Record<string, string> }).env;
     expect(env!.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe('200000');
   });
 
@@ -429,9 +382,7 @@ describe('executeClaudeCompatSdkQuery: env injection (SP-10.4)', () => {
 
       expect(capturedQueryCalls.length).toBe(1);
       expect(capturedQueryCalls[0].options.model).toBe('totally-unknown-model-x');
-      const env = (
-        capturedQueryCalls[0].options as { env?: Record<string, string> }
-      ).env;
+      const env = (capturedQueryCalls[0].options as { env?: Record<string, string> }).env;
       expect(env).not.toHaveProperty('CLAUDE_CODE_MAX_CONTEXT_TOKENS');
       expect(env).not.toHaveProperty('DISABLE_AUTO_COMPACT');
     } finally {
@@ -444,32 +395,18 @@ describe('executeClaudeCompatSdkQuery: env injection (SP-10.4)', () => {
 
   it('retries once with a fresh SDK session when resume fails', async () => {
     const { getSessionMessages } = await import('../../db');
-    (
-      getSessionMessages as unknown as ReturnType<typeof vi.fn>
-    ).mockReturnValueOnce([
+    (getSessionMessages as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce([
       { id: 1, role: 'user', content: 'mensagem anterior' },
     ]);
-    nextIteratorError = Object.assign(
-      new Error('resume subprocess pipe closed'),
-      {
-        code: 'EPIPE',
-      },
-    );
+    nextIteratorError = Object.assign(new Error('resume subprocess pipe closed'), {
+      code: 'EPIPE',
+    });
 
     const selection = makeSelection();
-    await executeClaudeCompatSdkQuery(
-      'oi',
-      { sessionId: 'test-session-006' },
-      makeGetWindow(),
-      undefined,
-      selection,
-    );
+    await executeClaudeCompatSdkQuery('oi', { sessionId: 'test-session-006' }, makeGetWindow(), undefined, selection);
 
     expect(capturedQueryCalls.length).toBe(2);
-    const scopedSessionId = makeScopedSdkSessionId(
-      'claude-compat-sdk:zai:desktop',
-      'test-session-006',
-    );
+    const scopedSessionId = makeScopedSdkSessionId('claude-compat-sdk:zai:desktop', 'test-session-006');
 
     expect(capturedQueryCalls[0].options.resume).toBe(scopedSessionId);
     expect(capturedQueryCalls[0].options.sessionId).toBeUndefined();
@@ -533,9 +470,7 @@ describe('executeClaudeCompatSdkQuery: env injection (SP-10.4)', () => {
     const win = {
       isDestroyed: () => false,
       webContents: {
-        send: vi.fn((_channel: string, chunk: unknown) =>
-          sentChunks.push(chunk),
-        ),
+        send: vi.fn((_channel: string, chunk: unknown) => sentChunks.push(chunk)),
       },
     };
     nextIteratorMessages = [
@@ -573,22 +508,13 @@ describe('executeClaudeCompatSdkQuery: env injection (SP-10.4)', () => {
 
   it('does NOT inject env when no apiKey is resolvable (early error path)', async () => {
     const { getSecret } = await import('../../secrets-vault');
-    (getSecret as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
-      null,
-    );
+    (getSecret as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
 
     const selection = makeSelection({ apiKey: undefined });
-    await executeClaudeCompatSdkQuery(
-      'oi',
-      { sessionId: 'test-session-005' },
-      makeGetWindow(),
-      undefined,
-      selection,
-    );
+    await executeClaudeCompatSdkQuery('oi', { sessionId: 'test-session-005' }, makeGetWindow(), undefined, selection);
 
     expect(capturedQueryCalls.length).toBe(0);
   });
-
 
   it('contador ativo: sucesso do turno SETA = PISO FORTE do payload (todos os buckets)', async () => {
     const {
@@ -621,18 +547,12 @@ describe('executeClaudeCompatSdkQuery: env injection (SP-10.4)', () => {
       systemPrompt: string | { append?: string };
     };
     const fullSystemPrompt =
-      typeof opts.systemPrompt === 'string'
-        ? opts.systemPrompt
-        : opts.systemPrompt.append ?? '';
+      typeof opts.systemPrompt === 'string' ? opts.systemPrompt : (opts.systemPrompt.append ?? '');
     let settingsFilesTokens = 0;
-    for (const p of [
-      join('/tmp/lionclaw-test-cwd', 'CLAUDE.md'),
-      join(os.homedir(), '.claude', 'CLAUDE.md'),
-    ]) {
+    for (const p of [join('/tmp/lionclaw-test-cwd', 'CLAUDE.md'), join(os.homedir(), '.claude', 'CLAUDE.md')]) {
       try {
         settingsFilesTokens += Math.ceil(readFileSync(p, 'utf-8').length / 4);
-      } catch {
-      }
+      } catch {}
     }
     const esperado = estimateStrongFloor({
       systemPrompt: fullSystemPrompt,
@@ -645,25 +565,14 @@ describe('executeClaudeCompatSdkQuery: env injection (SP-10.4)', () => {
       agenticTokens: 0, // turno sem tools
       imageCount: 0,
     });
-    expect(setSessionActiveContextTokens).toHaveBeenCalledWith(
-      'test-session-active-set',
-      esperado,
-    );
+    expect(setSessionActiveContextTokens).toHaveBeenCalledWith('test-session-active-set', esperado);
     expect(esperado).toBeGreaterThan(CLI_PRESET_TOKENS + CLI_BUILTIN_SCHEMAS_TOKENS);
-    expect(resetSessionAgenticContext).toHaveBeenCalledWith(
-      'test-session-active-set',
-      { threadResetMessageId: null },
-    );
-    expect(setSessionAgenticContextTokens).toHaveBeenCalledWith(
-      'test-session-active-set',
-      0,
-      undefined,
-    );
+    expect(resetSessionAgenticContext).toHaveBeenCalledWith('test-session-active-set', { threadResetMessageId: null });
+    expect(setSessionAgenticContextTokens).toHaveBeenCalledWith('test-session-active-set', 0, undefined);
   });
 
   it('contador ativo: turno que FALHA NAO seta (valor anterior preservado)', async () => {
-    const { setSessionActiveContextTokens, setSessionAgenticContextTokens } =
-      await import('../../db');
+    const { setSessionActiveContextTokens, setSessionAgenticContextTokens } = await import('../../db');
     nextIteratorError = Object.assign(new Error('provider caiu'), { code: 'BOOM' });
 
     await executeClaudeCompatSdkQuery(

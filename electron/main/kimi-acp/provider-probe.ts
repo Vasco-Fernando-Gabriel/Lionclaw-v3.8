@@ -1,14 +1,6 @@
-import {
-  buildKimiChildEnv,
-  resolveKimiBinary,
-  resolveKimiHome,
-} from '../agent-runtime/kimi-availability';
+import { buildKimiChildEnv, resolveKimiBinary, resolveKimiHome } from '../agent-runtime/kimi-availability';
 import { KIMI_MODELS } from '../../../src/constants/kimi-models';
-import {
-  defaultAcpTransportFactory,
-  type AcpTransport,
-  type AcpTransportFactory,
-} from './acp-transport';
+import { defaultAcpTransportFactory, type AcpTransport, type AcpTransportFactory } from './acp-transport';
 
 export interface KimiProviderProbeResult {
   ok: boolean;
@@ -26,9 +18,7 @@ interface KimiProviderProbeOptions {
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 function modelOption(value: unknown): Record<string, unknown> {
@@ -68,10 +58,8 @@ async function requestWithTimeout(
   });
 }
 
-export async function probeKimiProvider(
-  options: KimiProviderProbeOptions = {},
-): Promise<KimiProviderProbeResult> {
-  const binary = options.binary ?? await resolveKimiBinary();
+export async function probeKimiProvider(options: KimiProviderProbeOptions = {}): Promise<KimiProviderProbeResult> {
+  const binary = options.binary ?? (await resolveKimiBinary());
   if (!binary) {
     return { ok: false, currentModel: null, availableModels: [], message: 'CLI Kimi nao encontrado.' };
   }
@@ -88,18 +76,8 @@ export async function probeKimiProvider(
       cwd,
       env: buildKimiChildEnv({ home }),
     });
-    await requestWithTimeout(
-      transport,
-      'initialize',
-      { protocolVersion: 1, clientCapabilities: {} },
-      timeoutMs,
-    );
-    const session = asRecord(await requestWithTimeout(
-      transport,
-      'session/new',
-      { cwd, mcpServers: [] },
-      timeoutMs,
-    ));
+    await requestWithTimeout(transport, 'initialize', { protocolVersion: 1, clientCapabilities: {} }, timeoutMs);
+    const session = asRecord(await requestWithTimeout(transport, 'session/new', { cwd, mcpServers: [] }, timeoutMs));
     if (typeof session['sessionId'] !== 'string' || session['sessionId'].length === 0) {
       throw new Error('session/new retornou sem sessionId');
     }

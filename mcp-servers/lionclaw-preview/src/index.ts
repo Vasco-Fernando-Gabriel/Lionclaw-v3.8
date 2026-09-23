@@ -1,10 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import {
-  LocalIpcClient,
-  assertEndpointPresentOrExit,
-} from '../../_shared/local-ipc-client.js';
+import { LocalIpcClient, assertEndpointPresentOrExit } from '../../_shared/local-ipc-client.js';
 
 assertEndpointPresentOrExit();
 
@@ -27,8 +24,11 @@ server.tool(
     target: z.string().describe('Caminho absoluto .html/.htm ou URL http(s) localhost.'),
   },
   async ({ target }) => {
-    try { return result(await client.callMethod('preview_open', { target }, { idempotent: false })); }
-    catch (error) { return failure(error); }
+    try {
+      return result(await client.callMethod('preview_open', { target }, { idempotent: false }));
+    } catch (error) {
+      return failure(error);
+    }
   },
 );
 
@@ -42,12 +42,12 @@ server.tool(
   },
   async ({ target, width, height }) => {
     try {
-      return result(await client.callMethod(
-        'preview_capture',
-        { target, width, height },
-        { idempotent: false, timeoutMs: 30_000 },
-      ));
-    } catch (error) { return failure(error); }
+      return result(
+        await client.callMethod('preview_capture', { target, width, height }, { idempotent: false, timeoutMs: 30_000 }),
+      );
+    } catch (error) {
+      return failure(error);
+    }
   },
 );
 

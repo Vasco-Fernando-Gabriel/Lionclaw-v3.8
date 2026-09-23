@@ -40,7 +40,7 @@ vi.mock('@/stores/pipeline-store', () => {
 
 vi.mock('@/hooks/useActiveProjectState', () => ({
   useActiveProjectState: <T,>(selector: (s: FakeProjectState) => T): T | null =>
-    (fake.project ? selector(fake.project) : null),
+    fake.project ? selector(fake.project) : null,
 }));
 
 let SprintExecutionView: typeof import('@/components/pipeline/SprintExecutionView').SprintExecutionView;
@@ -84,8 +84,7 @@ function resetFakes(pipelineType: string, currentPhase: number | null): void {
 }
 
 beforeAll(async () => {
-  Element.prototype.scrollIntoView = function scrollIntoView(): void {
-  };
+  Element.prototype.scrollIntoView = function scrollIntoView(): void {};
   ({ SprintExecutionView } = await import('@/components/pipeline/SprintExecutionView'));
 });
 
@@ -102,9 +101,7 @@ afterEach(() => {
 
 function render(): void {
   act(() => {
-    root.render(
-      <SprintExecutionView totalSprints={1} maxRounds={3} projectId="p1" />,
-    );
+    root.render(<SprintExecutionView totalSprints={1} maxRounds={3} projectId="p1" />);
   });
 }
 

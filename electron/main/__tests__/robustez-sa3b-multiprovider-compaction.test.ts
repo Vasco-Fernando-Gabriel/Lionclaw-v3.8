@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -12,7 +11,11 @@ const h = vi.hoisted(() => ({
   setSessionActiveContextTokensMock: vi.fn(),
   createSessionMock: vi.fn(),
   updateSessionStatusMock: vi.fn(),
-  transactionMock: vi.fn((fn: (...args: unknown[]) => unknown) => (...args: unknown[]) => fn(...args)),
+  transactionMock: vi.fn(
+    (fn: (...args: unknown[]) => unknown) =>
+      (...args: unknown[]) =>
+        fn(...args),
+  ),
   summarizeLightweightMock: vi.fn(),
   getContextWindowMock: vi.fn((_model: string, _provider?: string): number | undefined => undefined),
 }));
@@ -55,7 +58,6 @@ import {
   __resetChatCompactionGuardsForTests,
 } from '../chat-compaction-trigger';
 import { EmptyProviderResponseError } from '../agent-runtime/llm-error';
-
 
 function makeSession(overrides: Partial<ChatSession> = {}): ChatSession {
   return {
@@ -104,7 +106,7 @@ const RUNTIMES = [
     model: 'gpt-5.5-codex',
     provider: 'openai',
     windowTokens: 400_000, // threshold default 80% = 320k
-    catchMarker: '"Codex SDK query failed"',
+    catchMarker: "'Codex SDK query failed'",
     successMarker: 'turnOk = true',
     sinkPattern: /await maybeCompactChatSession\(sessionId, emit, \{/,
   },
@@ -114,7 +116,7 @@ const RUNTIMES = [
     model: 'kimi-k2-turbo-preview',
     provider: 'kimi',
     windowTokens: 262_144, // threshold default 80% = 209_715
-    catchMarker: '"Kimi SDK query failed"',
+    catchMarker: "'Kimi SDK query failed'",
     successMarker: 'turnOk = true',
     sinkPattern: /await maybeCompactChatSession\(sessionId, emit, \{/,
   },
@@ -126,7 +128,11 @@ beforeEach(() => {
   h.getSettingMock.mockReturnValue(undefined);
   h.getSessionMessagesMock.mockReturnValue([]);
   h.getContextWindowMock.mockReturnValue(undefined);
-  h.transactionMock.mockImplementation((fn: (...args: unknown[]) => unknown) => (...args: unknown[]) => fn(...args));
+  h.transactionMock.mockImplementation(
+    (fn: (...args: unknown[]) => unknown) =>
+      (...args: unknown[]) =>
+        fn(...args),
+  );
   h.summarizeLightweightMock.mockResolvedValue(OK_SUMMARY);
 });
 
@@ -137,9 +143,9 @@ function installTurnModel(rt: (typeof RUNTIMES)[number]): void {
     return undefined;
   });
   h.getContextWindowMock.mockImplementation((model: string, provider?: string) =>
-    model === rt.model && provider === rt.provider ? rt.windowTokens : undefined);
+    model === rt.model && provider === rt.provider ? rt.windowTokens : undefined,
+  );
 }
-
 
 describe('AC-A5b [INV] — hook UNICO no completion de SUCESSO de cada executor (nunca no catch)', () => {
   for (const rt of RUNTIMES) {
@@ -175,7 +181,6 @@ describe('AC-A5b [INV] — hook UNICO no completion de SUCESSO de cada executor 
     expect(callMatches).toHaveLength(1);
   });
 });
-
 
 for (const rt of RUNTIMES) {
   const threshold = Math.floor((rt.windowTokens * 80) / 100);
@@ -217,14 +222,16 @@ for (const rt of RUNTIMES) {
       const events: string[] = [];
       let resolveSummarize!: (v: typeof OK_SUMMARY) => void;
       h.summarizeLightweightMock.mockImplementation(
-        () => new Promise<typeof OK_SUMMARY>((res) => { resolveSummarize = res; }),
+        () =>
+          new Promise<typeof OK_SUMMARY>((res) => {
+            resolveSummarize = res;
+          }),
       );
 
-      const trigger = maybeCompactChatSession('s1', undefined, turnModel)
-        .then(() => events.push('trigger:resolved'));
+      const trigger = maybeCompactChatSession('s1', undefined, turnModel).then(() => events.push('trigger:resolved'));
       await new Promise((r) => setTimeout(r, 0));
       expect(h.summarizeLightweightMock).toHaveBeenCalledTimes(1);
-      expect(events).toEqual([]); // exclusao mutua: o executor esta AGUARDANDO
+      expect(events).toEqual([]);
 
       events.push('summarize:done');
       resolveSummarize(OK_SUMMARY);
@@ -243,17 +250,12 @@ for (const rt of RUNTIMES) {
       installTurnModel(rt);
       h.getSessionMock.mockReturnValue(makeSession({ activeContextTokensEst: threshold + 1 }));
       h.getSessionMessagesMock.mockReturnValue([makeMsg(1, 'user', 'oi')]);
-      h.summarizeLightweightMock.mockRejectedValue(
-        new EmptyProviderResponseError(rt.provider, rt.model, rt.name),
-      );
+      h.summarizeLightweightMock.mockRejectedValue(new EmptyProviderResponseError(rt.provider, rt.model, rt.name));
 
       const chunks: StreamChunk[] = [];
-      await expect(
-        maybeCompactChatSession('s1', (c) => chunks.push(c), turnModel),
-      ).resolves.toBeUndefined(); // best-effort — o executor retorna normal
+      await expect(maybeCompactChatSession('s1', (c) => chunks.push(c), turnModel)).resolves.toBeUndefined();
 
-      expect(chunks.filter((c) => c.type === 'compacting').map((c) => c.isCompacting))
-        .toEqual([true, false]);
+      expect(chunks.filter((c) => c.type === 'compacting').map((c) => c.isCompacting)).toEqual([true, false]);
       const errorChunks = chunks.filter((c) => c.type !== 'compacting');
       expect(errorChunks).toHaveLength(1);
       expect(errorChunks[0]).toMatchObject({ type: 'error', code: 'COMPACT-EMPTY' });

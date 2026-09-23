@@ -62,19 +62,16 @@ export function XtermView({ sessionId, visible }: XtermViewProps) {
       if (el.clientWidth === 0 || el.clientHeight === 0) return;
       try {
         fit.fit();
-      } catch {
-      }
+      } catch {}
     };
     const fitRaf = requestAnimationFrame(doFit);
 
-    void window.lionclaw.terminal
-      .open(sessionId, term.cols || 80, term.rows || 24)
-      .then((result) => {
-        if (disposed) return;
-        if (result && 'ok' in result && result.ok) return;
-        const message = result && 'error' in result ? result.error : 'erro desconhecido';
-        term.write(`\r\n\x1b[31m[terminal indisponivel] ${message}\x1b[0m\r\n`);
-      });
+    void window.lionclaw.terminal.open(sessionId, term.cols || 80, term.rows || 24).then((result) => {
+      if (disposed) return;
+      if (result && 'ok' in result && result.ok) return;
+      const message = result && 'error' in result ? result.error : 'erro desconhecido';
+      term.write(`\r\n\x1b[31m[terminal indisponivel] ${message}\x1b[0m\r\n`);
+    });
 
     const unsubData = window.lionclaw.terminal.onData(({ sessionId: sid, chunk }) => {
       if (!disposed && sid === sessionId) term.write(chunk);

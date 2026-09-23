@@ -1,12 +1,12 @@
+import { swarmAggregationGuard } from '../swarm/aggregation-policy';
+import { persistSwarmResponse } from '../swarm/chat-persistence';
 
-import crypto from "crypto";
-import type { BrowserWindow } from "electron";
-import { smokeAudit } from "../smoke-audit";
-import { createLogger } from "../logger";
+import crypto from 'crypto';
+import type { BrowserWindow } from 'electron';
+import { smokeAudit } from '../smoke-audit';
+import { createLogger } from '../logger';
 import {
-  createSession,
   clearSessionPendingSeed,
-  getActiveChatSession,
   getSession,
   getSessionMessages,
   getPermissionBypass,
@@ -17,9 +17,18 @@ import {
   insertMessage,
   updateSessionTokens,
   setSessionActiveContextTokens,
-} from "../db";
-import { persistUserChatMessage } from "../user-attachments-meta";
-import { estimateTokens } from "../token-estimator";
+} from '../db';
+import { persistUserChatMessage } from '../user-attachments-meta';
+import { getAgentCwd } from '../paths';
+import {
+  beginTimelineTurn,
+  buildToolsBlocksByAnchor,
+  computeTimelineMetrics,
+  logTimelineMetrics,
+  resolveCliTimelineOrigin,
+  resolveTimelineAnchor,
+} from '../session-timeline';
+import { estimateTokens } from '../token-estimator';
 import {
   normalizeUsage,
   canonicalPromptTokens,
@@ -27,73 +36,68 @@ import {
   estimateStrongFloor,
   estimateAgenticContentTokens,
   KIMI_PRESET_TOKENS,
-} from "../agent-runtime/context-measure";
-import { buildChatContextUsage } from "../chat-context-usage";
-import { maybeCompactChatSession } from "../chat-compaction-trigger";
-import { KIMI_PRICING_REMAP } from "../agent-runtime/kimi-executor";
-import { ensureInitialSessionTitle, generateSessionTitle } from "../title-generator";
-import type { QueryOptions } from "../orchestrator";
-import type { OrchestratorSelection } from "../orchestrator-selection";
-import { type SdkLane, desktopLane } from "../sdk-lane";
-import type { ArtifactData, AuditEntry, StreamChunk } from "../../../src/types";
-import { buildKimiHistoryPreamble } from "./history";
-import { createChatKimiSession } from "./session";
-import { buildKimiUsageSnapshot, createKimiStreamTranslator } from "./stream-translator";
-import { createPermissionGuard } from "../permission-guard";
-import { PERM_BYPASS_NO_GUARD, PERM_DEFAULT_WITH_GUARD } from "../agent-runtime/permission-profiles";
+} from '../agent-runtime/context-measure';
+import { buildChatContextUsage } from '../chat-context-usage';
+import { isChatTimelineReinjectEnabled, maybeCompactChatSession } from '../chat-compaction-trigger';
+import { KIMI_PRICING_REMAP } from '../agent-runtime/kimi-executor';
+import { ensureInitialSessionTitle, generateSessionTitle } from '../title-generator';
+import type { QueryOptions } from '../orchestrator';
+import type { OrchestratorSelection } from '../orchestrator-selection';
+import type { SdkLane } from '../sdk-lane';
+import { resolveLaneForOptions, lanesOrAllDesktop } from '../desktop-lanes';
+import { SessionRequiredError } from '../lanes';
+import type { ArtifactData, AuditEntry, StreamChunk } from '../../../src/types';
+import { buildKimiHistoryPreamble } from './history';
+import { createChatKimiSession } from './session';
+import { buildKimiUsageSnapshot, createKimiStreamTranslator } from './stream-translator';
+import { createPermissionGuard } from '../permission-guard';
+import { PERM_BYPASS_NO_GUARD, PERM_DEFAULT_WITH_GUARD } from '../agent-runtime/permission-profiles';
+import { isSubagentProviderAuthError, subagentAuthFailure } from '../agent-runtime/subagent-dispatch';
+import { isKimiEffort } from '../../../src/constants/kimi-models';
 import {
-  isSubagentProviderAuthError,
-  subagentAuthFailure,
-} from "../agent-runtime/subagent-dispatch";
-import { isKimiEffort } from "../../../src/constants/kimi-models";
-import {
-  getActiveChatTurnByLane,
+  getActiveChatTurnBinding,
   getChatCapabilityTurn,
   computeEffectiveCapabilitiesForTurn,
-} from "../chat-capability-context";
-import { recordCompletedMainChatTurn } from "../dreaming-turn-engine";
+} from '../chat-capability-context';
+import { recordCompletedMainChatTurn } from '../dreaming-turn-engine';
 import {
   completeOnboardingFromPersistedProfile,
   extractAndProcessOnboardingData,
   resolveOnboardingCompletedFromState,
-} from "../onboarding";
+} from '../onboarding';
 
-const logger = createLogger("kimi-sdk");
+const logger = createLogger('kimi-sdk');
 
-export function stopKimiSdkQuery(lane: SdkLane = desktopLane): void {
-  if (lane.currentAbortController) {
-    lane.currentAbortController.abort();
-    lane.currentAbortController = null;
+export function stopKimiSdkQuery(laneArg?: SdkLane): void {
+  for (const lane of lanesOrAllDesktop(laneArg)) {
+    if (lane.currentAbortController) {
+      lane.currentAbortController.abort();
+      lane.currentAbortController = null;
+    }
   }
 }
 
-export function isKimiSdkQueryActive(lane: SdkLane = desktopLane): boolean {
-  return lane.currentAbortController !== null;
+export function isKimiSdkQueryActive(laneArg?: SdkLane): boolean {
+  return lanesOrAllDesktop(laneArg).some((lane) => lane.currentAbortController !== null);
 }
 
-export function resetKimiSdkSessionState(lane: SdkLane = desktopLane): void {
-  stopKimiSdkQuery(lane);
+export function resetKimiSdkSessionState(laneArg?: SdkLane): void {
+  for (const lane of lanesOrAllDesktop(laneArg)) {
+    stopKimiSdkQuery(lane);
+  }
 }
 
-function sendStream(
-  getWindow: () => BrowserWindow | null,
-  silent: boolean | undefined,
-  chunk: StreamChunk,
-): void {
+function sendStream(getWindow: () => BrowserWindow | null, silent: boolean | undefined, chunk: StreamChunk): void {
   if (silent) return;
   try {
     const win = getWindow();
     if (win && !win.isDestroyed()) {
-      win.webContents.send("chat:stream", chunk);
+      win.webContents.send('chat:stream', chunk);
     }
-  } catch {
-  }
+  } catch {}
 }
 
-function sendLogEntry(
-  getWindow: () => BrowserWindow | null,
-  entry: Omit<AuditEntry, "id" | "createdAt">,
-): void {
+function sendLogEntry(getWindow: () => BrowserWindow | null, entry: Omit<AuditEntry, 'id' | 'createdAt'>): void {
   try {
     const win = getWindow();
     if (win && !win.isDestroyed()) {
@@ -102,16 +106,12 @@ function sendLogEntry(
         createdAt: new Date().toISOString(),
         ...entry,
       };
-      win.webContents.send("logs:entry", liveEntry);
+      win.webContents.send('logs:entry', liveEntry);
     }
-  } catch {
-  }
+  } catch {}
 }
 
-function recordAuditEntry(
-  getWindow: () => BrowserWindow | null,
-  entry: Omit<AuditEntry, "id" | "createdAt">,
-): void {
+function recordAuditEntry(getWindow: () => BrowserWindow | null, entry: Omit<AuditEntry, 'id' | 'createdAt'>): void {
   insertAuditEntry(entry);
   sendLogEntry(getWindow, entry);
 }
@@ -126,27 +126,17 @@ function resolveSessionId(
   if (options.sessionId) {
     return { sessionId: options.sessionId, created: false };
   }
-  if (lane !== desktopLane) {
-    throw new Error(
-      `Lane '${lane.name}' exige options.sessionId explicito (guard de sessao, SPEC 3.3)`,
-    );
-  }
-  const active = getActiveChatSession();
-  if (active) {
-    return { sessionId: active.id, created: false };
-  }
-  const sessionId = crypto.randomUUID();
-  createSession(sessionId, "");
-  return { sessionId, created: true };
+  throw new SessionRequiredError(lane.name, 'kimi-sdk');
 }
 
 export async function executeKimiSdkQuery(
   message: string,
   options: QueryOptions,
   getWindow: () => BrowserWindow | null,
-  lane: SdkLane = desktopLane,
+  laneArg: SdkLane | undefined,
   selection: OrchestratorSelection,
 ): Promise<void> {
+  const lane = laneArg ?? resolveLaneForOptions(options, 'kimi-sdk');
   const queryId = crypto.randomUUID();
   const { sessionId, created } = resolveSessionId(options, lane);
   logger.info(
@@ -159,19 +149,20 @@ export async function executeKimiSdkQuery(
       provider: selection.provider,
       messageChars: message.length,
     },
-    "Kimi SDK query started",
+    'Kimi SDK query started',
   );
 
-  options.onStreamChunk?.({ type: "session", content: sessionId });
+  options.onStreamChunk?.({ type: 'session', content: sessionId });
   sendStream(getWindow, options.silent, {
-    type: "session",
+    type: 'session',
     content: sessionId,
+    sessionId,
   });
 
   const displayContent = options.displayMessage ?? message;
-  const skipUserPersistence =
-    options.origin === "system-event" || options.skipUserMessagePersistence === true;
+  const skipUserPersistence = options.origin === 'system-event' || options.skipUserMessagePersistence === true;
   let currentTurnIndex = 0;
+  let persistedUserMessageId: number | null = null;
   if (skipUserPersistence) {
     try {
       currentTurnIndex = getLatestUserTurnIndex(sessionId);
@@ -181,14 +172,15 @@ export async function executeKimiSdkQuery(
   } else {
     try {
       const userMessageId = persistUserChatMessage(sessionId, displayContent, options.attachmentsMeta);
+      persistedUserMessageId = userMessageId;
       currentTurnIndex = getTurnIndexForUserMessage(sessionId, userMessageId);
       logger.debug(
         { queryId, sessionId, displayChars: displayContent.length, turnIndex: currentTurnIndex },
-        "Kimi SDK user message persisted",
+        'Kimi SDK user message persisted',
       );
       ensureInitialSessionTitle(sessionId, displayContent);
     } catch (err) {
-      logger.warn({ err, queryId, sessionId }, "failed to persist user message");
+      logger.warn({ err, queryId, sessionId }, 'failed to persist user message');
       try {
         currentTurnIndex = getLatestUserTurnIndex(sessionId);
       } catch {
@@ -205,12 +197,34 @@ export async function executeKimiSdkQuery(
     sendStream(getWindow, options.silent, { ...chunk, sessionId });
   };
 
-  let isOnboarding = getSetting("onboarding_completed") !== "true";
+  let isOnboarding = getSetting('onboarding_completed') !== 'true';
   if (isOnboarding && resolveOnboardingCompletedFromState()) {
-    emit({ type: "onboarding_completed" });
+    emit({ type: 'onboarding_completed' });
     isOnboarding = false;
   }
 
+  const timelineOrigin = resolveCliTimelineOrigin({
+    laneKind: lane.kind,
+    origin: options.origin,
+    swarmDelivery: options.swarmDelivery !== undefined,
+    forceNewSession: options._forceNewSession === true,
+    persistedUserMessageId,
+  });
+  const timelineAnchor = resolveTimelineAnchor({
+    origin: timelineOrigin,
+    persistedUserMessageId,
+    answeredUserMessageId: null,
+  });
+  const timeline = beginTimelineTurn({
+    sessionId,
+    turnIndex: currentTurnIndex,
+    anchorMessageId: timelineAnchor.anchorMessageId,
+    currentUserMessageId: timelineAnchor.currentUserMessageId,
+    origin: timelineOrigin,
+    runtime: 'kimi',
+    fidelity: 'observed',
+    cwd: getAgentCwd(isOnboarding),
+  });
   const collectedArtifacts: ArtifactData[] = [];
   const translator = createKimiStreamTranslator({
     sessionId,
@@ -221,12 +235,27 @@ export async function executeKimiSdkQuery(
       collectedArtifacts.push(artifact);
     },
     onAuditEntry: (entry) => sendLogEntry(getWindow, entry),
+    timeline,
   });
+  let timelineSettled = false;
+  const settleTimeline = (complete: boolean): void => {
+    if (timelineSettled) return;
+    timelineSettled = true;
+    const metrics = computeTimelineMetrics('kimi', translator.timelineEvents());
+    timeline.metrics(metrics);
+    if (complete && !timeline.persistFailed) timeline.complete();
+    logTimelineMetrics({
+      runId: timeline.runId,
+      runtime: 'kimi',
+      status: complete && !timeline.persistFailed ? 'complete' : 'interrupted',
+      ...metrics,
+    });
+  };
 
   const chatCaps =
-    lane.name === "desktop"
+    lane.kind === 'desktop'
       ? (() => {
-          const t = getActiveChatTurnByLane("desktop");
+          const t = getActiveChatTurnBinding({ sessionId, lane: 'desktop' });
           const ctx = t ? getChatCapabilityTurn(t) : undefined;
           return ctx ? computeEffectiveCapabilitiesForTurn(ctx) : undefined;
         })()
@@ -234,43 +263,45 @@ export async function executeKimiSdkQuery(
 
   let session;
   try {
-    logger.info(
-      { queryId, sessionId, model: selection.model, agentId: options.agentId },
-      "Creating chat Kimi session",
-    );
+    logger.info({ queryId, sessionId, model: selection.model, agentId: options.agentId }, 'Creating chat Kimi session');
     session = await createChatKimiSession({
+      swarmReadOnly: !!options.swarmDelivery,
       sessionId,
       model: selection.model,
       ...(isKimiEffort(selection.effort) ? { effort: selection.effort } : {}),
-      permission: !isOnboarding && getPermissionBypass()
-        ? PERM_BYPASS_NO_GUARD
-        : PERM_DEFAULT_WITH_GUARD(createPermissionGuard(getWindow, { isOnboarding })),
+      permission: options.swarmDelivery
+        ? PERM_DEFAULT_WITH_GUARD(swarmAggregationGuard)
+        : !isOnboarding && getPermissionBypass()
+          ? PERM_BYPASS_NO_GUARD
+          : PERM_DEFAULT_WITH_GUARD(createPermissionGuard(getWindow, { isOnboarding, sessionId })),
       abortSignal: abort.signal,
       agentId: options.agentId,
       isOnboarding,
       capabilities: chatCaps,
-      lane: lane.name === 'telegram' || lane.name === 'cron' ? lane.name : 'desktop',
+      lane: lane.kind,
+      turnBinding: getActiveChatTurnBinding({ sessionId, lane: lane.kind }),
     });
-    logger.info({ queryId, sessionId }, "Chat Kimi session created");
+    logger.info({ queryId, sessionId }, 'Chat Kimi session created');
   } catch (err) {
     const errMessage = err instanceof Error ? err.message : String(err);
-    logger.error({ err, queryId, sessionId }, "failed to create chat Kimi session");
-    emit({ type: "error", error: errMessage });
+    logger.error({ err, queryId, sessionId }, 'failed to create chat Kimi session');
+    emit({ type: 'error', error: errMessage });
     try {
       recordAuditEntry(getWindow, {
         sessionId,
         subagent: options.agentId,
-        eventType: "error",
-        toolName: "kimi.session",
+        eventType: 'error',
+        toolName: 'kimi.session',
         output: errMessage,
       });
     } catch (auditErr) {
-      logger.debug({ err: auditErr, sessionId }, "audit insert for kimi session error failed");
+      logger.debug({ err: auditErr, sessionId }, 'audit insert for kimi session error failed');
     }
+    settleTimeline(false);
     if (lane.currentAbortController === abort) {
       lane.currentAbortController = null;
     }
-    if (lane !== desktopLane) throw err;
+    if (lane.kind !== 'desktop') throw err;
     return;
   }
 
@@ -279,14 +310,14 @@ export async function executeKimiSdkQuery(
   const sessionRow = getSession(sessionId);
   const compactedUpTo = sessionRow?.compactedUpToMessageId ?? null;
   const allPriorTurns = getSessionMessages(sessionId);
-  const priorTurns =
-    compactedUpTo !== null
-      ? allPriorTurns.filter((m) => m.id > compactedUpTo)
-      : allPriorTurns;
+  const priorTurns = compactedUpTo !== null ? allPriorTurns.filter((m) => m.id > compactedUpTo) : allPriorTurns;
   const historyPreamble = buildKimiHistoryPreamble(priorTurns, {
     dropLast: !skipUserPersistence,
+    ...(isChatTimelineReinjectEnabled()
+      ? { toolsByAnchor: buildToolsBlocksByAnchor(sessionId, priorTurns, compactedUpTo) }
+      : {}),
   });
-  const historyTurns = historyPreamble ? historyPreamble.split("\n\n").length : 0;
+  const historyTurns = historyPreamble ? historyPreamble.split('\n\n').length : 0;
   const basePrompt = historyPreamble
     ? `Conversation so far:\n${historyPreamble}\n\nNew user message:\n${message}`
     : message;
@@ -301,16 +332,16 @@ export async function executeKimiSdkQuery(
       historyChars: historyPreamble.length,
       promptChars: prompt.length,
     },
-    "Kimi SDK context prepared",
+    'Kimi SDK context prepared',
   );
   try {
     recordAuditEntry(getWindow, {
       sessionId,
       subagent: options.agentId,
-      eventType: "tool_call",
-      toolName: "kimi.context",
+      eventType: 'tool_call',
+      toolName: 'kimi.context',
       input: JSON.stringify({
-        runtime: "kimi-sdk",
+        runtime: 'kimi-sdk',
         model: selection.model,
         provider: selection.provider,
         historyChars: historyPreamble.length,
@@ -319,10 +350,10 @@ export async function executeKimiSdkQuery(
       }),
     });
   } catch (err) {
-    logger.debug({ err, sessionId }, "audit insert for kimi context failed");
+    logger.debug({ err, sessionId }, 'audit insert for kimi context failed');
   }
 
-  let assistantText = "";
+  let assistantText = '';
   let firstTextLogged = false;
   let agenticTurnTokens = 0;
   const wrappedCallbacks = {
@@ -330,27 +361,25 @@ export async function executeKimiSdkQuery(
     onText: (delta: string) => {
       if (!firstTextLogged) {
         firstTextLogged = true;
-        logger.info(
-          { queryId, sessionId, deltaChars: delta.length },
-          "Kimi SDK first text delta",
-        );
+        logger.info({ queryId, sessionId, deltaChars: delta.length }, 'Kimi SDK first text delta');
       }
       assistantText += delta;
       translator.callbacks.onText?.(delta);
     },
-    onToolUseIO: (tool: string, input: unknown, output: unknown) => {
-      agenticTurnTokens +=
-        estimateAgenticContentTokens(input) + estimateAgenticContentTokens(output);
-      translator.callbacks.onToolUseIO?.(tool, input, output);
+    onToolUseIO: (tool: string, input: unknown, output: unknown, toolCallId?: string) => {
+      agenticTurnTokens += estimateAgenticContentTokens(input) + estimateAgenticContentTokens(output);
+      translator.callbacks.onToolUseIO?.(tool, input, output, toolCallId);
     },
   };
 
   let turnOk = false;
-  smokeAudit("turn_start", { lane: lane.name, runtime: "kimi-sdk", sessionId });
+  let responseFinished = false;
+  smokeAudit('turn_start', { lane: lane.name, runtime: 'kimi-sdk', sessionId });
 
   try {
-    logger.info({ queryId, sessionId, promptChars: prompt.length }, "Kimi SDK send starting");
+    logger.info({ queryId, sessionId, promptChars: prompt.length }, 'Kimi SDK send starting');
     const response = await session.send(prompt, wrappedCallbacks, abort.signal);
+    responseFinished = response.status === 'finished';
     logger.info(
       {
         queryId,
@@ -360,16 +389,16 @@ export async function executeKimiSdkQuery(
         inputTokens: response.usage.inputTokens,
         outputTokens: response.usage.outputTokens,
       },
-      "Kimi SDK send completed",
+      'Kimi SDK send completed',
     );
-    if (abort.signal.aborted || response.status === "cancelled") {
-      logger.info(
-        { queryId, sessionId, status: response.status },
-        "Kimi SDK query cancelled",
-      );
+    if (abort.signal.aborted || response.status === 'cancelled') {
+      logger.info({ queryId, sessionId, status: response.status }, 'Kimi SDK query cancelled');
       return;
     }
     const finalText = response.content || assistantText;
+    if (options.swarmDelivery && (abort.signal.aborted || response.status !== 'finished')) {
+      throw new Error(`Agregação Swarm não concluída: ${response.status}`);
+    }
     let persistedFinalText = finalText;
     if (persistedFinalText.trim().length > 0) {
       const recordOnboardingAudit = ({
@@ -384,18 +413,20 @@ export async function executeKimiSdkQuery(
         recordAuditEntry(getWindow, {
           sessionId,
           subagent: options.agentId,
-          eventType: "tool_call",
+          eventType: 'tool_call',
           toolName,
           input,
           output,
         });
       };
-      const cleaned = extractAndProcessOnboardingData(persistedFinalText, {
-        sendStream: emit,
-        onAudit: recordOnboardingAudit,
-      });
+      const cleaned = options.swarmDelivery
+        ? null
+        : extractAndProcessOnboardingData(persistedFinalText, {
+            sendStream: emit,
+            onAudit: recordOnboardingAudit,
+          });
       if (cleaned !== null) persistedFinalText = cleaned;
-      if (cleaned === null && isOnboarding) {
+      if (cleaned === null && isOnboarding && !options.swarmDelivery) {
         completeOnboardingFromPersistedProfile({
           sendStream: emit,
           onAudit: recordOnboardingAudit,
@@ -417,40 +448,31 @@ export async function executeKimiSdkQuery(
     if (hasAssistantText) {
       try {
         const messageMetadata =
-          collectedArtifacts.length > 0
-            ? JSON.stringify({ artifacts: collectedArtifacts })
-            : undefined;
-        insertMessage(
-          sessionId,
-          "assistant",
-          persistedFinalText,
-          options.agentId,
-          messageMetadata,
-        );
+          collectedArtifacts.length > 0 ? JSON.stringify({ artifacts: collectedArtifacts }) : undefined;
+        if (!persistSwarmResponse(options, sessionId, persistedFinalText, messageMetadata)) {
+          insertMessage(sessionId, 'assistant', persistedFinalText, options.agentId, messageMetadata);
+        }
         recordCompletedMainChatTurn(sessionId, getWindow);
         const session = getSession(sessionId);
-        if (session && session.type !== "scheduled" && session.type !== "telegram") {
+        if (session && session.type !== 'scheduled' && session.type !== 'telegram') {
           const msgs = getSessionMessages(session.id);
-          const assistantCount = msgs.filter((m) => m.role === "assistant").length;
+          const assistantCount = msgs.filter((m) => m.role === 'assistant').length;
           const shouldGenerateTitle = !session.title || assistantCount === 1;
           if (shouldGenerateTitle && msgs.length >= 2) {
             void generateSessionTitle(session.id).catch((err) =>
-              logger.error({ err, queryId, sessionId }, "Kimi: title generation failed"),
+              logger.error({ err, queryId, sessionId }, 'Kimi: title generation failed'),
             );
           }
         }
       } catch (err) {
-        logger.warn({ err, queryId, sessionId }, "failed to persist assistant message");
+        logger.warn({ err, queryId, sessionId }, 'failed to persist assistant message');
       }
     } else {
-      logger.debug(
-        { queryId, sessionId },
-        "Kimi: empty response - skipping insertMessage and dreaming hook",
-      );
+      logger.debug({ queryId, sessionId }, 'Kimi: empty response - skipping insertMessage and dreaming hook');
     }
     if ((hasAssistantText || hasValidToolOnlyTurn) && pendingSeed) {
       clearSessionPendingSeed(sessionId);
-      logger.info({ queryId, sessionId }, "Kimi: pending_seed consumido no sucesso do turno");
+      logger.info({ queryId, sessionId }, 'Kimi: pending_seed consumido no sucesso do turno');
     }
     if (hasAssistantText || hasValidToolOnlyTurn) {
       try {
@@ -475,37 +497,33 @@ export async function executeKimiSdkQuery(
           messageTexts: [prompt, persistedFinalText],
           agenticTokens: agenticTurnTokens,
         });
-        const kimiCanonical = normalizeUsage(response.usage, "anthropic");
+        const kimiCanonical = normalizeUsage(response.usage, 'anthropic');
         const usageComplete = kimiUsageSnapshot.tokenStatus === 'reported';
         const realPromptTokens = usageComplete ? canonicalPromptTokens(kimiCanonical) : 0;
         const realOutputTokens = usageComplete ? kimiCanonical.outputTokens : 0;
-        const liveContextTokens = reconcileActiveContext(
-          realPromptTokens,
-          realOutputTokens,
-          kimiContextEstimate,
-        );
+        const liveContextTokens = reconcileActiveContext(realPromptTokens, realOutputTokens, kimiContextEstimate);
         setSessionActiveContextTokens(sessionId, liveContextTokens);
         const turnContextUsage = buildChatContextUsage({
           model: selection.model,
           provider: selection.provider,
           contextTokens: liveContextTokens,
-          source: realPromptTokens > 0 ? "provider" : "estimate",
+          source: realPromptTokens > 0 ? 'provider' : 'estimate',
         });
-        if (turnContextUsage) emit({ type: "context_usage", contextUsage: turnContextUsage });
+        if (turnContextUsage) emit({ type: 'context_usage', contextUsage: turnContextUsage });
       } catch (err) {
-        logger.warn({ err, queryId, sessionId }, "Kimi: token persistence failed");
+        logger.warn({ err, queryId, sessionId }, 'Kimi: token persistence failed');
       }
     }
     try {
       recordAuditEntry(getWindow, {
         sessionId,
         subagent: options.agentId,
-        eventType: "tool_result",
-        toolName: "kimi.send",
+        eventType: 'tool_result',
+        toolName: 'kimi.send',
         output: `inputTokens=${response.usage.inputTokens} outputTokens=${response.usage.outputTokens} status=${response.status}`,
       });
     } catch (err) {
-      logger.debug({ err }, "audit insert for completion failed");
+      logger.debug({ err }, 'audit insert for completion failed');
     }
     turnOk = true;
 
@@ -518,36 +536,37 @@ export async function executeKimiSdkQuery(
       const failure = subagentAuthFailure(err);
       emit({ type: 'error', sessionId, ...failure });
       logger.warn({ queryId, sessionId, provider: failure.authProvider }, 'Kimi chat subagent auth required');
-      if (lane !== desktopLane) throw err;
+      if (lane.kind !== 'desktop') throw err;
     } else if (abort.signal.aborted) {
-      logger.info({ queryId, sessionId }, "Kimi SDK query aborted");
+      logger.info({ queryId, sessionId }, 'Kimi SDK query aborted');
     } else {
       translator.fail(err);
-      logger.error({ err, queryId, sessionId }, "Kimi SDK query failed");
+      logger.error({ err, queryId, sessionId }, 'Kimi SDK query failed');
       const errMessage = err instanceof Error ? err.message : String(err);
       try {
         recordAuditEntry(getWindow, {
           sessionId,
           subagent: options.agentId,
-          eventType: "error",
-          toolName: "kimi.send",
+          eventType: 'error',
+          toolName: 'kimi.send',
           output: errMessage,
         });
       } catch (auditErr) {
-        logger.debug({ err: auditErr, sessionId }, "audit insert for kimi send error failed");
+        logger.debug({ err: auditErr, sessionId }, 'audit insert for kimi send error failed');
       }
-      if (lane !== desktopLane) throw err;
+      if (lane.kind !== 'desktop') throw err;
     }
   } finally {
-    smokeAudit("turn_done", { lane: lane.name, runtime: "kimi-sdk", sessionId, ok: turnOk });
+    settleTimeline(turnOk && responseFinished && !abort.signal.aborted);
+    smokeAudit('turn_done', { lane: lane.name, runtime: 'kimi-sdk', sessionId, ok: turnOk });
     try {
       await session.close();
     } catch (err) {
-      logger.debug({ err }, "session.close threw");
+      logger.debug({ err }, 'session.close threw');
     }
     if (lane.currentAbortController === abort) {
       lane.currentAbortController = null;
     }
-    logger.info({ queryId, sessionId }, "Kimi SDK query finished");
+    logger.info({ queryId, sessionId }, 'Kimi SDK query finished');
   }
 }

@@ -1,15 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import {
-  V83_SQL,
-  __V83_INTERNAL,
-} from '../db-migrations/v83-dynamic-workflows';
+import { V83_SQL, __V83_INTERNAL } from '../db-migrations/v83-dynamic-workflows';
 import {
   DYNAMIC_WORKFLOW_RUN_STATUSES,
   DYNAMIC_WORKFLOW_NODE_STATUSES,
   DYNAMIC_WORKFLOW_GATE_DECISIONS,
   DYNAMIC_WORKFLOW_MESSAGE_SOURCES,
 } from '../../../src/types/dynamic-workflow';
-
 
 function expectedCheck(column: string, values: readonly string[]): string {
   return `CHECK (${column} IN (${values.map((v) => `'${v}'`).join(', ')}))`;
@@ -31,16 +27,12 @@ describe('migration v83 dynamic_workflow_* (asserts de string, sem DB)', () => {
 
   it('CHECK de runs.status e GERADO do union DynamicWorkflowRunStatus (9 valores, 10.2)', () => {
     expect(DYNAMIC_WORKFLOW_RUN_STATUSES).toHaveLength(9);
-    expect(V83_SQL).toContain(
-      expectedCheck('status', DYNAMIC_WORKFLOW_RUN_STATUSES),
-    );
+    expect(V83_SQL).toContain(expectedCheck('status', DYNAMIC_WORKFLOW_RUN_STATUSES));
   });
 
   it('CHECK de node_runs.status e GERADO do union DynamicWorkflowNodeStatus (8 valores, 10.2)', () => {
     expect(DYNAMIC_WORKFLOW_NODE_STATUSES).toHaveLength(8);
-    expect(V83_SQL).toContain(
-      expectedCheck('status', DYNAMIC_WORKFLOW_NODE_STATUSES),
-    );
+    expect(V83_SQL).toContain(expectedCheck('status', DYNAMIC_WORKFLOW_NODE_STATUSES));
   });
 
   it('CHECK de gate_decisions.decision inclui override-approved/override-rejected (14.1.1/AC-17)', () => {
@@ -59,9 +51,7 @@ describe('migration v83 dynamic_workflow_* (asserts de string, sem DB)', () => {
       'runner',
       'closer',
     ]);
-    expect(V83_SQL).toContain(
-      expectedCheck('source', DYNAMIC_WORKFLOW_MESSAGE_SOURCES),
-    );
+    expect(V83_SQL).toContain(expectedCheck('source', DYNAMIC_WORKFLOW_MESSAGE_SOURCES));
   });
 
   it('awaiting-user NUNCA entra em CHECK (UIStatus derivado, 10.2/13.3.4)', () => {
@@ -78,18 +68,13 @@ describe('migration v83 dynamic_workflow_* (asserts de string, sem DB)', () => {
       idx_dwf_artifacts_run: 'dynamic_workflow_artifacts',
       idx_dwf_gate_decisions_run: 'dynamic_workflow_gate_decisions',
     };
-    expect(Object.keys(indexToTable).sort()).toEqual(
-      [...__V83_INTERNAL.INDEXES].sort(),
-    );
+    expect(Object.keys(indexToTable).sort()).toEqual([...__V83_INTERNAL.INDEXES].sort());
     for (const [indexName, table] of Object.entries(indexToTable)) {
       const indexPos = V83_SQL.indexOf(`CREATE INDEX IF NOT EXISTS ${indexName} ON ${table}(`);
       const tablePos = V83_SQL.indexOf(`CREATE TABLE IF NOT EXISTS ${table} (`);
       expect(indexPos, `indice ${indexName} ausente ou fora do padrao`).toBeGreaterThan(-1);
       expect(tablePos, `tabela ${table} ausente`).toBeGreaterThan(-1);
-      expect(
-        indexPos,
-        `indice ${indexName} precisa vir DEPOIS do CREATE TABLE ${table}`,
-      ).toBeGreaterThan(tablePos);
+      expect(indexPos, `indice ${indexName} precisa vir DEPOIS do CREATE TABLE ${table}`).toBeGreaterThan(tablePos);
     }
   });
 

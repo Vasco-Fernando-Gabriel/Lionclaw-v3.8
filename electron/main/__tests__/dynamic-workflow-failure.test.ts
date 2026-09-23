@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   classifyFailure,
@@ -25,9 +24,7 @@ describe('workflow-failure: classifyFailure (10.4)', () => {
   });
 
   it('CodexAuthError (por nome) -> provider-auth, exige humano', () => {
-    expect(
-      classifyFailure({ runtime: 'codex', error: namedError('CodexAuthError') }),
-    ).toBe('provider-auth');
+    expect(classifyFailure({ runtime: 'codex', error: namedError('CodexAuthError') })).toBe('provider-auth');
   });
 
   it('CodexUnavailableError (por nome) -> provider-limit', () => {
@@ -41,9 +38,7 @@ describe('workflow-failure: classifyFailure (10.4)', () => {
 
   it('reconhece o erro do codex mesmo re-serializado (so name, sem prototype)', () => {
     const plain = { name: 'CodexAuthError', message: 'login required' };
-    expect(classifyFailure({ runtime: 'codex', error: plain })).toBe(
-      'provider-auth',
-    );
+    expect(classifyFailure({ runtime: 'codex', error: plain })).toBe('provider-auth');
   });
 
   it('timedOut (watchdog do node) -> timeout', () => {
@@ -57,31 +52,21 @@ describe('workflow-failure: classifyFailure (10.4)', () => {
   });
 
   it('HTTP 429 -> provider-limit (Claude-compatible/external)', () => {
-    expect(
-      classifyFailure({ runtime: 'zai', error: new Error('x'), httpStatus: 429 }),
-    ).toBe('provider-limit');
+    expect(classifyFailure({ runtime: 'zai', error: new Error('x'), httpStatus: 429 })).toBe('provider-limit');
   });
 
   it('HTTP 401/403 -> provider-auth', () => {
-    expect(
-      classifyFailure({ runtime: 'external', error: {}, httpStatus: 401 }),
-    ).toBe('provider-auth');
-    expect(
-      classifyFailure({ runtime: 'external', error: {}, httpStatus: 403 }),
-    ).toBe('provider-auth');
+    expect(classifyFailure({ runtime: 'external', error: {}, httpStatus: 401 })).toBe('provider-auth');
+    expect(classifyFailure({ runtime: 'external', error: {}, httpStatus: 403 })).toBe('provider-auth');
   });
 
   it('HTTP 5xx -> provider-error (transitorio)', () => {
-    expect(
-      classifyFailure({ runtime: 'minimax-tp', error: {}, httpStatus: 503 }),
-    ).toBe('provider-error');
+    expect(classifyFailure({ runtime: 'minimax-tp', error: {}, httpStatus: 503 })).toBe('provider-error');
   });
 
   it('le status do proprio erro quando o adapter nao passa httpStatus', () => {
     const err = Object.assign(new Error('boom'), { status: 429 });
-    expect(classifyFailure({ runtime: 'cloud', error: err })).toBe(
-      'provider-limit',
-    );
+    expect(classifyFailure({ runtime: 'cloud', error: err })).toBe('provider-limit');
   });
 
   it('heuristica de mensagem: rate limit -> provider-limit', () => {
@@ -130,12 +115,8 @@ describe('workflow-failure: classifyFailure (10.4)', () => {
   });
 
   it('string crua e tolerada (sem name/status)', () => {
-    expect(classifyFailure({ runtime: 'local', error: 'quota exceeded' })).toBe(
-      'provider-limit',
-    );
-    expect(classifyFailure({ runtime: 'local', error: 'random junk' })).toBe(
-      'logic',
-    );
+    expect(classifyFailure({ runtime: 'local', error: 'quota exceeded' })).toBe('provider-limit');
+    expect(classifyFailure({ runtime: 'local', error: 'random junk' })).toBe('logic');
   });
 });
 
@@ -143,11 +124,7 @@ describe('workflow-failure: retry policy (10.4)', () => {
   it('defaults: 3 retries, blockOn provider-auth, retryOn limit/error/timeout', () => {
     expect(DEFAULT_RETRY_POLICY.maxAutoRetries).toBe(3);
     expect(DEFAULT_RETRY_POLICY.blockOn).toContain('provider-auth');
-    expect(DEFAULT_RETRY_POLICY.retryOn).toEqual([
-      'provider-limit',
-      'provider-error',
-      'timeout',
-    ]);
+    expect(DEFAULT_RETRY_POLICY.retryOn).toEqual(['provider-limit', 'provider-error', 'timeout']);
   });
 
   it('provider-auth bloqueia IMEDIATAMENTE (nunca auto-retry)', () => {
@@ -160,12 +137,12 @@ describe('workflow-failure: retry policy (10.4)', () => {
   it('provider-limit com tentativas restantes -> retry com backoff', () => {
     const d = decideRetry('provider-limit', 1);
     expect(d.shouldRetry).toBe(true);
-    expect(d.backoffMs).toBe(30_000); // primeiro retry: 30s
+    expect(d.backoffMs).toBe(30_000);
     expect(d.blockImmediately).toBe(false);
   });
 
   it('provider-limit esgotado -> escala para bloqueio (run blocked)', () => {
-    const d = decideRetry('provider-limit', 3); // attemptsMade == maxAutoRetries
+    const d = decideRetry('provider-limit', 3);
     expect(d.shouldRetry).toBe(false);
     expect(d.escalate).toBe(true);
     expect(d.blockImmediately).toBe(false);
@@ -181,8 +158,8 @@ describe('workflow-failure: retry policy (10.4)', () => {
   });
 
   it('backoff exponencial: 30s, 2min, 8min (base 30s * 4^i, curva normativa 10.4 L995, sem random)', () => {
-    expect(computeBackoffMs(0)).toBe(30_000); // 30s
-    expect(computeBackoffMs(1)).toBe(120_000); // 2min
-    expect(computeBackoffMs(2)).toBe(480_000); // 8min
+    expect(computeBackoffMs(0)).toBe(30_000);
+    expect(computeBackoffMs(1)).toBe(120_000);
+    expect(computeBackoffMs(2)).toBe(480_000);
   });
 });

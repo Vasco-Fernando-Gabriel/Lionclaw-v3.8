@@ -7,6 +7,7 @@ const ANTHROPIC_ALIASES: Record<string, string> = {
   'claude-haiku-4-5-20251001': 'haiku',
   'claude-haiku-4-5': 'haiku',
   'claude-haiku-4': 'haiku',
+  'claude-opus-5-5': 'opus',
   'claude-opus-5': 'opus',
   'claude-opus-4-8': 'opus',
   'claude-opus-4-7': 'opus',
@@ -77,7 +78,10 @@ const EXTERNAL_DISPLAY: Record<string, { name: string; ctx: string }> = {
   'anthropic/claude-sonnet-4-5': { name: 'Sonnet 4.5', ctx: '200k' },
   'anthropic/claude-sonnet-4-6': { name: 'Sonnet 4.6', ctx: '200k' },
   'anthropic/claude-haiku-4-5': { name: 'Haiku 4.5', ctx: '200k' },
+  'anthropic/claude-opus-5-5': { name: 'Opus 5.5', ctx: '1M' },
   'anthropic/claude-opus-5': { name: 'Opus 5', ctx: '1M' },
+  'openai/gpt-6-sol': { name: 'GPT-6 Sol', ctx: '1M' },
+  'openai/gpt-6-luna': { name: 'GPT-6 Luna', ctx: '1M' },
   'anthropic/claude-opus-4-8': { name: 'Opus 4.8', ctx: '1M' },
   'anthropic/claude-opus-4-7': { name: 'Opus 4.7', ctx: '200k' },
 };
@@ -104,9 +108,7 @@ export function formatModelLabel(model: string | null | undefined): string {
   const anthropic = model.match(/claude-(opus|sonnet|haiku|fable)-(\d+)(?:-(\d+))?/i);
   if (anthropic) {
     const tier = TIER_LABEL[anthropic[1].toLowerCase()] ?? anthropic[1];
-    return anthropic[3] !== undefined
-      ? `${tier} ${anthropic[2]}.${anthropic[3]}`
-      : `${tier} ${anthropic[2]}`;
+    return anthropic[3] !== undefined ? `${tier} ${anthropic[2]}.${anthropic[3]}` : `${tier} ${anthropic[2]}`;
   }
 
   const gpt = model.match(/^gpt-?(.+)$/i);

@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { Workflow, Waypoints, AlertTriangle, X } from 'lucide-react';
 import {
   useChatFeatureTogglesStore,
+  useFeatureToggles,
+  selectFeatureToggles,
   CHAT_CAPABILITY_LABELS,
   type ChatCapabilityKey,
 } from '@/stores/chat-feature-toggles-store';
 import { useChatStore } from '@/stores/chat-store';
-
 
 interface ChipDef {
   label: string;
@@ -15,6 +16,11 @@ interface ChipDef {
 }
 
 const CHIP_DEFS: Record<ChatCapabilityKey, ChipDef> = {
+  swarm: {
+    label: 'Swarm',
+    icon: Waypoints,
+    onClasses: 'border-orange-500/40 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20',
+  },
   pipelineControl: {
     label: CHAT_CAPABILITY_LABELS.pipelineControl,
     icon: Workflow,
@@ -46,20 +52,54 @@ export function ChatCapabilityToggles({
   disabled = false,
   isCodexRuntime = false,
 }: ChatCapabilityTogglesProps) {
+  const [swarmProgress, setSwarmProgress] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    setSwarmProgress(null);
+    const api = window.lionclaw.swarm;
+    if (!api) return;
+    const revisions = new Map<string, number>();
+    let activeRunId: string | null = null;
+    const refresh = async (runId: string) => {
+      activeRunId = runId;
+      try {
+        const run = await api.getRunState(sessionId, runId);
+        if (!live || activeRunId !== runId || 'error' in run || run.revision < (revisions.get(runId) ?? -1)) return;
+        revisions.set(runId, run.revision);
+        setSwarmProgress(
+          ['queued', 'running', 'aborting'].includes(run.status)
+            ? `${run.items.filter((item) => ['ok', 'failed', 'cancelled'].includes(item.status)).length}/${run.items.length}`
+            : null,
+        );
+      } catch {
+        /* O painel Swarm apresenta erros de consulta. */
+      }
+    };
+    const dispose = api.onStream((event) => {
+      if (event.chatSessionId === sessionId) void refresh(event.runId);
+    });
+    api
+      .listRuns(sessionId, undefined, 1)
+      .then((result) => {
+        if (live && !('error' in result) && result.runs[0] && !activeRunId) void refresh(result.runs[0].runId);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+      dispose();
+    };
+  }, [sessionId]);
   const hydrate = useChatFeatureTogglesStore((s) => s.hydrate);
-  const storeSessionId = useChatFeatureTogglesStore((s) => s.sessionId);
-  const toggles = useChatFeatureTogglesStore((s) => s.toggles);
-  const loading = useChatFeatureTogglesStore((s) => s.loading);
-  const pending = useChatFeatureTogglesStore((s) => s.pending);
+  const slot = useFeatureToggles(sessionId);
+  const { toggles, loading, pending, actionError } = slot;
   const mcpAvailable = useChatFeatureTogglesStore((s) => s.mcpAvailable);
-  const actionError = useChatFeatureTogglesStore((s) => s.actionError);
   const setFeatureToggle = useChatFeatureTogglesStore((s) => s.setFeatureToggle);
 
   useEffect(() => {
     void hydrate(sessionId);
   }, [sessionId, hydrate]);
 
-  const hydrating = loading || storeSessionId !== sessionId || toggles === null;
+  const hydrating = loading || toggles === null;
 
   return (
     <>
@@ -67,21 +107,16 @@ export function ChatCapabilityToggles({
         const isOn = toggles?.[capability] ?? false;
         const isLoading = hydrating || pending[capability];
         const unavailable = !isLoading && isOn && !mcpAvailable[capability];
-        const state: ChipVisualState = isLoading
-          ? 'loading'
-          : unavailable
-            ? 'unavailable'
-            : isOn
-              ? 'on'
-              : 'off';
+        const state: ChipVisualState = isLoading ? 'loading' : unavailable ? 'unavailable' : isOn ? 'on' : 'off';
         return (
           <ChatCapabilityChip
             key={capability}
             capability={capability}
+            progress={capability === 'swarm' ? swarmProgress : null}
             state={state}
             disabled={disabled}
             isCodexRuntime={isCodexRuntime}
-            onToggle={() => void setFeatureToggle(capability, !isOn)}
+            onToggle={() => void setFeatureToggle(sessionId, capability, !isOn)}
           />
         );
       })}
@@ -95,6 +130,7 @@ export function ChatCapabilityToggles({
 }
 
 interface ChatCapabilityChipProps {
+  progress?: string | null;
   capability: ChatCapabilityKey;
   state: ChipVisualState;
   disabled: boolean;
@@ -103,6 +139,7 @@ interface ChatCapabilityChipProps {
 }
 
 function ChatCapabilityChip({
+  progress,
   capability,
   state,
   disabled,
@@ -130,11 +167,9 @@ function ChatCapabilityChip({
         : state === 'on'
           ? `${def.label} LIGADO nesta sessão. Vale para o próximo envio. Clique para desligar.`
           : `${def.label} DESLIGADO nesta sessão. Vale para o próximo envio. Clique para ligar.`;
-  const tooltip =
-    isCodexRuntime && state !== 'loading' ? baseTooltip + CODEX_DEGRADED_TOOLTIP : baseTooltip;
+  const tooltip = isCodexRuntime && state !== 'loading' ? baseTooltip + CODEX_DEGRADED_TOOLTIP : baseTooltip;
 
-  const colorClasses =
-    state === 'unavailable' ? UNAVAILABLE_CLASSES : state === 'on' ? def.onClasses : OFF_CLASSES;
+  const colorClasses = state === 'unavailable' ? UNAVAILABLE_CLASSES : state === 'on' ? def.onClasses : OFF_CLASSES;
 
   return (
     <button
@@ -147,22 +182,24 @@ function ChatCapabilityChip({
       data-capability={capability}
       data-state={state}
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${
-        state === 'loading' ? 'animate-pulse' : ''
+        state === 'loading' || progress ? 'animate-pulse' : ''
       } ${colorClasses}`}
     >
       <Icon size={10} />
       {/* <768: icon-only + tooltip (A.8 responsivo) */}
       <span className="hidden md:inline">{def.label}</span>
+      {progress && <span>{progress}</span>}
     </button>
   );
 }
 
-export function ChatCapabilityResendAffordance() {
-  const capabilityError = useChatFeatureTogglesStore((s) => s.capabilityError);
-  const lastSent = useChatFeatureTogglesStore((s) => s.lastSent);
+export function ChatCapabilityResendAffordance({ sessionId }: { sessionId?: string | null }) {
+  const visibleSessionId = useChatStore((s) => s.currentSessionId);
+  const targetSessionId = sessionId ?? visibleSessionId;
+  const { capabilityError, lastSent } = useFeatureToggles(targetSessionId);
   const [busy, setBusy] = useState(false);
 
-  if (!capabilityError) return null;
+  if (!capabilityError || !targetSessionId) return null;
 
   const label = CHAT_CAPABILITY_LABELS[capabilityError.capability];
 
@@ -171,16 +208,17 @@ export function ChatCapabilityResendAffordance() {
     setBusy(true);
     try {
       const store = useChatFeatureTogglesStore.getState();
-      const error = store.capabilityError;
-      const payload = store.lastSent;
+      const slot = selectFeatureToggles(store, targetSessionId);
+      const error = slot.capabilityError;
+      const payload = slot.lastSent;
       if (!error) return;
-      const ok = await store.setFeatureToggle(error.capability, true);
-      if (!ok) return; // set falhou: mantem a affordance (actionError explica)
-      store.clearCapabilityError();
+      const ok = await store.setFeatureToggle(targetSessionId, error.capability, true);
+      if (!ok) return;
+      store.clearCapabilityError(targetSessionId);
       if (payload) {
         await useChatStore
           .getState()
-          .sendMessage(payload.message, payload.agentId, payload.attachments);
+          .sendMessage(payload.message, payload.agentId, payload.attachments, targetSessionId);
       }
     } finally {
       setBusy(false);
@@ -208,7 +246,7 @@ export function ChatCapabilityResendAffordance() {
       )}
       <button
         type="button"
-        onClick={() => useChatFeatureTogglesStore.getState().clearCapabilityError()}
+        onClick={() => useChatFeatureTogglesStore.getState().clearCapabilityError(targetSessionId)}
         aria-label="Dispensar aviso"
         className="p-1 rounded-md text-amber-400/70 hover:text-amber-300 hover:bg-amber-500/10 transition-colors shrink-0"
       >

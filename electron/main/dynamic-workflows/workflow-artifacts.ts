@@ -1,17 +1,8 @@
-
 import { createHash } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  realpathSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { createLogger } from '../logger';
-import type {
-  DynamicWorkflowArtifact,
-  DynamicWorkflowArtifactInsertInput,
-} from './types';
+import type { DynamicWorkflowArtifact, DynamicWorkflowArtifactInsertInput } from './types';
 
 const logger = createLogger('dynamic-workflow-artifacts');
 
@@ -20,9 +11,7 @@ export class WorkflowArtifactPathError extends Error {
   readonly runDir: string;
   readonly attemptedPath: string;
   constructor(runDir: string, attemptedPath: string, detail: string) {
-    super(
-      `artifact path fora do run dir do workflow: ${detail} (runDir=${runDir}, alvo=${attemptedPath})`,
-    );
+    super(`artifact path fora do run dir do workflow: ${detail} (runDir=${runDir}, alvo=${attemptedPath})`);
     this.name = 'WorkflowArtifactPathError';
     this.runDir = runDir;
     this.attemptedPath = attemptedPath;
@@ -30,9 +19,7 @@ export class WorkflowArtifactPathError extends Error {
 }
 
 export interface WorkflowArtifactsDeps {
-  registerArtifact: (
-    input: DynamicWorkflowArtifactInsertInput,
-  ) => DynamicWorkflowArtifact;
+  registerArtifact: (input: DynamicWorkflowArtifactInsertInput) => DynamicWorkflowArtifact;
   generateId?: () => string;
 }
 
@@ -53,20 +40,14 @@ export interface WriteArtifactResult {
 }
 
 function defaultGenerateId(): string {
-  return `dwfa_${createHash('sha256')
-    .update(`${Date.now()}:${Math.random()}`)
-    .digest('hex')
-    .slice(0, 24)}`;
+  return `dwfa_${createHash('sha256').update(`${Date.now()}:${Math.random()}`).digest('hex').slice(0, 24)}`;
 }
 
 export function sha256Hex(content: string): string {
   return createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
-export function resolveArtifactPath(
-  runDir: string,
-  target: string,
-): string {
+export function resolveArtifactPath(runDir: string, target: string): string {
   const canonicalRoot = existsSync(runDir) ? realpathSync(runDir) : resolve(runDir);
 
   const absoluteTarget = isAbsolute(target) ? resolve(target) : resolve(canonicalRoot, target);
@@ -74,11 +55,7 @@ export function resolveArtifactPath(
   const canonicalTarget = canonicalizeExisting(absoluteTarget);
 
   if (!isWithin(canonicalRoot, canonicalTarget)) {
-    throw new WorkflowArtifactPathError(
-      canonicalRoot,
-      target,
-      'o caminho resolvido escapa a raiz do run dir',
-    );
+    throw new WorkflowArtifactPathError(canonicalRoot, target, 'o caminho resolvido escapa a raiz do run dir');
   }
   return canonicalTarget;
 }
@@ -105,10 +82,7 @@ function canonicalizeExisting(absoluteTarget: string): string {
   return absoluteTarget;
 }
 
-export function writeArtifact(
-  deps: WorkflowArtifactsDeps,
-  input: WriteArtifactInput,
-): WriteArtifactResult {
+export function writeArtifact(deps: WorkflowArtifactsDeps, input: WriteArtifactInput): WriteArtifactResult {
   const absolutePath = resolveArtifactPath(input.runDir, input.relativePath);
 
   const parentDir = absolutePath.slice(0, absolutePath.lastIndexOf(sep)) || sep;
@@ -128,10 +102,7 @@ export function writeArtifact(
     metadataJson: JSON.stringify(input.metadata ?? {}),
   });
 
-  logger.info(
-    { runId: input.runId, kind: input.kind, path: absolutePath, sha256 },
-    'artifact gravado e registrado',
-  );
+  logger.info({ runId: input.runId, kind: input.kind, path: absolutePath, sha256 }, 'artifact gravado e registrado');
 
   return { artifact, absolutePath, sha256 };
 }

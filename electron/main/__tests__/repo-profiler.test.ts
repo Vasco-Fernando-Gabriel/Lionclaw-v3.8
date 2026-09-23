@@ -1,13 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import {
-  classifyByContent,
-  stripCommentsAndStrings,
-  ROLE_MIN_HITS,
-  ROLE_METADATA,
-  PATH_HINTS,
-} from '../repo-profiler';
+import { classifyByContent, stripCommentsAndStrings, ROLE_MIN_HITS, ROLE_METADATA, PATH_HINTS } from '../repo-profiler';
 import type { Role } from '../repo-profiler';
-
 
 describe('stripCommentsAndStrings', () => {
   it('removes single-line comments so keywords inside are not counted', () => {
@@ -45,7 +38,6 @@ describe('stripCommentsAndStrings', () => {
   });
 });
 
-
 describe('classifyByContent - threshold enforcement', () => {
   it('does NOT assign auth when only 1 content hit (threshold is 2)', () => {
     const content = 'function session() {}';
@@ -54,11 +46,7 @@ describe('classifyByContent - threshold enforcement', () => {
   });
 
   it('assigns auth when 3+ distinct pattern hits appear in real code', () => {
-    const content = [
-      'function session() {}',
-      'function token() {}',
-      'bcrypt.hash(password, 10);',
-    ].join('\n');
+    const content = ['function session() {}', 'function token() {}', 'bcrypt.hash(password, 10);'].join('\n');
     const roles = classifyByContent('src/foo.ts', 'foo.ts', content);
     expect(roles).toContain('auth');
   });
@@ -80,11 +68,9 @@ describe('classifyByContent - threshold enforcement', () => {
   });
 
   it('assigns route role when route patterns exceed threshold', () => {
-    const content = [
-      'router.use(handler);',
-      'app.get("/users", getUsers);',
-      'app.post("/users", createUser);',
-    ].join('\n');
+    const content = ['router.use(handler);', 'app.get("/users", getUsers);', 'app.post("/users", createUser);'].join(
+      '\n',
+    );
     const roles = classifyByContent('src/users.ts', 'users.ts', content);
     expect(roles).toContain('route');
   });
@@ -103,11 +89,18 @@ describe('classifyByContent - threshold enforcement', () => {
   });
 });
 
-
 describe('ROLE_MIN_HITS', () => {
   const ALL_ROLES: Role[] = [
-    'auth', 'query', 'crypto', 'route', 'middleware',
-    'template', 'async', 'error-handling', 'config', 'migration',
+    'auth',
+    'query',
+    'crypto',
+    'route',
+    'middleware',
+    'template',
+    'async',
+    'error-handling',
+    'config',
+    'migration',
   ];
 
   it('has an entry for each of the 10 roles', () => {
@@ -119,11 +112,18 @@ describe('ROLE_MIN_HITS', () => {
   });
 });
 
-
 describe('ROLE_METADATA', () => {
   const ALL_ROLES: Role[] = [
-    'auth', 'query', 'crypto', 'route', 'middleware',
-    'template', 'async', 'error-handling', 'config', 'migration',
+    'auth',
+    'query',
+    'crypto',
+    'route',
+    'middleware',
+    'template',
+    'async',
+    'error-handling',
+    'config',
+    'migration',
   ];
 
   it('has 10 entries with required fields', () => {
@@ -145,33 +145,24 @@ describe('ROLE_METADATA', () => {
   });
 });
 
-
 describe('PATH_HINTS', () => {
   it('has at least one hint that matches src/middlewares/foo.ts', () => {
-    const matched = PATH_HINTS.filter(
-      (h) => h.role === 'middleware' && h.regex.test('src/middlewares/foo.ts'),
-    );
+    const matched = PATH_HINTS.filter((h) => h.role === 'middleware' && h.regex.test('src/middlewares/foo.ts'));
     expect(matched.length).toBeGreaterThan(0);
   });
 
   it('has at least one hint that matches src/crypto/utils.ts for crypto role', () => {
-    const matched = PATH_HINTS.filter(
-      (h) => h.role === 'crypto' && h.regex.test('src/crypto/utils.ts'),
-    );
+    const matched = PATH_HINTS.filter((h) => h.role === 'crypto' && h.regex.test('src/crypto/utils.ts'));
     expect(matched.length).toBeGreaterThan(0);
   });
 
   it('has at least one hint that matches src/auth/login.ts for auth role', () => {
-    const matched = PATH_HINTS.filter(
-      (h) => h.role === 'auth' && h.regex.test('src/auth/login.ts'),
-    );
+    const matched = PATH_HINTS.filter((h) => h.role === 'auth' && h.regex.test('src/auth/login.ts'));
     expect(matched.length).toBeGreaterThan(0);
   });
 
   it('has at least one hint that matches db/migrations/001.sql for migration role', () => {
-    const matched = PATH_HINTS.filter(
-      (h) => h.role === 'migration' && h.regex.test('db/migrations/001.sql'),
-    );
+    const matched = PATH_HINTS.filter((h) => h.role === 'migration' && h.regex.test('db/migrations/001.sql'));
     expect(matched.length).toBeGreaterThan(0);
   });
 });

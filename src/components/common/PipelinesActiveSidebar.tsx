@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { useChatStore } from '@/stores/chat-store';
+import { laneLabel } from '@/lib/lanes';
 import { Loader2, Square } from 'lucide-react';
 import { usePipelineStore } from '@/stores/pipeline-store';
 import { useAppStore } from '@/stores/app-store';
@@ -15,6 +17,11 @@ function getDotColor(isStreaming: boolean, error: string | null, phaseStatus: st
 }
 
 export function PipelinesActiveSidebar() {
+  const openLanes = useChatStore((s) => s.openLanes);
+  const loadOpenLanes = useChatStore((s) => s.loadOpenLanes);
+  useEffect(() => {
+    void loadOpenLanes();
+  }, [loadOpenLanes]);
   const projectStates = usePipelineStore((s) => s.projectStates);
   const projects = usePipelineStore((s) => s.projects);
   const setActiveProject = usePipelineStore((s) => s.setActiveProject);
@@ -25,9 +32,7 @@ export function PipelinesActiveSidebar() {
   const stopDrive = useDriveStore((s) => s.stop);
   const setDriveMode = useDriveStore((s) => s.setMode);
 
-  const activeEntries = [...projectStates.entries()].filter(
-    ([, ps]) => isActiveSidebarEntry(ps) || ps.drivePaused,
-  );
+  const activeEntries = [...projectStates.entries()].filter(([, ps]) => isActiveSidebarEntry(ps) || ps.drivePaused);
 
   const activeIdsKey = activeEntries.map(([id]) => id).join(',');
   useEffect(() => {
@@ -41,9 +46,7 @@ export function PipelinesActiveSidebar() {
 
   return (
     <div className="px-2 py-2">
-      <p className="text-[10px] uppercase text-zinc-600 font-medium px-3 py-1 tracking-wider">
-        Pipelines ativos
-      </p>
+      <p className="text-[10px] uppercase text-zinc-600 font-medium px-3 py-1 tracking-wider">Pipelines ativos</p>
 
       {streamingCount >= 5 && (
         <div className="mx-1 mb-1.5 px-2 py-1.5 rounded bg-amber-500/10 border border-amber-500/20">
@@ -54,15 +57,11 @@ export function PipelinesActiveSidebar() {
       )}
 
       {/* Acima de 3 ativos, a regiao ganha scroll interno para nao engolir a sidebar (I3) */}
-      <div
-        className={`space-y-0.5 ${activeEntries.length > 3 ? 'max-h-40 overflow-y-auto' : ''}`}
-      >
+      <div className={`space-y-0.5 ${activeEntries.length > 3 ? 'max-h-40 overflow-y-auto' : ''}`}>
         {activeEntries.map(([projectId, ps]) => {
           const project = projects.find((p) => p.id === projectId);
           const name = project?.name ?? projectId;
-          const dotColor = ps.drivePaused
-            ? 'text-yellow-400'
-            : getDotColor(ps.isStreaming, ps.error, ps.phaseStatus);
+          const dotColor = ps.drivePaused ? 'text-yellow-400' : getDotColor(ps.isStreaming, ps.error, ps.phaseStatus);
           const phases = project ? getPhasesForProject(project) : [];
           const phaseLabel = ps.drivePaused
             ? 'pausado, aguardando voce'
@@ -70,8 +69,9 @@ export function PipelinesActiveSidebar() {
           const isRunning = !ps.drivePaused && (ps.isStreaming || ps.phaseStatus === 'running');
           const drive = drives.get(projectId) ?? null;
           const isCoordinating =
-            drive?.driver === 'orchestrator' &&
-            (drive.status === 'driving' || drive.status === 'awaiting-human');
+            drive?.driver === 'orchestrator' && (drive.status === 'driving' || drive.status === 'awaiting-human');
+
+          const lane = isCoordinating ? openLanes.find((l) => l.id === drive.sessionId) : undefined;
 
           return (
             <div
@@ -96,6 +96,11 @@ export function PipelinesActiveSidebar() {
                   &#9679;
                 </span>
                 <span className="flex-1 min-w-0 truncate font-medium">{name}</span>
+                {lane && (
+                  <span data-testid="drive-lane-badge" title={laneLabel(lane)} className="text-[10px] text-amber-400">
+                    L{lane.laneBadge}
+                  </span>
+                )}
                 {isCoordinating && (
                   <span className="shrink-0 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                     <DriveModeToggle
@@ -121,13 +126,7 @@ export function PipelinesActiveSidebar() {
                 )}
               </span>
               <span className="w-full flex items-center gap-1.5 pl-4">
-                {isRunning && (
-                  <Loader2
-                    size={11}
-                    className="animate-spin text-amber-500 shrink-0"
-                    aria-hidden="true"
-                  />
-                )}
+                {isRunning && <Loader2 size={11} className="animate-spin text-amber-500 shrink-0" aria-hidden="true" />}
                 <span className="min-w-0 truncate text-[10px] text-zinc-500">{phaseLabel}</span>
               </span>
             </div>

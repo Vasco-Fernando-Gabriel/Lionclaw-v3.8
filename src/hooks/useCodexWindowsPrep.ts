@@ -1,4 +1,3 @@
-
 import { useCallback, useRef, useState } from 'react';
 import type { CodexPrepCheckResult, CodexPrepApplyResult, CodexWindowsIssue } from '@/types';
 
@@ -28,21 +27,18 @@ export function useCodexWindowsPrep(): UseCodexWindowsPrepReturn {
     }
   }, []);
 
-  const checkProject = useCallback(
-    async (projectPath: string): Promise<CodexPrepCheckResult> => {
-      setBusy(true);
-      try {
-        const result = (await window.lionclaw.codex.checkPrepNeeded(projectPath)) as CodexPrepCheckResult;
-        if (result.needs) {
-          setCheckResult(result);
-        }
-        return result;
-      } finally {
-        setBusy(false);
+  const checkProject = useCallback(async (projectPath: string): Promise<CodexPrepCheckResult> => {
+    setBusy(true);
+    try {
+      const result = (await window.lionclaw.codex.checkPrepNeeded(projectPath)) as CodexPrepCheckResult;
+      if (result.needs) {
+        setCheckResult(result);
       }
-    },
-    [],
-  );
+      return result;
+    } finally {
+      setBusy(false);
+    }
+  }, []);
 
   const openFromWarning = useCallback((repoRoot: string, issues: CodexWindowsIssue[]): void => {
     setCheckResult({

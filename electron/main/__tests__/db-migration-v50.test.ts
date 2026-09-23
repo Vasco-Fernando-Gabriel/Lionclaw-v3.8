@@ -1,4 +1,3 @@
-
 import Database from 'better-sqlite3';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { __V50_INTERNAL, applyMigrationV50 } from '../db-migrations/v50-prompts';
@@ -56,9 +55,7 @@ describe('db-migration-v50: security-skeptic-security prompt', () => {
     expect(OLD_SECURITY_SKEPTIC_SECURITY_PROMPT).toContain('Secao 02: Auth Auditor');
     expect(OLD_SECURITY_SKEPTIC_SECURITY_PROMPT).toContain('Secao 03: Isolation Inspector');
     expect(OLD_SECURITY_SKEPTIC_SECURITY_PROMPT).toContain('Secao 07: OWASP Scanner');
-    expect(OLD_SECURITY_SKEPTIC_SECURITY_PROMPT).toContain(
-      'elas sao responsabilidade do outro validador',
-    );
+    expect(OLD_SECURITY_SKEPTIC_SECURITY_PROMPT).toContain('elas sao responsabilidade do outro validador');
   });
 
   it('NEW prompt usa o formato pos-S0.5 (descricoes funcionais sem nomes de agentes) com PT_BR_BLOCK', () => {
@@ -86,7 +83,6 @@ describe('db-migration-v50: contrato de preservacao', () => {
   });
 });
 
-
 const SCHEMA_AGENTS = `
   CREATE TABLE agents (
     id TEXT PRIMARY KEY,
@@ -105,9 +101,12 @@ const SCHEMA_AGENTS = `
 `;
 
 function insertAgent(db: Database.Database, id: string, system_prompt: string): void {
-  db.prepare(
-    `INSERT INTO agents (id, name, description, system_prompt) VALUES (?, ?, ?, ?)`,
-  ).run(id, id, `desc-${id}`, system_prompt);
+  db.prepare(`INSERT INTO agents (id, name, description, system_prompt) VALUES (?, ?, ?, ?)`).run(
+    id,
+    id,
+    `desc-${id}`,
+    system_prompt,
+  );
 }
 
 describe('db-migration-v50: applyMigrationV50 (banco in-memory)', () => {
@@ -123,9 +122,9 @@ describe('db-migration-v50: applyMigrationV50 (banco in-memory)', () => {
 
     applyMigrationV50(db);
 
-    const row = db
-      .prepare(`SELECT system_prompt FROM agents WHERE id='spec-builder'`)
-      .get() as { system_prompt: string };
+    const row = db.prepare(`SELECT system_prompt FROM agents WHERE id='spec-builder'`).get() as {
+      system_prompt: string;
+    };
     expect(row.system_prompt).toBe(__V50_INTERNAL.NEW_SPEC_BUILDER_PROMPT);
   });
 
@@ -134,24 +133,20 @@ describe('db-migration-v50: applyMigrationV50 (banco in-memory)', () => {
 
     applyMigrationV50(db);
 
-    const row = db
-      .prepare(`SELECT system_prompt FROM agents WHERE id='spec-validator'`)
-      .get() as { system_prompt: string };
+    const row = db.prepare(`SELECT system_prompt FROM agents WHERE id='spec-validator'`).get() as {
+      system_prompt: string;
+    };
     expect(row.system_prompt).toBe(__V50_INTERNAL.NEW_SPEC_VALIDATOR_PROMPT);
   });
 
   it('aplica NEW prompt quando system_prompt = OLD (security-skeptic-security)', () => {
-    insertAgent(
-      db,
-      'security-skeptic-security',
-      __V50_INTERNAL.OLD_SECURITY_SKEPTIC_SECURITY_PROMPT,
-    );
+    insertAgent(db, 'security-skeptic-security', __V50_INTERNAL.OLD_SECURITY_SKEPTIC_SECURITY_PROMPT);
 
     applyMigrationV50(db);
 
-    const row = db
-      .prepare(`SELECT system_prompt FROM agents WHERE id='security-skeptic-security'`)
-      .get() as { system_prompt: string };
+    const row = db.prepare(`SELECT system_prompt FROM agents WHERE id='security-skeptic-security'`).get() as {
+      system_prompt: string;
+    };
     expect(row.system_prompt).toBe(__V50_INTERNAL.NEW_SECURITY_SKEPTIC_SECURITY_PROMPT);
   });
 
@@ -179,13 +174,19 @@ describe('db-migration-v50: applyMigrationV50 (banco in-memory)', () => {
 
     applyMigrationV50(db);
 
-    const sb = db.prepare(`SELECT system_prompt FROM agents WHERE id='spec-builder'`).get() as { system_prompt: string };
+    const sb = db.prepare(`SELECT system_prompt FROM agents WHERE id='spec-builder'`).get() as {
+      system_prompt: string;
+    };
     expect(sb.system_prompt).toBe(__V50_INTERNAL.NEW_SPEC_BUILDER_PROMPT);
 
-    const sv = db.prepare(`SELECT system_prompt FROM agents WHERE id='spec-validator'`).get() as { system_prompt: string };
+    const sv = db.prepare(`SELECT system_prompt FROM agents WHERE id='spec-validator'`).get() as {
+      system_prompt: string;
+    };
     expect(sv.system_prompt).toBe('custom-validator');
 
-    const sk = db.prepare(`SELECT system_prompt FROM agents WHERE id='security-skeptic-security'`).get() as { system_prompt: string };
+    const sk = db.prepare(`SELECT system_prompt FROM agents WHERE id='security-skeptic-security'`).get() as {
+      system_prompt: string;
+    };
     expect(sk.system_prompt).toBe(__V50_INTERNAL.NEW_SECURITY_SKEPTIC_SECURITY_PROMPT);
   });
 
@@ -193,11 +194,15 @@ describe('db-migration-v50: applyMigrationV50 (banco in-memory)', () => {
     insertAgent(db, 'spec-builder', __V50_INTERNAL.OLD_SPEC_BUILDER_PROMPT);
 
     applyMigrationV50(db);
-    const after1 = (db.prepare(`SELECT system_prompt FROM agents WHERE id='spec-builder'`).get() as { system_prompt: string }).system_prompt;
+    const after1 = (
+      db.prepare(`SELECT system_prompt FROM agents WHERE id='spec-builder'`).get() as { system_prompt: string }
+    ).system_prompt;
     expect(after1).toBe(__V50_INTERNAL.NEW_SPEC_BUILDER_PROMPT);
 
     applyMigrationV50(db);
-    const after2 = (db.prepare(`SELECT system_prompt FROM agents WHERE id='spec-builder'`).get() as { system_prompt: string }).system_prompt;
+    const after2 = (
+      db.prepare(`SELECT system_prompt FROM agents WHERE id='spec-builder'`).get() as { system_prompt: string }
+    ).system_prompt;
     expect(after2).toBe(__V50_INTERNAL.NEW_SPEC_BUILDER_PROMPT);
   });
 
@@ -206,7 +211,9 @@ describe('db-migration-v50: applyMigrationV50 (banco in-memory)', () => {
 
     applyMigrationV50(db);
 
-    const row = db.prepare(`SELECT system_prompt FROM agents WHERE id='outro-agente'`).get() as { system_prompt: string };
+    const row = db.prepare(`SELECT system_prompt FROM agents WHERE id='outro-agente'`).get() as {
+      system_prompt: string;
+    };
     expect(row.system_prompt).toBe(__V50_INTERNAL.OLD_SPEC_BUILDER_PROMPT);
   });
 });

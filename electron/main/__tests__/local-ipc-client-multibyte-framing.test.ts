@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import net from 'net';
 import fs from 'fs';
@@ -93,8 +92,7 @@ afterEach(async () => {
   }
   try {
     await fs.promises.rm(SANDBOX, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
 });
 
 describe('F8-b3 — framing multibyte do LocalIpcClient (F8-AC3)', () => {
@@ -161,10 +159,7 @@ describe('F8-b3 — framing multibyte do LocalIpcClient (F8-AC3)', () => {
       });
     });
 
-    const line = Buffer.from(
-      JSON.stringify({ jsonrpc: '2.0', id: 42, result: MULTIBYTE_TEXT }) + '\n',
-      'utf8',
-    );
+    const line = Buffer.from(JSON.stringify({ jsonrpc: '2.0', id: 42, result: MULTIBYTE_TEXT }) + '\n', 'utf8');
     for (let offset = 0; offset < line.length; offset += 5) {
       fakeSocket.emit('data', line.subarray(offset, Math.min(offset + 5, line.length)));
     }

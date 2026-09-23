@@ -3,28 +3,12 @@ import fs from 'fs';
 import TelegramBot from 'node-telegram-bot-api';
 import { createLogger } from '../logger';
 import type { IpcContext } from './context';
-import {
-  getAllMCPServers,
-  updateMCPServer,
-  restartServer,
-  stopServer,
-} from '../mcp-manager';
+import { getAllMCPServers, updateMCPServer, restartServer, stopServer } from '../mcp-manager';
 import { startGoogleMcps } from '../google-mcp-startup';
-import {
-  generateSpeech,
-  transcribeAudio,
-} from '../voice-engine';
-import {
-  generateCartesiaSpeech,
-  generateLiveSpeech,
-  listCartesiaVoices,
-} from '../cartesia-engine';
+import { generateSpeech, transcribeAudio } from '../voice-engine';
+import { generateCartesiaSpeech, generateLiveSpeech, listCartesiaVoices } from '../cartesia-engine';
 import { generateImage, editImage } from '../image-engine';
-import {
-  runOAuthFlow,
-  getGoogleAuthStatus,
-  revokeGoogleAuth,
-} from '../google-auth';
+import { runOAuthFlow, getGoogleAuthStatus, revokeGoogleAuth } from '../google-auth';
 import {
   getVaultEntries,
   setVaultSecret,
@@ -34,17 +18,8 @@ import {
   registerVaultEntry,
   type VaultEntry,
 } from '../vault-registry';
-import {
-  getAllChannels,
-  getChannel,
-  upsertChannel,
-  toggleChannel,
-} from '../channels-db';
-import {
-  startTelegramBot,
-  stopTelegramBot,
-  isTelegramRunning,
-} from '../telegram-bridge';
+import { getAllChannels, getChannel, upsertChannel, toggleChannel } from '../channels-db';
+import { startTelegramBot, stopTelegramBot, isTelegramRunning } from '../telegram-bridge';
 import { syncCodexMcpConfig } from '../codex-sdk/mcp-config-sync';
 import {
   connectHiggsfield,
@@ -79,19 +54,16 @@ export function registerIntegrationsHandlers(ctx: IpcContext): void {
     return getSecretsHealth();
   });
 
-  ipcMain.handle(
-    'vault:register-and-set',
-    async (_event, entry: Omit<VaultEntry, 'configured'>, value: string) => {
-      try {
-        registerVaultEntry(entry);
-        await setVaultSecret(entry.key, value);
-        return { ok: true };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return { error: message };
-      }
-    },
-  );
+  ipcMain.handle('vault:register-and-set', async (_event, entry: Omit<VaultEntry, 'configured'>, value: string) => {
+    try {
+      registerVaultEntry(entry);
+      await setVaultSecret(entry.key, value);
+      return { ok: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { error: message };
+    }
+  });
 
   ipcMain.handle('higgsfield:auth-status', async () => {
     return getHiggsfieldAuthStatus();
@@ -122,25 +94,13 @@ export function registerIntegrationsHandlers(ctx: IpcContext): void {
     return { ok: true, status: await getHiggsfieldAuthStatus() };
   });
 
-  ipcMain.handle(
-    'image:generate',
-    async (_event, prompt: string, options?: { aspectRatio?: string }) => {
-      return generateImage(
-        prompt,
-        options as { aspectRatio?: '1:1' | '3:4' | '4:3' | '9:16' | '16:9' },
-      );
-    },
-  );
+  ipcMain.handle('image:generate', async (_event, prompt: string, options?: { aspectRatio?: string }) => {
+    return generateImage(prompt, options as { aspectRatio?: '1:1' | '3:4' | '4:3' | '9:16' | '16:9' });
+  });
 
   ipcMain.handle(
     'image:edit',
-    async (
-      _event,
-      prompt: string,
-      imageBase64: string,
-      imageMimeType: string,
-      options?: { aspectRatio?: string },
-    ) => {
+    async (_event, prompt: string, imageBase64: string, imageMimeType: string, options?: { aspectRatio?: string }) => {
       return editImage(
         prompt,
         imageBase64,
@@ -154,29 +114,21 @@ export function registerIntegrationsHandlers(ctx: IpcContext): void {
     return transcribeAudio(audioBase64);
   });
 
-  ipcMain.handle(
-    'voice:speak',
-    async (_event, text: string, voiceId?: string) => {
-      const result = await generateSpeech(text, voiceId);
-      return result;
-    },
-  );
+  ipcMain.handle('voice:speak', async (_event, text: string, voiceId?: string) => {
+    const result = await generateSpeech(text, voiceId);
+    return result;
+  });
 
   ipcMain.handle('voice:speak-live', async (_event, text: string) => {
     return generateLiveSpeech(text);
   });
 
-  ipcMain.handle(
-    'voice:speak-cartesia',
-    async (_event, text: string, voiceId?: string, language?: string) => {
-      return generateCartesiaSpeech(text, voiceId, language);
-    },
-  );
+  ipcMain.handle('voice:speak-cartesia', async (_event, text: string, voiceId?: string, language?: string) => {
+    return generateCartesiaSpeech(text, voiceId, language);
+  });
 
   ipcMain.handle('voice:list-voices', async () => {
-    const apiKey = await (
-      await import('../secrets-vault')
-    ).getSecret('ELEVENLABS_API_KEY');
+    const apiKey = await (await import('../secrets-vault')).getSecret('ELEVENLABS_API_KEY');
     if (!apiKey) throw new Error('ELEVENLABS_API_KEY nao configurada');
 
     const response = await fetch('https://api.elevenlabs.io/v1/voices', {
@@ -215,15 +167,12 @@ export function registerIntegrationsHandlers(ctx: IpcContext): void {
     return buffer.toString('base64');
   });
 
-  ipcMain.handle(
-    'google:setup',
-    async (_event, config: { clientId: string; clientSecret: string }) => {
-      const { setSecret } = await import('../secrets-vault');
-      await setSecret('GOOGLE_CLIENT_ID', config.clientId);
-      await setSecret('GOOGLE_CLIENT_SECRET', config.clientSecret);
-      return { success: true };
-    },
-  );
+  ipcMain.handle('google:setup', async (_event, config: { clientId: string; clientSecret: string }) => {
+    const { setSecret } = await import('../secrets-vault');
+    await setSecret('GOOGLE_CLIENT_ID', config.clientId);
+    await setSecret('GOOGLE_CLIENT_SECRET', config.clientSecret);
+    return { success: true };
+  });
 
   ipcMain.handle('google:authenticate', async () => {
     const result = await runOAuthFlow();
@@ -289,16 +238,13 @@ export function registerIntegrationsHandlers(ctx: IpcContext): void {
     },
   );
 
-  ipcMain.handle(
-    'channels:toggle',
-    async (_event, type: string, active: boolean) => {
-      toggleChannel(type, active);
-      if (type === 'telegram') {
-        await stopTelegramBot();
-        if (active) await startTelegramBot(getMainWindow);
-      }
-    },
-  );
+  ipcMain.handle('channels:toggle', async (_event, type: string, active: boolean) => {
+    toggleChannel(type, active);
+    if (type === 'telegram') {
+      await stopTelegramBot();
+      if (active) await startTelegramBot(getMainWindow);
+    }
+  });
 
   ipcMain.handle('channels:test-telegram', async () => {
     const { getSecret } = await import('../secrets-vault');

@@ -1,10 +1,10 @@
-
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import {
   LocalIpcClient,
   assertEndpointPresentOrExit,
+  withTurnBinding,
   type CallOptions,
 } from '../../_shared/local-ipc-client.js';
 import { AUTHORING_GUIDE_TEXT } from '../../_shared/dynamic-workflow-authoring-guide.js';
@@ -12,6 +12,11 @@ import { AUTHORING_GUIDE_TEXT } from '../../_shared/dynamic-workflow-authoring-g
 assertEndpointPresentOrExit();
 
 const client = new LocalIpcClient({ callTimeoutMs: 15 * 60 * 1000 });
+
+const LANE: string | undefined = (() => {
+  const raw = process.env['LIONCLAW_MCP_LANE'];
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined;
+})();
 
 const server = new McpServer({ name: 'lionclaw-dynamic-workflows', version: '1.0.0' });
 
@@ -24,9 +29,14 @@ async function proxy(
   method: string,
   params: Record<string, unknown>,
   options: CallOptions = {},
+  extra?: unknown,
 ): Promise<ToolResult> {
   try {
-    const result = await client.callMethod(method, params, options);
+    const result = await client.callMethod(
+      method,
+      withTurnBinding({ ...params, ...(LANE !== undefined ? { lane: LANE } : {}) }, extra),
+      options,
+    );
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -52,17 +62,22 @@ server.tool(
     name: z.string().optional().describe('Workflow name.'),
     workflowJsSource: z
       .string()
-      .describe('The claude-code workflow.js source YOU wrote (ESM subset). The .js IS the workflow - no SPEC, no manifest.'),
+      .describe(
+        'The claude-code workflow.js source YOU wrote (ESM subset). The .js IS the workflow - no SPEC, no manifest.',
+      ),
     start: z
       .boolean()
       .optional()
-      .describe('Start the run immediately after creating it (default true). Set false to create-only and start later.'),
+      .describe(
+        'Start the run immediately after creating it (default true). Set false to create-only and start later.',
+      ),
   },
-  async ({ projectPath, name, workflowJsSource, start }) =>
+  async ({ projectPath, name, workflowJsSource, start }, extra) =>
     proxy(
       'dynamic_workflow_author',
       { projectPath, name, workflowJsSource, start },
       { idempotent: false, timeoutMs: 5 * 60_000 },
+      extra,
     ),
 );
 
@@ -72,7 +87,7 @@ server.tool(
   {
     runId: z.string().describe('Workflow run id.'),
   },
-  async ({ runId }) => proxy('dynamic_workflow_start', { runId }),
+  async ({ runId }, extra) => proxy('dynamic_workflow_start', { runId }, {}, extra),
 );
 
 server.tool(
@@ -81,7 +96,7 @@ server.tool(
   {
     runId: z.string().describe('Workflow run id.'),
   },
-  async ({ runId }) => proxy('dynamic_workflow_inspect', { runId }),
+  async ({ runId }, extra) => proxy('dynamic_workflow_inspect', { runId }, {}, extra),
 );
 
 server.tool(
@@ -92,8 +107,8 @@ server.tool(
     message: z.string().describe('Message/answer for the node.'),
     targetNodeId: z.string().optional().describe('Optional node id this reply is meant for.'),
   },
-  async ({ runId, message, targetNodeId }) =>
-    proxy('dynamic_workflow_reply', { runId, message, targetNodeId }, { idempotent: false }),
+  async ({ runId, message, targetNodeId }, extra) =>
+    proxy('dynamic_workflow_reply', { runId, message, targetNodeId }, { idempotent: false }, extra),
 );
 
 server.tool(
@@ -101,7 +116,9 @@ server.tool(
   'Approve (or reject) a gate of a workflow run that YOU drive (mode orchestrator). Authored runs have only HOST gates: boundary:<phase> / boundary:coordinator-finished (opened when the window semaphore is ATENCAO or SEM VEREDITO; approve = continue with the risk stated, reject = pause and keep the verdict until a new judgement), failure:<nodeId> (a node failed non-retryably or exhausted retries: the coordinator is PAUSED inside that agent() until you decide; decision "approve" + payload.action = retry (default; optional payload.instruction is appended to the SAME node as [AJUSTE DO ORQUESTRADOR], new attempt now, worktree kept from the wip(failed) commit), switch-agent (+payload.agentType from the dynamic-workflow squad), skip (agent() returns null to the .js, which records the skip and moves on; the failed worktree is reset) or abort (kills the run); decision "reject" = keep the run paused), and cc-delivery (LOCAL squash-merge of the run worktree, reversible, never pushes). Always dynamic_workflow_inspect first and approve only the pendingDecision gate. gate() is fatal in authored .js, so there is no plan-review gate: replan does nothing on these runs (legacy manifest runs only).',
   {
     runId: z.string().describe('Workflow run id.'),
-    gateId: z.string().describe('Gate id to decide (boundary:<phase>, boundary:coordinator-finished, failure:<nodeId>, cc-delivery).'),
+    gateId: z
+      .string()
+      .describe('Gate id to decide (boundary:<phase>, boundary:coordinator-finished, failure:<nodeId>, cc-delivery).'),
     decision: z.enum(['approve', 'reject']).describe('Gate decision.'),
     reason: z.string().optional().describe('Optional reason recorded in the audit trail.'),
     payload: z
@@ -119,7 +136,9 @@ server.tool(
         agentType: z
           .string()
           .optional()
-          .describe('switch-agent only: the new agentType (dynamic-workflow squad, e.g. dynamic-workflow-coder-codex).'),
+          .describe(
+            'switch-agent only: the new agentType (dynamic-workflow squad, e.g. dynamic-workflow-coder-codex).',
+          ),
       })
       .optional()
       .describe(
@@ -132,7 +151,7 @@ server.tool(
         'Legacy manifest runs only (plan-review gate): send the plan back to the planner for one more round. Authored runs have no plan-review gate (gate() is fatal), so this is ignored on boundary:*, failure:* and cc-delivery.',
       ),
   },
-  async ({ runId, gateId, decision, reason, payload, replan }) =>
+  async ({ runId, gateId, decision, reason, payload, replan }, extra) =>
     proxy(
       'dynamic_workflow_approve',
       {
@@ -143,6 +162,7 @@ server.tool(
         ...(payload ? { payload } : replan ? { payload: { action: 'replan' } } : {}),
       },
       { idempotent: false },
+      extra,
     ),
 );
 
@@ -154,26 +174,27 @@ server.tool(
     intervention: z
       .object({
         type: z
-          .enum([
-            'pause',
-            'resume',
-            'rerun-node',
-            'adjust-next-node',
-            'switch-agent',
-            'approve-gate',
-            'reply',
-          ])
+          .enum(['pause', 'resume', 'rerun-node', 'adjust-next-node', 'switch-agent', 'approve-gate', 'reply'])
           .describe('Intervention type (14.1.1; rerun-node per SPEC orquestrador-driver D9).'),
         reason: z.string().optional().describe('Reason (required for some types: switch-agent requires it).'),
         acceptBoundary: z
           .boolean()
           .optional()
-          .describe('resume only: explicitly ACCEPT a rejected boundary gate (boundary:*) and reset its frozen window; without it the resume re-reaches the boundary and the gate reopens.'),
+          .describe(
+            'resume only: explicitly ACCEPT a rejected boundary gate (boundary:*) and reset its frozen window; without it the resume re-reaches the boundary and the gate reopens.',
+          ),
         nodeId: z
           .string()
           .optional()
-          .describe('Target node id. rerun-node: the COMPLETED node to re-execute, or the FAILED node with a failure:<nodeId> gate pending (= retry with instruction) (required). adjust-next-node: exact id of any node not started yet (future nodes accepted) or "*" (next node that starts). switch-agent: the pending/interrupted node whose agent is swapped.'),
-        instruction: z.string().optional().describe('Steering instruction (rerun-node: required, appended to the node prompt; adjust-next-node: required, kept until the target node claims it).'),
+          .describe(
+            'Target node id. rerun-node: the COMPLETED node to re-execute, or the FAILED node with a failure:<nodeId> gate pending (= retry with instruction) (required). adjust-next-node: exact id of any node not started yet (future nodes accepted) or "*" (next node that starts). switch-agent: the pending/interrupted node whose agent is swapped.',
+          ),
+        instruction: z
+          .string()
+          .optional()
+          .describe(
+            'Steering instruction (rerun-node: required, appended to the node prompt; adjust-next-node: required, kept until the target node claims it).',
+          ),
         newAgentId: z
           .string()
           .optional()
@@ -185,8 +206,8 @@ server.tool(
       })
       .describe('Intervention payload (discriminated by type).'),
   },
-  async ({ runId, intervention }) =>
-    proxy('dynamic_workflow_intervene', { runId, intervention }, { idempotent: false }),
+  async ({ runId, intervention }, extra) =>
+    proxy('dynamic_workflow_intervene', { runId, intervention }, { idempotent: false }, extra),
 );
 
 server.tool(
@@ -195,7 +216,7 @@ server.tool(
   {
     runId: z.string().describe('Workflow run id.'),
   },
-  async ({ runId }) => proxy('dynamic_workflow_abort', { runId }),
+  async ({ runId }, extra) => proxy('dynamic_workflow_abort', { runId }, {}, extra),
 );
 
 server.tool(
@@ -210,11 +231,12 @@ server.tool(
       .optional()
       .describe('Resume the run automatically after the edit (default false; otherwise resume via intervene).'),
   },
-  async ({ runId, workflowJsSource, reason, resume }) =>
+  async ({ runId, workflowJsSource, reason, resume }, extra) =>
     proxy(
       'dynamic_workflow_edit_coordinator',
       { runId, workflowJsSource, reason, resume },
       { idempotent: false, timeoutMs: 5 * 60_000 },
+      extra,
     ),
 );
 

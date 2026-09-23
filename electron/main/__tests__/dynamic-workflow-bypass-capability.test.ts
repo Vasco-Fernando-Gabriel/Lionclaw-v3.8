@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -7,6 +6,10 @@ vi.mock('../logger', () => ({
 
 const getActiveChatSessionMock = vi.fn<() => { id: string } | null>(() => ({ id: 'chat-1' }));
 const getPermissionBypassMock = vi.fn(() => false);
+vi.mock('../in-flight-desktop-session', () => ({
+  getInFlightDesktopSession: () => getActiveChatSessionMock()?.id ?? null,
+  setInFlightDesktopSession: () => {},
+}));
 vi.mock('../db', () => ({
   getAllAgents: vi.fn(() => []),
   insertAuditEntry: vi.fn(),
@@ -73,6 +76,7 @@ import {
 import {
   registerChatCapabilityTurn,
   setActiveChatTurn,
+  clearActiveChatTurn,
   __resetChatCapabilityContextForTests,
 } from '../chat-capability-context';
 
@@ -137,12 +141,12 @@ describe('T4 — bypass OFF + capability de GATE LIBERA o gate mode:orchestrator
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_approve',
       id: 1,
-      params: { runId: RUN, gateId: GATE, decision: 'approve' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, gateId: GATE, decision: 'approve' },
     });
     expect(res.error).toBeUndefined();
     expect(approveCore).toHaveBeenCalledTimes(1);
     expect(sendAskQuestionMock).not.toHaveBeenCalled();
-    expect(consumeDriveCapability(gateReq)).toBeNull(); // consumida (uso unico)
+    expect(consumeDriveCapability(gateReq)).toBeNull();
   });
 
   it('intervene approve-gate: capability valida -> core chamado, SEM round-trip humano', async () => {
@@ -151,7 +155,11 @@ describe('T4 — bypass OFF + capability de GATE LIBERA o gate mode:orchestrator
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_intervene',
       id: 2,
-      params: { runId: RUN, intervention: { type: 'approve-gate', gateId: GATE, decision: 'approve' } },
+      params: {
+        ...{ sessionId: SESSION, turnId: TURN_ID },
+        runId: RUN,
+        intervention: { type: 'approve-gate', gateId: GATE, decision: 'approve' },
+      },
     });
     expect(res.error).toBeUndefined();
     expect(interveneCore).toHaveBeenCalledTimes(1);
@@ -165,7 +173,7 @@ describe('T4 — bypass OFF + capability de GATE LIBERA o gate mode:orchestrator
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_approve',
       id: 3,
-      params: { runId: RUN, gateId: GATE, decision: 'approve' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, gateId: GATE, decision: 'approve' },
     });
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
     expect(res.error).toBeDefined();
@@ -179,7 +187,7 @@ describe('T4 — bypass OFF + capability de GATE LIBERA o gate mode:orchestrator
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_approve',
       id: 4,
-      params: { runId: RUN, gateId: GATE, decision: 'approve' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, gateId: GATE, decision: 'approve' },
     });
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
     expect(res.error).toBeDefined();
@@ -193,7 +201,7 @@ describe('T4 — bypass OFF + capability de GATE LIBERA o gate mode:orchestrator
     const res = await dispatch(anonCtx, {
       method: 'dynamic_workflow_approve',
       id: 5,
-      params: { runId: RUN, gateId: GATE, decision: 'approve' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, gateId: GATE, decision: 'approve' },
     });
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
     expect(res.error).toBeDefined();
@@ -207,7 +215,7 @@ describe('T4 — fail-closed sem os dois predicados (gate)', () => {
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_approve',
       id: 6,
-      params: { runId: RUN, gateId: GATE, decision: 'approve' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, gateId: GATE, decision: 'approve' },
     });
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
     expect(res.error).toBeDefined();
@@ -217,11 +225,11 @@ describe('T4 — fail-closed sem os dois predicados (gate)', () => {
   it('caller subagente (sem chat ativo): recusado antes do carve-out; capability INTACTA', async () => {
     activateTurn(DRIVE_TURN);
     mintGate();
-    getActiveChatSessionMock.mockReturnValue(null);
+    clearActiveChatTurn({ sessionId: SESSION, lane: 'desktop' });
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_approve',
       id: 7,
-      params: { runId: RUN, gateId: GATE, decision: 'approve' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, gateId: GATE, decision: 'approve' },
     });
     expect(res.error).toBeDefined();
     expect(res.error?.message).toMatch(/orquestrador/i);
@@ -236,7 +244,11 @@ describe('T4 — fail-closed sem os dois predicados (gate)', () => {
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_intervene',
       id: 8,
-      params: { runId: RUN, intervention: { type: 'pause', reason: 'parar' } },
+      params: {
+        ...{ sessionId: SESSION, turnId: TURN_ID },
+        runId: RUN,
+        intervention: { type: 'pause', reason: 'parar' },
+      },
     });
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
     expect(res.error).toBeDefined();
@@ -251,7 +263,11 @@ describe('T4 — fail-closed sem os dois predicados (gate)', () => {
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_intervene',
       id: 9,
-      params: { runId: RUN, intervention: { type: 'request-replan', scope: 'remaining', reason: 'replanejar' } },
+      params: {
+        ...{ sessionId: SESSION, turnId: TURN_ID },
+        runId: RUN,
+        intervention: { type: 'request-replan', scope: 'remaining', reason: 'replanejar' },
+      },
     });
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
     expect(res.error).toBeDefined();
@@ -266,7 +282,7 @@ describe('T4 — fail-closed sem os dois predicados (gate)', () => {
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_approve',
       id: 10,
-      params: { runId: RUN, gateId: 'gate-X', decision: 'approve' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, gateId: 'gate-X', decision: 'approve' },
     });
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
     expect(res.error).toBeDefined();
@@ -280,14 +296,14 @@ describe('T4 — fail-closed sem os dois predicados (gate)', () => {
     const first = await dispatch(ctx, {
       method: 'dynamic_workflow_approve',
       id: 11,
-      params: { runId: RUN, gateId: GATE, decision: 'approve' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, gateId: GATE, decision: 'approve' },
     });
     expect(first.error).toBeUndefined();
     expect(approveCore).toHaveBeenCalledTimes(1);
     const second = await dispatch(ctx, {
       method: 'dynamic_workflow_approve',
       id: 12,
-      params: { runId: RUN, gateId: GATE, decision: 'approve' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, gateId: GATE, decision: 'approve' },
     });
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
     expect(second.error).toBeDefined();
@@ -300,7 +316,7 @@ describe('T4 — fail-closed sem os dois predicados (gate)', () => {
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_approve',
       id: 13,
-      params: { runId: RUN, decision: 'approve' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, decision: 'approve' },
     });
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
     expect(res.error).toBeDefined();
@@ -316,19 +332,23 @@ describe('D7 — capability de WAKE (scope:wake, 3 usos / 10 min, lista fechada)
     const pause = await dispatch(ctx, {
       method: 'dynamic_workflow_intervene',
       id: 20,
-      params: { runId: RUN, intervention: { type: 'pause' } },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, intervention: { type: 'pause' } },
     });
     expect(pause.error).toBeUndefined();
     const rerun = await dispatch(ctx, {
       method: 'dynamic_workflow_intervene',
       id: 21,
-      params: { runId: RUN, intervention: { type: 'rerun-node', nodeId: 'cc:S1:coder:1', instruction: 'refaca' } },
+      params: {
+        ...{ sessionId: SESSION, turnId: TURN_ID },
+        runId: RUN,
+        intervention: { type: 'rerun-node', nodeId: 'cc:S1:coder:1', instruction: 'refaca' },
+      },
     });
     expect(rerun.error).toBeUndefined();
     const abort = await dispatch(ctx, {
       method: 'dynamic_workflow_abort',
       id: 22,
-      params: { runId: RUN },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN },
     });
     expect(abort.error).toBeUndefined();
     expect(interveneCore).toHaveBeenCalledTimes(2);
@@ -343,7 +363,7 @@ describe('D7 — capability de WAKE (scope:wake, 3 usos / 10 min, lista fechada)
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_approve',
       id: 23,
-      params: { runId: RUN, gateId: 'boundary:S1', decision: 'approve' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, gateId: 'boundary:S1', decision: 'approve' },
     });
     expect(res.error).toBeUndefined();
     expect(approveCore).toHaveBeenCalledTimes(1);
@@ -357,7 +377,7 @@ describe('D7 — capability de WAKE (scope:wake, 3 usos / 10 min, lista fechada)
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_intervene',
       id: 24,
-      params: { runId: RUN, intervention: { type: 'pause' } },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, intervention: { type: 'pause' } },
     });
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
     expect(res.error).toBeDefined();
@@ -371,7 +391,7 @@ describe('D7 — capability de WAKE (scope:wake, 3 usos / 10 min, lista fechada)
     const noTurn = await dispatch(ctx, {
       method: 'dynamic_workflow_intervene',
       id: 25,
-      params: { runId: RUN, intervention: { type: 'pause' } },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, intervention: { type: 'pause' } },
     });
     expect(noTurn.error).toBeDefined();
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
@@ -381,7 +401,7 @@ describe('D7 — capability de WAKE (scope:wake, 3 usos / 10 min, lista fechada)
     const otherRun = await dispatch(ctx, {
       method: 'dynamic_workflow_abort',
       id: 26,
-      params: { runId: 'run-OTHER' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: 'run-OTHER' },
     });
     expect(otherRun.error).toBeDefined();
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(2);
@@ -395,19 +415,23 @@ describe('D7 — capability de WAKE (scope:wake, 3 usos / 10 min, lista fechada)
     const author = await dispatch(ctx, {
       method: 'dynamic_workflow_author',
       id: 27,
-      params: { projectPath: 'C:/p', workflowJsSource: 'export const meta = {}' },
+      params: {
+        ...{ sessionId: SESSION, turnId: TURN_ID },
+        projectPath: 'C:/p',
+        workflowJsSource: 'export const meta = {}',
+      },
     });
     expect(author.error).toBeDefined();
     const edit = await dispatch(ctx, {
       method: 'dynamic_workflow_edit_coordinator',
       id: 28,
-      params: { runId: RUN, workflowJsSource: 'x', reason: 'y' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, workflowJsSource: 'x', reason: 'y' },
     });
     expect(edit.error).toBeDefined();
     const reply = await dispatch(ctx, {
       method: 'dynamic_workflow_reply',
       id: 29,
-      params: { runId: RUN, message: 'oi' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, message: 'oi' },
     });
     expect(reply.error).toBeDefined();
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(3);
@@ -424,14 +448,14 @@ describe('D7 — capability de WAKE (scope:wake, 3 usos / 10 min, lista fechada)
       const res = await dispatch(ctx, {
         method: 'dynamic_workflow_intervene',
         id: 30 + i,
-        params: { runId: RUN, intervention: { type: 'pause' } },
+        params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, intervention: { type: 'pause' } },
       });
       expect(res.error).toBeUndefined();
     }
     const fourth = await dispatch(ctx, {
       method: 'dynamic_workflow_intervene',
       id: 34,
-      params: { runId: RUN, intervention: { type: 'pause' } },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, intervention: { type: 'pause' } },
     });
     expect(fourth.error).toBeDefined();
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
@@ -444,7 +468,7 @@ describe('D7 — capability de WAKE (scope:wake, 3 usos / 10 min, lista fechada)
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_intervene',
       id: 35,
-      params: { runId: RUN, intervention: { type: 'pause' } },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, intervention: { type: 'pause' } },
     });
     expect(res.error).toBeDefined();
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);
@@ -462,16 +486,20 @@ describe('D6 — turno needs-human SOMENTE-LEITURA nega WRITE mesmo com bypass O
     const intervene = await dispatch(ctx, {
       method: 'dynamic_workflow_intervene',
       id: 40,
-      params: { runId: RUN, intervention: { type: 'pause' } },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, intervention: { type: 'pause' } },
     });
     expect(intervene.error).toBeDefined();
     expect(intervene.error?.message).toMatch(/SOMENTE-LEITURA/i);
-    const abort = await dispatch(ctx, { method: 'dynamic_workflow_abort', id: 41, params: { runId: RUN } });
+    const abort = await dispatch(ctx, {
+      method: 'dynamic_workflow_abort',
+      id: 41,
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN },
+    });
     expect(abort.error?.message).toMatch(/SOMENTE-LEITURA/i);
     const approve = await dispatch(ctx, {
       method: 'dynamic_workflow_approve',
       id: 42,
-      params: { runId: RUN, gateId: GATE, decision: 'approve' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, gateId: GATE, decision: 'approve' },
     });
     expect(approve.error?.message).toMatch(/SOMENTE-LEITURA/i);
 
@@ -481,7 +509,11 @@ describe('D6 — turno needs-human SOMENTE-LEITURA nega WRITE mesmo com bypass O
     expect(sendAskQuestionMock).not.toHaveBeenCalled();
     expect(remainingWakeCapabilityUses(RUN, DRIVE_TURN)).toBe(3);
 
-    const inspect = await dispatch(ctx, { method: 'dynamic_workflow_inspect', id: 43, params: { runId: RUN } });
+    const inspect = await dispatch(ctx, {
+      method: 'dynamic_workflow_inspect',
+      id: 43,
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN },
+    });
     expect(inspect.error).toBeUndefined();
     expect(inspectCore).toHaveBeenCalledTimes(1);
   });
@@ -494,15 +526,19 @@ describe('D6 — turno needs-human SOMENTE-LEITURA nega WRITE mesmo com bypass O
     const intervene = await dispatch(anonCtx, {
       method: 'dynamic_workflow_intervene',
       id: 45,
-      params: { runId: RUN, intervention: { type: 'pause' } },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, intervention: { type: 'pause' } },
     });
     expect(intervene.error?.message).toMatch(/SOMENTE-LEITURA/i);
-    const abort = await dispatch(anonCtx, { method: 'dynamic_workflow_abort', id: 46, params: { runId: RUN } });
+    const abort = await dispatch(anonCtx, {
+      method: 'dynamic_workflow_abort',
+      id: 46,
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN },
+    });
     expect(abort.error?.message).toMatch(/SOMENTE-LEITURA/i);
     const approve = await dispatch(anonCtx, {
       method: 'dynamic_workflow_approve',
       id: 47,
-      params: { runId: RUN, gateId: GATE, decision: 'approve' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, gateId: GATE, decision: 'approve' },
     });
     expect(approve.error?.message).toMatch(/SOMENTE-LEITURA/i);
 
@@ -511,7 +547,11 @@ describe('D6 — turno needs-human SOMENTE-LEITURA nega WRITE mesmo com bypass O
     expect(approveCore).not.toHaveBeenCalled();
     expect(sendAskQuestionMock).not.toHaveBeenCalled();
 
-    const inspect = await dispatch(anonCtx, { method: 'dynamic_workflow_inspect', id: 48, params: { runId: RUN } });
+    const inspect = await dispatch(anonCtx, {
+      method: 'dynamic_workflow_inspect',
+      id: 48,
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN },
+    });
     expect(inspect.error).toBeUndefined();
     expect(inspectCore).toHaveBeenCalledTimes(1);
   });
@@ -523,7 +563,7 @@ describe('D6 — turno needs-human SOMENTE-LEITURA nega WRITE mesmo com bypass O
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_intervene',
       id: 44,
-      params: { runId: RUN, intervention: { type: 'pause' } },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, intervention: { type: 'pause' } },
     });
     expect(res.error).toBeUndefined();
     expect(interveneCore).toHaveBeenCalledTimes(1);
@@ -537,7 +577,7 @@ describe('turno humano sem capability = comportamento atual', () => {
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_approve',
       id: 50,
-      params: { runId: RUN, gateId: GATE, decision: 'approve' },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, gateId: GATE, decision: 'approve' },
     });
     expect(res.error).toBeUndefined();
     expect(approveCore).toHaveBeenCalledTimes(1);
@@ -550,7 +590,7 @@ describe('turno humano sem capability = comportamento atual', () => {
     const res = await dispatch(ctx, {
       method: 'dynamic_workflow_intervene',
       id: 51,
-      params: { runId: RUN, intervention: { type: 'pause' } },
+      params: { ...{ sessionId: SESSION, turnId: TURN_ID }, runId: RUN, intervention: { type: 'pause' } },
     });
     expect(res.error).toBeUndefined();
     expect(sendAskQuestionMock).toHaveBeenCalledTimes(1);

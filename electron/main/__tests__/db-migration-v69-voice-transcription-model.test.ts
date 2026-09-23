@@ -1,9 +1,5 @@
-
 import { describe, it, expect, vi } from 'vitest';
-import {
-  applyMigrationV69,
-  __V69_INTERNAL,
-} from '../db-migrations/v69-voice-transcription-model';
+import { applyMigrationV69, __V69_INTERNAL } from '../db-migrations/v69-voice-transcription-model';
 
 describe('applyMigrationV69 - structural', () => {
   it('exports applyMigrationV69 as a function', () => {
@@ -11,10 +7,7 @@ describe('applyMigrationV69 - structural', () => {
   });
 
   it('declares whisper-1 as the default transcription model', () => {
-    expect(__V69_INTERNAL.VOICE_TRANSCRIPTION_DEFAULTS).toContainEqual([
-      'voice_transcription_model',
-      'whisper-1',
-    ]);
+    expect(__V69_INTERNAL.VOICE_TRANSCRIPTION_DEFAULTS).toContainEqual(['voice_transcription_model', 'whisper-1']);
   });
 });
 

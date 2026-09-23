@@ -78,14 +78,10 @@ export interface SprintFeature {
   acceptance_criteria: string[];
 }
 
-export function buildPlannerPrompt(
-  specContent: string,
-  project: HarnessProject,
-  agents: AgentConfig[],
-): string {
+export function buildPlannerPrompt(specContent: string, project: HarnessProject, agents: AgentConfig[]): string {
   const agentList = agents
-    .filter(a => a.isActive && !['harness-coder', 'harness-evaluator', 'harness-planner'].includes(a.id))
-    .map(a => `- ${a.name} (ID: ${a.id}): ${a.description}`)
+    .filter((a) => a.isActive && !['harness-coder', 'harness-evaluator', 'harness-planner'].includes(a.id))
+    .map((a) => `- ${a.name} (ID: ${a.id}): ${a.description}`)
     .join('\n');
 
   return `## Spec do Projeto
@@ -178,9 +174,7 @@ export function parsePlannerOutput(
   const candidates = extractBalancedJsonObjectCandidates(rawOutput);
   if (candidates.length === 0) {
     const preview = rawOutput.slice(0, 200).replace(/\n/g, ' ');
-    throw new Error(
-      `Planner nao retornou JSON valido. Inicio da resposta: "${preview}..."`,
-    );
+    throw new Error(`Planner nao retornou JSON valido. Inicio da resposta: "${preview}..."`);
   }
 
   let parsed: SprintsJson | null = null;
@@ -203,9 +197,9 @@ export function parsePlannerOutput(
       } catch (repairErr) {
         lastCandidateError = new Error(
           `Planner output is not valid JSON. ` +
-          `Original error: ${(e1 as Error).message}. ` +
-          `Repair error: ${(repairErr as Error).message}. ` +
-          `Candidate (first 200 chars): ${candidate.slice(0, 200)}`,
+            `Original error: ${(e1 as Error).message}. ` +
+            `Repair error: ${(repairErr as Error).message}. ` +
+            `Candidate (first 200 chars): ${candidate.slice(0, 200)}`,
         );
         continue;
       }
@@ -215,21 +209,15 @@ export function parsePlannerOutput(
     const candidate_parsed = unwrapped as SprintsJson;
 
     if (!candidate_parsed?.project) {
-      lastCandidateError = new Error(
-        `Missing "project" in planner output (candidate index ${ci}).`,
-      );
+      lastCandidateError = new Error(`Missing "project" in planner output (candidate index ${ci}).`);
       continue;
     }
     if (!Array.isArray(candidate_parsed.sprints)) {
-      lastCandidateError = new Error(
-        `Missing "sprints" array in planner output (candidate index ${ci}).`,
-      );
+      lastCandidateError = new Error(`Missing "sprints" array in planner output (candidate index ${ci}).`);
       continue;
     }
     if (candidate_parsed.sprints.length === 0) {
-      lastCandidateError = new Error(
-        `Planner generated 0 sprints (candidate index ${ci}).`,
-      );
+      lastCandidateError = new Error(`Planner generated 0 sprints (candidate index ${ci}).`);
       continue;
     }
     parsed = candidate_parsed;
@@ -238,8 +226,8 @@ export function parsePlannerOutput(
 
   if (!parsed) {
     const preview = rawOutput.slice(0, 200).replace(/\n/g, ' ');
-    throw lastCandidateError ?? new Error(
-      `Planner nao retornou JSON valido com project + sprints. Inicio: "${preview}..."`,
+    throw (
+      lastCandidateError ?? new Error(`Planner nao retornou JSON valido com project + sprints. Inicio: "${preview}..."`)
     );
   }
 
@@ -259,8 +247,7 @@ export function parsePlannerOutput(
       if (sprint.coder_agent_id && !validAgentIds.coderIds.has(sprint.coder_agent_id)) {
         const validList = Array.from(validAgentIds.coderIds).join(', ');
         throw new Error(
-          `Sprint "${sprint.id}" has invalid coder_agent_id "${sprint.coder_agent_id}". ` +
-          `Valid IDs: ${validList}`,
+          `Sprint "${sprint.id}" has invalid coder_agent_id "${sprint.coder_agent_id}". ` + `Valid IDs: ${validList}`,
         );
       }
       if (
@@ -271,7 +258,7 @@ export function parsePlannerOutput(
         const validList = Array.from(validAgentIds.evaluatorIds).join(', ');
         throw new Error(
           `Sprint "${sprint.id}" has invalid evaluator_agent_id "${(sprint as Record<string, unknown>)['evaluator_agent_id'] as string}". ` +
-          `Valid IDs: ${validList}`,
+            `Valid IDs: ${validList}`,
         );
       }
     }
@@ -282,12 +269,17 @@ export function parsePlannerOutput(
       const validList = Array.from(validAgentIds.evaluatorIds).join(', ');
       throw new Error(
         `project.config.evaluator_agent_id "${parsed.project.config.evaluator_agent_id}" is not a valid evaluator. ` +
-        `Valid IDs: ${validList}`,
+          `Valid IDs: ${validList}`,
       );
     }
   }
 
-  parsed.metadata = parsed.metadata ?? { version: 1, created_at: new Date().toISOString(), total_sprints: 0, total_features: 0 };
+  parsed.metadata = parsed.metadata ?? {
+    version: 1,
+    created_at: new Date().toISOString(),
+    total_sprints: 0,
+    total_features: 0,
+  };
   parsed.metadata.total_sprints = parsed.sprints.length;
   parsed.metadata.total_features = parsed.sprints.reduce((sum, s) => sum + s.features.length, 0);
 
@@ -300,8 +292,8 @@ export function buildPlannerMarkdownPrompt(
   agents: AgentConfig[],
 ): string {
   const agentList = agents
-    .filter(a => a.isActive && !['harness-coder', 'harness-evaluator', 'harness-planner'].includes(a.id))
-    .map(a => `- ${a.name} (ID: ${a.id}): ${a.description}`)
+    .filter((a) => a.isActive && !['harness-coder', 'harness-evaluator', 'harness-planner'].includes(a.id))
+    .map((a) => `- ${a.name} (ID: ${a.id}): ${a.description}`)
     .join('\n');
 
   return `## Spec do Projeto
@@ -361,7 +353,7 @@ Descricao da feature.
 export function parsePlannerMarkdown(rawOutput: string, project: HarnessProject): SprintsJson {
   const text = rawOutput.trim();
 
-  const sprintBlocks = text.split(/(?=^# Sprint \d+[:\s-])/m).filter(b => b.trim());
+  const sprintBlocks = text.split(/(?=^# Sprint \d+[:\s-])/m).filter((b) => b.trim());
 
   if (sprintBlocks.length === 0) {
     throw new Error('Planner nao retornou nenhuma sprint em Markdown. Esperado "# Sprint 1: ..."');
@@ -393,7 +385,10 @@ export function parsePlannerMarkdown(rawOutput: string, project: HarnessProject)
       let pastMeta = false;
       for (const line of lines) {
         if (line.startsWith('# ')) continue;
-        if (line.match(/^\s*-\s*\*\*/)) { pastMeta = true; continue; }
+        if (line.match(/^\s*-\s*\*\*/)) {
+          pastMeta = true;
+          continue;
+        }
         if (pastMeta && line.trim()) {
           descLines.push(line.trim());
         }
@@ -401,7 +396,7 @@ export function parsePlannerMarkdown(rawOutput: string, project: HarnessProject)
       description = descLines.join(' ').trim();
     }
 
-    const featureBlocks = block.split(/(?=^##\s+Feature[:\s])/m).filter(b => b.match(/^##\s+Feature[:\s]/m));
+    const featureBlocks = block.split(/(?=^##\s+Feature[:\s])/m).filter((b) => b.match(/^##\s+Feature[:\s]/m));
     const features: SprintFeature[] = [];
 
     for (let j = 0; j < featureBlocks.length; j++) {
@@ -413,7 +408,7 @@ export function parsePlannerMarkdown(rawOutput: string, project: HarnessProject)
       const featName = featNameMatch[1].trim();
       const featId = `feat-${String(i + 1).padStart(3, '0')}-${String(j + 1).padStart(3, '0')}`;
 
-      const criteriaHeaderIdx = fb.search(/^###?\s+Crit[eé]rios/mi);
+      const criteriaHeaderIdx = fb.search(/^###?\s+Crit[eé]rios/im);
       let featDescription = '';
       if (criteriaHeaderIdx !== -1) {
         const descPart = fb.slice(featNameMatch[0].length, criteriaHeaderIdx).trim();
@@ -440,7 +435,7 @@ export function parsePlannerMarkdown(rawOutput: string, project: HarnessProject)
       });
     }
 
-    const hintsMatch = block.match(/^##\s+Hints?\s*\n([\s\S]*?)(?=\n---|\n# Sprint|$)/mi);
+    const hintsMatch = block.match(/^##\s+Hints?\s*\n([\s\S]*?)(?=\n---|\n# Sprint|$)/im);
     const hints = {
       existing_files: [] as string[],
       key_interfaces: [] as string[],
@@ -454,10 +449,16 @@ export function parsePlannerMarkdown(rawOutput: string, project: HarnessProject)
       const archMatch = hintsBlock.match(/\*\*Arquitetura:\*\*\s*(.+)/i);
 
       if (filesMatch) {
-        hints.existing_files = filesMatch[1].split(',').map(s => s.trim()).filter(Boolean);
+        hints.existing_files = filesMatch[1]
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
       }
       if (interfacesMatch) {
-        hints.key_interfaces = interfacesMatch[1].split(',').map(s => s.trim()).filter(Boolean);
+        hints.key_interfaces = interfacesMatch[1]
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
       }
       if (archMatch) {
         hints.architecture_notes = archMatch[1].trim();
@@ -478,7 +479,10 @@ export function parsePlannerMarkdown(rawOutput: string, project: HarnessProject)
     }
 
     const stack: string[] = stackMatch
-      ? stackMatch[1].split(',').map(s => s.trim()).filter(Boolean)
+      ? stackMatch[1]
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
       : [];
 
     sprints.push({
@@ -538,32 +542,38 @@ export function parsePlannerMarkdown(rawOutput: string, project: HarnessProject)
 }
 
 export function sprintsJsonToMarkdown(sprintsJson: SprintsJson): string {
-  return sprintsJson.sprints.map((sprint, i) => {
-    const deps = sprint.dependencies.length > 0
-      ? sprint.dependencies.map(d => {
-          const num = d.match(/\d+/);
-          return num ? `sprint ${parseInt(num[0], 10)}` : d;
-        }).join(', ')
-      : 'nenhuma';
+  return sprintsJson.sprints
+    .map((sprint, i) => {
+      const deps =
+        sprint.dependencies.length > 0
+          ? sprint.dependencies
+              .map((d) => {
+                const num = d.match(/\d+/);
+                return num ? `sprint ${parseInt(num[0], 10)}` : d;
+              })
+              .join(', ')
+          : 'nenhuma';
 
-    const featuresBlock = sprint.features.map(f => {
-      const criteria = f.acceptance_criteria.map(c => `- ${c}`).join('\n');
-      return `## Feature: ${f.name}\n${f.description}\n\n### Criterios de aceite\n${criteria}`;
-    }).join('\n\n');
+      const featuresBlock = sprint.features
+        .map((f) => {
+          const criteria = f.acceptance_criteria.map((c) => `- ${c}`).join('\n');
+          return `## Feature: ${f.name}\n${f.description}\n\n### Criterios de aceite\n${criteria}`;
+        })
+        .join('\n\n');
 
-    const hintsLines: string[] = [];
-    if (sprint.hints.existing_files.length > 0) {
-      hintsLines.push(`- **Arquivos existentes:** ${sprint.hints.existing_files.join(', ')}`);
-    }
-    if (sprint.hints.key_interfaces.length > 0) {
-      hintsLines.push(`- **Interfaces chave:** ${sprint.hints.key_interfaces.join(', ')}`);
-    }
-    if (sprint.hints.architecture_notes) {
-      hintsLines.push(`- **Arquitetura:** ${sprint.hints.architecture_notes}`);
-    }
-    const hintsBlock = hintsLines.length > 0 ? `\n## Hints\n${hintsLines.join('\n')}` : '';
+      const hintsLines: string[] = [];
+      if (sprint.hints.existing_files.length > 0) {
+        hintsLines.push(`- **Arquivos existentes:** ${sprint.hints.existing_files.join(', ')}`);
+      }
+      if (sprint.hints.key_interfaces.length > 0) {
+        hintsLines.push(`- **Interfaces chave:** ${sprint.hints.key_interfaces.join(', ')}`);
+      }
+      if (sprint.hints.architecture_notes) {
+        hintsLines.push(`- **Arquitetura:** ${sprint.hints.architecture_notes}`);
+      }
+      const hintsBlock = hintsLines.length > 0 ? `\n## Hints\n${hintsLines.join('\n')}` : '';
 
-    return `# Sprint ${i + 1}: ${sprint.name}
+      return `# Sprint ${i + 1}: ${sprint.name}
 - **Coder:** ${sprint.coder_agent_id}
 - **Complexidade:** ${sprint.complexity}
 - **Stack:** ${sprint.stack.join(', ')}
@@ -573,17 +583,18 @@ export function sprintsJsonToMarkdown(sprintsJson: SprintsJson): string {
 ${sprint.description}
 
 ${featuresBlock}${hintsBlock}`;
-  }).join('\n\n---\n\n');
+    })
+    .join('\n\n---\n\n');
 }
 
 export function getNextSprintsVersion(projectDir: string): number {
   const files = fs.existsSync(projectDir)
-    ? fs.readdirSync(projectDir).filter(f => f.match(/^sprints\.v\d+\.(json|md)$/))
+    ? fs.readdirSync(projectDir).filter((f) => f.match(/^sprints\.v\d+\.(json|md)$/))
     : [];
 
   if (files.length === 0) return 1;
 
-  const versions = files.map(f => {
+  const versions = files.map((f) => {
     const match = f.match(/^sprints\.v(\d+)\.(json|md)$/);
     return match ? parseInt(match[1], 10) : 0;
   });
@@ -619,7 +630,7 @@ export function saveSprintsJson(
 
   replaceHarnessSprintsForProject(
     projectId,
-    sprintsJson.sprints.map(sprint => ({
+    sprintsJson.sprints.map((sprint) => ({
       sprintIndex: sprint.index,
       sprintJsonId: sprint.id,
       name: sprint.name,
@@ -670,13 +681,13 @@ export function buildRegenerationPrompt(
     updatedAt: new Date().toISOString(),
   };
 
-  const basePrompt = format === 'markdown'
-    ? buildPlannerMarkdownPrompt(specContent, fakeProject, agents)
-    : buildPlannerPrompt(specContent, fakeProject, agents);
+  const basePrompt =
+    format === 'markdown'
+      ? buildPlannerMarkdownPrompt(specContent, fakeProject, agents)
+      : buildPlannerPrompt(specContent, fakeProject, agents);
 
-  const previousContent = format === 'markdown'
-    ? sprintsJsonToMarkdown(previousJson)
-    : JSON.stringify(previousJson, null, 2);
+  const previousContent =
+    format === 'markdown' ? sprintsJsonToMarkdown(previousJson) : JSON.stringify(previousJson, null, 2);
 
   return `${basePrompt}
 
@@ -705,10 +716,10 @@ export function readLatestSprintsJson(projectDir: string, canonicalPath?: string
 
   if (!fs.existsSync(projectDir)) return null;
 
-  const files = fs.readdirSync(projectDir).filter(f => f.match(/^sprints\.v\d+\.json$/));
+  const files = fs.readdirSync(projectDir).filter((f) => f.match(/^sprints\.v\d+\.json$/));
   if (files.length === 0) return null;
 
-  const versions = files.map(f => {
+  const versions = files.map((f) => {
     const match = f.match(/^sprints\.v(\d+)\.json$/);
     return { file: f, version: match ? parseInt(match[1], 10) : 0 };
   });
@@ -739,7 +750,6 @@ export function readHarnessSprintsJson(project: HarnessProject): SprintsJson | n
   return readLatestSprintsJson(path.dirname(canonicalPath), canonicalPath);
 }
 
-
 const SPRINT_QUEUE_PLAYBOOK =
   'Playbook de recuperacao: (i) reverta o sprints.json para casar com a fila de execucao; ' +
   '(ii) resete a fase do Sprint Validator e re-aprove o inicio do desenvolvimento (o confirm re-semeia a fila); ' +
@@ -758,19 +768,18 @@ export function computeSprintJsonHashes(sprintsJson: SprintsJson): Record<string
   return hashes;
 }
 
-export function validateSprintsJsonStructure(
-  sprintsJson: SprintsJson,
-  agents: Array<Pick<AgentConfig, 'id'>>,
-): void {
+export function validateSprintsJsonStructure(sprintsJson: SprintsJson, agents: Array<Pick<AgentConfig, 'id'>>): void {
   const fail = (msg: string): never => {
-    throw new Error(`sprints.json invalido (editado pelo Sprint Validator): ${msg}. Corrija o arquivo ou resete a fase do Planner.`);
+    throw new Error(
+      `sprints.json invalido (editado pelo Sprint Validator): ${msg}. Corrija o arquivo ou resete a fase do Planner.`,
+    );
   };
 
   if (!Array.isArray(sprintsJson.sprints) || sprintsJson.sprints.length === 0) {
     fail('campo "sprints" ausente, nao-array ou vazio');
   }
 
-  const agentIds = new Set(agents.map(a => a.id));
+  const agentIds = new Set(agents.map((a) => a.id));
   const sprintIds = new Set<string>();
   for (let i = 0; i < sprintsJson.sprints.length; i++) {
     const s = sprintsJson.sprints[i] as Partial<SprintJsonEntry> | null;
@@ -788,14 +797,17 @@ export function validateSprintsJsonStructure(
     const featureIds = new Set<string>();
     for (const feature of sprint.features as Array<Partial<SprintFeature>>) {
       if (!feature || typeof feature !== 'object') fail(`sprint "${id}" tem feature que nao e objeto`);
-      if (typeof feature.id !== 'string' || feature.id.trim() === '') fail(`sprint "${id}" tem feature sem "id" valido`);
+      if (typeof feature.id !== 'string' || feature.id.trim() === '')
+        fail(`sprint "${id}" tem feature sem "id" valido`);
       if (featureIds.has(feature.id as string)) fail(`sprint "${id}" tem id de feature duplicado: "${feature.id}"`);
       featureIds.add(feature.id as string);
       if (typeof feature.name !== 'string' || feature.name.trim() === '') {
         fail(`sprint "${id}" feature "${feature.id}" sem "name" valido`);
       }
-      if (feature.acceptance_criteria !== undefined
-        && (!Array.isArray(feature.acceptance_criteria) || feature.acceptance_criteria.some(c => typeof c !== 'string'))) {
+      if (
+        feature.acceptance_criteria !== undefined &&
+        (!Array.isArray(feature.acceptance_criteria) || feature.acceptance_criteria.some((c) => typeof c !== 'string'))
+      ) {
         fail(`sprint "${id}" feature "${feature.id}" com "acceptance_criteria" invalido (esperado array de strings)`);
       }
     }
@@ -805,7 +817,7 @@ export function validateSprintsJsonStructure(
       }
     }
     if (sprint.dependencies !== undefined) {
-      if (!Array.isArray(sprint.dependencies) || sprint.dependencies.some(d => typeof d !== 'string')) {
+      if (!Array.isArray(sprint.dependencies) || sprint.dependencies.some((d) => typeof d !== 'string')) {
         fail(`sprint "${id}" com "dependencies" invalido (esperado array de strings)`);
       }
     }
@@ -835,7 +847,7 @@ function readCanonicalSprintsFileOrThrow(project: HarnessProject): { sprintsJson
   if (!readPath) {
     throw new Error(
       `sprints.json canonico nao encontrado para o projeto ${project.id} (${project.projectPath}). ` +
-      'Resete a fase do Planner para regenerar o plano antes de iniciar o desenvolvimento.',
+        'Resete a fase do Planner para regenerar o plano antes de iniciar o desenvolvimento.',
     );
   }
   let sprintsJson: SprintsJson;
@@ -844,16 +856,18 @@ function readCanonicalSprintsFileOrThrow(project: HarnessProject): { sprintsJson
   } catch (err) {
     throw new Error(
       `sprints.json ilegivel/invalido em ${readPath}: ${(err as Error).message}. ` +
-      'Corrija o JSON editado pelo Sprint Validator ou resete a fase do Planner.',
+        'Corrija o JSON editado pelo Sprint Validator ou resete a fase do Planner.',
     );
   }
   return { sprintsJson, readPath };
 }
 
 function queueRowFieldsDiverge(row: HarnessSprint, entry: SprintJsonEntry, fileMaxRounds: number): boolean {
-  return row.name !== entry.name
-    || (row.coderAgentId ?? null) !== (entry.coder_agent_id ?? null)
-    || row.maxRounds !== fileMaxRounds;
+  return (
+    row.name !== entry.name ||
+    (row.coderAgentId ?? null) !== (entry.coder_agent_id ?? null) ||
+    row.maxRounds !== fileMaxRounds
+  );
 }
 
 export function reseedHarnessSprintsFromFile(project: HarnessProject): SprintReseedOutcome {
@@ -863,8 +877,8 @@ export function reseedHarnessSprintsFromFile(project: HarnessProject): SprintRes
   }
 
   const dbSprints = getHarnessSprints(project.id);
-  const fileIds = sprintsJson.sprints.map(s => s.id);
-  const dbIds = dbSprints.map(s => s.sprintJsonId);
+  const fileIds = sprintsJson.sprints.map((s) => s.id);
+  const dbIds = dbSprints.map((s) => s.sprintJsonId);
   const fileHashes = computeSprintJsonHashes(sprintsJson);
   const fileMaxRounds = resolveFileMaxRounds(sprintsJson, project);
 
@@ -879,9 +893,8 @@ export function reseedHarnessSprintsFromFile(project: HarnessProject): SprintRes
       const entry = sprintsJson.sprints[i];
       const row = dbSprints[i];
       const known = hashMap?.[entry.id];
-      const diverged = known !== undefined
-        ? fileHashes[entry.id] !== known
-        : queueRowFieldsDiverge(row, entry, fileMaxRounds);
+      const diverged =
+        known !== undefined ? fileHashes[entry.id] !== known : queueRowFieldsDiverge(row, entry, fileMaxRounds);
       if (diverged) divergentIds.push(entry.id);
     }
   }
@@ -898,14 +911,17 @@ export function reseedHarnessSprintsFromFile(project: HarnessProject): SprintRes
     }
     if (Object.keys(missing).length > 0) {
       mergeHarnessProjectSprintJsonHashes(project.id, missing);
-      logger.info({ projectId: project.id, seeded: Object.keys(missing).length }, 'Reseed no-op: mapa de hashes semeado (projeto legado)');
+      logger.info(
+        { projectId: project.id, seeded: Object.keys(missing).length },
+        'Reseed no-op: mapa de hashes semeado (projeto legado)',
+      );
     }
     return { action: 'noop', ...totals };
   }
 
   validateSprintsJsonStructure(sprintsJson, getAllAgents());
 
-  const allPending = dbSprints.every(s => s.status === 'pending');
+  const allPending = dbSprints.every((s) => s.status === 'pending');
   const roundsCount = countHarnessRoundsForProject(project.id);
 
   if (allPending && roundsCount === 0) {
@@ -929,12 +945,12 @@ export function reseedHarnessSprintsFromFile(project: HarnessProject): SprintRes
   }
 
   if (idsEqual) {
-    const nonPendingDivergent = divergentIds.filter(id => {
+    const nonPendingDivergent = divergentIds.filter((id) => {
       const row = dbSprints[fileIds.indexOf(id)];
       return row.status !== 'pending';
     });
     if (nonPendingDivergent.length === 0) {
-      const updates = divergentIds.map(id => {
+      const updates = divergentIds.map((id) => {
         const i = fileIds.indexOf(id);
         const entry = sprintsJson.sprints[i];
         return {
@@ -953,13 +969,13 @@ export function reseedHarnessSprintsFromFile(project: HarnessProject): SprintRes
     }
     throw new Error(
       `Fila de sprints divergente do sprints.json em sprint(s) ja executado(s) [${nonPendingDivergent.join(', ')}] — ` +
-      `o conteudo aprovado nao pode ser reconciliado automaticamente sem apagar historico. ${SPRINT_QUEUE_PLAYBOOK}`,
+        `o conteudo aprovado nao pode ser reconciliado automaticamente sem apagar historico. ${SPRINT_QUEUE_PLAYBOOK}`,
     );
   }
 
   throw new Error(
     `Fila de sprints divergente do sprints.json (fila: [${dbIds.join(', ')}] vs arquivo: [${fileIds.join(', ')}]) ` +
-    `com sprint(s) ja executado(s)/rounds registrados — reconciliar automaticamente apagaria historico. ${SPRINT_QUEUE_PLAYBOOK}`,
+      `com sprint(s) ja executado(s)/rounds registrados — reconciliar automaticamente apagaria historico. ${SPRINT_QUEUE_PLAYBOOK}`,
   );
 }
 
@@ -997,8 +1013,8 @@ export function checkHarnessSprintQueueIntegrity(
     };
   }
 
-  const fileIds = (sprintsJson.sprints ?? []).map(s => s.id);
-  const dbIds = dbSprints.map(s => s.sprintJsonId);
+  const fileIds = (sprintsJson.sprints ?? []).map((s) => s.id);
+  const dbIds = dbSprints.map((s) => s.sprintJsonId);
   const hashMap = freshProject.config.sprintJsonHashes;
   const hashMapPresent = !!hashMap && Object.keys(hashMap).length > 0;
 
@@ -1010,7 +1026,7 @@ export function checkHarnessSprintQueueIntegrity(
       mergeHarnessProjectSprintJsonHashes(project.id, fileHashes);
       return { ok: true, warning: 'mapa de hashes ausente (projeto legado) — semeado a partir do sprints.json atual' };
     }
-    const changed = fileIds.filter(id => hashMap?.[id] !== undefined && fileHashes[id] !== hashMap[id]);
+    const changed = fileIds.filter((id) => hashMap?.[id] !== undefined && fileHashes[id] !== hashMap[id]);
     if (changed.length > 0) {
       return {
         ok: false,
@@ -1030,17 +1046,15 @@ export function checkHarnessSprintQueueIntegrity(
     return { ok: true };
   }
 
-  const sameMultiset =
-    fileIds.length === dbIds.length &&
-    [...fileIds].sort().join(' ') === [...dbIds].sort().join(' ');
+  const sameMultiset = fileIds.length === dbIds.length && [...fileIds].sort().join(' ') === [...dbIds].sort().join(' ');
   const kind = sameMultiset ? 'reordered' : 'added-removed';
 
   if (!hashMapPresent) {
     const pendingIds = dbSprints
-      .filter(s => s.status === 'pending' || s.status === 'running')
-      .map(s => s.sprintJsonId);
+      .filter((s) => s.status === 'pending' || s.status === 'running')
+      .map((s) => s.sprintJsonId);
     let cursor = 0;
-    const pendingSubsequenceOk = pendingIds.every(id => {
+    const pendingSubsequenceOk = pendingIds.every((id) => {
       const at = fileIds.indexOf(id, cursor);
       if (at === -1) return false;
       cursor = at + 1;
@@ -1056,9 +1070,10 @@ export function checkHarnessSprintQueueIntegrity(
     }
   }
 
-  const detail = kind === 'reordered'
-    ? `sprints foram REORDENADOS sem mudanca de IDs (fila: [${dbIds.join(', ')}] vs arquivo: [${fileIds.join(', ')}]) — a ordem decide a execucao e o lookup posicional de design do dev-v2`
-    : `sprint(s) foram ADICIONADOS/REMOVIDOS no arquivo (fila: [${dbIds.join(', ')}] vs arquivo: [${fileIds.join(', ')}])`;
+  const detail =
+    kind === 'reordered'
+      ? `sprints foram REORDENADOS sem mudanca de IDs (fila: [${dbIds.join(', ')}] vs arquivo: [${fileIds.join(', ')}]) — a ordem decide a execucao e o lookup posicional de design do dev-v2`
+      : `sprint(s) foram ADICIONADOS/REMOVIDOS no arquivo (fila: [${dbIds.join(', ')}] vs arquivo: [${fileIds.join(', ')}])`;
   return {
     ok: false,
     kind,

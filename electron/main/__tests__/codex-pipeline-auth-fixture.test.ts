@@ -1,14 +1,9 @@
-
 import { describe, it, expect } from 'vitest';
 import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import {
-  getOfficialPhaseCodexSpawnExtraArgs,
-  listConfiguredCodexMcpServerNames,
-} from '../codex-pipeline-config';
-
+import { getOfficialPhaseCodexSpawnExtraArgs, listConfiguredCodexMcpServerNames } from '../codex-pipeline-config';
 
 function resolveCodexBinaryForFixture(): string | null {
   try {
@@ -34,7 +29,6 @@ const canRun = codexBin !== null && hasAuth;
 const canSampleChildren = process.platform !== 'win32';
 
 const PROMPT = 'Responda apenas com a palavra: ok';
-
 
 function extractServerCommandTokens(configRaw: string): string[] {
   const tokens = new Set<string>();
@@ -107,34 +101,27 @@ function runCodexExecSamplingChildren(bin: string, extraArgs: string[]): Promise
   });
 }
 
-
 describe.skipIf(!canRun)('gate 17.1.5 - codex com frota minima configura E autentica (LIVE)', () => {
-  it(
-    'B6-AC1 primario: exec real com os overrides -c -> resposta do modelo (auth OK) e NENHUM server do config sobe (ps/children)',
-    async () => {
-      const extraArgs = getOfficialPhaseCodexSpawnExtraArgs();
-      const serverNames = listConfiguredCodexMcpServerNames();
+  it('B6-AC1 primario: exec real com os overrides -c -> resposta do modelo (auth OK) e NENHUM server do config sobe (ps/children)', async () => {
+    const extraArgs = getOfficialPhaseCodexSpawnExtraArgs();
+    const serverNames = listConfiguredCodexMcpServerNames();
 
-      expect(extraArgs.length).toBeGreaterThan(0);
-      expect(extraArgs.length % 2).toBe(0);
-      expect(extraArgs.length).toBeLessThanOrEqual(serverNames.length * 2);
+    expect(extraArgs.length).toBeGreaterThan(0);
+    expect(extraArgs.length % 2).toBe(0);
+    expect(extraArgs.length).toBeLessThanOrEqual(serverNames.length * 2);
 
-      const result = await runCodexExecSamplingChildren(codexBin as string, extraArgs);
+    const result = await runCodexExecSamplingChildren(codexBin as string, extraArgs);
 
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout.toLowerCase()).toContain('ok');
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toLowerCase()).toContain('ok');
 
-      if (canSampleChildren && serverNames.length > 0 && fs.existsSync(realConfigPath)) {
-        const tokens = extractServerCommandTokens(fs.readFileSync(realConfigPath, 'utf-8'));
-        expect(tokens.length).toBeGreaterThan(0);
-        const offenders = result.childCommandLines.filter((cmd) =>
-          tokens.some((t) => cmd.includes(t)),
-        );
-        expect(offenders).toEqual([]);
-      }
-    },
-    240_000,
-  );
+    if (canSampleChildren && serverNames.length > 0 && fs.existsSync(realConfigPath)) {
+      const tokens = extractServerCommandTokens(fs.readFileSync(realConfigPath, 'utf-8'));
+      expect(tokens.length).toBeGreaterThan(0);
+      const offenders = result.childCommandLines.filter((cmd) => tokens.some((t) => cmd.includes(t)));
+      expect(offenders).toEqual([]);
+    }
+  }, 240_000);
 
   it('auth intacta com o override: `codex -c ... login status` continua logado', () => {
     const extraArgs = getOfficialPhaseCodexSpawnExtraArgs();

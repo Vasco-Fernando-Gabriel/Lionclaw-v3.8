@@ -1,4 +1,3 @@
-
 import type { ChatFeatureToggles } from '../../../src/types';
 
 export const CODEX_SDK_SYSTEM_PROMPT_V1 = `# LionClaw Codex SDK Runtime
@@ -118,7 +117,6 @@ Default to proceeding when context makes a safe assumption possible. State the a
 - One or two sentences for simple tasks. Structured output only when the answer truly has multiple items.
 `;
 
-
 export const CODEX_SDK_SYSTEM_PROMPT_V2 = `# LionClaw Codex SDK Runtime
 
 You are running as the main-chat assistant inside LionClaw, the user's personal Electron desktop app on their machine.
@@ -229,7 +227,6 @@ Default to proceeding when context makes a safe assumption possible. State the a
 - Reference files as \`path/to/file.ts\` or \`path/to/file.ts:42\`.
 - One or two sentences for simple tasks. Structured output only when the answer truly has multiple items.
 `;
-
 
 export const CODEX_SDK_SYSTEM_PROMPT_V3 = `# LionClaw Codex SDK Runtime
 
@@ -344,7 +341,6 @@ Default to proceeding when context makes a safe assumption possible. State the a
 - One or two sentences for simple tasks. Structured output only when the answer truly has multiple items.
 `;
 
-
 export const CODEX_SDK_SYSTEM_PROMPT_V4 = `# LionClaw Codex SDK Runtime
 
 You are running as the main-chat assistant inside LionClaw, the user's personal Electron desktop app on their machine.
@@ -458,7 +454,6 @@ Default to proceeding when context makes a safe assumption possible. State the a
 - One or two sentences for simple tasks. Structured output only when the answer truly has multiple items.
 `;
 
-
 export const CODEX_SDK_SYSTEM_PROMPT_V5 = `# LionClaw Codex SDK Runtime
 
 You are running as the main-chat assistant inside LionClaw, the user's personal Electron desktop app on their machine.
@@ -571,7 +566,6 @@ Default to proceeding when context makes a safe assumption possible. State the a
 - Reference files as \`path/to/file.ts\` or \`path/to/file.ts:42\`.
 - One or two sentences for simple tasks. Structured output only when the answer truly has multiple items.
 `;
-
 
 export const CODEX_SDK_SYSTEM_PROMPT_V6 = `# LionClaw Codex SDK Runtime
 
@@ -688,7 +682,6 @@ Default to proceeding when context makes a safe assumption possible. State the a
 - One or two sentences for simple tasks. Structured output only when the answer truly has multiple items.
 `;
 
-
 const DRIVING_PIPELINES_HEADER = '## Driving Pipelines';
 const DRIVING_PIPELINES_NEXT_HEADER = '## Asking the User';
 
@@ -737,7 +730,6 @@ export function buildCodexSdkSystemPromptV3(capabilities?: ChatFeatureToggles): 
   );
 }
 
-
 const MCP_CAPABILITY_BULLET_HEADER = '- All LionClaw MCP servers synced into your transport.';
 const MCP_CAPABILITY_NEXT_BULLET = '- LionClaw subagents via the `lionclaw-agents` MCP:';
 
@@ -757,63 +749,50 @@ export function buildCodexMcpIndexCapabilityBullet(naming: CodexMcpIndexNaming):
   ].join('\n');
 }
 
-export function buildCodexSdkSystemPromptV5(
-  capabilities?: ChatFeatureToggles,
-  mcpIndex?: CodexMcpIndexNaming,
-): string {
+export function buildCodexSdkSystemPromptV5(capabilities?: ChatFeatureToggles, mcpIndex?: CodexMcpIndexNaming): string {
   let prompt: string = CODEX_SDK_SYSTEM_PROMPT_V5;
   if (capabilities?.pipelineControl === false) {
     const start = prompt.indexOf(DRIVING_PIPELINES_HEADER);
     const end = prompt.indexOf(DRIVING_PIPELINES_NEXT_HEADER);
     if (start !== -1 && end !== -1 && end > start) {
-      prompt =
-        prompt.slice(0, start) + CODEX_DRIVING_PIPELINES_STUB + '\n\n' + prompt.slice(end);
+      prompt = prompt.slice(0, start) + CODEX_DRIVING_PIPELINES_STUB + '\n\n' + prompt.slice(end);
     }
   }
   if (mcpIndex) {
     const start = prompt.indexOf(MCP_CAPABILITY_BULLET_HEADER);
     const end = prompt.indexOf(MCP_CAPABILITY_NEXT_BULLET);
     if (start !== -1 && end !== -1 && end > start) {
-      prompt =
-        prompt.slice(0, start) +
-        buildCodexMcpIndexCapabilityBullet(mcpIndex) +
-        '\n' +
-        prompt.slice(end);
+      prompt = prompt.slice(0, start) + buildCodexMcpIndexCapabilityBullet(mcpIndex) + '\n' + prompt.slice(end);
     }
   }
   return prompt;
 }
 
-export function buildCodexSdkSystemPromptV6(
-  capabilities?: ChatFeatureToggles,
-  mcpIndex?: CodexMcpIndexNaming,
-): string {
+export function buildCodexSdkSystemPromptV6(capabilities?: ChatFeatureToggles, mcpIndex?: CodexMcpIndexNaming): string {
   let prompt: string = CODEX_SDK_SYSTEM_PROMPT_V6;
   if (capabilities?.pipelineControl === false) {
     const start = prompt.indexOf(DRIVING_PIPELINES_HEADER);
     const end = prompt.indexOf(DRIVING_PIPELINES_NEXT_HEADER);
     if (start !== -1 && end !== -1 && end > start) {
-      prompt =
-        prompt.slice(0, start) + CODEX_DRIVING_PIPELINES_STUB + '\n\n' + prompt.slice(end);
+      prompt = prompt.slice(0, start) + CODEX_DRIVING_PIPELINES_STUB + '\n\n' + prompt.slice(end);
     }
   }
   if (mcpIndex) {
     const start = prompt.indexOf(MCP_CAPABILITY_BULLET_HEADER);
     const end = prompt.indexOf(MCP_CAPABILITY_NEXT_BULLET);
     if (start !== -1 && end !== -1 && end > start) {
-      prompt =
-        prompt.slice(0, start) +
-        buildCodexMcpIndexCapabilityBullet(mcpIndex) +
-        '\n' +
-        prompt.slice(end);
+      prompt = prompt.slice(0, start) + buildCodexMcpIndexCapabilityBullet(mcpIndex) + '\n' + prompt.slice(end);
     }
   }
   return prompt;
 }
 
-export function buildCodexMcpCatalogPrompt(servers: Array<{
-  id: string; description?: string;
-}>): string {
+export function buildCodexMcpCatalogPrompt(
+  servers: Array<{
+    id: string;
+    description?: string;
+  }>,
+): string {
   if (!servers.length) return '## Available MCP Servers\n\n(no active MCPs)';
   const lines = ['## Available MCP Servers', ''];
   for (const srv of servers) {

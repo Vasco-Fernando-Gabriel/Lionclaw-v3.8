@@ -95,10 +95,7 @@ export function CloserChatView({
           </div>
         ) : (
           thread.map((m) => (
-            <div
-              key={m.id}
-              className={`flex ${m.role === 'human' ? 'justify-end' : 'justify-start'}`}
-            >
+            <div key={m.id} className={`flex ${m.role === 'human' ? 'justify-end' : 'justify-start'}`}>
               <div
                 className={`max-w-[80%] rounded-lg px-3 py-2 text-[12px] break-words ${
                   m.role === 'human'

@@ -1,8 +1,5 @@
-
 import { describe, it, expect } from 'vitest';
-import {
-  buildDevSprintNodes,
-} from '../dynamic-workflows/sprint-node-factory';
+import { buildDevSprintNodes } from '../dynamic-workflows/sprint-node-factory';
 import {
   createWorkflowHostApi,
   WorkflowHostFatalError,
@@ -17,9 +14,7 @@ import type {
   DynamicWorkflowSprintUpsertInput,
   PlannedSprint,
 } from '../dynamic-workflows/types';
-import {
-  DYNAMIC_WORKFLOW_SPRINT_PLANNER_ID,
-} from '../seed-agents/dynamic-workflow-sprint-planner';
+import { DYNAMIC_WORKFLOW_SPRINT_PLANNER_ID } from '../seed-agents/dynamic-workflow-sprint-planner';
 import { DYNAMIC_WORKFLOW_CODER_ID } from '../seed-agents/dynamic-workflow-coder';
 import { DYNAMIC_WORKFLOW_VALIDATOR_SPEC_ID } from '../seed-agents/dynamic-workflow-validator-spec';
 import { DYNAMIC_WORKFLOW_VALIDATOR_REGRESSION_ID } from '../seed-agents/dynamic-workflow-validator-regression';
@@ -39,7 +34,6 @@ import {
   DEV_DEFAULT_VALIDATOR_AGENT_IDS,
 } from '../dynamic-workflows/dev-loop-ids';
 
-
 const SPECIALIST_CODER = DYNAMIC_WORKFLOW_CODER_ID;
 
 function fixtureSprint(index: number, writeSetHint: string[]): PlannedSprint {
@@ -55,9 +49,7 @@ function fixtureSprint(index: number, writeSetHint: string[]): PlannedSprint {
       DYNAMIC_WORKFLOW_VALIDATOR_REGRESSION_ID,
       DYNAMIC_WORKFLOW_VALIDATOR_TESTS_ID,
     ],
-    features: [
-      { id: `f${index}`, name: `feature ${index}`, acceptanceCriteria: ['tsc verde'] },
-    ],
+    features: [{ id: `f${index}`, name: `feature ${index}`, acceptanceCriteria: ['tsc verde'] }],
     writeSetHint,
     dependencies: index > 0 ? [devSprintId(index - 1)] : [],
     maxRounds: 3,
@@ -75,7 +67,6 @@ function fixturePlan(): DynamicWorkflowSprintPlan {
 const MAX_DEV_ROUNDS = 3;
 let idSeq = 0;
 const genId = (prefix: string): string => `${prefix}_${idSeq++}`;
-
 
 describe('buildDevSprintNodes: contrato de ids do C1', () => {
   it('expande coder/validadores/fix por sprint+rodada com os ids EXATOS do C1', () => {
@@ -117,12 +108,7 @@ describe('buildDevSprintNodes: contrato de ids do C1', () => {
     expect(coder.isolation).toBe('run-workspace');
     expect(coder.allowBash).toBe(true);
     expect(coder.allowedTools).toEqual(['Read', 'Glob', 'Grep', 'Edit', 'Write', 'Bash']);
-    expect(coder.allowedCommands).toEqual([
-      'npm run typecheck',
-      'npm run test',
-      'npm install',
-      'npm ci',
-    ]);
+    expect(coder.allowedCommands).toEqual(['npm run typecheck', 'npm run test', 'npm install', 'npm ci']);
     expect(coder.allowNetwork).toBe(true);
     expect(coder.agentId).toBe(SPECIALIST_CODER);
     expect(coder.schemaRef).toBeUndefined();
@@ -131,12 +117,7 @@ describe('buildDevSprintNodes: contrato de ids do C1', () => {
     expect(fix.access).toBe('workspace-write');
     expect(fix.agentId).toBe(SPECIALIST_CODER);
     expect(fix.schemaRef).toBeUndefined();
-    expect(fix.allowedCommands).toEqual([
-      'npm run typecheck',
-      'npm run test',
-      'npm install',
-      'npm ci',
-    ]);
+    expect(fix.allowedCommands).toEqual(['npm run typecheck', 'npm run test', 'npm install', 'npm ci']);
     expect(fix.allowNetwork).toBe(true);
 
     const s0 = fixturePlan().sprints[0];
@@ -198,18 +179,10 @@ describe('buildDevSprintNodes: contrato de ids do C1', () => {
       planHash: 'hash-custom',
       sprints: [custom],
     };
-    const { manifestNodes, sprintNodeIds } = buildDevSprintNodes(
-      plan,
-      { maxDevRounds: 1 },
-      genId,
-    );
+    const { manifestNodes, sprintNodeIds } = buildDevSprintNodes(plan, { maxDevRounds: 1 }, genId);
 
-    expect(manifestNodes.find((n) => n.id === devValidatorNodeId(0, 0, 0))?.agentId).toBe(
-      'agente-validador-A',
-    );
-    expect(manifestNodes.find((n) => n.id === devValidatorNodeId(1, 0, 0))?.agentId).toBe(
-      'agente-validador-B',
-    );
+    expect(manifestNodes.find((n) => n.id === devValidatorNodeId(0, 0, 0))?.agentId).toBe('agente-validador-A');
+    expect(manifestNodes.find((n) => n.id === devValidatorNodeId(1, 0, 0))?.agentId).toBe('agente-validador-B');
     expect(manifestNodes.some((n) => n.id === devValidatorNodeId(2, 0, 0))).toBe(false);
 
     const s0 = sprintNodeIds.find((s) => s.sprintId === devSprintId(0))!;
@@ -234,23 +207,15 @@ describe('buildDevSprintNodes: contrato de ids do C1', () => {
     };
     const { manifestNodes } = buildDevSprintNodes(plan, { maxDevRounds: 1 }, genId);
     DEV_DEFAULT_VALIDATOR_AGENT_IDS.forEach((agentId, vi) => {
-      expect(manifestNodes.find((n) => n.id === devValidatorNodeId(vi, 0, 0))?.agentId).toBe(
-        agentId,
-      );
+      expect(manifestNodes.find((n) => n.id === devValidatorNodeId(vi, 0, 0))?.agentId).toBe(agentId);
     });
-    expect(
-      manifestNodes.some(
-        (n) => n.id === devValidatorNodeId(DEV_DEFAULT_VALIDATOR_AGENT_IDS.length, 0, 0),
-      ),
-    ).toBe(false);
+    expect(manifestNodes.some((n) => n.id === devValidatorNodeId(DEV_DEFAULT_VALIDATOR_AGENT_IDS.length, 0, 0))).toBe(
+      false,
+    );
   });
 
   it('createInputs: 1 por node, definitionId placeholder (a CRUD do runner sobrescreve)', () => {
-    const { manifestNodes, createInputs } = buildDevSprintNodes(
-      fixturePlan(),
-      { maxDevRounds: MAX_DEV_ROUNDS },
-      genId,
-    );
+    const { manifestNodes, createInputs } = buildDevSprintNodes(fixturePlan(), { maxDevRounds: MAX_DEV_ROUNDS }, genId);
     expect(createInputs.length).toBe(manifestNodes.length);
     for (const ci of createInputs) {
       expect(ci.definitionId).toBe('');
@@ -268,7 +233,6 @@ describe('buildDevSprintNodes: contrato de ids do C1', () => {
     expect(a.sprintNodeIds).toEqual(b.sprintNodeIds);
   });
 
-
   it('FIX-F2b: cada sprint pre-expande ate o SEU maxRounds (abaixo do teto global)', () => {
     const plan: DynamicWorkflowSprintPlan = {
       planVersion: 1,
@@ -278,11 +242,7 @@ describe('buildDevSprintNodes: contrato de ids do C1', () => {
         { ...fixtureSprint(1, ['src/b/**']), maxRounds: 3 },
       ],
     };
-    const { manifestNodes, sprintNodeIds } = buildDevSprintNodes(
-      plan,
-      { maxDevRounds: 3 },
-      genId,
-    );
+    const { manifestNodes, sprintNodeIds } = buildDevSprintNodes(plan, { maxDevRounds: 3 }, genId);
 
     expect(manifestNodes.some((n) => n.id === devCoderNodeId(0, 0))).toBe(true);
     expect(manifestNodes.some((n) => n.id === devCoderNodeId(0, 1))).toBe(false);
@@ -291,8 +251,8 @@ describe('buildDevSprintNodes: contrato de ids do C1', () => {
     expect(manifestNodes.some((n) => n.id === devCoderNodeId(1, 2))).toBe(true);
     expect(manifestNodes.some((n) => n.id === devFixNodeId(1, 2))).toBe(true);
 
-    const vCount = plan.sprints[0].validatorAgentIds.length; // 3
-    const idsPerRound = 1 + vCount + 1 + 1; // coder + validadores + refuter + fix (F2-S7)
+    const vCount = plan.sprints[0].validatorAgentIds.length;
+    const idsPerRound = 1 + vCount + 1 + 1;
     const s0 = sprintNodeIds.find((s) => s.sprintId === devSprintId(0))!;
     const s1 = sprintNodeIds.find((s) => s.sprintId === devSprintId(1))!;
     expect(s0.nodeIds.length).toBe(idsPerRound * 1);
@@ -310,7 +270,6 @@ describe('buildDevSprintNodes: contrato de ids do C1', () => {
     expect(manifestNodes.some((n) => n.id === devCoderNodeId(0, 2))).toBe(false);
   });
 });
-
 
 describe('buildDevSprintNodes: fresh fixer (fechamento S6)', () => {
   it('materializa fixer-s{S}-r{R} por sprint+rodada com o fixer dedicado e grants de writer', () => {
@@ -330,12 +289,7 @@ describe('buildDevSprintNodes: fresh fixer (fechamento S6)', () => {
         expect(fixer.access).toBe('workspace-write');
         expect(fixer.isolation).toBe('run-workspace');
         expect(fixer.allowedTools).toEqual(['Read', 'Glob', 'Grep', 'Edit', 'Write', 'Bash']);
-        expect(fixer.allowedCommands).toEqual([
-          'npm run typecheck',
-          'npm run test',
-          'npm install',
-          'npm ci',
-        ]);
+        expect(fixer.allowedCommands).toEqual(['npm run typecheck', 'npm run test', 'npm install', 'npm ci']);
         expect(fixer.allowBash).toBe(true);
         expect(fixer.allowNetwork).toBe(true);
         expect(fixer.schemaRef).toBeUndefined();
@@ -353,11 +307,7 @@ describe('buildDevSprintNodes: fresh fixer (fechamento S6)', () => {
   });
 
   it('fail-safe: config.fixerAgentId === null (fixer fora do catalogo) cai pro coder da sprint', () => {
-    const { manifestNodes } = buildDevSprintNodes(
-      fixturePlan(),
-      { maxDevRounds: 1, fixerAgentId: null },
-      genId,
-    );
+    const { manifestNodes } = buildDevSprintNodes(fixturePlan(), { maxDevRounds: 1, fixerAgentId: null }, genId);
     const fixer = manifestNodes.find((n) => n.id === devFixerNodeId(0, 0))!;
     expect(fixer.agentId).toBe(SPECIALIST_CODER);
   });
@@ -390,7 +340,6 @@ describe('buildDevSprintNodes: fresh fixer (fechamento S6)', () => {
     expect(a.sprintNodeIds).toEqual(b.sprintNodeIds);
   });
 });
-
 
 function planningManifest(): DynamicWorkflowManifest {
   return {
@@ -449,8 +398,7 @@ function makeMatHarness(): MatHarness {
     createNodes: (_definitionId, nodes) => {
       for (const n of nodes) createdNodes.push(n);
     },
-    updateDefinition: (_definitionId, patch) =>
-      definitionPatches.push({ ...patch }),
+    updateDefinition: (_definitionId, patch) => definitionPatches.push({ ...patch }),
     persistSprints: (sprints) => {
       for (const s of sprints) persistedSprints.push(s);
     },
@@ -547,9 +495,7 @@ describe('materializeSprintPlan + buildDevSprintNodes (integracao)', () => {
 
     await api.materializeSprintPlan(fixturePlan());
     const tampered: DynamicWorkflowSprintPlan = { ...fixturePlan(), planHash: 'hash-OUTRO' };
-    await expect(api.materializeSprintPlan(tampered)).rejects.toBeInstanceOf(
-      WorkflowHostFatalError,
-    );
+    await expect(api.materializeSprintPlan(tampered)).rejects.toBeInstanceOf(WorkflowHostFatalError);
   });
 
   it('agentId fora do catalogo no plano -> REMAPEIA pro coder fallback (SM-25, regra maxima: NAO crasha)', async () => {

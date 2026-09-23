@@ -1,21 +1,5 @@
-/**
- * minimax-tokenplan-executor.ts
- *
- * Runs an agent via MiniMax TokenPlan's Anthropic-compatible endpoint.
- *
- * This runtime is intentionally separate from cloud-executor AND from
- * zai-executor (duplicacao deliberada — SPEC-006 §8.3 + R6 ADR):
- * - no ensureAuthForSDK()
- * - no Anthropic API key fallback
- * - child env is sanitized before injecting MiniMax variables
- * - costEstimationKind: 'subscription-equivalent-payg' em todo retorno
- *
- * NOTA: este executor espelha a estrutura do zai-executor.ts mas NAO importa
- * dele. Qualquer correcao futura no zai-executor deve ser replicada aqui
- * manualmente para manter a simetria (SPEC-006 §15 — symmetry drift risk).
- *
- * SPEC-006 §11.4: comportamento defensivo de usage zero implementado em `run`.
- */
+import { createSwarmProcessOwner } from './swarm-process';
+import { swarmSdkHooks } from './swarm-sdk-hooks';
 
 import fs from 'fs';
 import { createLogger } from '../logger';
@@ -24,10 +8,7 @@ import { calculateCost, getPricingSnapshot } from '../pricing';
 import { getSetting } from '../db';
 import { getSecret } from '../secrets-vault';
 import { getClaudeCompatPreset } from '../claude-compat-sdk/provider-presets';
-import {
-  getClaudeSdkProcessOptions,
-  ensureNodeInPath,
-} from '../pipeline-shared/sdk-bootstrap';
+import { getClaudeSdkProcessOptions, ensureNodeInPath } from '../pipeline-shared/sdk-bootstrap';
 import type { AgentQueryConfig } from '../agent-config-resolver';
 import type { RuntimeExecutor, AgentExecutionRequest, AgentExecutionResult } from './types';
 import { SDK_DISALLOWED_TOOLS, toSdkToolNames } from './sdk-tool-names';
@@ -38,10 +19,6 @@ const logger = createLogger('minimax-tp-executor');
 
 type EnvMap = Record<string, string>;
 
-// Engine knobs for context window / auto-compact dropped from the inherited env
-// before re-injecting the LionClaw-computed window (SPEC agent-sdk-0.3 D9).
-// Deliberate copy of the compat / zai builders (three independent env
-// builders, SPEC §10.5).
 const CONTEXT_WINDOW_ENV_KEYS: ReadonlySet<string> = new Set([
   'CLAUDE_CODE_MAX_CONTEXT_TOKENS',
   'CLAUDE_CODE_AUTO_COMPACT_WINDOW',
@@ -77,34 +54,27 @@ export function buildMinimaxTpEnv(
     if (key === 'API_TIMEOUT_MS') continue;
     if (key.startsWith('ANTHROPIC_')) continue;
     if (CONTEXT_WINDOW_ENV_KEYS.has(key)) continue;
-    // Follow-up L1.7: vars de dev do Electron nunca chegam ao engine.
     if (isStrippedSubprocessEnvKey(key)) continue;
     env[key] = value;
   }
 
-  // F8: the engine honours CLAUDE_CODE_MAX_CONTEXT_TOKENS for names that do NOT
-  // start with `claude-`. Unknown window => key ABSENT (never guess).
   const contextWindow = getContextWindow(model, 'minimax');
 
   return {
     ...env,
     ANTHROPIC_BASE_URL: baseUrl,
     ANTHROPIC_AUTH_TOKEN: apiKey,
-    // Match the working orchestrator MiniMax compat path: MiniMax requires the
-    // explicit top-level model env in addition to Claude Code default aliases.
     ANTHROPIC_MODEL: model,
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
     API_TIMEOUT_MS: '3000000',
     ANTHROPIC_DEFAULT_OPUS_MODEL: model,
     ANTHROPIC_DEFAULT_SONNET_MODEL: model,
     ANTHROPIC_DEFAULT_HAIKU_MODEL: model,
-    ...(contextWindow !== undefined
-      ? { CLAUDE_CODE_MAX_CONTEXT_TOKENS: String(contextWindow) }
-      : {}),
+    ...(contextWindow !== undefined ? { CLAUDE_CODE_MAX_CONTEXT_TOKENS: String(contextWindow) } : {}),
   };
 }
 
-async function resolveMinimaxTpApiKey(): Promise<string> {
+export async function resolveMinimaxTpApiKey(): Promise<string> {
   const vaultRef = getSetting('orchestrator_minimax_api_key_ref');
   if (!vaultRef || vaultRef.trim().length === 0) {
     throw new Error(
@@ -114,9 +84,7 @@ async function resolveMinimaxTpApiKey(): Promise<string> {
 
   const apiKey = await getSecret(vaultRef);
   if (!apiKey) {
-    throw new Error(
-      `Chave MiniMax foi removida do Vault (ref=${vaultRef}). Reconecte MiniMax em Provedores externos.`,
-    );
+    throw new Error(`Chave MiniMax foi removida do Vault (ref=${vaultRef}). Reconecte MiniMax em Provedores externos.`);
   }
 
   return apiKey;
@@ -130,9 +98,8 @@ export function buildMinimaxTpQueryOptions(
   apiKey: string,
 ): Record<string, unknown> {
   const preset = getClaudeCompatPreset('minimax');
-  const mcpServersObj = config.mcpServers.length > 0
-    ? Object.fromEntries(config.mcpServers.flatMap((s) => Object.entries(s)))
-    : undefined;
+  const mcpServersObj =
+    config.mcpServers.length > 0 ? Object.fromEntries(config.mcpServers.flatMap((s) => Object.entries(s))) : undefined;
 
   return {
     env: buildMinimaxTpEnv(apiKey, config.model, preset.baseUrl),
@@ -140,9 +107,11 @@ export function buildMinimaxTpQueryOptions(
     cwd: req.cwd,
     model: config.model,
     systemPrompt: appendMinimaxTpRuntimeContext(config.systemPrompt, config.model),
-    // D7/D8 (SPEC agent-sdk-0.3): ver cloud-executor.buildClaudeQueryOptions.
-    allowedTools: toSdkToolNames(config.allowedTools),
+    allowedTools: req.executionAgent ? [] : toSdkToolNames(config.allowedTools),
     disallowedTools: [...SDK_DISALLOWED_TOOLS],
+    ...(req.executionAgent
+      ? { tools: toSdkToolNames(config.allowedTools), settingSources: [], hooks: swarmSdkHooks(req) }
+      : {}),
     permissionMode: req.permission.mode,
     allowDangerouslySkipPermissions: req.permission.dangerouslySkipPermissions,
     ...(req.permission.canUseTool ? { canUseTool: req.permission.canUseTool } : {}),
@@ -168,10 +137,7 @@ export function buildMinimaxTpQueryOptions(
   };
 }
 
-async function run(
-  req: AgentExecutionRequest,
-  config: AgentQueryConfig,
-): Promise<AgentExecutionResult> {
+async function run(req: AgentExecutionRequest, config: AgentQueryConfig): Promise<AgentExecutionResult> {
   ensureNodeInPath();
 
   const apiKey = await resolveMinimaxTpApiKey();
@@ -197,16 +163,15 @@ async function run(
     req.abortController.signal.removeEventListener('abort', onParentAbort);
   };
 
-  logger.info(
-    { agentId: req.agentId, model: config.model },
-    'minimax-tp-executor: running agent',
-  );
+  logger.info({ agentId: req.agentId, model: config.model }, 'minimax-tp-executor: running agent');
 
+  const swarmOwner = req.executionAgent ? createSwarmProcessOwner(req.swarmOwnerDirectory) : null;
   const q = (query as (opts: Record<string, unknown>) => unknown)({
     prompt: req.prompt,
     options: {
       ...buildMinimaxTpQueryOptions(req, config, cliPath, childAbort, apiKey),
       ...processOptions,
+      ...(swarmOwner ? { spawnClaudeCodeProcess: swarmOwner.spawnProcess } : {}),
     },
   }) as AsyncIterable<Record<string, unknown>>;
 
@@ -214,17 +179,11 @@ async function run(
   let streamMetrics: Awaited<ReturnType<typeof processAgentStream>>['metrics'];
   let accumulatedText: string;
   let textBlocks: string[];
-  // SPEC robustez-chat SB-2 (AC-B6b): vazio-como-sucesso detectado no ponto
-  // comum (processAgentStream) e propagado ao contrato `error?` do resultado.
   let resultError: Awaited<ReturnType<typeof processAgentStream>>['resultError'];
-  // BUG 3 F1/F3 (bug-atividade-toolcalls-codex.md 3.3): sessionIds do stream.
-  // O total_cost_usd do result NUNCA e usado aqui — VENENOSO no compat (o CLI
-  // precifica o modelo mapeado com tabela Anthropic); o custo segue em
-  // calculateCost e o snapshot da tabela vai na proveniencia do metadata.
   let sessionIds: Awaited<ReturnType<typeof processAgentStream>>['sessionIds'];
 
   try {
-    const result = await processAgentStream(q, {
+    const result = await processAgentStream(withRuntimeActivity(q, req.onActivity), {
       shouldAbort: () => childAbort.signal.aborted,
       onText: req.onText,
       onThinking: req.onThinking,
@@ -239,14 +198,11 @@ async function run(
     resultError = result.resultError;
   } finally {
     cleanupParentListener();
+    await swarmOwner?.closeConfirmed();
   }
 
   const durationMs = Date.now() - startedAt;
 
-  // SPEC-006 §11.4: comportamento DEFENSIVO. Se o SDK retornou texto mas tokens
-  // vieram zero, marcar tokenStatus: 'not_reported' + costStatus: 'unknown' em
-  // vez de gravar $0 silencioso. Apenas aplica quando ha output real.
-  // Sem output + tokens zero: legitimo (noop ou empty response), nao marca.
   const usageReported = streamMetrics.inputTokens > 0 || streamMetrics.outputTokens > 0;
 
   if (!usageReported && (output.length > 0 || accumulatedText.length > 0)) {
@@ -319,3 +275,10 @@ async function run(
 }
 
 export const minimaxTokenplanExecutor: RuntimeExecutor = { run };
+
+async function* withRuntimeActivity<T>(source: AsyncIterable<T>, onActivity?: () => void): AsyncIterable<T> {
+  for await (const event of source) {
+    onActivity?.();
+    yield event;
+  }
+}

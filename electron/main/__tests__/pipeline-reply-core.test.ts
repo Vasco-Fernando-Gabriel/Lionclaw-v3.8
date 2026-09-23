@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -25,10 +24,7 @@ import { getHarnessProject } from '../db';
 import { releaseProjectLock, isProjectLocked } from '../pipeline-shared/lock';
 import type { Mock } from 'vitest';
 import { pipelineEventBus } from '../pipeline-event-bus';
-import {
-  registerPipelineEngineRef,
-  _resetPipelineEngineRefForTesting,
-} from '../pipeline-engine-ref';
+import { registerPipelineEngineRef, _resetPipelineEngineRefForTesting } from '../pipeline-engine-ref';
 import { pipelineReplyCore } from '../pipeline-control-core';
 
 interface FakeEngine {
@@ -64,7 +60,6 @@ describe('pipelineReplyCore (SPEC 4.3 / A6 / AC-3)', () => {
     _resetPipelineEngineRefForTesting();
     (getHarnessProject as Mock).mockReturnValue({ ...PROJECT });
   });
-
 
   it('resolve no 1o pipeline:stream {type:"done"} correlacionado (fim do turno)', async () => {
     installEngine({
@@ -112,7 +107,6 @@ describe('pipelineReplyCore (SPEC 4.3 / A6 / AC-3)', () => {
     expect(res.ok).toBe(true);
   });
 
-
   it('falha IMEDIATA quando sendMessage retorna { error } (auto-phase)', async () => {
     installEngine({
       sendMessage: vi.fn(() => ({ error: 'fase auto nao aceita mensagem' })),
@@ -125,7 +119,6 @@ describe('pipelineReplyCore (SPEC 4.3 / A6 / AC-3)', () => {
       expect(res.error).toContain('fase auto nao aceita mensagem');
     }
   });
-
 
   it('falha em pipeline:stream {type:"error"} sem esperar timeout', async () => {
     installEngine({
@@ -174,7 +167,6 @@ describe('pipelineReplyCore (SPEC 4.3 / A6 / AC-3)', () => {
     }
   });
 
-
   it('fail-fast se o engine LIVE esta "aborted" (nao despacha sendMessage)', async () => {
     const engine = installEngine({
       getCurrentPhase: vi.fn(() => ({ phase: 1, status: 'aborted' })),
@@ -207,7 +199,6 @@ describe('pipelineReplyCore (SPEC 4.3 / A6 / AC-3)', () => {
     },
   );
 
-
   it('F5-AC1 (caminho central): DB "interrupted" em fase CONVERSACIONAL -> reply despacha e completa', async () => {
     (getHarnessProject as Mock).mockReturnValue({ ...PROJECT, status: 'interrupted' });
     const engine = installEngine({
@@ -232,11 +223,7 @@ describe('pipelineReplyCore (SPEC 4.3 / A6 / AC-3)', () => {
       expect(value.id).toBe('proj_a');
       expect(value.status).toBe('completed');
     }
-    expect(engine.sendMessage).toHaveBeenCalledWith(
-      'proj_a',
-      'minha resposta a pergunta pendente',
-      [],
-    );
+    expect(engine.sendMessage).toHaveBeenCalledWith('proj_a', 'minha resposta a pergunta pendente', []);
     expect(isProjectLocked('proj_a')).toBe(true);
     releaseProjectLock('proj_a');
   });
@@ -260,7 +247,6 @@ describe('pipelineReplyCore (SPEC 4.3 / A6 / AC-3)', () => {
     }
     expect(engine.sendMessage).not.toHaveBeenCalled();
   });
-
 
   it('erro quando o pipeline nao existe', async () => {
     (getHarnessProject as Mock).mockReturnValue(undefined);

@@ -39,15 +39,11 @@ function writeJson(
 function authorized(request: http.IncomingMessage, token: string): boolean {
   const value = request.headers['authorization'];
   const header = Array.isArray(value) ? value[0] : value;
-  return typeof header === 'string'
-    && header.startsWith('Bearer ')
-    && header.slice(7) === token;
+  return typeof header === 'string' && header.startsWith('Bearer ') && header.slice(7) === token;
 }
 
 function schema(tool: GrokExternalTool): Record<string, unknown> {
-  return Object.keys(tool.parameters).length > 0
-    ? tool.parameters
-    : { type: 'object', properties: {} };
+  return Object.keys(tool.parameters).length > 0 ? tool.parameters : { type: 'object', properties: {} };
 }
 
 function safeToolError(error: unknown): string {
@@ -64,9 +60,7 @@ function safeToolError(error: unknown): string {
     .replace(/(^|[\s("'`])\/(?:home|Users|root|tmp|var\/folders)\/[^\s"'`,;]+/g, '$1[REDACTED_PATH]')
     .trim();
   const safe = redacted || 'tool execution failed';
-  return safe.length <= GROK_MCP_MAX_ERROR_CHARS
-    ? safe
-    : `${safe.slice(0, GROK_MCP_MAX_ERROR_CHARS - 1)}…`;
+  return safe.length <= GROK_MCP_MAX_ERROR_CHARS ? safe : `${safe.slice(0, GROK_MCP_MAX_ERROR_CHARS - 1)}…`;
 }
 
 async function invokeTool(
@@ -89,17 +83,19 @@ async function invokeTool(
   }
 }
 
-function rejectPayloadTooLarge(
-  request: http.IncomingMessage,
-  response: http.ServerResponse,
-): void {
+function rejectPayloadTooLarge(request: http.IncomingMessage, response: http.ServerResponse): void {
   request.pause();
   response.once('finish', () => request.destroy());
-  writeJson(response, 413, {
-    jsonrpc: '2.0',
-    id: null,
-    error: { code: -32000, message: 'request body too large' },
-  }, { Connection: 'close' });
+  writeJson(
+    response,
+    413,
+    {
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32000, message: 'request body too large' },
+    },
+    { Connection: 'close' },
+  );
 }
 
 async function settleBounded(promises: readonly Promise<unknown>[]): Promise<void> {
@@ -131,9 +127,7 @@ export async function startGrokMcpBridge(config: GrokMcpBridgeConfig): Promise<G
   }
   for (const tool of config.tools) {
     if (tool.name.includes('__')) {
-      throw new Error(
-        `Tool do bridge usa namespace MCP aninhado nao aceito pelo Grok: "${tool.name}"`,
-      );
+      throw new Error(`Tool do bridge usa namespace MCP aninhado nao aceito pelo Grok: "${tool.name}"`);
     }
     const qualified = `${serverName}__${tool.name}`;
     if (!GROK_MCP_NAME_PATTERN.test(qualified)) {
@@ -183,9 +177,9 @@ export async function startGrokMcpBridge(config: GrokMcpBridgeConfig): Promise<G
     }
     const declaredLength = request.headers['content-length'];
     if (
-      typeof declaredLength === 'string'
-      && /^\d+$/.test(declaredLength)
-      && Number(declaredLength) > GROK_MCP_MAX_BODY_BYTES
+      typeof declaredLength === 'string' &&
+      /^\d+$/.test(declaredLength) &&
+      Number(declaredLength) > GROK_MCP_MAX_BODY_BYTES
     ) {
       rejectPayloadTooLarge(request, response);
       return;
@@ -205,7 +199,8 @@ export async function startGrokMcpBridge(config: GrokMcpBridgeConfig): Promise<G
       chunks.push(chunk);
     });
     request.once('error', () => {
-      if (!response.headersSent) writeJson(response, 400, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } });
+      if (!response.headersSent)
+        writeJson(response, 400, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'parse error' } });
     });
     request.once('end', () => {
       if (tooLarge) return;
@@ -218,22 +213,27 @@ export async function startGrokMcpBridge(config: GrokMcpBridgeConfig): Promise<G
       }
       const id = message['id'] ?? null;
       const method = typeof message['method'] === 'string' ? message['method'] : '';
-      const params = message['params'] && typeof message['params'] === 'object'
-        ? message['params'] as Record<string, unknown>
-        : {};
+      const params =
+        message['params'] && typeof message['params'] === 'object'
+          ? (message['params'] as Record<string, unknown>)
+          : {};
       if (method === 'initialize') {
-        const protocolVersion = typeof params['protocolVersion'] === 'string'
-          ? params['protocolVersion']
-          : PROTOCOL_VERSION;
-        writeJson(response, 200, {
-          jsonrpc: '2.0',
-          id,
-          result: {
-            protocolVersion,
-            capabilities: { tools: {} },
-            serverInfo: { name: serverName, version: '1.0.0' },
+        const protocolVersion =
+          typeof params['protocolVersion'] === 'string' ? params['protocolVersion'] : PROTOCOL_VERSION;
+        writeJson(
+          response,
+          200,
+          {
+            jsonrpc: '2.0',
+            id,
+            result: {
+              protocolVersion,
+              capabilities: { tools: {} },
+              serverInfo: { name: serverName, version: '1.0.0' },
+            },
           },
-        }, { 'Mcp-Session-Id': crypto.randomUUID() });
+          { 'Mcp-Session-Id': crypto.randomUUID() },
+        );
         return;
       }
       if (method === 'notifications/initialized') {
@@ -262,9 +262,10 @@ export async function startGrokMcpBridge(config: GrokMcpBridgeConfig): Promise<G
           writeJson(response, 200, { jsonrpc: '2.0', id, error: { code: -32602, message: `unknown tool: ${name}` } });
           return;
         }
-        const args = params['arguments'] && typeof params['arguments'] === 'object'
-          ? params['arguments'] as Record<string, unknown>
-          : {};
+        const args =
+          params['arguments'] && typeof params['arguments'] === 'object'
+            ? (params['arguments'] as Record<string, unknown>)
+            : {};
         if (stopping) {
           writeJson(response, 200, {
             jsonrpc: '2.0',
@@ -280,15 +281,15 @@ export async function startGrokMcpBridge(config: GrokMcpBridgeConfig): Promise<G
         call.promise = invokeTool(
           tool,
           args,
-          typeof id === 'string' || typeof id === 'number'
-            ? { kind: 'mcp-request-id', value: String(id) }
-            : undefined,
+          typeof id === 'string' || typeof id === 'number' ? { kind: 'mcp-request-id', value: String(id) } : undefined,
           call.controller.signal,
-        ).then((result) => {
-          if (!response.destroyed && !response.writableEnded && !response.headersSent) {
-            writeJson(response, 200, { jsonrpc: '2.0', id, result });
-          }
-        }).finally(() => inFlightTools.delete(call));
+        )
+          .then((result) => {
+            if (!response.destroyed && !response.writableEnded && !response.headersSent) {
+              writeJson(response, 200, { jsonrpc: '2.0', id, result });
+            }
+          })
+          .finally(() => inFlightTools.delete(call));
         inFlightTools.add(call);
         return;
       }
@@ -335,7 +336,11 @@ export async function startGrokMcpBridge(config: GrokMcpBridgeConfig): Promise<G
         await settleBounded([...inFlightTools].map((call) => call.promise));
       } finally {
         for (const stream of streams) {
-          try { stream.end(); } catch { /* best effort */ }
+          try {
+            stream.end();
+          } catch {
+            /* best effort */
+          }
         }
         streams.clear();
         for (const socket of sockets) socket.destroy();

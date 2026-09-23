@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const state = vi.hoisted(() => ({
@@ -39,8 +38,7 @@ import { GATEWAY_INVOKE_TOOL_NAME } from '../mcp-display';
 
 const CURSOR_IDENTITY_LINE =
   'Voce roda pelo agente do Cursor (@cursor/sdk) via assinatura, sob orquestracao do LionClaw. Voce NAO e o Cursor.';
-const CLAUDE_IDENTITY_LINE =
-  'Voce roda sobre a infraestrutura do Claude Agent SDK, mas voce NAO e o Claude Code.';
+const CLAUDE_IDENTITY_LINE = 'Voce roda sobre a infraestrutura do Claude Agent SDK, mas voce NAO e o Claude Code.';
 
 beforeEach(() => {
   vi.clearAllMocks();

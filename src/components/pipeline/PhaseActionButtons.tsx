@@ -1,15 +1,7 @@
 import { useState } from 'react';
-import {
-  ThumbsUp,
-  XCircle,
-  AlertTriangle,
-  Square,
-  Rocket,
-  CheckCircle2,
-} from 'lucide-react';
+import { ThumbsUp, XCircle, AlertTriangle, Square, Rocket, CheckCircle2 } from 'lucide-react';
 import { usePipelineStore } from '@/stores/pipeline-store';
 import { useActiveProjectState } from '@/hooks/useActiveProjectState';
-
 
 interface FeedbackInputProps {
   value: string;
@@ -31,7 +23,6 @@ function FeedbackInput({ value, onChange, placeholder }: FeedbackInputProps) {
 
 const APPROVAL_PHASES = new Set([1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 
-
 interface ApprovalButtonsProps {
   disabled: boolean;
   onApprove: () => void;
@@ -52,7 +43,6 @@ function ApprovalButtons({ disabled, onApprove, label = 'Aprovar' }: ApprovalBut
     </div>
   );
 }
-
 
 interface MaxLoopsPausedButtonsProps {
   disabled: boolean;
@@ -84,16 +74,10 @@ function MaxLoopsPausedButtons({
     <div className="space-y-2">
       <div className="flex items-center gap-1.5 justify-center mb-1">
         <AlertTriangle size={12} className="text-amber-400" />
-        <span className="text-[11px] text-amber-400 font-medium">
-          Limite de loops atingido
-        </span>
+        <span className="text-[11px] text-amber-400 font-medium">Limite de loops atingido</span>
       </div>
       {showFeedback && (
-        <FeedbackInput
-          value={feedback}
-          onChange={setFeedback}
-          placeholder="Feedback para nova tentativa..."
-        />
+        <FeedbackInput value={feedback} onChange={setFeedback} placeholder="Feedback para nova tentativa..." />
       )}
       <div className="flex flex-wrap gap-2 justify-center">
         <button
@@ -122,7 +106,10 @@ function MaxLoopsPausedButtons({
         </button>
         {showFeedback && (
           <button
-            onClick={() => { setShowFeedback(false); setFeedback(''); }}
+            onClick={() => {
+              setShowFeedback(false);
+              setFeedback('');
+            }}
             className="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
           >
             Cancelar
@@ -132,8 +119,6 @@ function MaxLoopsPausedButtons({
     </div>
   );
 }
-
-
 
 interface BugGateButtonsProps {
   disabled: boolean;
@@ -172,7 +157,6 @@ function BugGateButtons({ disabled, onApprovePlan, onClosePipeline }: BugGateBut
   );
 }
 
-
 interface DevConfirmationButtonsProps {
   disabled: boolean;
   onConfirm: () => void;
@@ -207,7 +191,6 @@ function DevConfirmationButtons({ disabled, onConfirm, onAbort }: DevConfirmatio
   );
 }
 
-
 interface PhaseActionButtonsProps {
   currentPhase: number | null;
   pausedByMaxLoops?: boolean;
@@ -219,18 +202,18 @@ export function PhaseActionButtons({
   pausedByMaxLoops = false,
   readOnly = false,
 }: PhaseActionButtonsProps) {
-  const isStreaming = useActiveProjectState(s => s.isStreaming) ?? false;
-  const awaitingUser = useActiveProjectState(s => s.awaitingUser) ?? false;
-  const agentCompleted = useActiveProjectState(s => s.agentCompleted) ?? false;
-  const phaseStatus = useActiveProjectState(s => s.phaseStatus) ?? '';
-  const pipelineType = usePipelineStore(s => {
+  const isStreaming = useActiveProjectState((s) => s.isStreaming) ?? false;
+  const awaitingUser = useActiveProjectState((s) => s.awaitingUser) ?? false;
+  const agentCompleted = useActiveProjectState((s) => s.agentCompleted) ?? false;
+  const phaseStatus = useActiveProjectState((s) => s.phaseStatus) ?? '';
+  const pipelineType = usePipelineStore((s) => {
     const p = s.projects.find((proj) => proj.id === s.activeProjectId);
     return p?.pipelineType ?? 'development';
   });
-  const getCurrentMessages = usePipelineStore(s => s.getCurrentMessages);
-  const approvePhase = usePipelineStore(s => s.approvePhase);
-  const abortPipeline = usePipelineStore(s => s.abortPipeline);
-  const confirmDevelopment = usePipelineStore(s => s.confirmDevelopment);
+  const getCurrentMessages = usePipelineStore((s) => s.getCurrentMessages);
+  const approvePhase = usePipelineStore((s) => s.approvePhase);
+  const abortPipeline = usePipelineStore((s) => s.abortPipeline);
+  const confirmDevelopment = usePipelineStore((s) => s.confirmDevelopment);
 
   const disabled = isStreaming;
   const messages = getCurrentMessages();
@@ -244,8 +227,7 @@ export function PhaseActionButtons({
 
   const hasAssistantMessage = messages.some((m) => m.role === 'assistant');
 
-  const containerClass =
-    'border-t border-amber-500/20 bg-amber-500/5 px-4 py-3 shrink-0';
+  const containerClass = 'border-t border-amber-500/20 bg-amber-500/5 px-4 py-3 shrink-0';
   const innerClass = 'max-w-2xl mx-auto';
   const titleClass = 'text-xs text-amber-400 font-medium text-center mb-3';
 
@@ -265,7 +247,6 @@ export function PhaseActionButtons({
   }
 
   if (currentPhase === null) return null;
-
 
   if (phaseStatus === 'awaiting-dev-confirmation') {
     return (
@@ -297,11 +278,8 @@ export function PhaseActionButtons({
 
   if (APPROVAL_PHASES.has(currentPhase)) {
     const approvalDisabled = disabled || !hasAssistantMessage;
-    const isArchPhase4 =
-      pipelineType === 'architecture-review' && currentPhase === 4;
-    const approvalLabel = isArchPhase4
-      ? 'Fechar decisoes e gerar SPEC'
-      : 'Aprovar';
+    const isArchPhase4 = pipelineType === 'architecture-review' && currentPhase === 4;
+    const approvalLabel = isArchPhase4 ? 'Fechar decisoes e gerar SPEC' : 'Aprovar';
     const hintText = isArchPhase4
       ? agentCompleted
         ? 'Entrevista cobriu o essencial. Fechar dispara a geracao da SPEC (~5-10min).'
@@ -313,11 +291,7 @@ export function PhaseActionButtons({
       <div className={containerClass}>
         <div className={innerClass}>
           <p className={titleClass}>{hintText}</p>
-          <ApprovalButtons
-            disabled={approvalDisabled}
-            onApprove={handleApprove}
-            label={approvalLabel}
-          />
+          <ApprovalButtons disabled={approvalDisabled} onApprove={handleApprove} label={approvalLabel} />
         </div>
       </div>
     );

@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { PT_BR_BLOCK } from './_shared/language-pt-br';
 
@@ -7,7 +6,8 @@ export const REPO_PROFILER_ID = 'repo-profiler';
 export const repoProfiler: Omit<AgentConfig, 'sortOrder'> = {
   id: REPO_PROFILER_ID,
   name: 'Repo Profiler',
-  description: 'Analisa repositorio local: detecta linguagem, framework, classifica arquivos por role. Usa LLM apenas como fallback quando a deteccao deterministica falha.',
+  description:
+    'Analisa repositorio local: detecta linguagem, framework, classifica arquivos por role. Usa LLM apenas como fallback quando a deteccao deterministica falha.',
   model: 'claude-haiku-4-5-20251001',
   effort: 'low' as const,
   thinking: 'disabled' as const,

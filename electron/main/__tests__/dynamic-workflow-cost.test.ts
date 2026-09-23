@@ -1,10 +1,5 @@
-
 import { describe, it, expect } from 'vitest';
-import {
-  normalizeCost,
-  type PricingHelpers,
-  type RawCostReport,
-} from '../dynamic-workflows/workflow-cost';
+import { normalizeCost, type PricingHelpers, type RawCostReport } from '../dynamic-workflows/workflow-cost';
 
 const fakePricing: PricingHelpers = {
   hasKnownPricing: (model) => {
@@ -63,10 +58,7 @@ describe('workflow-cost: normalizeCost (secao 9 / AC-7)', () => {
     expect(api.apiRequests).toBe(3);
     expect(api.toolUses).toBe(7);
 
-    const local = normalizeCost(
-      { runtime: 'local', model: 'llama3', apiRequests: 2, toolUses: 4 },
-      fakePricing,
-    );
+    const local = normalizeCost({ runtime: 'local', model: 'llama3', apiRequests: 2, toolUses: 4 }, fakePricing);
     expect(local.apiRequests).toBe(2);
     expect(local.toolUses).toBe(4);
   });

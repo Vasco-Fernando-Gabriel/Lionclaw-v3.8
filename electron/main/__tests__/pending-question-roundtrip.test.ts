@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
@@ -11,7 +10,6 @@ vi.mock('../logger', () => ({
     debug: vi.fn(),
   }),
 }));
-
 
 interface StoredRow {
   id: number;
@@ -58,22 +56,15 @@ vi.mock('../pipeline-create', () => ({ createPipelineProject: vi.fn() }));
 vi.mock('../pipeline-drive-coordinator', () => ({ getPipelineDriveCoordinator: vi.fn(() => null) }));
 vi.mock('../pipeline-shared/ipc-emitter', () => ({ emitIPC: vi.fn() }));
 
-
 import type { Mock } from 'vitest';
 import { getHarnessProject } from '../db';
 import { pipelineEventBus } from '../pipeline-event-bus';
-import {
-  registerPipelineEngineRef,
-  _resetPipelineEngineRefForTesting,
-} from '../pipeline-engine-ref';
+import { registerPipelineEngineRef, _resetPipelineEngineRefForTesting } from '../pipeline-engine-ref';
 import { pipelineReplyCore, resolvePendingQuestion } from '../pipeline-control-core';
 import { persistMessage } from '../pipeline-shared/persist';
 import { textProbe } from '../pipeline-shared/text-probe';
 
-const FIXTURE = fs.readFileSync(
-  path.join(__dirname, 'fixtures', 'f8-pending-question-multibyte.txt'),
-  'utf8',
-);
+const FIXTURE = fs.readFileSync(path.join(__dirname, 'fixtures', 'f8-pending-question-multibyte.txt'), 'utf8');
 
 const PROJECT = {
   id: 'proj_rt',
@@ -111,7 +102,7 @@ beforeEach(() => {
 describe('F8-b2 — round-trip multibyte byte a byte (F8-AC2)', () => {
   it('fixture e de fato multibyte pesada (sanidade: bytes > chars, >200 chars de path)', () => {
     const probe = textProbe(FIXTURE);
-    expect(probe.bytes).toBeGreaterThan(FIXTURE.length); // multibyte presente
+    expect(probe.bytes).toBeGreaterThan(FIXTURE.length);
     const pathLine = FIXTURE.split('\n').find((l) => l.startsWith('- /Users/'));
     expect(pathLine && pathLine.length).toBeGreaterThan(200);
   });

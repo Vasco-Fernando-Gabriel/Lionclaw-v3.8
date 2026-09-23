@@ -20,10 +20,7 @@ export interface WorkflowHandoffViewProps {
   onFinalize: () => Promise<{ ok: true } | { error: string }>;
 }
 
-export function summarizeCloserWalkthrough(
-  thread: CloserThreadMessage[],
-  maxChars = 1200,
-): string {
+export function summarizeCloserWalkthrough(thread: CloserThreadMessage[], maxChars = 1200): string {
   let last = '';
   for (const m of thread) {
     if (m.role === 'closer' && m.content.trim().length > 0) last = m.content.trim();

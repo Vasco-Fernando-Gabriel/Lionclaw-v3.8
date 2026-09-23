@@ -18,7 +18,6 @@ import type { DynamicWorkflowRun } from '@/types';
 import type { DynamicWorkflowUIStatus } from '@/stores/dynamic-workflow-store';
 import { AbortRunConfirm } from './AbortRunConfirm';
 
-
 interface StatusToken {
   label: string;
   className: string;
@@ -74,7 +73,6 @@ function deriveProjectName(run: DynamicWorkflowRun): string {
   return `Workflow ${shortId(run.id)}`;
 }
 
-
 type CircleState = 'done' | 'active' | 'pending' | 'failed';
 type BarTone = 'green' | 'amber' | 'red' | 'zinc';
 
@@ -84,10 +82,7 @@ interface RunCardProgress {
   tone: BarTone;
 }
 
-function deriveRunCardProgress(
-  run: DynamicWorkflowRun,
-  uiStatus: DynamicWorkflowUIStatus,
-): RunCardProgress {
+function deriveRunCardProgress(run: DynamicWorkflowRun, uiStatus: DynamicWorkflowUIStatus): RunCardProgress {
   const total = run.sprintsTotal ?? 0;
   const done = Math.max(0, Math.min(run.sprintsDone ?? 0, total));
   const sprintCount = total > 0 ? total : 1;
@@ -134,18 +129,8 @@ function deriveRunCardProgress(
   circles.push(terminalSuccess ? 'done' : failed ? 'failed' : 'pending');
 
   const doneCount = circles.filter((c) => c === 'done').length;
-  const pct = terminalSuccess
-    ? 100
-    : created
-      ? 0
-      : Math.max(4, Math.round((doneCount / circles.length) * 100));
-  const tone: BarTone = failed
-    ? 'red'
-    : terminalSuccess
-      ? 'green'
-      : created
-        ? 'zinc'
-        : 'amber';
+  const pct = terminalSuccess ? 100 : created ? 0 : Math.max(4, Math.round((doneCount / circles.length) * 100));
+  const tone: BarTone = failed ? 'red' : terminalSuccess ? 'green' : created ? 'zinc' : 'amber';
 
   return { circles, pct, tone };
 }
@@ -171,7 +156,6 @@ function ProgressCircle({ state }: { state: CircleState }) {
   }
   return <Circle size={13} className="shrink-0 text-zinc-700" />;
 }
-
 
 interface DynamicWorkflowRunCardProps {
   run: DynamicWorkflowRun;
@@ -243,11 +227,7 @@ export function DynamicWorkflowRunCard({
             </span>
             {/* Acoes do run (SPEC 13.1). */}
             {isPausable && (
-              <ActionIcon
-                title="Pausar"
-                onClick={() => onPause(run.id)}
-                className="text-zinc-300 hover:text-amber-300"
-              >
+              <ActionIcon title="Pausar" onClick={() => onPause(run.id)} className="text-zinc-300 hover:text-amber-300">
                 <Pause size={14} />
               </ActionIcon>
             )}
@@ -330,9 +310,7 @@ export function DynamicWorkflowRunCard({
           <span>
             Custo <span className="font-medium text-zinc-400">{formatCost(run.totalCostUsd)}</span>
           </span>
-          {run.currentPhaseId && (
-            <span className="font-mono text-zinc-600">{run.currentPhaseId}</span>
-          )}
+          {run.currentPhaseId && <span className="font-mono text-zinc-600">{run.currentPhaseId}</span>}
           <span className="ml-auto inline-flex items-center gap-1 text-zinc-600">
             {createdByChat ? <MessageSquare size={11} /> : <Menu size={11} />}
             {createdByChat ? 'chat' : 'manual'}

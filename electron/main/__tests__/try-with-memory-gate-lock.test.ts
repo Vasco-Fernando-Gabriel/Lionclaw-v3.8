@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi } from 'vitest';
-
 
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
@@ -75,13 +73,11 @@ vi.mock('../dreaming-gate', () => ({
   saveDreamingReport: vi.fn(async () => '/tmp/report.md'),
 }));
 
-
 import { withMemoryGateLock, tryWithMemoryGateLock } from '../memory-pipeline';
 
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
 
 describe('tryWithMemoryGateLock', () => {
   it('(a) executa fn e retorna resultado quando lock esta livre', async () => {
@@ -117,7 +113,10 @@ describe('tryWithMemoryGateLock', () => {
   });
 
   it('(b same-tick) duas chamadas no MESMO tick: 1a roda, 2a retorna null sem enfileirar', async () => {
-    const fn1 = vi.fn(async () => { await delay(50); return 'um'; });
+    const fn1 = vi.fn(async () => {
+      await delay(50);
+      return 'um';
+    });
     const fn2 = vi.fn(async () => 'dois');
 
     const p1 = tryWithMemoryGateLock(fn1);
@@ -125,8 +124,8 @@ describe('tryWithMemoryGateLock', () => {
 
     const [r1, r2] = await Promise.all([p1, p2]);
 
-    expect(r1).toBe('um');           // 1a adquire e executa
-    expect(r2).toBeNull();           // 2a aborta sem rodar
+    expect(r1).toBe('um');
+    expect(r2).toBeNull();
     expect(fn1).toHaveBeenCalledTimes(1);
     expect(fn2).not.toHaveBeenCalled();
   });

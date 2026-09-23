@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-
 vi.mock('../logger', () => ({
   createLogger: () => ({
     info: vi.fn(),
@@ -15,15 +14,15 @@ vi.mock('electron', () => ({
     getAppPath: () => '/tmp/lionclaw-test-approot',
     getPath: (_name: string) => '/tmp/lionclaw-test-userdata',
   },
-  BrowserWindow: class { static getAllWindows() { return []; } },
+  BrowserWindow: class {
+    static getAllWindows() {
+      return [];
+    }
+  },
   ipcMain: { on: vi.fn(), handle: vi.fn() },
 }));
 
-import {
-  createAdapter,
-  isForbiddenPath,
-  type Adapter,
-} from '../open-design/adapter-http';
+import { createAdapter, isForbiddenPath, type Adapter } from '../open-design/adapter-http';
 import type { OpenDesignSessionConfig } from '../../../src/types/open-design';
 
 const BASE_URL = 'http://127.0.0.1:4321';
@@ -49,14 +48,17 @@ function makeResponse(mr: MockResponse): Response {
 beforeEach(() => {
   fetchCalls = [];
   fetchResponses = [];
-  vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
-    fetchCalls.push({ url: typeof url === 'string' ? url : url.toString(), init });
-    if (fetchResponses.length === 0) {
-      throw new Error(`fetch mock: nenhum response na fila (url=${url})`);
-    }
-    const mr = fetchResponses.shift()!;
-    return makeResponse(mr);
-  }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string | URL, init?: RequestInit) => {
+      fetchCalls.push({ url: typeof url === 'string' ? url : url.toString(), init });
+      if (fetchResponses.length === 0) {
+        throw new Error(`fetch mock: nenhum response na fila (url=${url})`);
+      }
+      const mr = fetchResponses.shift()!;
+      return makeResponse(mr);
+    }),
+  );
 });
 
 afterEach(() => {
@@ -190,16 +192,12 @@ describe('adapter.startInitialRun (SPEC L1073)', () => {
     expect(fetchCalls.length).toBe(5);
 
     expect(fetchCalls[0]!.init?.method).toBe('PUT');
-    expect(fetchCalls[0]!.url).toBe(
-      `${BASE_URL}/api/projects/lionclaw-runabc/conversations/conv_1/messages/u1`,
-    );
+    expect(fetchCalls[0]!.url).toBe(`${BASE_URL}/api/projects/lionclaw-runabc/conversations/conv_1/messages/u1`);
     const userBody = JSON.parse(String(fetchCalls[0]!.init?.body));
     expect(userBody).toMatchObject({ id: 'u1', role: 'user', content: 'Briefing prompt aqui' });
 
     expect(fetchCalls[1]!.init?.method).toBe('PUT');
-    expect(fetchCalls[1]!.url).toBe(
-      `${BASE_URL}/api/projects/lionclaw-runabc/conversations/conv_1/messages/a1`,
-    );
+    expect(fetchCalls[1]!.url).toBe(`${BASE_URL}/api/projects/lionclaw-runabc/conversations/conv_1/messages/a1`);
     const assistantBody = JSON.parse(String(fetchCalls[1]!.init?.body));
     expect(assistantBody).toMatchObject({
       id: 'a1',
@@ -225,9 +223,7 @@ describe('adapter.startInitialRun (SPEC L1073)', () => {
     });
 
     expect(fetchCalls[3]!.init?.method).toBe('PUT');
-    expect(fetchCalls[3]!.url).toBe(
-      `${BASE_URL}/api/projects/lionclaw-runabc/conversations/conv_1/messages/u1`,
-    );
+    expect(fetchCalls[3]!.url).toBe(`${BASE_URL}/api/projects/lionclaw-runabc/conversations/conv_1/messages/u1`);
     expect(JSON.parse(String(fetchCalls[3]!.init?.body))).toMatchObject({
       id: 'u1',
       role: 'user',
@@ -235,9 +231,7 @@ describe('adapter.startInitialRun (SPEC L1073)', () => {
     });
 
     expect(fetchCalls[4]!.init?.method).toBe('PUT');
-    expect(fetchCalls[4]!.url).toBe(
-      `${BASE_URL}/api/projects/lionclaw-runabc/conversations/conv_1/messages/a1`,
-    );
+    expect(fetchCalls[4]!.url).toBe(`${BASE_URL}/api/projects/lionclaw-runabc/conversations/conv_1/messages/a1`);
     expect(JSON.parse(String(fetchCalls[4]!.init?.body))).toMatchObject({
       id: 'a1',
       role: 'assistant',
@@ -298,10 +292,7 @@ describe('adapter.fetchFinalArtifact (SPEC L1074)', () => {
     fetchResponses.push({
       status: 200,
       body: {
-        files: [
-          { path: 'index.html', metadata: { entryFile: true } },
-          { path: 'other.html' },
-        ],
+        files: [{ path: 'index.html', metadata: { entryFile: true } }, { path: 'other.html' }],
       },
     });
     fetchResponses.push({ status: 200, body: '<html>some content</html>', isText: true });

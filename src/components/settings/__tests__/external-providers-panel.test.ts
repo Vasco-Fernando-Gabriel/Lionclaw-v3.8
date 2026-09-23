@@ -1,13 +1,8 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AgentConfig } from '@/types/index';
 import type { AppSettings } from '@/types/index';
 
-
-function resolveClaudeCompatVaultKey(
-  provider: 'zai' | 'minimax',
-  settings: AppSettings | null,
-): string {
+function resolveClaudeCompatVaultKey(provider: 'zai' | 'minimax', settings: AppSettings | null): string {
   return provider === 'zai'
     ? (settings?.orchestratorZaiApiKeyRef ?? 'ORCHESTRATOR_ZAI_API_KEY')
     : (settings?.orchestratorMinimaxApiKeyRef ?? 'ORCHESTRATOR_MINIMAX_API_KEY');
@@ -20,7 +15,6 @@ function resolveVertexVaultKey(): string {
 function resolveOpenAiCompatVaultKey(settings: AppSettings | null): string {
   return settings?.orchestratorOpenAiCompatApiKeyRef ?? 'ORCHESTRATOR_OPENAI_COMPAT_API_KEY';
 }
-
 
 interface AgentRef {
   id: string;
@@ -41,13 +35,7 @@ async function shouldShowDisconnectDialog(
   return usage.agentsReferencing.length > 0;
 }
 
-
-function makeExternalAgent(overrides: {
-  id: string;
-  name: string;
-  provider: string;
-  apiKeyRef: string;
-}): AgentConfig {
+function makeExternalAgent(overrides: { id: string; name: string; provider: string; apiKeyRef: string }): AgentConfig {
   return {
     id: overrides.id,
     name: overrides.name,
@@ -63,14 +51,17 @@ function makeExternalAgent(overrides: {
     skills: [],
     runtime: 'external',
     externalConfig: {
-      provider: overrides.provider as AgentConfig['externalConfig'] extends infer T ? T extends { provider: infer P } ? P : never : never,
+      provider: overrides.provider as AgentConfig['externalConfig'] extends infer T
+        ? T extends { provider: infer P }
+          ? P
+          : never
+        : never,
       model: 'some-model',
       apiKeyRef: overrides.apiKeyRef,
       baseUrl: 'https://api.example.com/v1',
     },
   };
 }
-
 
 const mockAgentsList: AgentConfig[] = [];
 
@@ -86,7 +77,6 @@ vi.stubGlobal('window', {
 });
 
 import { getAgentsUsingVaultKey } from '../../../lib/credential-usage';
-
 
 describe('resolveClaudeCompatVaultKey', () => {
   it('zai sem settings usa ORCHESTRATOR_ZAI_API_KEY', () => {
@@ -113,7 +103,6 @@ describe('resolveClaudeCompatVaultKey', () => {
   });
 });
 
-
 describe('resolveVertexVaultKey', () => {
   it('retorna sempre ORCHESTRATOR_VERTEX_API_KEY', () => {
     expect(resolveVertexVaultKey()).toBe('ORCHESTRATOR_VERTEX_API_KEY');
@@ -123,7 +112,6 @@ describe('resolveVertexVaultKey', () => {
     expect(resolveVertexVaultKey()).toBe('ORCHESTRATOR_VERTEX_API_KEY');
   });
 });
-
 
 describe('resolveOpenAiCompatVaultKey', () => {
   it('sem settings usa ORCHESTRATOR_OPENAI_COMPAT_API_KEY', () => {
@@ -150,7 +138,6 @@ describe('resolveOpenAiCompatVaultKey', () => {
   });
 });
 
-
 describe('shouldShowDisconnectDialog', () => {
   it('retorna false quando nenhum agente referencia a chave', async () => {
     const getUsage = vi.fn(async () => ({ agentsReferencing: [] }));
@@ -175,7 +162,6 @@ describe('shouldShowDisconnectDialog', () => {
     expect(show).toBe(false);
   });
 });
-
 
 describe('VertexGeminiSection disconnect gate (via getAgentsUsingVaultKey)', () => {
   beforeEach(() => {
@@ -220,15 +206,24 @@ describe('VertexGeminiSection disconnect gate (via getAgentsUsingVaultKey)', () 
 
   it('varios agentes Gemini com a mesma chave: todos aparecem', async () => {
     mockAgentsList.push(
-      makeExternalAgent({ id: 'gem-1', name: 'Gemini One', provider: 'gemini-agent-platform', apiKeyRef: 'ORCHESTRATOR_VERTEX_API_KEY' }),
-      makeExternalAgent({ id: 'gem-2', name: 'Gemini Two', provider: 'gemini-agent-platform', apiKeyRef: 'ORCHESTRATOR_VERTEX_API_KEY' }),
+      makeExternalAgent({
+        id: 'gem-1',
+        name: 'Gemini One',
+        provider: 'gemini-agent-platform',
+        apiKeyRef: 'ORCHESTRATOR_VERTEX_API_KEY',
+      }),
+      makeExternalAgent({
+        id: 'gem-2',
+        name: 'Gemini Two',
+        provider: 'gemini-agent-platform',
+        apiKeyRef: 'ORCHESTRATOR_VERTEX_API_KEY',
+      }),
     );
 
     const usage = await getAgentsUsingVaultKey(resolveVertexVaultKey());
     expect(usage.agentsReferencing).toHaveLength(2);
   });
 });
-
 
 describe('ClaudeCompatSection disconnect gate — zai', () => {
   beforeEach(() => {
@@ -265,7 +260,6 @@ describe('ClaudeCompatSection disconnect gate — zai', () => {
     expect(usage.agentsReferencing[0].name).toBe('Z.ai Worker');
   });
 });
-
 
 describe('OpenAiCompatSection disconnect gate', () => {
   beforeEach(() => {
@@ -322,7 +316,6 @@ describe('OpenAiCompatSection disconnect gate', () => {
   });
 });
 
-
 describe('disconnect flow: disconnect so ocorre apos confirmacao', () => {
   it('disconnect nao e chamado se o usuario nao confirmou (gate ativo)', async () => {
     const disconnectFn = vi.fn(async () => ({ ok: true }));
@@ -368,7 +361,7 @@ describe('disconnect flow: disconnect so ocorre apos confirmacao', () => {
     const shouldGate = usage.agentsReferencing.length > 0;
 
     if (shouldGate) {
-      await disconnectFn(); // onConfirm chama performDisconnect
+      await disconnectFn();
     }
     expect(disconnectFn).toHaveBeenCalledOnce();
   });

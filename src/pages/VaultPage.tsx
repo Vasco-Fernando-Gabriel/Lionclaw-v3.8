@@ -1,5 +1,16 @@
 import { useState, useEffect } from 'react';
-import { KeyRound, Eye, EyeOff, Check, Trash2, ExternalLink, ShieldCheck, ShieldAlert, Wifi, AlertTriangle } from 'lucide-react';
+import {
+  KeyRound,
+  Eye,
+  EyeOff,
+  Check,
+  Trash2,
+  ExternalLink,
+  ShieldCheck,
+  ShieldAlert,
+  Wifi,
+  AlertTriangle,
+} from 'lucide-react';
 import { PROVIDER_PRESETS } from '@/lib/provider-presets';
 import { getAgentsUsingVaultKey } from '@/lib/credential-usage';
 
@@ -147,11 +158,7 @@ export default function VaultPage() {
       return next;
     });
 
-    const result = await window.lionclaw.provider.testConnection(
-      providerName,
-      preset.baseUrl ?? '',
-      entry.key,
-    );
+    const result = await window.lionclaw.provider.testConnection(providerName, preset.baseUrl ?? '', entry.key);
 
     if (result.ok) {
       setTestStates((prev) => new Map(prev).set(entry.key, 'ok'));
@@ -176,7 +183,9 @@ export default function VaultPage() {
                 </p>
                 <ul className="mt-2 space-y-1">
                   {deleteConfirm.agentNames.map((n) => (
-                    <li key={n} className="text-xs text-amber-300 font-medium">{n}</li>
+                    <li key={n} className="text-xs text-amber-300 font-medium">
+                      {n}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -206,8 +215,8 @@ export default function VaultPage() {
         </div>
 
         <p className="text-sm text-zinc-400 mb-6">
-          Gerencie suas credenciais de forma segura. As chaves e sessoes sao armazenadas
-          no keychain do sistema operacional com criptografia AES-256-GCM.
+          Gerencie suas credenciais de forma segura. As chaves e sessoes sao armazenadas no keychain do sistema
+          operacional com criptografia AES-256-GCM.
         </p>
 
         {/* SB-9: badges de saude do vault */}
@@ -215,9 +224,9 @@ export default function VaultPage() {
           <div className="flex items-start gap-2 mb-3 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30">
             <AlertTriangle size={14} className="text-amber-400 mt-0.5 shrink-0" />
             <p className="text-xs text-amber-300">
-              <span className="font-semibold">Keychain indisponivel (KEYTAR-DEGRADED):</span>{' '}
-              o keychain do sistema nao respondeu; os segredos estao operando pelo arquivo
-              criptografado local. Verifique o keychain do sistema e reinicie o app.
+              <span className="font-semibold">Keychain indisponivel (KEYTAR-DEGRADED):</span> o keychain do sistema nao
+              respondeu; os segredos estao operando pelo arquivo criptografado local. Verifique o keychain do sistema e
+              reinicie o app.
             </p>
           </div>
         )}
@@ -225,9 +234,8 @@ export default function VaultPage() {
           <div className="flex items-start gap-2 mb-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30">
             <AlertTriangle size={14} className="text-red-400 mt-0.5 shrink-0" />
             <p className="text-xs text-red-300">
-              <span className="font-semibold">Arquivo de segredos corrompido (VAULT-CORRUPT):</span>{' '}
-              um backup foi preservado em{' '}
-              <code className="text-red-200">{health.vaultCorruptBackupPath}</code>. Reconfigure as
+              <span className="font-semibold">Arquivo de segredos corrompido (VAULT-CORRUPT):</span> um backup foi
+              preservado em <code className="text-red-200">{health.vaultCorruptBackupPath}</code>. Reconfigure as
               credenciais afetadas.
             </p>
           </div>
@@ -235,10 +243,7 @@ export default function VaultPage() {
 
         <div className="space-y-3">
           {entries.map((entry) => (
-            <div
-              key={entry.key}
-              className="rounded-lg border border-zinc-700/50 bg-zinc-800/50 p-4"
-            >
+            <div key={entry.key} className="rounded-lg border border-zinc-700/50 bg-zinc-800/50 p-4">
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   {entry.status === 'error' ? (
@@ -276,8 +281,8 @@ export default function VaultPage() {
                   de ERRO, distinguivel de "nunca configurado". */}
               {entry.status === 'error' && (
                 <p className="text-xs text-red-400 bg-red-500/10 rounded px-2 py-1 mb-3">
-                  Segredo ilegivel (SECRET-UNREADABLE): {entry.error ?? 'falha ao descriptografar'}.
-                  Reconfigure a credencial.
+                  Segredo ilegivel (SECRET-UNREADABLE): {entry.error ?? 'falha ao descriptografar'}. Reconfigure a
+                  credencial.
                 </p>
               )}
 
@@ -290,11 +295,7 @@ export default function VaultPage() {
                       className="text-xs px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white transition-colors flex items-center gap-1.5 disabled:opacity-50"
                     >
                       <Wifi size={12} />
-                      {higgsfieldBusy === 'connect'
-                        ? 'Conectando...'
-                        : entry.configured
-                          ? 'Reautenticar'
-                          : 'Conectar'}
+                      {higgsfieldBusy === 'connect' ? 'Conectando...' : entry.configured ? 'Reautenticar' : 'Conectar'}
                     </button>
                     {entry.configured && (
                       <button
@@ -315,9 +316,7 @@ export default function VaultPage() {
                     )}
                   </div>
                   {higgsfieldError && (
-                    <p className="text-xs text-red-400 bg-red-500/10 rounded px-2 py-1">
-                      {higgsfieldError}
-                    </p>
+                    <p className="text-xs text-red-400 bg-red-500/10 rounded px-2 py-1">{higgsfieldError}</p>
                   )}
                 </div>
               ) : editingKey === entry.key ? (
@@ -347,7 +346,10 @@ export default function VaultPage() {
                     {saving ? '...' : 'Salvar'}
                   </button>
                   <button
-                    onClick={() => { setEditingKey(null); setInputValue(''); }}
+                    onClick={() => {
+                      setEditingKey(null);
+                      setInputValue('');
+                    }}
                     className="px-3 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-sm transition-colors"
                   >
                     Cancelar

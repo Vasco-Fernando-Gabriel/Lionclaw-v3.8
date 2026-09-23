@@ -9,9 +9,9 @@ interface Props {
 
 const statusConfig = {
   scheduled: { label: 'Agendado', Icon: Clock },
-  running:   { label: 'Executando', Icon: Loader2 },
-  success:   { label: 'Concluido', Icon: CheckCircle2 },
-  error:     { label: 'Erro', Icon: XCircle },
+  running: { label: 'Executando', Icon: Loader2 },
+  success: { label: 'Concluido', Icon: CheckCircle2 },
+  error: { label: 'Erro', Icon: XCircle },
 } as const;
 
 function formatTime(iso: string): string {
@@ -37,10 +37,13 @@ export function ActivityCard({ item, onViewSession, compact }: Props) {
         <cfg.Icon
           size={12}
           className={`shrink-0 ${
-            item.status === 'scheduled' ? 'text-blue-400' :
-            item.status === 'running'   ? 'text-amber-400 animate-spin' :
-            item.status === 'success'   ? 'text-green-400' :
-                                          'text-red-400'
+            item.status === 'scheduled'
+              ? 'text-blue-400'
+              : item.status === 'running'
+                ? 'text-amber-400 animate-spin'
+                : item.status === 'success'
+                  ? 'text-green-400'
+                  : 'text-red-400'
           }`}
         />
         {/* SPEC robustez-chat SB-10 (P14): texto truncado ganha o completo em title */}
@@ -61,7 +64,7 @@ export function ActivityCard({ item, onViewSession, compact }: Props) {
 
       {item.tags.length > 0 && (
         <div className="flex gap-1 mt-1.5 flex-wrap">
-          {item.tags.map(tag => (
+          {item.tags.map((tag) => (
             <span key={tag} className="px-1.5 py-0.5 text-[9px] bg-zinc-700 text-zinc-400 rounded">
               {tag}
             </span>
@@ -76,7 +79,9 @@ export function ActivityCard({ item, onViewSession, compact }: Props) {
       )}
 
       {item.error && (
-        <p title={item.error} className="mt-1.5 text-[10px] text-red-400 truncate">{item.error}</p>
+        <p title={item.error} className="mt-1.5 text-[10px] text-red-400 truncate">
+          {item.error}
+        </p>
       )}
 
       {item.sessionId && (

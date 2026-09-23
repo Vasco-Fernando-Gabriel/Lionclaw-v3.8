@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach } from 'vitest';
 
 import {
@@ -71,7 +70,6 @@ beforeEach(() => {
   __clearStalenessThrottleForTests();
 });
 
-
 describe('staleness - HEAD vs indexed_commit', () => {
   it('HEAD igual + worktree limpo -> nao stale', () => {
     const deps = makeDeps({ head: HEAD, porcelain: '' });
@@ -88,7 +86,6 @@ describe('staleness - HEAD vs indexed_commit', () => {
     expect(deps.gitCalls[0][0]).toBe('rev-parse');
   });
 });
-
 
 describe('staleness - dirty files via porcelain + mtime', () => {
   it('arquivo dirty re-editado APOS o index (mtime > last_indexed_at) -> stale', () => {
@@ -163,7 +160,6 @@ describe('staleness - dirty files via porcelain + mtime', () => {
   });
 });
 
-
 describe('staleness - cap de dirty files', () => {
   it('constante da spec: STALE_CHECK_MAX_DIRTY === 200', () => {
     expect(STALE_CHECK_MAX_DIRTY).toBe(200);
@@ -191,7 +187,6 @@ describe('staleness - cap de dirty files', () => {
   });
 });
 
-
 describe('staleness - throttle in-memory', () => {
   it('janela da spec: 5 minutos', () => {
     expect(STALE_CHECK_THROTTLE_MS).toBe(5 * 60_000);
@@ -207,10 +202,10 @@ describe('staleness - throttle in-memory', () => {
     expect(first.stale).toBe(false);
     const gitCallsAfterFirst = deps.gitCalls.length;
 
-    nowValue += STALE_CHECK_THROTTLE_MS - 1; // ainda dentro da janela
+    nowValue += STALE_CHECK_THROTTLE_MS - 1;
     const second = checkRepoStaleness(input, timedDeps);
     expect(second).toEqual(first);
-    expect(deps.gitCalls.length).toBe(gitCallsAfterFirst); // nenhum git novo
+    expect(deps.gitCalls.length).toBe(gitCallsAfterFirst);
   });
 
   it('>= 5min: re-checa (git roda de novo) e pode mudar de resultado', () => {
@@ -234,7 +229,7 @@ describe('staleness - throttle in-memory', () => {
 
     expect(checkRepoStaleness(input, timedDeps).stale).toBe(false);
 
-    head = 'cccc333344445555cccc333344445555cccc3333'; // commit novo
+    head = 'cccc333344445555cccc333344445555cccc3333';
     nowValue += STALE_CHECK_THROTTLE_MS + 1;
     const second = checkRepoStaleness(input, timedDeps);
     expect(second.stale).toBe(true);
@@ -249,7 +244,6 @@ describe('staleness - throttle in-memory', () => {
     expect(b.stale).toBe(true);
   });
 });
-
 
 describe('staleness - invalidacao por repo (clearStalenessForRepo)', () => {
   it('apos clear, o proximo check RECOMPUTA dentro da janela de 5min', () => {
@@ -281,7 +275,6 @@ describe('staleness - invalidacao por repo (clearStalenessForRepo)', () => {
     expect(depsB.gitCalls.length).toBe(gitCallsAfterFirst);
   });
 });
-
 
 describe('staleness - bordas', () => {
   it('git indisponivel -> nao-determinavel (stale false; NUNCA bloqueia)', () => {

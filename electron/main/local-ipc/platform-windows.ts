@@ -1,4 +1,3 @@
-
 import net from 'net';
 import fs from 'fs';
 import path from 'path';
@@ -25,9 +24,7 @@ export function buildPipePath(): string {
   return `\\\\.\\pipe\\lionclaw-main-${crypto.randomUUID()}`;
 }
 
-export async function listenWindows(
-  connectionHandler: (socket: net.Socket) => void,
-): Promise<WindowsListenResult> {
+export async function listenWindows(connectionHandler: (socket: net.Socket) => void): Promise<WindowsListenResult> {
   await ensureRuntimeDir();
   const pipePath = buildPipePath();
 
@@ -50,5 +47,4 @@ export async function listenWindows(
   return { server, address: pipePath, transport: 'pipe' };
 }
 
-export async function cleanupWindows(_pipePath: string): Promise<void> {
-}
+export async function cleanupWindows(_pipePath: string): Promise<void> {}

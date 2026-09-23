@@ -15,9 +15,7 @@ export async function requestAgentCorrection(
 ): Promise<{ runId: string }> {
   const cfg = getOpenDesignConfig(projectId);
   if (!cfg?.openDesignProjectId || !cfg?.conversationId) {
-    throw new Error(
-      'auto-correct: cfg.openDesignProjectId ou conversationId ausente (bootstrap nao concluido)',
-    );
+    throw new Error('auto-correct: cfg.openDesignProjectId ou conversationId ausente (bootstrap nao concluido)');
   }
 
   const sessionConfig = getSessionConfig(projectId);
@@ -32,9 +30,7 @@ export async function requestAgentCorrection(
 
   const adapter = createAdapter({ baseUrl: stat.daemonUrl });
 
-  const problemsList = validation.problems
-    .map((p, i) => `${i + 1}. ${p.hint}`)
-    .join('\n');
+  const problemsList = validation.problems.map((p, i) => `${i + 1}. ${p.hint}`).join('\n');
 
   const prompt = [
     `[LionClaw — auto-correcao do Design Lock, tentativa ${attempt}]`,
@@ -61,11 +57,7 @@ export async function requestAgentCorrection(
     'Apos atualizar, salve/re-exporte o HTML para que ele fique disponivel via `GET /api/projects/:id/files`. O LionClaw vai tentar travar novamente sozinho — voce NAO precisa me avisar quando terminar.',
   ].join('\n');
 
-  const promptStamp = crypto
-    .createHash('sha256')
-    .update(`${attempt}-${prompt}`)
-    .digest('hex')
-    .slice(0, 16);
+  const promptStamp = crypto.createHash('sha256').update(`${attempt}-${prompt}`).digest('hex').slice(0, 16);
 
   const { runId } = await adapter.startInitialRun({
     projectId: cfg.openDesignProjectId,

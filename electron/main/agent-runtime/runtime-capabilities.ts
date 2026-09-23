@@ -1,4 +1,3 @@
-
 import type { OrchestratorRuntime } from '../../../src/types';
 
 export interface RuntimeCapabilities {
@@ -8,13 +7,13 @@ export interface RuntimeCapabilities {
 }
 
 export const RUNTIME_CAPABILITIES: Record<OrchestratorRuntime, RuntimeCapabilities> = {
-  'claude-sdk':        { supportsImageInput: true,  supportsDocumentInput: true,  supportsEffort: true  },
-  'claude-compat-sdk': { supportsImageInput: true,  supportsDocumentInput: false, supportsEffort: false },
-  'codex-sdk':         { supportsImageInput: false, supportsDocumentInput: false, supportsEffort: true  },
-  'kimi-sdk':          { supportsImageInput: false, supportsDocumentInput: false, supportsEffort: true  },
-  'grok-sdk':          { supportsImageInput: false, supportsDocumentInput: false, supportsEffort: true  },
-  'cursor-sdk':        { supportsImageInput: false, supportsDocumentInput: false, supportsEffort: false },
-  'lion-sdk':          { supportsImageInput: false, supportsDocumentInput: false, supportsEffort: false },
+  'claude-sdk': { supportsImageInput: true, supportsDocumentInput: true, supportsEffort: true },
+  'claude-compat-sdk': { supportsImageInput: true, supportsDocumentInput: false, supportsEffort: false },
+  'codex-sdk': { supportsImageInput: false, supportsDocumentInput: false, supportsEffort: true },
+  'kimi-sdk': { supportsImageInput: false, supportsDocumentInput: false, supportsEffort: true },
+  'grok-sdk': { supportsImageInput: false, supportsDocumentInput: false, supportsEffort: true },
+  'cursor-sdk': { supportsImageInput: false, supportsDocumentInput: false, supportsEffort: false },
+  'lion-sdk': { supportsImageInput: false, supportsDocumentInput: false, supportsEffort: false },
 };
 
 const RUNTIME_LABELS: Record<OrchestratorRuntime, string> = {

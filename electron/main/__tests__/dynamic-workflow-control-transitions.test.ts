@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   WorkflowRunner,
@@ -7,14 +6,8 @@ import {
   type WorkflowRunnerDeps,
   type WorkflowRunnerCrud,
 } from '../dynamic-workflows/workflow-runner';
-import type {
-  SandboxProcessFactory,
-  SandboxProcessHandle,
-} from '../dynamic-workflows/workflow-sandbox';
-import type {
-  SandboxParentMessage,
-  SandboxChildMessage,
-} from '../dynamic-workflows/sandbox-protocol';
+import type { SandboxProcessFactory, SandboxProcessHandle } from '../dynamic-workflows/workflow-sandbox';
+import type { SandboxParentMessage, SandboxChildMessage } from '../dynamic-workflows/sandbox-protocol';
 import type {
   DynamicWorkflowRun,
   DynamicWorkflowDefinition,
@@ -29,7 +22,6 @@ import type { NodeRunResult, RunNodeAgentInput } from '../dynamic-workflows/work
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
 
 interface CoordinatorCtx {
   phase: (name: string) => Promise<unknown>;
@@ -111,7 +103,6 @@ function makeFakeSandboxFactory(coordinator: Coordinator): SandboxProcessFactory
   };
 }
 
-
 interface Harness {
   deps: WorkflowRunnerDeps;
   crud: WorkflowRunnerCrud;
@@ -170,9 +161,37 @@ function makeManifest(over?: Partial<DynamicWorkflowManifest>): DynamicWorkflowM
       { id: 'Gate', name: 'Gate', order: 2 },
     ],
     nodes: [
-      { id: 'planner-r0', type: 'agent', phaseId: 'Plan', agentId: 'a-plan', access: 'read-only', canResume: true, produces: ['plan0'], consumes: [] },
-      { id: 'planner-r1', type: 'agent', phaseId: 'Plan', agentId: 'a-plan', access: 'read-only', canResume: true, produces: ['plan1'], consumes: [] },
-      { id: 'coder', type: 'agent', phaseId: 'Implementar', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], canResume: true, produces: ['impl'], consumes: ['plan0'] },
+      {
+        id: 'planner-r0',
+        type: 'agent',
+        phaseId: 'Plan',
+        agentId: 'a-plan',
+        access: 'read-only',
+        canResume: true,
+        produces: ['plan0'],
+        consumes: [],
+      },
+      {
+        id: 'planner-r1',
+        type: 'agent',
+        phaseId: 'Plan',
+        agentId: 'a-plan',
+        access: 'read-only',
+        canResume: true,
+        produces: ['plan1'],
+        consumes: [],
+      },
+      {
+        id: 'coder',
+        type: 'agent',
+        phaseId: 'Implementar',
+        agentId: 'a-coder',
+        access: 'workspace-write',
+        writeSet: ['src/**'],
+        canResume: true,
+        produces: ['impl'],
+        consumes: ['plan0'],
+      },
       { id: 'plan-gate', type: 'gate', phaseId: 'Gate', canResume: false, produces: [], consumes: [] },
     ],
     parallelism: { maxConcurrentAgents: 1, parallelWritersAllowed: false },
@@ -464,7 +483,6 @@ async function waitFor(
   return crud.getRun(runId)?.status ?? 'unknown';
 }
 
-
 let tmpRoot: string;
 
 beforeEach(() => {
@@ -476,7 +494,6 @@ beforeEach(() => {
 function cleanup(): void {
   rmSync(tmpRoot, { recursive: true, force: true });
 }
-
 
 describe('PAUSE -> RESUME re-executa do checkpoint (SM-9/SM-22)', () => {
   it('pause para limpo (libera lock) e resume RE-ADQUIRE o lock e re-executa', async () => {
@@ -496,7 +513,13 @@ describe('PAUSE -> RESUME re-executa do checkpoint (SM-9/SM-22)', () => {
     };
     const coordinator: Coordinator = async (ctx) => {
       await ctx.phase('Implementar');
-      await ctx.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'impl' });
+      await ctx.agent({
+        id: 'coder',
+        agentId: 'a-coder',
+        access: 'workspace-write',
+        writeSet: ['src/**'],
+        prompt: 'impl',
+      });
       await ctx.log({ message: 'pos-coder' });
       return { ok: true };
     };
@@ -510,7 +533,7 @@ describe('PAUSE -> RESUME re-executa do checkpoint (SM-9/SM-22)', () => {
     expect(isWorkflowRunLocked('run-1')).toBe(true);
 
     expect(await runner.pause('run-1')).toEqual({ ok: true });
-    releaseAgent(); // solta a promise pendente do 1o adapter (input capturado no closure)
+    releaseAgent();
     const paused = await waitFor(h.crud, 'run-1', 'paused');
     expect(paused).toBe('paused');
     await vi.waitFor(() => expect(isWorkflowRunLocked('run-1')).toBe(false));
@@ -526,16 +549,27 @@ describe('PAUSE -> RESUME re-executa do checkpoint (SM-9/SM-22)', () => {
   });
 });
 
-
 describe('ABORT preserva e o run segue RECUPERAVEL (SM-9, REGRA MAXIMA)', () => {
   it('abort marca aborted preservando branch; resume re-executa do checkpoint', async () => {
     const h = makeHarness({
       coordinator: async (ctx) => {
-        await ctx.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'x' });
+        await ctx.agent({
+          id: 'coder',
+          agentId: 'a-coder',
+          access: 'workspace-write',
+          writeSet: ['src/**'],
+          prompt: 'x',
+        });
         return { ok: true };
       },
       projectPath: tmpRoot,
-      run: { status: 'paused', workspaceMode: 'run-worktree', worktreeBranch: 'dynworkflow/run-1', baseCommitSha: 'basesha', worktreePath: join(tmpRoot, 'wt') },
+      run: {
+        status: 'paused',
+        workspaceMode: 'run-worktree',
+        worktreeBranch: 'dynworkflow/run-1',
+        baseCommitSha: 'basesha',
+        worktreePath: join(tmpRoot, 'wt'),
+      },
     });
     const runner = new WorkflowRunner(h.deps);
 
@@ -563,7 +597,13 @@ describe('ABORT preserva e o run segue RECUPERAVEL (SM-9, REGRA MAXIMA)', () => 
       });
     const h = makeHarness({
       coordinator: async (ctx) => {
-        await ctx.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'x' });
+        await ctx.agent({
+          id: 'coder',
+          agentId: 'a-coder',
+          access: 'workspace-write',
+          writeSet: ['src/**'],
+          prompt: 'x',
+        });
         await ctx.log({ message: 'pos-coder' });
         return { ok: true };
       },
@@ -587,12 +627,17 @@ describe('ABORT preserva e o run segue RECUPERAVEL (SM-9, REGRA MAXIMA)', () => 
   });
 });
 
-
 describe('FAILED e recuperavel (SM-9)', () => {
   it('resume de um run failed re-executa (transiciona via interrupted, limpa o erro)', async () => {
     const h = makeHarness({
       coordinator: async (ctx) => {
-        await ctx.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'x' });
+        await ctx.agent({
+          id: 'coder',
+          agentId: 'a-coder',
+          access: 'workspace-write',
+          writeSet: ['src/**'],
+          prompt: 'x',
+        });
         return { ok: true };
       },
       projectPath: tmpRoot,
@@ -614,7 +659,6 @@ describe('FAILED e recuperavel (SM-9)', () => {
     cleanup();
   });
 });
-
 
 describe('REJECT-com-replan no gate de PLANO spawna planner-r{n+1} (SM-20)', () => {
   it('reject no plan-review NAO mata o run: o .js recebe action:replan e roda outro planner', async () => {
@@ -677,9 +721,11 @@ describe('REJECT-com-replan no gate de PLANO spawna planner-r{n+1} (SM-20)', () 
   });
 });
 
-
-function installAdjustmentStore(h: Harness): Array<{ id: number; nodeId: string | null; content: string; applied: string | null; consumed: boolean }> {
-  const rows: Array<{ id: number; nodeId: string | null; content: string; applied: string | null; consumed: boolean }> = [];
+function installAdjustmentStore(
+  h: Harness,
+): Array<{ id: number; nodeId: string | null; content: string; applied: string | null; consumed: boolean }> {
+  const rows: Array<{ id: number; nodeId: string | null; content: string; applied: string | null; consumed: boolean }> =
+    [];
   const origInsert = h.crud.insertMessage;
   h.crud.insertMessage = (input) => {
     const m = origInsert(input);
@@ -712,7 +758,10 @@ function installAdjustmentStore(h: Harness): Array<{ id: number; nodeId: string 
     return got.sort((a, b) => a.id - b.id).map(toMsg);
   };
   h.crud.getConsumedAdjustmentsForNode = (_runId, nodeId) =>
-    rows.filter((r) => r.consumed && r.applied === nodeId).sort((a, b) => a.id - b.id).map(toMsg);
+    rows
+      .filter((r) => r.consumed && r.applied === nodeId)
+      .sort((a, b) => a.id - b.id)
+      .map(toMsg);
   return rows;
 }
 
@@ -762,8 +811,11 @@ describe('rerun-node (D9): quiescencia real, truncate no node, ajuste consumido 
 
     await runner.start('run-1');
     expect(await waitFor(h.crud, 'run-1', 'blocked')).toBe('blocked');
-    expect(isWorkflowRunLocked('run-1')).toBe(true); // child vivo aguardando o gate
-    expect(JSON.parse(h.crud.getRun('run-1')!.inputJson).pendingDecision).toMatchObject({ type: 'gate', id: 'plan-gate' });
+    expect(isWorkflowRunLocked('run-1')).toBe(true);
+    expect(JSON.parse(h.crud.getRun('run-1')!.inputJson).pendingDecision).toMatchObject({
+      type: 'gate',
+      id: 'plan-gate',
+    });
     expect(h.state.journal.some((e) => e.nodeId === 'planner-r0')).toBe(true);
     expect(plannerPrompts).toEqual(['plan']);
 
@@ -806,7 +858,12 @@ describe('rerun-node (D9): quiescencia real, truncate no node, ajuste consumido 
         coderCalls += 1;
         if (coderCalls === 1) {
           return new Promise<NodeRunResult>((resolve) => {
-            holdCoder = () => resolve({ ...(makeFakeAdapter(input) as unknown as NodeRunResult), ok: false, output: '' } as NodeRunResult);
+            holdCoder = () =>
+              resolve({
+                ...(makeFakeAdapter(input) as unknown as NodeRunResult),
+                ok: false,
+                output: '',
+              } as NodeRunResult);
           });
         }
       }
@@ -816,7 +873,13 @@ describe('rerun-node (D9): quiescencia real, truncate no node, ajuste consumido 
       await ctx.phase('Plan');
       await ctx.agent({ id: 'planner-r0', agentId: 'a-plan', access: 'read-only', prompt: 'plan' });
       await ctx.phase('Implementar');
-      await ctx.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'impl' });
+      await ctx.agent({
+        id: 'coder',
+        agentId: 'a-coder',
+        access: 'workspace-write',
+        writeSet: ['src/**'],
+        prompt: 'impl',
+      });
       await ctx.log({ message: 'pos-coder' });
       return { ok: true };
     };
@@ -861,13 +924,24 @@ describe('rerun-node (D9): quiescencia real, truncate no node, ajuste consumido 
       coordinator,
       projectPath: tmpRoot,
       adapter,
-      run: { status: 'failed', error: 'crash', workspaceMode: 'run-worktree', worktreeBranch: 'dynworkflow/run-1', baseCommitSha: 'basesha', worktreePath: join(tmpRoot, 'wt') },
+      run: {
+        status: 'failed',
+        error: 'crash',
+        workspaceMode: 'run-worktree',
+        worktreeBranch: 'dynworkflow/run-1',
+        baseCommitSha: 'basesha',
+        worktreePath: join(tmpRoot, 'wt'),
+      },
     });
     installAdjustmentStore(h);
     h.state.journal.push(seededJournalEntry('planner-r0', 1));
     const runner = new WorkflowRunner(h.deps);
 
-    const res = await runner.intervene('run-1', { type: 'rerun-node', nodeId: 'planner-r0', instruction: 'de novo' }, 'orchestrator');
+    const res = await runner.intervene(
+      'run-1',
+      { type: 'rerun-node', nodeId: 'planner-r0', instruction: 'de novo' },
+      'orchestrator',
+    );
     expect(res).toEqual({ ok: true });
     expect(h.state.events.some((e) => e.type === 'rerun-requested')).toBe(true);
     expect(h.state.events.some((e) => e.type === 'run-recovered-from-terminal')).toBe(true);
@@ -882,7 +956,15 @@ describe('rerun-node (D9): quiescencia real, truncate no node, ajuste consumido 
       await ctx.agent({ id: 'planner-r0', agentId: 'a-plan', access: 'read-only', prompt: 'plan' });
       return { ok: true };
     };
-    const pending = { type: 'provider', id: 'provider:planner-r0', prompt: 'limite', nodeId: 'planner-r0', failureClass: 'provider-limit', retriesExhausted: true, nodeError: 'boom' };
+    const pending = {
+      type: 'provider',
+      id: 'provider:planner-r0',
+      prompt: 'limite',
+      nodeId: 'planner-r0',
+      failureClass: 'provider-limit',
+      retriesExhausted: true,
+      nodeError: 'boom',
+    };
     const h = makeHarness({
       coordinator,
       projectPath: tmpRoot,
@@ -890,12 +972,19 @@ describe('rerun-node (D9): quiescencia real, truncate no node, ajuste consumido 
     });
     installAdjustmentStore(h);
     h.state.journal.push(seededJournalEntry('planner-r0', 1));
-    const runner = new WorkflowRunner(h.deps); // processo NOVO: nenhum estado ativo
+    const runner = new WorkflowRunner(h.deps);
 
-    const res = await runner.intervene('run-1', { type: 'rerun-node', nodeId: 'planner-r0', instruction: 'tente outro modelo' }, 'orchestrator');
+    const res = await runner.intervene(
+      'run-1',
+      { type: 'rerun-node', nodeId: 'planner-r0', instruction: 'tente outro modelo' },
+      'orchestrator',
+    );
     expect(res).toEqual({ ok: true });
     const rerun = h.state.events.find((e) => e.type === 'rerun-requested')!;
-    expect(JSON.parse(rerun.payload as string)).toMatchObject({ nodeId: 'planner-r0', clearedDecision: { type: 'provider', nodeError: 'boom' } });
+    expect(JSON.parse(rerun.payload as string)).toMatchObject({
+      nodeId: 'planner-r0',
+      clearedDecision: { type: 'provider', nodeError: 'boom' },
+    });
     expect(h.state.events.some((e) => e.type === 'pause-requested')).toBe(false);
     const status = await waitFor(h.crud, 'run-1', ['delivered', 'blocked', 'completed', 'running']);
     expect(['delivered', 'blocked', 'completed', 'running']).toContain(status);
@@ -915,7 +1004,13 @@ describe('rerun-node (D9): quiescencia real, truncate no node, ajuste consumido 
     };
     const coordinator: Coordinator = async (ctx) => {
       await ctx.agent({ id: 'planner-r0', agentId: 'a-plan', access: 'read-only', prompt: 'plan' });
-      await ctx.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'impl' });
+      await ctx.agent({
+        id: 'coder',
+        agentId: 'a-coder',
+        access: 'workspace-write',
+        writeSet: ['src/**'],
+        prompt: 'impl',
+      });
       return { ok: true };
     };
     const h = makeHarness({ coordinator, projectPath: tmpRoot, adapter });
@@ -927,7 +1022,11 @@ describe('rerun-node (D9): quiescencia real, truncate no node, ajuste consumido 
     const journalBefore = h.state.journal.map((e) => e.callIndex);
     expect(journalBefore.length).toBeGreaterThan(0);
 
-    const res = await runner.intervene('run-1', { type: 'rerun-node', nodeId: 'planner-r0', instruction: 'x' }, 'orchestrator');
+    const res = await runner.intervene(
+      'run-1',
+      { type: 'rerun-node', nodeId: 'planner-r0', instruction: 'x' },
+      'orchestrator',
+    );
     expect('error' in res).toBe(true);
     expect((res as { error: string }).error).toMatch(/nao quiesceu/);
     expect(h.state.journal.map((e) => e.callIndex)).toEqual(journalBefore);
@@ -945,7 +1044,11 @@ describe('rerun-node (D9): quiescencia real, truncate no node, ajuste consumido 
     installAdjustmentStore(h);
     h.state.journal.push(seededJournalEntry('planner-r0', 1));
     const runner = new WorkflowRunner(h.deps);
-    const res = await runner.intervene('run-1', { type: 'rerun-node', nodeId: 'nao-existe', instruction: 'x' }, 'orchestrator');
+    const res = await runner.intervene(
+      'run-1',
+      { type: 'rerun-node', nodeId: 'nao-existe', instruction: 'x' },
+      'orchestrator',
+    );
     expect('error' in res).toBe(true);
     expect((res as { error: string }).error).toMatch(/nao esta no journal/);
     expect(h.state.journal).toHaveLength(1);
@@ -969,14 +1072,34 @@ describe('rerun-node (D9): quiescencia real, truncate no node, ajuste consumido 
   });
 });
 
-
-function installClaimStore(h: Harness): Array<{ id: number; nodeId: string | null; kind: string; content: string; applied: string | null; consumed: boolean }> {
-  const rows: Array<{ id: number; nodeId: string | null; kind: string; content: string; applied: string | null; consumed: boolean }> = [];
+function installClaimStore(h: Harness): Array<{
+  id: number;
+  nodeId: string | null;
+  kind: string;
+  content: string;
+  applied: string | null;
+  consumed: boolean;
+}> {
+  const rows: Array<{
+    id: number;
+    nodeId: string | null;
+    kind: string;
+    content: string;
+    applied: string | null;
+    consumed: boolean;
+  }> = [];
   const origInsert = h.crud.insertMessage;
   h.crud.insertMessage = (input) => {
     const m = origInsert(input);
     if (input.kind === 'adjustment' || input.kind === 'agent-switch') {
-      rows.push({ id: m.id, nodeId: input.nodeId ?? null, kind: input.kind, content: input.content, applied: null, consumed: false });
+      rows.push({
+        id: m.id,
+        nodeId: input.nodeId ?? null,
+        kind: input.kind,
+        content: input.content,
+        applied: null,
+        consumed: false,
+      });
     }
     return m;
   };
@@ -1003,7 +1126,10 @@ function installClaimStore(h: Harness): Array<{ id: number; nodeId: string | nul
     return got.sort((a, b) => a.id - b.id).map(toMsg);
   };
   h.crud.getConsumedAdjustmentsForNode = (_runId, nodeId) =>
-    rows.filter((r) => r.consumed && r.applied === nodeId).sort((a, b) => a.id - b.id).map(toMsg);
+    rows
+      .filter((r) => r.consumed && r.applied === nodeId)
+      .sort((a, b) => a.id - b.id)
+      .map(toMsg);
   return rows;
 }
 
@@ -1014,7 +1140,13 @@ function failThenOkAdapter(failures: number, seen: Array<{ agentId: string; prom
     seen.push({ agentId: input.agentId, prompt: input.prompt });
     calls += 1;
     if (calls <= failures) {
-      return { ...base, ok: false, output: '', failureClass: 'logic', errorMessage: 'Reached maximum number of turns (80)' };
+      return {
+        ...base,
+        ok: false,
+        output: '',
+        failureClass: 'logic',
+        errorMessage: 'Reached maximum number of turns (80)',
+      };
     }
     return base;
   };
@@ -1031,16 +1163,32 @@ describe('L1.1 (runner): gate failure:<nodeId> com o child vivo', () => {
       const out = await ctx.agent({ id: 'planner-r0', agentId: 'a-plan', access: 'read-only', prompt: 'plan' });
       return { got: out };
     };
-    const h = makeHarness({ coordinator, projectPath: tmpRoot, run: { status: 'created' }, adapter: failThenOkAdapter(1, seen) });
+    const h = makeHarness({
+      coordinator,
+      projectPath: tmpRoot,
+      run: { status: 'created' },
+      adapter: failThenOkAdapter(1, seen),
+    });
     installClaimStore(h);
     const runner = new WorkflowRunner({ ...h.deps, sleep: async () => {} });
     await runner.start('run-1');
     expect(await waitFor(h.crud, 'run-1', 'blocked')).toBe('blocked');
-    expect(pendingOf(h)).toMatchObject({ type: 'provider', id: 'failure:planner-r0', gateId: 'failure:planner-r0', failureClass: 'logic' });
+    expect(pendingOf(h)).toMatchObject({
+      type: 'provider',
+      id: 'failure:planner-r0',
+      gateId: 'failure:planner-r0',
+      failureClass: 'logic',
+    });
     expect(isWorkflowRunLocked('run-1')).toBe(true);
-    expect(h.state.events.some((e) => e.type === 'gate-blocked' && String(e.payload).includes('failure:planner-r0'))).toBe(true);
+    expect(
+      h.state.events.some((e) => e.type === 'gate-blocked' && String(e.payload).includes('failure:planner-r0')),
+    ).toBe(true);
 
-    const res = await runner.intervene('run-1', { type: 'rerun-node', nodeId: 'planner-r0', instruction: 'tente de novo' }, 'orchestrator');
+    const res = await runner.intervene(
+      'run-1',
+      { type: 'rerun-node', nodeId: 'planner-r0', instruction: 'tente de novo' },
+      'orchestrator',
+    );
     expect(res).toEqual({ ok: true });
     expect(h.state.events.some((e) => e.type === 'rerun-requested')).toBe(false);
     expect(await waitFor(h.crud, 'run-1', ['delivered', 'completed'])).toMatch(/delivered|completed/);
@@ -1048,8 +1196,14 @@ describe('L1.1 (runner): gate failure:<nodeId> com o child vivo', () => {
     expect(pendingOf(h)).toBeUndefined();
     const approved = h.state.events.find((e) => e.type === 'gate-approved');
     expect(JSON.parse(approved!.payload as string)).toMatchObject({ gateId: 'failure:planner-r0', action: 'retry' });
-    const attempts = h.crud.listNodeRuns('run-1').filter((n) => n.nodeId === 'planner-r0').map((n) => [n.attempt, n.status]);
-    expect(attempts).toEqual([[1, 'failed'], [2, 'completed']]);
+    const attempts = h.crud
+      .listNodeRuns('run-1')
+      .filter((n) => n.nodeId === 'planner-r0')
+      .map((n) => [n.attempt, n.status]);
+    expect(attempts).toEqual([
+      [1, 'failed'],
+      [2, 'completed'],
+    ]);
     expect(h.state.events.some((e) => e.type === 'run-failed')).toBe(false);
     cleanup();
   });
@@ -1060,25 +1214,51 @@ describe('L1.1 (runner): gate failure:<nodeId> com o child vivo', () => {
       await ctx.agent({ id: 'planner-r0', agentId: 'a-plan', access: 'read-only', prompt: 'plan' });
       return { ok: true };
     };
-    const h = makeHarness({ coordinator, projectPath: tmpRoot, run: { status: 'created' }, adapter: failThenOkAdapter(1, seen) });
+    const h = makeHarness({
+      coordinator,
+      projectPath: tmpRoot,
+      run: { status: 'created' },
+      adapter: failThenOkAdapter(1, seen),
+    });
     const rows = installClaimStore(h);
     const runner = new WorkflowRunner({ ...h.deps, sleep: async () => {} });
     await runner.start('run-1');
     expect(await waitFor(h.crud, 'run-1', 'blocked')).toBe('blocked');
 
-    const denied = await runner.approveGate('run-1', 'failure:planner-r0', { decision: 'approve', payload: { action: 'switch-agent', agentType: 'dynamic-workflow-closer' } }, 'orchestrator');
+    const denied = await runner.approveGate(
+      'run-1',
+      'failure:planner-r0',
+      { decision: 'approve', payload: { action: 'switch-agent', agentType: 'dynamic-workflow-closer' } },
+      'orchestrator',
+    );
     expect(denied).toMatchObject({ error: expect.stringContaining('denylist') });
-    const invalid = await runner.approveGate('run-1', 'failure:planner-r0', { decision: 'approve', payload: { action: 'redev' } }, 'orchestrator');
+    const invalid = await runner.approveGate(
+      'run-1',
+      'failure:planner-r0',
+      { decision: 'approve', payload: { action: 'redev' } },
+      'orchestrator',
+    );
     expect(invalid).toMatchObject({ error: expect.stringContaining('payload.action invalida') });
     expect(h.crud.getRun('run-1')?.status).toBe('blocked');
 
-    const res = await runner.approveGate('run-1', 'failure:planner-r0', { decision: 'approve', payload: { action: 'switch-agent', agentType: 'a-plan-b' } }, 'orchestrator');
+    const res = await runner.approveGate(
+      'run-1',
+      'failure:planner-r0',
+      { decision: 'approve', payload: { action: 'switch-agent', agentType: 'a-plan-b' } },
+      'orchestrator',
+    );
     expect(res).toEqual({ ok: true });
     expect(await waitFor(h.crud, 'run-1', ['delivered', 'completed'])).toMatch(/delivered|completed/);
     expect(seen.map((s) => s.agentId)).toEqual(['a-plan', 'a-plan-b']);
     expect(rows.map((r) => [r.kind, r.content, r.consumed])).toEqual([['agent-switch', 'a-plan-b', true]]);
-    const attempts = h.crud.listNodeRuns('run-1').filter((n) => n.nodeId === 'planner-r0').map((n) => [n.attempt, n.agentId, n.status]);
-    expect(attempts).toEqual([[1, 'a-plan', 'failed'], [2, 'a-plan-b', 'completed']]);
+    const attempts = h.crud
+      .listNodeRuns('run-1')
+      .filter((n) => n.nodeId === 'planner-r0')
+      .map((n) => [n.attempt, n.agentId, n.status]);
+    expect(attempts).toEqual([
+      [1, 'a-plan', 'failed'],
+      [2, 'a-plan-b', 'completed'],
+    ]);
     cleanup();
   });
 
@@ -1087,7 +1267,12 @@ describe('L1.1 (runner): gate failure:<nodeId> com o child vivo', () => {
       await ctx.agent({ id: 'planner-r0', agentId: 'a-plan', access: 'read-only', prompt: 'plan' });
       return { ok: true };
     };
-    const h = makeHarness({ coordinator, projectPath: tmpRoot, run: { status: 'created' }, adapter: failThenOkAdapter(5) });
+    const h = makeHarness({
+      coordinator,
+      projectPath: tmpRoot,
+      run: { status: 'created' },
+      adapter: failThenOkAdapter(5),
+    });
     installClaimStore(h);
     const runner = new WorkflowRunner({ ...h.deps, sleep: async () => {} });
     await runner.start('run-1');
@@ -1106,8 +1291,16 @@ describe('L1.1 (runner): gate failure:<nodeId> com o child vivo', () => {
       return { ok: true };
     };
     const pending = {
-      type: 'provider', id: 'failure:planner-r0', gateId: 'failure:planner-r0', prompt: 'x', nodeId: 'planner-r0',
-      failureClass: 'logic', retriesExhausted: false, attemptsMade: 1, nodeError: 'boom', actions: ['retry', 'switch-agent', 'skip', 'abort'],
+      type: 'provider',
+      id: 'failure:planner-r0',
+      gateId: 'failure:planner-r0',
+      prompt: 'x',
+      nodeId: 'planner-r0',
+      failureClass: 'logic',
+      retriesExhausted: false,
+      attemptsMade: 1,
+      nodeError: 'boom',
+      actions: ['retry', 'switch-agent', 'skip', 'abort'],
     };
     const h = makeHarness({
       coordinator,
@@ -1116,8 +1309,13 @@ describe('L1.1 (runner): gate failure:<nodeId> com o child vivo', () => {
       adapter: failThenOkAdapter(0, seen),
     });
     installClaimStore(h);
-    const runner = new WorkflowRunner({ ...h.deps, sleep: async () => {} }); // processo NOVO: sem estado ativo
-    const res = await runner.approveGate('run-1', 'failure:planner-r0', { decision: 'approve', payload: { action: 'retry', instruction: 'de novo' } }, 'orchestrator');
+    const runner = new WorkflowRunner({ ...h.deps, sleep: async () => {} });
+    const res = await runner.approveGate(
+      'run-1',
+      'failure:planner-r0',
+      { decision: 'approve', payload: { action: 'retry', instruction: 'de novo' } },
+      'orchestrator',
+    );
     expect(res).toEqual({ ok: true });
     expect(h.state.events.some((e) => e.type === 'gate-orphan-rearm')).toBe(true);
     expect(await waitFor(h.crud, 'run-1', ['delivered', 'completed'])).toMatch(/delivered|completed/);
@@ -1136,7 +1334,12 @@ describe('L1.1 (runner): gate failure:<nodeId> com o child vivo', () => {
       adapter: failThenOkAdapter(0),
     });
     const runner2 = new WorkflowRunner(h2.deps);
-    const res2 = await runner2.approveGate('run-1', 'failure:planner-r0', { decision: 'approve', payload: { action: 'abort' } }, 'orchestrator');
+    const res2 = await runner2.approveGate(
+      'run-1',
+      'failure:planner-r0',
+      { decision: 'approve', payload: { action: 'abort' } },
+      'orchestrator',
+    );
     expect(res2).toEqual({ ok: true });
     expect(h2.crud.getRun('run-1')?.status).toBe('aborted');
     expect(pendingOf(h2)).toBeUndefined();
@@ -1149,8 +1352,17 @@ describe('L1.1 (runner): gate failure:<nodeId> com o child vivo', () => {
       calls += 1;
       const base = await makeFakeAdapter(input);
       if (calls === 1) {
-        await new Promise<void>((resolve) => input.abortSignal!.addEventListener('abort', () => resolve(), { once: true }));
-        return { ...base, ok: false, output: '', failureClass: 'cancelled', errorMessage: 'The operation was aborted', aborted: true };
+        await new Promise<void>((resolve) =>
+          input.abortSignal!.addEventListener('abort', () => resolve(), { once: true }),
+        );
+        return {
+          ...base,
+          ok: false,
+          output: '',
+          failureClass: 'cancelled',
+          errorMessage: 'The operation was aborted',
+          aborted: true,
+        };
       }
       return base;
     };

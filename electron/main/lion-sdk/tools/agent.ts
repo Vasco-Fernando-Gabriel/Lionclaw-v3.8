@@ -1,4 +1,3 @@
-
 import { getAgent } from '../../db';
 import { executeAgent } from '../../agent-runtime';
 import { PERM_BYPASS_NO_GUARD } from '../../agent-runtime/permission-profiles';
@@ -7,7 +6,7 @@ import { createLogger } from '../../logger';
 import { resolveSubagentRepoRoot } from '../../repo-graph/validate-root';
 import { prefetchRepoGraphTurnContext } from '../../repo-graph/minimal-context';
 import { getRepoGraphTurnContext } from '../../repo-graph/turn-context';
-import { resolveChatInheritedEffort } from '../../agent-runtime/chat-effort-inheritance';
+import type { ChatInheritedEffort } from '../../agent-runtime/chat-effort-inheritance';
 import type { AgentExecutionResult } from '../../agent-runtime/types';
 import type { SubagentDispatchContext } from '../../agent-runtime/types';
 import {
@@ -24,6 +23,7 @@ export const PIPELINE_INTERNAL_SQUADS = new Set<string>([
   'security',
   'feature',
   'enrich',
+  'swarm',
 ]);
 
 export interface AgentInput {
@@ -51,7 +51,7 @@ export interface AgentToolDependencies {
   resolveRepoRoot?: typeof resolveSubagentRepoRoot;
   prefetchContext?: typeof prefetchRepoGraphTurnContext;
   getTurnContext?: typeof getRepoGraphTurnContext;
-  resolveInheritedEffort?: typeof resolveChatInheritedEffort;
+  resolveInheritedEffort?: () => ChatInheritedEffort | undefined;
   dispatchContext?: SubagentDispatchContext;
   toolUseId?: string;
   transportCorrelation?: {
@@ -60,10 +60,7 @@ export interface AgentToolDependencies {
   };
 }
 
-export async function lionAgentDispatch(
-  input: AgentInput,
-  deps: AgentToolDependencies = {},
-): Promise<AgentToolResult> {
+export async function lionAgentDispatch(input: AgentInput, deps: AgentToolDependencies = {}): Promise<AgentToolResult> {
   if (!input || typeof input.agent_id !== 'string' || input.agent_id.length === 0) {
     return { ok: false, error: 'Agent: agent_id obrigatorio.' };
   }
@@ -119,18 +116,19 @@ export async function lionAgentDispatch(
 
   const agentRuntime = agent.runtime ?? 'cloud';
   const runtimeSemMcp = agentRuntime === 'local' || agentRuntime === 'external';
-  const turnCtx = (deps.getTurnContext ?? getRepoGraphTurnContext)();
+  const turnSessionId = deps.dispatchContext?.sessionId ?? input.sessionId;
+  const turnCtx = turnSessionId ? (deps.getTurnContext ?? getRepoGraphTurnContext)(turnSessionId) : null;
   let repoBaseline: string | null = null;
-  if (repoRootValidated || (runtimeSemMcp && turnCtx !== null)) {
+  if (turnSessionId && (repoRootValidated || (runtimeSemMcp && turnCtx !== null))) {
     const prefetch = deps.prefetchContext ?? prefetchRepoGraphTurnContext;
-    const prefetched = await prefetch(input.task);
+    const prefetched = await prefetch(input.task, { sessionId: turnSessionId });
     repoBaseline = prefetched?.renderedMarkdown ?? null;
   }
 
   const basePrompt = promptParts.join('\n');
   const prompt = repoBaseline ? `${repoBaseline}\n\n${basePrompt}` : basePrompt;
 
-  const resolveEffort = deps.resolveInheritedEffort ?? resolveChatInheritedEffort;
+  const resolveEffort = deps.resolveInheritedEffort ?? (() => deps.dispatchContext?.inheritedEffort);
   const inheritedEffort = resolveEffort();
 
   try {

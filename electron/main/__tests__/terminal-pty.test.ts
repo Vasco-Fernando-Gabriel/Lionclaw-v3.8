@@ -27,8 +27,14 @@ const fakePtyModuleImpl = {
     };
     spawned.push(fake);
     return {
-      onData: (cb: (d: string) => void) => { dataCb = cb; return { dispose: vi.fn() }; },
-      onExit: (cb: (e: { exitCode: number; signal?: number }) => void) => { exitCb = cb; return { dispose: vi.fn() }; },
+      onData: (cb: (d: string) => void) => {
+        dataCb = cb;
+        return { dispose: vi.fn() };
+      },
+      onExit: (cb: (e: { exitCode: number; signal?: number }) => void) => {
+        exitCb = cb;
+        return { dispose: vi.fn() };
+      },
       write: fake.write,
       resize: fake.resize,
       kill: fake.kill,
@@ -107,9 +113,7 @@ describe('terminal-pty registry', () => {
     expect(spawned).toHaveLength(1);
 
     spawned[0].emitData('hello');
-    expect(win.sent).toEqual([
-      { channel: 'terminal:data', payload: { sessionId: 'tab-a', chunk: 'hello' } },
-    ]);
+    expect(win.sent).toEqual([{ channel: 'terminal:data', payload: { sessionId: 'tab-a', chunk: 'hello' } }]);
 
     writeTerminalSession(1, 'tab-a', 'ls\r');
     expect(spawned[0].write).toHaveBeenCalledWith('ls\r');
@@ -127,7 +131,7 @@ describe('terminal-pty registry', () => {
     openTerminalSession(asWindow(win), 'tab-a', 999999, -5);
     const opts = spawned[0].spawnArgs.opts;
     expect(opts.cols).toBe(1000);
-    expect(opts.rows).toBe(1); // negativo -> clamp de piso
+    expect(opts.rows).toBe(1);
     expect(typeof opts.cwd).toBe('string');
     expect((opts.env as Record<string, string>).TERM).toBe('xterm-256color');
   });
@@ -151,7 +155,7 @@ describe('terminal-pty registry', () => {
     expect(openTerminalSession(asWindow(win), 'tab-a', 80, 24)).toEqual({ ok: true });
     const second = openTerminalSession(asWindow(win), 'tab-a', 80, 24);
     expect(second.ok).toBe(false);
-    expect(spawned).toHaveLength(1); // nao spawnou outro
+    expect(spawned).toHaveLength(1);
     expect(spawned[0].kill).not.toHaveBeenCalled();
   });
 
@@ -205,7 +209,7 @@ describe('terminal-pty registry', () => {
     expect(spawned[0].kill).toHaveBeenCalled();
     expect(spawned[1].kill).toHaveBeenCalled();
     expect(spawned[2].kill).not.toHaveBeenCalled();
-    expect(hasActiveTerminalSessions()).toBe(true); // win2 segue viva
+    expect(hasActiveTerminalSessions()).toBe(true);
   });
 
   it('close explicito NAO emite terminal:exit (teardown silencioso)', () => {

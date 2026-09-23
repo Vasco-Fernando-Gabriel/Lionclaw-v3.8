@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import { BrowserWindow, session, shell } from 'electron';
@@ -10,16 +9,27 @@ import { createLogger } from './logger';
 
 const logger = createLogger('preview-open');
 
-export type PreviewOpenResult =
-  | { ok: true; value: unknown }
-  | { ok: false; error: string };
+export type PreviewOpenResult = { ok: true; value: unknown } | { ok: false; error: string };
 
 const ALLOWED_EXTENSIONS = new Set(['.html', '.htm']);
 const ALLOWED_URL_HOSTS = new Set(['localhost', '127.0.0.1']);
 const ALLOWED_CAPTURE_ASSET_EXTENSIONS = new Set([
-  '.css', '.js', '.mjs', '.wasm',
-  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.avif', '.ico',
-  '.woff', '.woff2', '.ttf', '.otf',
+  '.css',
+  '.js',
+  '.mjs',
+  '.wasm',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.svg',
+  '.webp',
+  '.avif',
+  '.ico',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.otf',
 ]);
 
 function fail(error: string): PreviewOpenResult {
@@ -46,8 +56,7 @@ export function resolveAllowedRealRoots(): string[] {
   for (const candidate of candidates) {
     try {
       roots.push(fs.realpathSync(candidate));
-    } catch {
-    }
+    } catch {}
   }
   return roots;
 }
@@ -70,8 +79,9 @@ export function isPreviewRequestAllowed(rawUrl: string, canonicalTarget: string)
     const requested = fs.realpathSync(fileURLToPath(url));
     const assetRoot = fs.realpathSync(path.dirname(canonicalTarget));
     if (requested === canonicalTarget) return true;
-    return isUnderRoot(requested, assetRoot) &&
-      ALLOWED_CAPTURE_ASSET_EXTENSIONS.has(path.extname(requested).toLowerCase());
+    return (
+      isUnderRoot(requested, assetRoot) && ALLOWED_CAPTURE_ASSET_EXTENSIONS.has(path.extname(requested).toLowerCase())
+    );
   } catch {
     return false;
   }
@@ -79,8 +89,7 @@ export function isPreviewRequestAllowed(rawUrl: string, canonicalTarget: string)
 
 function isPreviewMainNavigationAllowed(rawUrl: string, canonicalTarget: string): boolean {
   try {
-    return new URL(rawUrl).protocol === 'file:' &&
-      fs.realpathSync(fileURLToPath(rawUrl)) === canonicalTarget;
+    return new URL(rawUrl).protocol === 'file:' && fs.realpathSync(fileURLToPath(rawUrl)) === canonicalTarget;
   } catch {
     return false;
   }
@@ -131,9 +140,7 @@ async function openLocalHtmlFile(raw: string): Promise<PreviewOpenResult> {
   return { ok: true, value: { opened: true, kind: 'file', target: realTarget } };
 }
 
-type LocalHtmlValidation =
-  | { ok: true; target: string }
-  | { ok: false; result: PreviewOpenResult };
+type LocalHtmlValidation = { ok: true; target: string } | { ok: false; result: PreviewOpenResult };
 
 function validateLocalHtmlFile(raw: string): LocalHtmlValidation {
   if (!path.isAbsolute(raw)) {
@@ -175,7 +182,9 @@ function validateLocalHtmlFile(raw: string): LocalHtmlValidation {
   if (!allowed) {
     return {
       ok: false,
-      result: fail('preview_open: caminho fora das raizes permitidas (project paths dos pipelines e a pasta de dados do LionClaw).'),
+      result: fail(
+        'preview_open: caminho fora das raizes permitidas (project paths dos pipelines e a pasta de dados do LionClaw).',
+      ),
     };
   }
   return { ok: true, target: realTarget };
@@ -189,9 +198,8 @@ export async function previewCaptureCore(
   if (!validated.ok) return validated.result;
 
   const width = Math.max(320, Math.min(3840, Math.round(options.width ?? 1440)));
-  const requestedHeight = options.height === undefined
-    ? null
-    : Math.max(320, Math.min(4096, Math.round(options.height)));
+  const requestedHeight =
+    options.height === undefined ? null : Math.max(320, Math.min(4096, Math.round(options.height)));
   const isolatedSession = session.fromPartition(`lionclaw-preview-${crypto.randomUUID()}`, {
     cache: false,
   });
@@ -227,15 +235,15 @@ export async function previewCaptureCore(
   try {
     await Promise.race([
       win.loadFile(validated.target),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`timeout de ${timeoutMs}ms`)), timeoutMs),
-      ),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`timeout de ${timeoutMs}ms`)), timeoutMs)),
     ]);
     await new Promise((resolve) => setTimeout(resolve, 150));
-    const documentHeight = requestedHeight ?? await win.webContents.executeJavaScript(
-      'Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0, 900)',
-      true,
-    ) as number;
+    const documentHeight =
+      requestedHeight ??
+      ((await win.webContents.executeJavaScript(
+        'Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0, 900)',
+        true,
+      )) as number);
     const height = Math.max(320, Math.min(4096, Math.ceil(documentHeight)));
     win.setContentSize(width, height);
     const image = await win.webContents.capturePage();
@@ -250,7 +258,11 @@ export async function previewCaptureCore(
       fs.linkSync(tempPath, outputPath);
       fs.unlinkSync(tempPath);
     } catch (error) {
-      try { fs.unlinkSync(tempPath); } catch { /* temp pode não ter sido criado */ }
+      try {
+        fs.unlinkSync(tempPath);
+      } catch {
+        /* temp pode não ter sido criado */
+      }
       throw error;
     }
     logger.info({ target: validated.target, outputPath, width, height }, 'preview_capture concluido');

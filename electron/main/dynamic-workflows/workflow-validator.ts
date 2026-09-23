@@ -1,4 +1,3 @@
-
 import { compileWorkflowJs } from './workflow-js-compiler';
 import type {
   DynamicWorkflowManifest,
@@ -9,13 +8,7 @@ import type {
 import { sha256Hex } from './workflow-context-bundle';
 
 const VALID_ACCESS = new Set(['read-only', 'workspace-write']);
-const VALID_NODE_TYPES = new Set([
-  'agent',
-  'parallel',
-  'gate',
-  'artifact',
-  'checkpoint',
-]);
+const VALID_NODE_TYPES = new Set(['agent', 'parallel', 'gate', 'artifact', 'checkpoint']);
 
 export interface ValidateWorkflowPackageInput {
   workflowJsSource: string;
@@ -58,9 +51,7 @@ export function validateWorkflowPackage(
   }
 
   const schemaSet = new Set((input.schemaFileNames ?? []).map(schemaBasename));
-  const catalogSet = input.catalogAgentIds
-    ? new Set(input.catalogAgentIds)
-    : null;
+  const catalogSet = input.catalogAgentIds ? new Set(input.catalogAgentIds) : null;
 
   for (const node of m.nodes) {
     validateNode(node, { schemaSet, catalogSet, issues });
@@ -70,12 +61,7 @@ export function validateWorkflowPackage(
     ? (m.parallelism as { parallelWritersAllowed?: unknown }).parallelWritersAllowed
     : undefined;
   if (parallelWritersAllowed === true) {
-    issues.push(
-      issue(
-        'parallel-writer-forbidden',
-        'parallelWritersAllowed=true proibido (15/7.4)',
-      ),
-    );
+    issues.push(issue('parallel-writer-forbidden', 'parallelWritersAllowed=true proibido (15/7.4)'));
   }
 
   if (!catalogSet) {
@@ -97,30 +83,21 @@ interface NodeValidationCtx {
   issues: DynamicWorkflowValidationIssue[];
 }
 
-function validateNode(
-  node: DynamicWorkflowManifestNode,
-  ctx: NodeValidationCtx,
-): void {
+function validateNode(node: DynamicWorkflowManifestNode, ctx: NodeValidationCtx): void {
   const { issues } = ctx;
   if (!node.id || typeof node.id !== 'string') {
     issues.push(issue('node-id-missing', 'node sem id valido'));
     return;
   }
   if (!VALID_NODE_TYPES.has(node.type)) {
-    issues.push(
-      issue('node-type-invalid', `node '${node.id}' com type invalido: ${node.type}`, 'error', node.id),
-    );
+    issues.push(issue('node-type-invalid', `node '${node.id}' com type invalido: ${node.type}`, 'error', node.id));
   }
   if (node.access !== undefined && !VALID_ACCESS.has(node.access)) {
-    issues.push(
-      issue('access-invalid', `node '${node.id}' com access invalido: ${node.access}`, 'error', node.id),
-    );
+    issues.push(issue('access-invalid', `node '${node.id}' com access invalido: ${node.access}`, 'error', node.id));
   }
   if (node.type === 'agent') {
     if (!node.agentId || typeof node.agentId !== 'string') {
-      issues.push(
-        issue('agent-id-missing', `node agent '${node.id}' sem agentId (15)`, 'error', node.id),
-      );
+      issues.push(issue('agent-id-missing', `node agent '${node.id}' sem agentId (15)`, 'error', node.id));
     } else if (ctx.catalogSet && !ctx.catalogSet.has(node.agentId)) {
       issues.push(
         issue(
@@ -134,9 +111,7 @@ function validateNode(
   }
   if (node.access === 'workspace-write') {
     if (!Array.isArray(node.writeSet) || node.writeSet.length === 0) {
-      issues.push(
-        issue('writeset-missing', `node writer '${node.id}' sem writeSet (7.4)`, 'error', node.id),
-      );
+      issues.push(issue('writeset-missing', `node writer '${node.id}' sem writeSet (7.4)`, 'error', node.id));
     }
     if (node.isolation !== 'run-workspace') {
       issues.push(

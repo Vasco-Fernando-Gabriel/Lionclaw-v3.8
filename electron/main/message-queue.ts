@@ -9,6 +9,7 @@ export interface QueuedMessage {
   message: string;
   options: {
     sessionId?: string;
+    swarmDelivery?: { runId: string; terminalRevision: number; claimId: string };
     agentId?: string;
     silent?: boolean;
     displayMessage?: string;
@@ -36,7 +37,7 @@ export interface QueuedMessage {
   enqueuedAt: number;
 }
 
-class MessageQueue {
+export class MessageQueue {
   private queue: QueuedMessage[] = [];
   private _processing = false;
   private _processingStartedAt: number | null = null;
@@ -61,10 +62,7 @@ class MessageQueue {
 
   enqueue(item: QueuedMessage): void {
     this.queue.push(item);
-    logger.info(
-      { queueLength: this.queue.length, message: item.message.substring(0, 80) },
-      'Message enqueued',
-    );
+    logger.info({ queueLength: this.queue.length, message: item.message.substring(0, 80) }, 'Message enqueued');
   }
 
   dequeue(): QueuedMessage | undefined {
@@ -79,22 +77,38 @@ class MessageQueue {
     return this.queue.length;
   }
 
-  clear(): void {
+  clear(): QueuedMessage[] {
+    const discarded = this.queue;
     const cleared = this.queue.length;
     this.queue = [];
     if (cleared > 0) {
       logger.info({ cleared }, 'Queue cleared');
     }
+    return discarded;
   }
 
-  drain(): QueuedMessage[] {
-    const drained = this.queue;
-    this.queue = [];
+  drain(predicate?: (item: QueuedMessage) => boolean): QueuedMessage[] {
+    if (!predicate) {
+      const drained = this.queue;
+      this.queue = [];
+      if (drained.length > 0) {
+        logger.info({ cleared: drained.length }, 'Queue drained');
+      }
+      return drained;
+    }
+    const drained: QueuedMessage[] = [];
+    const kept: QueuedMessage[] = [];
+    for (const item of this.queue) {
+      (predicate(item) ? drained : kept).push(item);
+    }
+    this.queue = kept;
     if (drained.length > 0) {
-      logger.info({ cleared: drained.length }, 'Queue drained');
+      logger.info({ cleared: drained.length, kept: kept.length }, 'Queue drained by predicate');
     }
     return drained;
   }
-}
 
-export const messageQueue = new MessageQueue();
+  some(predicate: (item: QueuedMessage) => boolean): boolean {
+    return this.queue.some(predicate);
+  }
+}

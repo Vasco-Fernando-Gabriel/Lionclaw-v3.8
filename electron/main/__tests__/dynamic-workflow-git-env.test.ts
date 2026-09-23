@@ -1,4 +1,3 @@
-
 import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -75,10 +74,7 @@ describe('workflow-git-env: runGit nao pendura num remote SSH (SM-28 end-to-end)
   it('git fetch de um host SSH inexistente FALHA RAPIDO em vez de pendurar', async () => {
     root = mkdtempSync(join(tmpdir(), 'wf-git-env-'));
     await runGit(['init', '-b', 'main'], root);
-    await runGit(
-      ['remote', 'add', 'origin', 'git@nonexistent.invalid.lionclaw:owner/repo.git'],
-      root,
-    );
+    await runGit(['remote', 'add', 'origin', 'git@nonexistent.invalid.lionclaw:owner/repo.git'], root);
     const started = Date.now();
     const res = await runGit(['fetch', 'origin'], root);
     const elapsed = Date.now() - started;

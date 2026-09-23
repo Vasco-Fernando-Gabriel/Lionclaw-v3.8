@@ -1,8 +1,5 @@
 import { ipcMain } from 'electron';
-import {
-  getCodexModelCapabilities,
-  getCodexModelCapabilitiesState,
-} from '../codex-runtime/model-capabilities';
+import { getCodexModelCapabilities, getCodexModelCapabilitiesState } from '../codex-runtime/model-capabilities';
 import type { IpcContext } from './context';
 import { getSetting, setSetting } from '../db';
 import { invalidateProviderStatusCache } from '../provider-availability';
@@ -22,9 +19,7 @@ export function registerCodexHandlers(_ctx: IpcContext): void {
   });
 
   ipcMain.handle('codex:test', async () => {
-    const { getCodexBinaryStatus, invalidateCodexBinaryProbe } = await import(
-      '../codex-runtime/binary'
-    );
+    const { getCodexBinaryStatus, invalidateCodexBinaryProbe } = await import('../codex-runtime/binary');
     const status = await getCodexBinaryStatus();
     if (!status.installed || !status.authenticated || !status.appServerSupported) {
       return { ok: false, message: status.error ?? 'Codex indisponivel ou nao autenticado' };
@@ -48,11 +43,11 @@ export function registerCodexHandlers(_ctx: IpcContext): void {
       const asExpr = `tell application "Terminal" to do script "${appleScriptEscape(shellCmd)}"`;
       spawn('osascript', ['-e', asExpr]);
     } else if (platform === 'win32') {
-      spawn(
-        'cmd',
-        ['/c', 'start', '""', 'cmd', '/k', `${cmdQuote(binaryPath)} login`],
-        { detached: true, shell: false, windowsVerbatimArguments: true },
-      );
+      spawn('cmd', ['/c', 'start', '""', 'cmd', '/k', `${cmdQuote(binaryPath)} login`], {
+        detached: true,
+        shell: false,
+        windowsVerbatimArguments: true,
+      });
     } else {
       const shellCmd = `${shellEscapePOSIX(binaryPath)} login; exec bash`;
       const term = spawn('gnome-terminal', ['--', 'bash', '-c', shellCmd], {
@@ -73,28 +68,22 @@ export function registerCodexHandlers(_ctx: IpcContext): void {
     return { ok: true };
   });
 
-  ipcMain.handle(
-    'codex:check-prep-needed',
-    async (_event, projectPath: string) => {
-      const { checkProjectNeedsPrep } = await import('../codex-windows-prep');
-      return checkProjectNeedsPrep(projectPath);
-    },
-  );
+  ipcMain.handle('codex:check-prep-needed', async (_event, projectPath: string) => {
+    const { checkProjectNeedsPrep } = await import('../codex-windows-prep');
+    return checkProjectNeedsPrep(projectPath);
+  });
 
   ipcMain.handle('codex:apply-prep', async (_event, repoRoot: string) => {
     const { applyPrepWithConsent } = await import('../codex-windows-prep');
     return applyPrepWithConsent(repoRoot);
   });
 
-  ipcMain.handle(
-    'codex:grant-consent',
-    async (_event, payload: { repoRoot: string; action: 'skip' }) => {
-      const { grantSkipConsent } = await import('../codex-windows-prep');
-      if (payload.action === 'skip') {
-        grantSkipConsent(payload.repoRoot);
-        return { ok: true };
-      }
-      return { ok: false, error: 'Unsupported action' };
-    },
-  );
+  ipcMain.handle('codex:grant-consent', async (_event, payload: { repoRoot: string; action: 'skip' }) => {
+    const { grantSkipConsent } = await import('../codex-windows-prep');
+    if (payload.action === 'skip') {
+      grantSkipConsent(payload.repoRoot);
+      return { ok: true };
+    }
+    return { ok: false, error: 'Unsupported action' };
+  });
 }

@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi } from 'vitest';
-
 
 import { applyMigrationV65 } from '../db-migrations/v65-drop-theme-setting';
 
@@ -9,7 +7,6 @@ describe('applyMigrationV65 - structural', () => {
     expect(typeof applyMigrationV65).toBe('function');
   });
 });
-
 
 describe('applyMigrationV65 - mock DB', () => {
   it('calls prepare with DELETE WHERE key = theme and then run', () => {

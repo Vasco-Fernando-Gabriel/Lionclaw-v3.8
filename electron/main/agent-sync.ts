@@ -1,21 +1,11 @@
-
-import {
-  getAllAgents,
-  getAgent,
-  getSetting,
-  listHarnessProjects,
-  updateAgent,
-  type AgentUpdatePatch,
-} from './db';
-import {
-  resolveOrchestratorSelection,
-  type OrchestratorSelection,
-} from './orchestrator-selection';
+import { getAllAgents, getAgent, getSetting, listHarnessProjects, updateAgent, type AgentUpdatePatch } from './db';
+import { resolveOrchestratorSelection, type OrchestratorSelection } from './orchestrator-selection';
 import { getSeedAgentById } from './seed-agents';
 import { isProjectLocked } from './pipeline-shared/lock';
 import { CODEX_EFFORT_ORDER } from '../../src/constants/codex-models';
 import { getKimiModel } from '../../src/constants/kimi-models';
 import { clampCodexEffortForModelDiscovered } from './codex-runtime/model-capabilities';
+import type { SessionOrchestrator } from './lanes';
 import { createLogger } from './logger';
 import type { HarnessEngine } from './harness-engine';
 import type {
@@ -28,7 +18,9 @@ import type {
   HarnessProjectStatus,
   OrchestratorSelectionSnapshot,
   SyncAgentsToOrchestratorRequest,
-  SyncAgentsToOrchestratorResponse, CodexChatReasoningEffort } from '../../src/types';
+  SyncAgentsToOrchestratorResponse,
+  CodexChatReasoningEffort,
+} from '../../src/types';
 
 const logger = createLogger('agent-sync');
 
@@ -37,9 +29,7 @@ export class InvalidOrchestratorMappingError extends Error {
   public readonly provider: string;
 
   constructor(runtime: string, provider: string) {
-    super(
-      `Unsupported orchestrator runtime/provider combination: ${runtime}/${provider}`,
-    );
+    super(`Unsupported orchestrator runtime/provider combination: ${runtime}/${provider}`);
     this.name = 'InvalidOrchestratorMappingError';
     this.runtime = runtime;
     this.provider = provider;
@@ -57,35 +47,28 @@ export const LOCAL_ALLOWED_TOOLS: readonly string[] = [
   'WebFetch',
 ] as const;
 
-const BLOCKING_STATUSES: ReadonlyArray<HarnessProjectStatus> = [
-  'planning',
-  'reviewing',
-  'running',
-  'paused',
-];
+const BLOCKING_STATUSES: ReadonlyArray<HarnessProjectStatus> = ['planning', 'reviewing', 'running', 'paused'];
 
 interface SyncAgentsToOrchestratorDeps {
   getHarnessEngine: () => HarnessEngine | null;
 }
 
-
-function toOrchestratorSnapshot(
-  sel: OrchestratorSelection,
-): OrchestratorSelectionSnapshot {
+function toOrchestratorSnapshot(sel: OrchestratorSelection): OrchestratorSelectionSnapshot {
   const snapshot: OrchestratorSelectionSnapshot = {
     runtime: sel.runtime,
     provider: sel.provider,
     model: sel.model,
   };
+  if (sel.effort !== undefined) {
+    snapshot.effort = sel.effort;
+  }
   if (sel.baseUrl !== undefined) {
     snapshot.baseUrl = sel.baseUrl;
   }
   return snapshot;
 }
 
-function toSnapshot(
-  source: AgentUpdatePatch | AgentConfig,
-): AgentSyncPatchSnapshot {
+function toSnapshot(source: AgentUpdatePatch | AgentConfig): AgentSyncPatchSnapshot {
   const snapshot: AgentSyncPatchSnapshot = {
     runtime: (source.runtime ?? 'cloud') as AgentConfig['runtime'],
     model: source.model ?? '',
@@ -117,26 +100,21 @@ function toSnapshot(
   return snapshot;
 }
 
-function readClaudeOrchestratorEffort(): AgentConfig['effort'] {
-  const raw = getSetting('orchestrator_effort');
-  return raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'max'
-    ? raw
-    : 'high';
+function selectionClaudeEffort(raw: string | undefined): AgentConfig['effort'] {
+  return raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'max' ? raw : 'high';
 }
 
-function readCodexOrchestratorEffort(
+function selectionCodexEffort(
+  raw: string | undefined,
   model: string,
 ): NonNullable<NonNullable<AgentConfig['codexConfig']>['reasoningEffort']> {
-  const raw = getSetting('orchestrator_codex_effort');
   if ((CODEX_EFFORT_ORDER as readonly string[]).includes(raw ?? '')) {
     return clampCodexEffortForModelDiscovered(raw as CodexChatReasoningEffort, model);
   }
   return 'high';
 }
 
-export function mapOrchestratorToAgentPatch(
-  sel: OrchestratorSelection,
-): AgentUpdatePatch {
+export function mapOrchestratorToAgentPatch(sel: OrchestratorSelection): AgentUpdatePatch {
   const key = `${sel.runtime}|${sel.provider}`;
 
   switch (key) {
@@ -144,7 +122,7 @@ export function mapOrchestratorToAgentPatch(
       return {
         runtime: 'cloud',
         model: sel.model,
-        effort: readClaudeOrchestratorEffort(),
+        effort: selectionClaudeEffort(sel.effort),
         localConfig: null,
         externalConfig: null,
         codexConfig: null,
@@ -159,7 +137,7 @@ export function mapOrchestratorToAgentPatch(
         codexConfig: {
           model: sel.model,
           sandbox: 'workspace-write',
-          reasoningEffort: readCodexOrchestratorEffort(sel.model),
+          reasoningEffort: selectionCodexEffort(sel.effort, sel.model),
         },
       };
 
@@ -240,10 +218,10 @@ export function mapOrchestratorToAgentPatch(
 
     case 'kimi-sdk|kimi': {
       const model = getKimiModel(sel.model);
-      const saved = getSetting('orchestrator_kimi_effort');
+      const saved = sel.effort;
       const effort = model?.efforts.includes(saved as 'low' | 'high' | 'max')
-        ? saved as 'low' | 'high' | 'max'
-        : model?.defaultEffort ?? 'max';
+        ? (saved as 'low' | 'high' | 'max')
+        : (model?.defaultEffort ?? 'max');
       return {
         runtime: 'kimi',
         model: sel.model,
@@ -255,9 +233,8 @@ export function mapOrchestratorToAgentPatch(
     }
 
     case 'grok-sdk|grok': {
-      const saved = getSetting('orchestrator_grok_effort');
-      const effort: AgentConfig['effort'] =
-        saved === 'low' || saved === 'medium' || saved === 'high' ? saved : 'high';
+      const saved = sel.effort;
+      const effort: AgentConfig['effort'] = saved === 'low' || saved === 'medium' || saved === 'high' ? saved : 'high';
       return {
         runtime: 'grok',
         model: sel.model,
@@ -281,7 +258,6 @@ export function mapOrchestratorToAgentPatch(
       throw new InvalidOrchestratorMappingError(sel.runtime, sel.provider);
   }
 }
-
 
 function stableStringify(value: unknown): string {
   return JSON.stringify(value ?? null);
@@ -313,15 +289,13 @@ function diffAgentVsPatch({ patch, agent, touchedExtras }: DiffInput): boolean {
     }
   }
   if (patch.externalConfig !== undefined) {
-    const patchValue =
-      patch.externalConfig === null ? undefined : patch.externalConfig;
+    const patchValue = patch.externalConfig === null ? undefined : patch.externalConfig;
     if (stableStringify(patchValue) !== stableStringify(agent.externalConfig)) {
       return true;
     }
   }
   if (patch.codexConfig !== undefined) {
-    const patchValue =
-      patch.codexConfig === null ? undefined : patch.codexConfig;
+    const patchValue = patch.codexConfig === null ? undefined : patch.codexConfig;
     if (stableStringify(patchValue) !== stableStringify(agent.codexConfig)) {
       return true;
     }
@@ -334,6 +308,15 @@ function diffAgentVsPatch({ patch, agent, touchedExtras }: DiffInput): boolean {
   return false;
 }
 
+async function resolveSyncSelection(explicit: SessionOrchestrator | undefined): Promise<OrchestratorSelection> {
+  if (explicit) {
+    return resolveOrchestratorSelection({ surface: 'default', selection: explicit });
+  }
+  logger.warn(
+    'agents:sync-to-orchestrator sem `selection`: alias deprecated, usando o Orquestrador padrao (surface default)',
+  );
+  return resolveOrchestratorSelection({ surface: 'default' });
+}
 
 export async function syncAgentsToOrchestrator(
   req: SyncAgentsToOrchestratorRequest,
@@ -349,23 +332,14 @@ export async function syncAgentsToOrchestrator(
   );
 
   const allProjects: HarnessProject[] = listHarnessProjects();
-  const projectsBlocking = allProjects.filter((p) =>
-    BLOCKING_STATUSES.includes(p.status),
-  );
+  const projectsBlocking = allProjects.filter((p) => BLOCKING_STATUSES.includes(p.status));
   const lockedProjects = allProjects.filter((p) => isProjectLocked(p.id));
 
   const engine = deps.getHarnessEngine();
   const enrichActive = engine?.hasActiveEnrichSession() ?? false;
 
-  if (
-    projectsBlocking.length > 0 ||
-    lockedProjects.length > 0 ||
-    enrichActive
-  ) {
-    const blockingById = new Map<
-      string,
-      { id: string; name: string; status: HarnessProjectStatus }
-    >();
+  if (projectsBlocking.length > 0 || lockedProjects.length > 0 || enrichActive) {
+    const blockingById = new Map<string, { id: string; name: string; status: HarnessProjectStatus }>();
     for (const p of projectsBlocking) {
       blockingById.set(p.id, { id: p.id, name: p.name, status: p.status });
     }
@@ -405,9 +379,7 @@ export async function syncAgentsToOrchestrator(
     return blocked;
   }
 
-  const selection = await resolveOrchestratorSelection({
-    surface: 'main-chat',
-  });
+  const selection = await resolveSyncSelection(req.selection);
 
   const basePatch = mapOrchestratorToAgentPatch(selection);
 
@@ -415,15 +387,10 @@ export async function syncAgentsToOrchestrator(
   if (req.agentIds === undefined) {
     targets = getAllAgents();
   } else if (req.agentIds.length === 0) {
-    logger.info(
-      { mode: req.mode },
-      'sync called with empty agentIds array — zero targets, returning empty result',
-    );
+    logger.info({ mode: req.mode }, 'sync called with empty agentIds array — zero targets, returning empty result');
     targets = [];
   } else {
-    targets = req.agentIds
-      .map((id) => getAgent(id))
-      .filter((a): a is AgentConfig => a !== undefined);
+    targets = req.agentIds.map((id) => getAgent(id)).filter((a): a is AgentConfig => a !== undefined);
   }
 
   const results: AgentSyncResult[] = [];
@@ -434,14 +401,10 @@ export async function syncAgentsToOrchestrator(
     let restoredFromSeed: Array<'allowedTools' | 'mcpServers' | 'skills'> | undefined;
     let warning: string | undefined;
 
-    const fromToolStrippingRuntime =
-      agent.runtime === 'codex' || agent.runtime === 'local';
-    const targetConsumesTools =
-      basePatch.runtime !== 'codex' && basePatch.runtime !== 'local';
+    const fromToolStrippingRuntime = agent.runtime === 'codex' || agent.runtime === 'local';
+    const targetConsumesTools = basePatch.runtime !== 'codex' && basePatch.runtime !== 'local';
     const hasEmptyToolField =
-      agent.allowedTools.length === 0 ||
-      agent.mcpServers.length === 0 ||
-      agent.skills.length === 0;
+      agent.allowedTools.length === 0 || agent.mcpServers.length === 0 || agent.skills.length === 0;
 
     if (fromToolStrippingRuntime && targetConsumesTools && hasEmptyToolField) {
       const seed = getSeedAgentById(agent.id);
@@ -466,16 +429,11 @@ export async function syncAgentsToOrchestrator(
           restoredFromSeed = restored;
         }
       } else {
-        warning =
-          'Agente custom sem allowedTools/mcpServers/skills. Ajuste manualmente.';
+        warning = 'Agente custom sem allowedTools/mcpServers/skills. Ajuste manualmente.';
       }
     }
 
-    if (
-      basePatch.runtime === 'local' &&
-      agent.runtime !== 'local' &&
-      agent.allowedTools.length === 0
-    ) {
+    if (basePatch.runtime === 'local' && agent.runtime !== 'local' && agent.allowedTools.length === 0) {
       patch.allowedTools = [...LOCAL_ALLOWED_TOOLS];
       if (!touchedExtras.includes('allowedTools')) {
         touchedExtras.push('allowedTools');
@@ -498,10 +456,7 @@ export async function syncAgentsToOrchestrator(
         updateAgent(agent.id, patch);
       } catch (err) {
         error = err instanceof Error ? err.message : String(err);
-        logger.error(
-          { agentId: agent.id, err: error },
-          'syncAgentsToOrchestrator: updateAgent failed for agent',
-        );
+        logger.error({ agentId: agent.id, err: error }, 'syncAgentsToOrchestrator: updateAgent failed for agent');
       }
     }
 
@@ -538,6 +493,7 @@ export async function syncAgentsToOrchestrator(
         runtime: selection.runtime,
         provider: selection.provider,
         model: selection.model,
+        effort: selection.effort ?? null,
       },
       summary,
       targets: targets.length,

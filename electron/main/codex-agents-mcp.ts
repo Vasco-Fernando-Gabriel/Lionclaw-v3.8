@@ -1,11 +1,6 @@
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
-import {
-  finalizeTaskExecutionOnce,
-  finalizeTaskExecutionRootIfIdle,
-  getAgent,
-  startTaskExecution,
-} from './db';
+import { finalizeTaskExecutionOnce, finalizeTaskExecutionRootIfIdle, getAgent, startTaskExecution } from './db';
 import { executeAgent } from './agent-runtime/execute';
 import { PERM_BYPASS_NO_GUARD } from './agent-runtime/permission-profiles';
 import {
@@ -38,7 +33,10 @@ export async function getCodexAgentsServer(
         {
           agentId: z.string().describe('ID do agente codex (ex: "coder-codex")'),
           prompt: z.string().describe('A tarefa ou pergunta para o agente'),
-          context: z.string().optional().describe('Contexto adicional: dados de arquivos lidos, resultados de buscas, etc.'),
+          context: z
+            .string()
+            .optional()
+            .describe('Contexto adicional: dados de arquivos lidos, resultados de buscas, etc.'),
         },
         async ({ agentId, prompt, context }, extra) => {
           try {
@@ -51,23 +49,31 @@ export async function getCodexAgentsServer(
             }
             if (agent.runtime !== 'codex') {
               return {
-                content: [{ type: 'text' as const, text: `Erro: agente "${agentId}" agora usa runtime=${agent.runtime}. Use a rota canônica lionclaw-agents.call_agent; ela resolve o runtime atual automaticamente.` }],
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: `Erro: agente "${agentId}" agora usa runtime=${agent.runtime}. Use a rota canônica lionclaw-agents.call_agent; ela resolve o runtime atual automaticamente.`,
+                  },
+                ],
                 isError: true,
               };
             }
             if (!agent.codexConfig) {
               return {
-                content: [{ type: 'text' as const, text: `Erro: agente "${agentId}" tem runtime=codex mas sem codexConfig` }],
+                content: [
+                  { type: 'text' as const, text: `Erro: agente "${agentId}" tem runtime=codex mas sem codexConfig` },
+                ],
                 isError: true,
               };
             }
 
-            const prefetched = dispatchContext.lane === 'desktop'
-              ? await prefetchRepoGraphTurnContext(prompt)
-              : null;
-            const hostContext = [prefetched?.renderedMarkdown, context]
-              .filter((value): value is string => Boolean(value))
-              .join('\n\n') || undefined;
+            const prefetched =
+              dispatchContext.lane === 'desktop' && dispatchContext.sessionId
+                ? await prefetchRepoGraphTurnContext(prompt, { sessionId: dispatchContext.sessionId })
+                : null;
+            const hostContext =
+              [prefetched?.renderedMarkdown, context].filter((value): value is string => Boolean(value)).join('\n\n') ||
+              undefined;
             const transportCorrelation = mcpRequestCorrelation(extra);
             const result = await executeDedicatedCodexAgent(
               {
@@ -158,9 +164,7 @@ async function executeDedicatedCodexAgent(
     budgetState: host.budgetState,
   };
   const fullPrompt = input.context ? `${input.context}\n\n${input.prompt}` : input.prompt;
-  const transportMetadata = input.transportCorrelation
-    ? { transportCorrelation: input.transportCorrelation }
-    : {};
+  const transportMetadata = input.transportCorrelation ? { transportCorrelation: input.transportCorrelation } : {};
 
   startTaskExecution({
     executionId: host.rootExecutionId,
@@ -292,9 +296,7 @@ async function executeDedicatedCodexAgent(
   }
 }
 
-function mcpRequestCorrelation(
-  extra: unknown,
-): { kind: 'mcp-request-id'; value: string } | undefined {
+function mcpRequestCorrelation(extra: unknown): { kind: 'mcp-request-id'; value: string } | undefined {
   if (!extra || typeof extra !== 'object' || !('requestId' in extra)) return undefined;
   const requestId = (extra as { requestId?: unknown }).requestId;
   if (typeof requestId !== 'string' && typeof requestId !== 'number') return undefined;

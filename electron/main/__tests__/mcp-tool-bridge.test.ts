@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import type { McpSessionClient } from '../mcp-tool-bridge';
 
@@ -18,7 +17,6 @@ import {
   setupMCPsForSession,
   teardownMCPsForSession,
 } from '../mcp-tool-bridge';
-
 
 function makeFakeClient(
   serverId: string,
@@ -49,7 +47,6 @@ function makeFakeClient(
   };
 }
 
-
 describe('classifyMcpStderr', () => {
   it('downgrades routine MCP/proxy lifecycle stderr to debug', () => {
     expect(classifyMcpStderr('[233090] [Local->Remote] tools/list\n')).toBe('debug');
@@ -64,7 +61,6 @@ describe('classifyMcpStderr', () => {
     expect(classifyMcpStderr('spawn failed: ENOENT')).toBe('warn');
   });
 });
-
 
 describe('mcpToolToOpenAISchema', () => {
   it('retorna type "function"', () => {
@@ -156,13 +152,10 @@ describe('mcpToolToOpenAISchema', () => {
   });
 });
 
-
 describe('callMCPTool: validacao de formato do nome', () => {
   it('lanca erro para tool sem prefixo mcp__', async () => {
     const client = makeFakeClient('srv');
-    await expect(callMCPTool(client, 'plain_tool_name', {})).rejects.toThrow(
-      'nome de tool invalido',
-    );
+    await expect(callMCPTool(client, 'plain_tool_name', {})).rejects.toThrow('nome de tool invalido');
   });
 
   it('lanca erro para tool com apenas 2 segmentos (mcp__srv)', async () => {
@@ -203,7 +196,7 @@ describe('callMCPTool: roteamento correto', () => {
               const parsed = JSON.parse(data) as { id: number };
               const id = parsed.id;
               setImmediate(() => {
-                const conn = client.connections.find(c => c.serverId === 'google-drive');
+                const conn = client.connections.find((c) => c.serverId === 'google-drive');
                 const cb = conn?.pending.get(id);
                 if (cb) {
                   cb.resolve({ result: { content: [{ type: 'text', text: 'file-list' }] }, id });
@@ -223,20 +216,15 @@ describe('callMCPTool: roteamento correto', () => {
 describe('callMCPTool: timeout por chamada (opts.timeoutMs, SPEC mcp-index-invoke 4.5)', () => {
   it('rejeita citando o valor quando o server nao responde dentro de opts.timeoutMs', async () => {
     const client = makeFakeClient('srv');
-    await expect(
-      callMCPTool(client, 'mcp__srv__slow_tool', {}, { timeoutMs: 50 }),
-    ).rejects.toThrow(/timeout aguardando resposta para tools\/call \(50ms\)/);
+    await expect(callMCPTool(client, 'mcp__srv__slow_tool', {}, { timeoutMs: 50 })).rejects.toThrow(
+      /timeout aguardando resposta para tools\/call \(50ms\)/,
+    );
   });
 
   it('remove a requisicao pendente e rejeita imediatamente ao abortar', async () => {
     const client = makeFakeClient('srv');
     const abort = new AbortController();
-    const call = callMCPTool(
-      client,
-      'mcp__srv__slow_tool',
-      {},
-      { timeoutMs: 5_000, signal: abort.signal },
-    );
+    const call = callMCPTool(client, 'mcp__srv__slow_tool', {}, { timeoutMs: 5_000, signal: abort.signal });
     expect(client.connections[0]!.pending.size).toBe(1);
     abort.abort();
 
@@ -245,7 +233,6 @@ describe('callMCPTool: timeout por chamada (opts.timeoutMs, SPEC mcp-index-invok
   });
 });
 
-
 describe('setupMCPsForSession', () => {
   it('retorna client com conexoes vazias e tools vazias para servers = {}', async () => {
     const { client, tools } = await setupMCPsForSession({});
@@ -253,7 +240,6 @@ describe('setupMCPsForSession', () => {
     expect(tools).toHaveLength(0);
   });
 });
-
 
 describe('teardownMCPsForSession', () => {
   it('chama kill() no proc quando ownedBySession = true', async () => {

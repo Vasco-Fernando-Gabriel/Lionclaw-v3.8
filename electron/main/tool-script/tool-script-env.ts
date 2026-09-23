@@ -1,4 +1,3 @@
-
 const PRESERVE_EXACT: ReadonlySet<string> = new Set([
   'HOME',
   'PATH',
@@ -89,9 +88,7 @@ export function isDeniedEnvKey(key: string): boolean {
   return DENY_SUBSTRINGS.some((needle) => upper.includes(needle));
 }
 
-export function buildToolScriptEnv(
-  base: NodeJS.ProcessEnv = process.env,
-): NodeJS.ProcessEnv {
+export function buildToolScriptEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(base)) {
     if (value === undefined) continue;

@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
 
 interface RegistryRow {
   mcpId: string;
@@ -21,8 +19,7 @@ const state = vi.hoisted(() => ({
   }>,
   surfaceConfig: {} as Record<string, { command: string; args: string[]; env?: Record<string, string> }>,
   guardDecision: { behavior: 'allow' } as
-    | { behavior: 'allow'; updatedInput?: Record<string, unknown> }
-    | { behavior: 'deny'; message: string },
+    { behavior: 'allow'; updatedInput?: Record<string, unknown> } | { behavior: 'deny'; message: string },
 }));
 
 const guardFn = vi.hoisted(() => vi.fn());
@@ -70,7 +67,6 @@ import {
   _resetMcpInvokeForTesting,
   type McpInvokeRequest,
 } from '../mcp-invoke';
-
 
 const CALENDAR_SCHEMA = JSON.stringify({
   type: 'object',
@@ -141,16 +137,16 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-
 describe('initMcpInvoke', () => {
-  it('instancia createPermissionGuard com o supplier de janela injetado', () => {
+  it('P2-2 (RM7): o guard nasce por chamada com o sessionId da requisicao e o supplier injetado', async () => {
     const getWindow = () => null;
     initMcpInvoke({ getWindow });
-    expect(createPermissionGuardMock).toHaveBeenCalledWith(getWindow);
+    await invokeMcpTool(makeReq({ toolName: 'delete_file', sessionId: 'sess-guard' }));
+    expect(createPermissionGuardMock).toHaveBeenCalledWith(getWindow, { sessionId: 'sess-guard' });
   });
 
   it('fail-closed: sem init, tool de risco NAO executa (isError, sem invoke)', async () => {
-    _resetMcpInvokeForTesting(); // remove o guard instanciado no beforeEach
+    _resetMcpInvokeForTesting();
     const result = await invokeMcpTool(makeReq({ toolName: 'delete_file' }));
     expect(result.isError).toBe(true);
     expect(result.content).toContain('nao inicializado');
@@ -159,7 +155,6 @@ describe('initMcpInvoke', () => {
   });
 });
 
-
 describe('escopo: allowedServerIds', () => {
   it('server fora do escopo -> erro claro SEM spawn e SEM guard', async () => {
     const result = await invokeMcpTool(
@@ -167,14 +162,13 @@ describe('escopo: allowedServerIds', () => {
     );
     expect(result.isError).toBe(true);
     expect(result.content).toContain('fora do escopo');
-    expect(result.content).toContain('srv'); // lista os permitidos
+    expect(result.content).toContain('srv');
     expect(result.displayName).toBe('mcp__forbidden__delete_file');
     expect(setupMock).not.toHaveBeenCalled();
     expect(callMock).not.toHaveBeenCalled();
     expect(guardFn).not.toHaveBeenCalled();
   });
 });
-
 
 describe('guard AC-13', () => {
   it('tool destrutiva consulta o guard com o nome REAL mcp__srv__delete_file e os args', async () => {
@@ -210,7 +204,6 @@ describe('guard AC-13', () => {
   });
 });
 
-
 describe('classe (a): erro JSON-RPC / excecao do bridge', () => {
   it('retorna o erro original + schema truncado (required + tipos) + dica', async () => {
     callMock.mockRejectedValue(new Error('MCP JSON-RPC error: invalid params'));
@@ -232,7 +225,6 @@ describe('classe (a): erro JSON-RPC / excecao do bridge', () => {
   });
 });
 
-
 describe('classe (b): result.isError do tools/call', () => {
   it('detecta isError=true no result (hoje passa como sucesso no bridge) e anexa schema', async () => {
     callMock.mockResolvedValue({
@@ -246,7 +238,6 @@ describe('classe (b): result.isError do tools/call', () => {
   });
 });
 
-
 describe('classe (c): did-you-mean', () => {
   it('tool inexistente retorna os 3 candidatos mais proximos DO MESMO server com descriptions, sem spawn', async () => {
     const result = await invokeMcpTool(makeReq({ toolName: 'get_event' }));
@@ -255,7 +246,7 @@ describe('classe (c): did-you-mean', () => {
     expect(result.content).toContain('- get_events: Lista eventos do calendario');
     expect(result.content).toContain('list_calendars');
     expect(result.content).toContain('delete_file');
-    expect(result.content).not.toContain('send_email'); // fallback nao usado
+    expect(result.content).not.toContain('send_email');
     expect(setupMock).not.toHaveBeenCalled();
     expect(callMock).not.toHaveBeenCalled();
   });
@@ -283,13 +274,10 @@ describe('classe (c): did-you-mean', () => {
   });
 });
 
-
 describe('classe (d): timeout', () => {
   it('usa mcp_invoke_timeout_ms do settings e cita o valor na mensagem', async () => {
     state.settings['mcp_invoke_timeout_ms'] = '1234';
-    callMock.mockRejectedValue(
-      new Error('MCP server srv: timeout aguardando resposta para tools/call (1234ms)'),
-    );
+    callMock.mockRejectedValue(new Error('MCP server srv: timeout aguardando resposta para tools/call (1234ms)'));
     const result = await invokeMcpTool(makeReq());
     expect(result.isError).toBe(true);
     expect(result.content).toContain('Timeout de 1234ms');
@@ -313,7 +301,6 @@ describe('classe (d): timeout', () => {
     );
   });
 });
-
 
 describe('schema-on-error', () => {
   it('schema gigante e truncado no teto (~1200 chars) com marcador', async () => {
@@ -340,7 +327,6 @@ describe('schema-on-error', () => {
     expect(result.content).toContain('schema indisponivel, re-discovery em andamento');
   });
 });
-
 
 describe('pool: lock por server', () => {
   it('2 invokes concorrentes do mesmo server -> 1 spawn so (promise cache)', async () => {
@@ -379,7 +365,7 @@ describe('pool: TTL de idle', () => {
     await invokeMcpTool(makeReq());
     await vi.advanceTimersByTimeAsync(600);
     expect(teardownMock).not.toHaveBeenCalled();
-    expect(setupMock).toHaveBeenCalledTimes(1); // conexao reusada, sem re-spawn
+    expect(setupMock).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(500);
     expect(teardownMock).toHaveBeenCalledTimes(1);
@@ -388,7 +374,6 @@ describe('pool: TTL de idle', () => {
     expect(setupMock).toHaveBeenCalledTimes(2);
   });
 });
-
 
 describe('re-discovery on-demand', () => {
   it('tool desconhecida dispara discovery 1x; segunda tool desconhecida do mesmo server no mesmo turno NAO redescobre', async () => {
@@ -427,7 +412,6 @@ describe('turn reset', () => {
   });
 });
 
-
 describe('flatten do result', () => {
   it('content blocks [{type:text}] viram texto puro (nunca envelope JSON cru)', async () => {
     callMock.mockResolvedValue({
@@ -453,7 +437,6 @@ describe('flatten do result', () => {
     expect(r2.displayName).toBe('mcp__srv__get_events');
   });
 });
-
 
 describe('getMcpToolSchema', () => {
   it('retorna o schema completo formatado legivel (descricao + JSON identado)', () => {

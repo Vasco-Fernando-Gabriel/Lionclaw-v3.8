@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   runLocalDispatcher,
@@ -89,7 +88,7 @@ describe('workflow-local-dispatcher: runLocalDispatcher (AC-4)', () => {
       modelRound: round,
       toolExecutor,
     });
-    expect(executed).toBe(0); // recusa nao executa
+    expect(executed).toBe(0);
     const rec = res.toolCalls.find((t) => t.tool === 'Glob');
     expect(rec?.refused).toBe(true);
     expect(rec?.isError).toBe(true);
@@ -103,9 +102,7 @@ describe('workflow-local-dispatcher: runLocalDispatcher (AC-4)', () => {
       if (name === 'Write') wrote++;
       return { result: 'ok', isError: false };
     };
-    const round = scriptedRound([
-      { id: 'c1', name: 'Write', args: { file_path: `${ROOT}/evil.txt`, content: 'x' } },
-    ]);
+    const round = scriptedRound([{ id: 'c1', name: 'Write', args: { file_path: `${ROOT}/evil.txt`, content: 'x' } }]);
     const res = await runLocalDispatcher({
       policy,
       prompt: 'edite o arquivo',
@@ -138,9 +135,7 @@ describe('workflow-local-dispatcher: runLocalDispatcher (AC-4)', () => {
       toolExecutor,
       pathGuard: undefined, // dispatcher cria com o writeSet... mas writeSet vem do guard injetado
     });
-    expect(res.toolCalls.find((t) => t.tool === 'Write')?.guardDenied ?? false).toBe(
-      false,
-    );
+    expect(res.toolCalls.find((t) => t.tool === 'Write')?.guardDenied ?? false).toBe(false);
     expect(wrote).toBe(1);
   });
 
@@ -154,9 +149,7 @@ describe('workflow-local-dispatcher: runLocalDispatcher (AC-4)', () => {
       wrote++;
       return { result: 'ok', isError: false };
     };
-    const round = scriptedRound([
-      { id: 'c1', name: 'Write', args: { file_path: '/etc/passwd', content: 'x' } },
-    ]);
+    const round = scriptedRound([{ id: 'c1', name: 'Write', args: { file_path: '/etc/passwd', content: 'x' } }]);
     const res = await runLocalDispatcher({
       policy,
       prompt: 'escreva fora',
@@ -176,9 +169,7 @@ describe('workflow-local-dispatcher: runLocalDispatcher (AC-4)', () => {
       seen.push(`${name}:${JSON.stringify(args)}`);
       return { result: 'conteudo do arquivo', isError: false };
     };
-    const round = scriptedRound([
-      { id: 'c1', name: 'Read', args: { file_path: `${ROOT}/x.txt` } },
-    ]);
+    const round = scriptedRound([{ id: 'c1', name: 'Read', args: { file_path: `${ROOT}/x.txt` } }]);
     const res = await runLocalDispatcher({
       policy,
       prompt: 'leia',
@@ -195,7 +186,7 @@ describe('workflow-local-dispatcher: runLocalDispatcher (AC-4)', () => {
   it('cancelamento ANTES do round para o loop e marca aborted (14.1.1)', async () => {
     const policy = makePolicy({ access: 'read-only', allowedTools: ['Read'] });
     const ac = new AbortController();
-    ac.abort(); // ja cancelado antes do 1o round
+    ac.abort();
     let called = 0;
     const round: LocalModelRound = async () => {
       called++;
@@ -208,7 +199,7 @@ describe('workflow-local-dispatcher: runLocalDispatcher (AC-4)', () => {
       abortSignal: ac.signal,
     });
     expect(res.aborted).toBe(true);
-    expect(called).toBe(0); // nem chamou o modelo
+    expect(called).toBe(0);
   });
 
   it('encerra quando o modelo nao pede tool (sem maxRoundsReached)', async () => {

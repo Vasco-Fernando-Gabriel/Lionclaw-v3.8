@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const h = vi.hoisted(() => {
@@ -39,9 +38,25 @@ vi.mock('../db', () => ({
   createSession: vi.fn(),
   getSetting: h.getSettingMock,
   insertMessage: h.insertMessageMock,
-  getSession: vi.fn(() => ({ id: 'session-1' })),
+  getSession: vi.fn(() => ({ id: 'session-1', status: 'active', type: 'chat', laneBadge: 1 })),
   getChatFeatureToggles: vi.fn(() => null),
   setChatFeatureToggles: vi.fn(),
+  isOpenDesktopConversation: vi.fn(() => true),
+  getOpenLaneSessionById: vi.fn(() => null),
+  listOpenDesktopSessions: vi.fn(() => []),
+  createLaneSession: vi.fn(),
+  setSessionOrchestrator: vi.fn(),
+  countSessionMessages: vi.fn(() => 0),
+  listHarnessProjects: vi.fn(() => []),
+  isDriveEngaged: vi.fn(() => false),
+}));
+
+vi.mock('../orchestrator-selection', () => ({
+  readDefaultOrchestratorColumns: vi.fn(() => null),
+}));
+
+vi.mock('../orchestrator-selection-matrix', () => ({
+  validateOrchestratorTriple: vi.fn(async () => null),
 }));
 
 vi.mock('../chat-capability-resolve', () => ({
@@ -53,6 +68,7 @@ vi.mock('../orchestrator', () => ({
   submitMessage: h.submitMessageMock,
   stopCurrentQuery: vi.fn(),
   resetSdkSessionState: vi.fn(),
+  getDesktopSessionExecutionState: vi.fn(() => 'idle'),
 }));
 
 vi.mock('../pipeline-drive-coordinator', () => ({
@@ -74,11 +90,11 @@ vi.mock('../ask-question', () => ({ resolveAskQuestion: vi.fn() }));
 vi.mock('../ipc/_shared/chat-compaction', () => ({
   compactActiveChatSession: vi.fn(),
   clearSDKSessionFiles: vi.fn(),
-  getTelegramActiveThreadIds: vi.fn(() => []),
 }));
 
 import { registerChatHandlers } from '../ipc/chat';
 import type { IpcContext } from '../ipc/context';
+import { clearingSessions, markSessionClearing } from '../clearing-sessions';
 
 function fakeWindow() {
   return {
@@ -129,6 +145,18 @@ describe('SB-10 AC-B26 — chat:send retorna { accepted } (nao mais fire-and-for
     expect(h.submitMessageMock).not.toHaveBeenCalled();
   });
 
+  it('AC-2/AC-12: lane em Clear (inclusive interrupted no boot) recusa chat:send com session_clearing', async () => {
+    markSessionClearing('session-1', 'interrupted', 1);
+    try {
+      const result = await invokeChatSend('oi', { sessionId: 'session-1' });
+      expect(result).toMatchObject({ accepted: false, code: 'session_clearing' });
+      expect(h.submitMessageMock).not.toHaveBeenCalled();
+      expect(h.tryInterceptMock).not.toHaveBeenCalled();
+    } finally {
+      clearingSessions.clear();
+    }
+  });
+
   it('AC-B26: drive-intercept aceito persiste a bolha e retorna { accepted: true } sem submitMessage', async () => {
     h.tryInterceptMock.mockReturnValue(true);
 
@@ -137,7 +165,10 @@ describe('SB-10 AC-B26 — chat:send retorna { accepted } (nao mais fire-and-for
     expect(result).toEqual({ accepted: true });
     expect(h.insertMessageMock).toHaveBeenCalledWith('session-1', 'user', 'segue');
     expect(h.submitMessageMock).not.toHaveBeenCalled();
-    expect(h.webContentsSendMock).not.toHaveBeenCalled();
+    expect(h.webContentsSendMock.mock.calls.map((call) => call[0])).toEqual([
+      'chat:session-updated',
+      'chat:sessions-updated',
+    ]);
   });
 });
 

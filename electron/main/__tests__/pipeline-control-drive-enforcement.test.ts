@@ -68,4 +68,3 @@ describe('driveConductBlocked (enforcement Parar/Assumir)', () => {
     expect(msg).toContain('ASSUMIU');
   });
 });
-

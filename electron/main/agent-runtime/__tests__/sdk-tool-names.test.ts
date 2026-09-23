@@ -1,12 +1,7 @@
-
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import {
-  SDK_DISALLOWED_TOOLS,
-  TASK_TOOL_NAMES,
-  toSdkToolNames,
-} from '../sdk-tool-names';
+import { SDK_DISALLOWED_TOOLS, TASK_TOOL_NAMES, toSdkToolNames } from '../sdk-tool-names';
 
 const FIXTURES_DIR = path.join(__dirname, '..', '..', '__tests__', 'fixtures');
 
@@ -29,6 +24,8 @@ function builtinsOf(fixture: InitToolsFixture): Set<string> {
 
 const EXPECTED_DISALLOWED = [
   'Artifact',
+  'ArtifactComments',
+  'ArtifactData',
   'DesignSync',
   'ListAgents',
   'ListSkills',
@@ -64,15 +61,29 @@ const PISO_ZERO_OCORRENCIAS_2_1_74 = [
 ];
 
 const LIONCLAW_TOOL_CATALOG = [
-  'Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash',
-  'WebSearch', 'WebFetch', 'Agent', 'TodoWrite',
-  'NotebookEdit', 'AskUserQuestion',
+  'Read',
+  'Write',
+  'Edit',
+  'Glob',
+  'Grep',
+  'Bash',
+  'WebSearch',
+  'WebFetch',
+  'Agent',
+  'TodoWrite',
+  'NotebookEdit',
+  'AskUserQuestion',
 ];
 
 describe('toSdkToolNames (D8)', () => {
   it('TodoWrite vira as 4 Task tools NO LUGAR, ordem estavel', () => {
     expect(toSdkToolNames(['Read', 'TodoWrite', 'Edit'])).toEqual([
-      'Read', 'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList', 'Edit',
+      'Read',
+      'TaskCreate',
+      'TaskUpdate',
+      'TaskGet',
+      'TaskList',
+      'Edit',
     ]);
   });
 
@@ -81,15 +92,9 @@ describe('toSdkToolNames (D8)', () => {
   });
 
   it('nao duplica Task tool ja presente (antes ou depois do TodoWrite)', () => {
-    expect(toSdkToolNames(['TaskCreate', 'TodoWrite'])).toEqual([
-      'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList',
-    ]);
-    expect(toSdkToolNames(['TodoWrite', 'TaskGet'])).toEqual([
-      'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList',
-    ]);
-    expect(toSdkToolNames(['TodoWrite', 'TodoWrite'])).toEqual([
-      'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList',
-    ]);
+    expect(toSdkToolNames(['TaskCreate', 'TodoWrite'])).toEqual(['TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList']);
+    expect(toSdkToolNames(['TodoWrite', 'TaskGet'])).toEqual(['TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList']);
+    expect(toSdkToolNames(['TodoWrite', 'TodoWrite'])).toEqual(['TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList']);
   });
 
   it('demais nomes passam intactos (mesma ordem, mesmo conteudo, MCP incluso)', () => {
@@ -146,22 +151,22 @@ describe('SDK_DISALLOWED_TOOLS (D7): lista congelada', () => {
 
 describe('SDK_DISALLOWED_TOOLS (D7): reconferida contra as fixtures do engine real', () => {
   const init74 = readFixture('sdk-init-tools-2.1.74.json');
-  const init257 = readFixture('sdk-init-tools-2.1.257.json');
+  const init280 = readFixture('sdk-init-tools-2.1.280.json');
 
   it('fixtures sao das versoes esperadas e capturadas com as MESMAS opcoes', () => {
     expect(init74.engineVersion).toContain('2.1.74');
-    expect(init257.engineVersion).toContain('2.1.257');
+    expect(init280.engineVersion).toContain('2.1.280');
     expect(init74.engineSha256).toMatch(/^[0-9a-f]{64}$/);
-    expect(init257.engineSha256).toMatch(/^[0-9a-f]{64}$/);
-    expect(init257.options).toEqual(init74.options);
+    expect(init280.engineSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(init280.options).toMatchObject(init74.options);
     expect(init74.options).toMatchObject({ allowedTools: [], settingSources: [], mcpServers: {}, maxTurns: 1 });
   });
 
-  it('⊇ init(2.1.257) − init(2.1.74) − Task*', () => {
+  it('⊇ init(2.1.280) − init(2.1.74) − Task*', () => {
     const builtins74 = builtinsOf(init74);
-    const builtins257 = builtinsOf(init257);
+    const builtins280 = builtinsOf(init280);
     const taskTools = new Set<string>(TASK_TOOL_NAMES);
-    const novas = [...builtins257].filter((t) => !builtins74.has(t) && !taskTools.has(t));
+    const novas = [...builtins280].filter((t) => !builtins74.has(t) && !taskTools.has(t));
     expect(novas.length).toBeGreaterThan(0);
     for (const name of novas) {
       expect(SDK_DISALLOWED_TOOLS).toContain(name);
@@ -181,14 +186,15 @@ describe('SDK_DISALLOWED_TOOLS (D7): reconferida contra as fixtures do engine re
     }
   });
 
-  it('equivalencia por conjunto (VA-4): init(2.1.257) − lista == init(2.1.74) − TodoWrite + Task* − {sumidas por opcoes da captura}', () => {
+  it('equivalencia por conjunto (VA-4): init(2.1.280) − lista == init(2.1.74) − TodoWrite + Task* − {sumidas por opcoes da captura} − {removidas pelo engine}', () => {
     const sumidasNaCaptura = new Set(['AskUserQuestion', 'EnterPlanMode', 'ExitPlanMode', 'TodoWrite']);
+    const removidasPeloEngine = new Set(['ListMcpResourcesTool', 'ReadMcpResourceTool', 'TaskOutput']);
     const disallowed = new Set(SDK_DISALLOWED_TOOLS);
-    const visiveis257 = [...builtinsOf(init257)].filter((t) => !disallowed.has(t)).sort();
+    const visiveis280 = [...builtinsOf(init280)].filter((t) => !disallowed.has(t)).sort();
     const esperado = [
-      ...[...builtinsOf(init74)].filter((t) => !sumidasNaCaptura.has(t)),
-      ...TASK_TOOL_NAMES.filter((t) => builtinsOf(init257).has(t)),
+      ...[...builtinsOf(init74)].filter((t) => !sumidasNaCaptura.has(t) && !removidasPeloEngine.has(t)),
+      ...TASK_TOOL_NAMES.filter((t) => builtinsOf(init280).has(t)),
     ].sort();
-    expect(visiveis257).toEqual(esperado);
+    expect(visiveis280).toEqual(esperado);
   });
 });

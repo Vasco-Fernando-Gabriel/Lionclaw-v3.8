@@ -1,11 +1,5 @@
-
 import { describe, it, expect } from 'vitest';
-import {
-  checkAntiRunaway,
-  mintDriveTurnId,
-  decideOneInFlight,
-  type DriveTurnSeq,
-} from '../drive-turn-core';
+import { checkAntiRunaway, mintDriveTurnId, decideOneInFlight, type DriveTurnSeq } from '../drive-turn-core';
 
 const LIMITS = {
   tokenBudget: 15_000_000,
@@ -15,41 +9,27 @@ const LIMITS = {
 
 describe('checkAntiRunaway (E4 - predicados anti-runaway puros)', () => {
   it('null quando todos os contadores estao DENTRO dos tetos', () => {
+    expect(checkAntiRunaway({ tokensSpent: 0, turnsThisDrive: 0, turnsThisPhase: 0 }, LIMITS)).toBeNull();
     expect(
-      checkAntiRunaway({ tokensSpent: 0, turnsThisDrive: 0, turnsThisPhase: 0 }, LIMITS),
-    ).toBeNull();
-    expect(
-      checkAntiRunaway(
-        { tokensSpent: LIMITS.tokenBudget - 1, turnsThisDrive: 59, turnsThisPhase: 14 },
-        LIMITS,
-      ),
+      checkAntiRunaway({ tokensSpent: LIMITS.tokenBudget - 1, turnsThisDrive: 59, turnsThisPhase: 14 }, LIMITS),
     ).toBeNull();
   });
 
   it('budget: estoura com `>=` (alcancar o teto exatamente ja para)', () => {
-    expect(
-      checkAntiRunaway(
-        { tokensSpent: LIMITS.tokenBudget, turnsThisDrive: 0, turnsThisPhase: 0 },
-        LIMITS,
-      ),
-    ).toBe('budget');
+    expect(checkAntiRunaway({ tokensSpent: LIMITS.tokenBudget, turnsThisDrive: 0, turnsThisPhase: 0 }, LIMITS)).toBe(
+      'budget',
+    );
   });
 
   it('max-turns-drive: estoura no teto global de turnos por drive', () => {
     expect(
-      checkAntiRunaway(
-        { tokensSpent: 0, turnsThisDrive: LIMITS.maxTurnsPerDrive, turnsThisPhase: 0 },
-        LIMITS,
-      ),
+      checkAntiRunaway({ tokensSpent: 0, turnsThisDrive: LIMITS.maxTurnsPerDrive, turnsThisPhase: 0 }, LIMITS),
     ).toBe('max-turns-drive');
   });
 
   it('max-turns-phase: estoura no teto de turnos por fase', () => {
     expect(
-      checkAntiRunaway(
-        { tokensSpent: 0, turnsThisDrive: 0, turnsThisPhase: LIMITS.maxTurnsPerPhase },
-        LIMITS,
-      ),
+      checkAntiRunaway({ tokensSpent: 0, turnsThisDrive: 0, turnsThisPhase: LIMITS.maxTurnsPerPhase }, LIMITS),
     ).toBe('max-turns-phase');
   });
 
@@ -91,9 +71,9 @@ describe('mintDriveTurnId (E4 - mint puro de driveTurnId)', () => {
 
   it('UNICO mesmo trocando a key: o contador e GLOBAL (nao reseta por key)', () => {
     const seq: DriveTurnSeq = { value: 0 };
-    const id1 = mintDriveTurnId('proj_a', seq); // proj_a:1
-    const id2 = mintDriveTurnId('20260628_120000-abc123', seq); // run:2
-    const id3 = mintDriveTurnId('proj_a', seq); // proj_a:3 (NAO proj_a:1)
+    const id1 = mintDriveTurnId('proj_a', seq);
+    const id2 = mintDriveTurnId('20260628_120000-abc123', seq);
+    const id3 = mintDriveTurnId('proj_a', seq);
     expect(id1).toBe('proj_a:1');
     expect(id2).toBe('20260628_120000-abc123:2');
     expect(id3).toBe('proj_a:3');

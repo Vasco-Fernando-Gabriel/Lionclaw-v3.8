@@ -22,9 +22,10 @@ async function getClient(): Promise<GoogleGenAI> {
   return new GoogleGenAI({ apiKey });
 }
 
-function extractImageFromParts(
-  parts: Array<{ inlineData?: { data: string; mimeType: string }; text?: string }>,
-): { imageData: { base64: string; mimeType: string } | null; textResponse: string } {
+function extractImageFromParts(parts: Array<{ inlineData?: { data: string; mimeType: string }; text?: string }>): {
+  imageData: { base64: string; mimeType: string } | null;
+  textResponse: string;
+} {
   let imageData: { base64: string; mimeType: string } | null = null;
   let textResponse = '';
 
@@ -43,16 +44,13 @@ function extractImageFromParts(
   return { imageData, textResponse };
 }
 
-export async function generateImage(
-  prompt: string,
-  options?: GenerateImageOptions,
-): Promise<GenerateImageResult> {
+export async function generateImage(prompt: string, options?: GenerateImageOptions): Promise<GenerateImageResult> {
   const ai = await getClient();
 
   logger.info({ prompt: prompt.substring(0, 80) }, 'Generating image with Nano Banana');
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image', // gate-allow: gerador de imagem Nano Banana, feature nao-LLM fora do escopo (SPEC 4.6)
+    model: 'gemini-2.5-flash-image', // gate-allow: gerador de imagem Nano Banana, feature nao-LLM fora do escopo
     contents: [{ text: prompt }],
     config: {
       responseModalities: ['TEXT', 'IMAGE'],
@@ -77,10 +75,7 @@ export async function generateImage(
     );
   }
 
-  logger.info(
-    { mimeType: imageData.mimeType, hasText: !!textResponse },
-    'Image generated successfully',
-  );
+  logger.info({ mimeType: imageData.mimeType, hasText: !!textResponse }, 'Image generated successfully');
 
   return {
     base64: imageData.base64,
@@ -100,7 +95,7 @@ export async function editImage(
   logger.info({ prompt: prompt.substring(0, 80) }, 'Editing image with Nano Banana');
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash-image', // gate-allow: gerador de imagem Nano Banana, feature nao-LLM fora do escopo (SPEC 4.6)
+    model: 'gemini-2.5-flash-image', // gate-allow: gerador de imagem Nano Banana, feature nao-LLM fora do escopo
     contents: [
       { text: prompt },
       {

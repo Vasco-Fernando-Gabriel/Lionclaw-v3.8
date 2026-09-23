@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   createCloserPermissionGuard,
@@ -8,10 +7,7 @@ import {
   type CloserGitAuditEvent,
   type CloserGitConfirmRequest,
 } from '../dynamic-workflows/closer-permission-guard';
-import type {
-  ComposedToolInput,
-  ToolDecision,
-} from '../dynamic-workflows/workflow-agent-adapter';
+import type { ComposedToolInput, ToolDecision } from '../dynamic-workflows/workflow-agent-adapter';
 
 const WORKSPACE = '/work/run-1/worktree';
 
@@ -108,7 +104,7 @@ describe('closer-permission-guard: escrita local sob confirmacao (8.8)', () => {
   });
 
   it('escrita local NEGADA por padrao quando NAO ha confirmador (fail-closed)', async () => {
-    const guard = makeGuard({}); // sem confirm.
+    const guard = makeGuard({});
     for (const cmd of [
       'git add -A',
       'git commit -m x',
@@ -146,16 +142,7 @@ describe('closer-permission-guard: escrita local sob confirmacao (8.8)', () => {
       const d = await guard(bash(c));
       expect(d.behavior, c).toBe('allow');
     }
-    expect(seen).toEqual([
-      'add',
-      'commit',
-      'merge',
-      'rebase',
-      'reset',
-      'stash',
-      'branch',
-      'checkout',
-    ]);
+    expect(seen).toEqual(['add', 'commit', 'merge', 'rebase', 'reset', 'stash', 'branch', 'checkout']);
   });
 });
 

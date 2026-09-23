@@ -1,23 +1,16 @@
 import { useState } from 'react';
-import {
-  FolderOpen,
-  FolderGit2,
-  Trash2,
-  Hammer,
-  RefreshCw,
-  BellOff,
-  Loader2,
-} from 'lucide-react';
-import { useRepoGraphStore } from '@/stores/repo-graph-store';
-
+import { FolderOpen, FolderGit2, Trash2, Hammer, RefreshCw, BellOff, Loader2 } from 'lucide-react';
+import { useRepoGraphSession, useRepoGraphStore } from '@/stores/repo-graph-store';
 
 interface RepoSelectorControlProps {
   sessionId: string;
 }
 
 export function RepoSelectorControl({ sessionId }: RepoSelectorControlProps) {
-  const sessionState = useRepoGraphStore((s) => s.sessionState);
-  const pending = useRepoGraphStore((s) => s.pending);
+  const slot = useRepoGraphSession(sessionId);
+  const sessionState = slot.sessionState;
+  const globalPending = useRepoGraphStore((s) => s.pending);
+  const pending = globalPending || slot.pending;
   const addRepository = useRepoGraphStore((s) => s.addRepository);
   const attachSession = useRepoGraphStore((s) => s.attachSession);
   const detachSession = useRepoGraphStore((s) => s.detachSession);
@@ -65,10 +58,7 @@ export function RepoSelectorControl({ sessionId }: RepoSelectorControlProps) {
 
   const handleSuppressSession = async () => {
     setError(null);
-    const result = await setPromptSuppressed(
-      sessionId,
-      !(sessionState?.attach?.graphPromptSuppressed ?? false),
-    );
+    const result = await setPromptSuppressed(sessionId, !(sessionState?.attach?.graphPromptSuppressed ?? false));
     if ('error' in result) setError(result.error);
   };
 
@@ -127,11 +117,7 @@ export function RepoSelectorControl({ sessionId }: RepoSelectorControlProps) {
                 title="Atualizar o graph (sync incremental)"
                 className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-zinc-700 text-xs text-zinc-400 hover:bg-zinc-800 transition-colors disabled:opacity-50"
               >
-                {building ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <RefreshCw size={12} />
-                )}
+                {building ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
                 Atualizar
               </button>
             )}

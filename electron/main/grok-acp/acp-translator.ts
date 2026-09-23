@@ -1,9 +1,5 @@
 import type { CliAgenticResponse, CliStreamCallbacks } from '../agent-runtime/cli-agentic/contract';
-import type {
-  GrokAcpSessionUpdate,
-  GrokAcpUsage,
-  GrokModelUsage,
-} from './types';
+import type { GrokAcpSessionUpdate, GrokAcpUsage, GrokModelUsage } from './types';
 
 export interface GrokAcpResponse extends CliAgenticResponse {
   usage: GrokAcpUsage;
@@ -40,13 +36,11 @@ function resolveMcpDisplayName(base: string, ...candidates: unknown[]): string {
   for (const candidate of candidates) {
     if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) continue;
     const record = candidate as Record<string, unknown>;
-    const tool = typeof record['tool_name'] === 'string' && record['tool_name'].length > 0
-      ? record['tool_name']
-      : undefined;
+    const tool =
+      typeof record['tool_name'] === 'string' && record['tool_name'].length > 0 ? record['tool_name'] : undefined;
     if (!tool) continue;
-    const server = typeof record['server_name'] === 'string' && record['server_name'].length > 0
-      ? record['server_name']
-      : undefined;
+    const server =
+      typeof record['server_name'] === 'string' && record['server_name'].length > 0 ? record['server_name'] : undefined;
     return server ? `${server}/${tool}` : tool;
   }
   return base;
@@ -54,9 +48,7 @@ function resolveMcpDisplayName(base: string, ...candidates: unknown[]): string {
 
 function textContent(content: GrokAcpSessionUpdate['content']): string | undefined {
   if (Array.isArray(content)) {
-    const joined = content
-      .map((part) => typeof part.text === 'string' ? part.text : '')
-      .join('');
+    const joined = content.map((part) => (typeof part.text === 'string' ? part.text : '')).join('');
     return joined || undefined;
   }
   return typeof content?.text === 'string' ? content.text : undefined;
@@ -97,12 +89,13 @@ export function translateGrokSessionUpdate(
         accumulator.toolInputById.set(update.toolCallId, update.rawInput);
       }
       if (update.status !== 'completed') return;
-      const name = (update.toolCallId ? accumulator.toolNameById.get(update.toolCallId) : undefined)
-        ?? update.title
-        ?? update.kind
-        ?? 'tool';
-      const input = (update.toolCallId ? accumulator.toolInputById.get(update.toolCallId) : undefined)
-        ?? update.rawInput;
+      const name =
+        (update.toolCallId ? accumulator.toolNameById.get(update.toolCallId) : undefined) ??
+        update.title ??
+        update.kind ??
+        'tool';
+      const input =
+        (update.toolCallId ? accumulator.toolInputById.get(update.toolCallId) : undefined) ?? update.rawInput;
       const output = update.rawOutput ?? textContent(update.content);
       const resolved = resolveMcpDisplayName(name, input, output);
       callbacks?.onToolUseComplete?.(resolved, input ?? output, update.toolCallId);
@@ -120,7 +113,7 @@ export function translateGrokSessionUpdate(
 }
 
 function record(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
 function finiteNonNegative(value: unknown): number | undefined {
@@ -141,12 +134,12 @@ function unreportedUsage(): GrokAcpUsage {
   };
 }
 
-function rawGrokUsage(meta: Record<string, unknown>, usage: Record<string, unknown>):
-Partial<Omit<GrokAcpUsage, 'reported' | 'modelUsage'>> {
-  const readNumber = (key: string): number | undefined =>
-    finiteNonNegative(usage[key]) ?? finiteNonNegative(meta[key]);
-  const readInteger = (key: string): number | undefined =>
-    finiteInteger(usage[key]) ?? finiteInteger(meta[key]);
+function rawGrokUsage(
+  meta: Record<string, unknown>,
+  usage: Record<string, unknown>,
+): Partial<Omit<GrokAcpUsage, 'reported' | 'modelUsage'>> {
+  const readNumber = (key: string): number | undefined => finiteNonNegative(usage[key]) ?? finiteNonNegative(meta[key]);
+  const readInteger = (key: string): number | undefined => finiteInteger(usage[key]) ?? finiteInteger(meta[key]);
   const output: Partial<Omit<GrokAcpUsage, 'reported' | 'modelUsage'>> = {};
   for (const key of [
     'inputTokens',
@@ -182,9 +175,7 @@ function parseGrokUsageEnvelope(result: unknown): {
     return { usage: unreportedUsage(), rawUsage };
   }
   const canonical = parseGrokReportedUsage(meta, wireUsage);
-  return canonical?.reported
-    ? { usage: canonical }
-    : { usage: unreportedUsage(), rawUsage };
+  return canonical?.reported ? { usage: canonical } : { usage: unreportedUsage(), rawUsage };
 }
 
 function parseGrokReportedUsage(
@@ -205,7 +196,7 @@ function parseGrokReportedUsage(
   const output = readCanonical('outputTokens');
   const cacheRead = readCanonical('cachedReadTokens', 'cacheReadTokens');
   const cacheCreation = readCanonical('cacheCreationTokens');
-  if ([input, output, cacheRead, cacheCreation].some(value => value.present && value.value === undefined)) {
+  if ([input, output, cacheRead, cacheCreation].some((value) => value.present && value.value === undefined)) {
     return undefined;
   }
   const inputTokens = input.value ?? 0;
@@ -215,8 +206,7 @@ function parseGrokReportedUsage(
   if (cacheReadTokens > inputTokens || cacheCreationTokens > inputTokens - cacheReadTokens) {
     return undefined;
   }
-  const read = (key: string): number | undefined =>
-    finiteNonNegative(usage[key]) ?? finiteNonNegative(meta[key]);
+  const read = (key: string): number | undefined => finiteNonNegative(usage[key]) ?? finiteNonNegative(meta[key]);
   const explicitlyComplete = usage['reported'] === true || meta['reported'] === true;
   const reported = explicitlyComplete || (inputTokens > 0 && outputTokens > 0);
   const costUsdTicks = finiteInteger(usage['costUsdTicks']);
@@ -230,7 +220,9 @@ function parseGrokReportedUsage(
     ...(read('providerInputTokens') !== undefined ? { providerInputTokens: read('providerInputTokens') } : {}),
     ...(read('reasoningTokens') !== undefined ? { reasoningTokens: read('reasoningTokens') } : {}),
     ...(finiteInteger(usage['modelCalls']) !== undefined ? { modelCalls: finiteInteger(usage['modelCalls']) } : {}),
-    ...(finiteNonNegative(usage['apiDurationMs']) !== undefined ? { apiDurationMs: finiteNonNegative(usage['apiDurationMs']) } : {}),
+    ...(finiteNonNegative(usage['apiDurationMs']) !== undefined
+      ? { apiDurationMs: finiteNonNegative(usage['apiDurationMs']) }
+      : {}),
     ...(costUsdTicks !== undefined ? { costUsdTicks } : {}),
     ...(finiteInteger(usage['numTurns']) !== undefined ? { numTurns: finiteInteger(usage['numTurns']) } : {}),
     ...(modelUsage !== undefined ? { modelUsage } : {}),
@@ -247,10 +239,10 @@ function parseModelUsage(value: unknown): Record<string, GrokModelUsage> | undef
     const cachedReadTokens = finiteInteger(usage['cachedReadTokens']);
     const reasoningTokens = finiteInteger(usage['reasoningTokens']);
     if (
-      inputTokens === undefined
-      || outputTokens === undefined
-      || cachedReadTokens === undefined
-      || reasoningTokens === undefined
+      inputTokens === undefined ||
+      outputTokens === undefined ||
+      cachedReadTokens === undefined ||
+      reasoningTokens === undefined
     ) {
       return undefined;
     }
@@ -260,7 +252,9 @@ function parseModelUsage(value: unknown): Record<string, GrokModelUsage> | undef
       cachedReadTokens,
       reasoningTokens,
       ...(finiteInteger(usage['modelCalls']) !== undefined ? { modelCalls: finiteInteger(usage['modelCalls']) } : {}),
-      ...(finiteInteger(usage['costUsdTicks']) !== undefined ? { costUsdTicks: finiteInteger(usage['costUsdTicks']) } : {}),
+      ...(finiteInteger(usage['costUsdTicks']) !== undefined
+        ? { costUsdTicks: finiteInteger(usage['costUsdTicks']) }
+        : {}),
     };
   }
   return Object.keys(output).length > 0 ? output : undefined;
@@ -305,11 +299,7 @@ export function finalizeGrokResponse(
     content: accumulator.content,
     usage,
     toolUses: accumulator.toolUses,
-    status: outcome === 'cancelled'
-      ? 'cancelled'
-      : outcome === 'failed'
-        ? 'max_steps_reached'
-        : 'finished',
+    status: outcome === 'cancelled' ? 'cancelled' : outcome === 'failed' ? 'max_steps_reached' : 'finished',
     metadata: {
       ...(modelId ? { modelId } : {}),
       ...(usage.reasoningTokens !== undefined ? { reasoningTokens: usage.reasoningTokens } : {}),

@@ -1,4 +1,3 @@
-
 import { createLogger } from './logger';
 import { updateMCPServer, startServer } from './mcp-manager';
 

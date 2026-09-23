@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   PIPELINE_PHASES,
@@ -12,17 +11,16 @@ import {
   getPhaseAgentId,
 } from '../pipeline-engine/phase-helpers';
 
-
 const EXPECTED_PIPELINE_AGENTS: Record<number, string> = {
-  1:  'discovery-agent',
-  2:  'prd-generator',
-  3:  'prd-validator',
-  4:  'prd-generator',       // PRD Completo reuses prd-generator in dev legacy
-  5:  'tech-database',
-  6:  'tech-backend',
-  7:  'tech-frontend',
-  8:  'tech-security',
-  9:  'spec-builder',
+  1: 'discovery-agent',
+  2: 'prd-generator',
+  3: 'prd-validator',
+  4: 'prd-generator', // PRD Completo reuses prd-generator in dev legacy
+  5: 'tech-database',
+  6: 'tech-backend',
+  7: 'tech-frontend',
+  8: 'tech-security',
+  9: 'spec-builder',
   10: 'spec-enricher',
   11: 'harness-planner',
   12: 'sprint-validator',
@@ -31,15 +29,15 @@ const EXPECTED_PIPELINE_AGENTS: Record<number, string> = {
 };
 
 const EXPECTED_FEATURE_AGENTS: Record<number, string> = {
-  1:  'feat-discovery',
-  2:  'feat-prd-generator',
-  3:  'feat-prd-validator',
-  4:  'feat-prd-completo',
-  5:  'feat-tech-database',
-  6:  'feat-tech-backend',
-  7:  'feat-tech-frontend',
-  8:  'feat-tech-security',
-  9:  'spec-builder',
+  1: 'feat-discovery',
+  2: 'feat-prd-generator',
+  3: 'feat-prd-validator',
+  4: 'feat-prd-completo',
+  5: 'feat-tech-database',
+  6: 'feat-tech-backend',
+  7: 'feat-tech-frontend',
+  8: 'feat-tech-security',
+  9: 'spec-builder',
   10: 'spec-enricher',
   11: 'harness-planner',
   12: 'sprint-validator',
@@ -48,33 +46,32 @@ const EXPECTED_FEATURE_AGENTS: Record<number, string> = {
 };
 
 const EXPECTED_SECURITY_AGENTS: Record<number, string> = {
-  1:  'repo-profiler',
-  2:  'multi-agent',
-  3:  'security-deduplicator',
-  4:  'security-skeptic-security',
-  5:  'security-skeptic-quality',
-  6:  'spec-builder',
-  7:  'spec-enricher',
-  8:  'harness-planner',
-  9:  'sprint-validator',
+  1: 'repo-profiler',
+  2: 'multi-agent',
+  3: 'security-deduplicator',
+  4: 'security-skeptic-security',
+  5: 'security-skeptic-quality',
+  6: 'spec-builder',
+  7: 'spec-enricher',
+  8: 'harness-planner',
+  9: 'sprint-validator',
   10: 'harness-coder',
   11: 'harness-evaluator',
 };
 
 const EXPECTED_ARCH_AGENTS: Record<number, string> = {
-  1:  'architecture-mapper',
-  2:  'architecture-target-triage',
-  3:  'architecture-diagnostician',
-  4:  'architecture-decision-interviewer',
-  5:  'spec-builder',
-  6:  'arch-spec-validator',
-  7:  'architecture-spec-enricher',
-  8:  'harness-planner',
-  9:  'sprint-validator',
+  1: 'architecture-mapper',
+  2: 'architecture-target-triage',
+  3: 'architecture-diagnostician',
+  4: 'architecture-decision-interviewer',
+  5: 'spec-builder',
+  6: 'arch-spec-validator',
+  7: 'architecture-spec-enricher',
+  8: 'harness-planner',
+  9: 'sprint-validator',
   10: 'harness-coder',
   11: 'harness-evaluator',
 };
-
 
 describe('Legacy PIPELINE_PHASES (development) — 14 phases intact', () => {
   it('has exactly 14 phases', () => {
@@ -107,7 +104,6 @@ describe('Legacy PIPELINE_PHASES (development) — 14 phases intact', () => {
   });
 });
 
-
 describe('Legacy FEATURE_PIPELINE_PHASES — 14 phases intact', () => {
   it('has exactly 14 phases', () => {
     expect(FEATURE_PIPELINE_PHASES).toHaveLength(14);
@@ -134,7 +130,6 @@ describe('Legacy FEATURE_PIPELINE_PHASES — 14 phases intact', () => {
     expect(FEATURE_PIPELINE_PHASES).toMatchSnapshot();
   });
 });
-
 
 describe('Legacy SECURITY_PIPELINE_PHASES — 11 phases intact', () => {
   it('has exactly 11 phases', () => {
@@ -163,7 +158,6 @@ describe('Legacy SECURITY_PIPELINE_PHASES — 11 phases intact', () => {
   });
 });
 
-
 describe('Legacy ARCHITECTURE_REVIEW_PIPELINE_PHASES — 11 phases intact', () => {
   it('has exactly 11 phases', () => {
     expect(ARCHITECTURE_REVIEW_PIPELINE_PHASES).toHaveLength(11);
@@ -187,8 +181,7 @@ describe('Legacy ARCHITECTURE_REVIEW_PIPELINE_PHASES — 11 phases intact', () =
   });
 
   it('phase 7 uses the architecture-specific spec enricher', () => {
-    expect(ARCHITECTURE_REVIEW_PIPELINE_PHASES.find((p) => p.number === 7)?.agentId)
-      .toBe('architecture-spec-enricher');
+    expect(ARCHITECTURE_REVIEW_PIPELINE_PHASES.find((p) => p.number === 7)?.agentId).toBe('architecture-spec-enricher');
   });
 
   it('phase 7 greeting cannot fall back to frontend PRD/stories instructions', () => {
@@ -204,7 +197,6 @@ describe('Legacy ARCHITECTURE_REVIEW_PIPELINE_PHASES — 11 phases intact', () =
     expect(ARCHITECTURE_REVIEW_PIPELINE_PHASES).toMatchSnapshot();
   });
 });
-
 
 describe('getPhaseNumberForAgent — legacy pipelines', () => {
   it('development: harness-coder === 13 (SPEC L1565)', () => {
@@ -240,7 +232,6 @@ describe('getPhaseNumberForAgent — legacy pipelines', () => {
   });
 });
 
-
 describe('getPhaseAgentId dispatch — legacy pipelines', () => {
   it.each([
     ['development', 1, 'discovery-agent'],
@@ -259,14 +250,10 @@ describe('getPhaseAgentId dispatch — legacy pipelines', () => {
     ['architecture-review', 1, 'architecture-mapper'],
     ['architecture-review', 10, 'harness-coder'],
     ['architecture-review', 11, 'harness-evaluator'],
-  ])(
-    '%s phase %d resolves to %s',
-    (pipelineType, phaseNum, expectedAgent) => {
-      expect(getPhaseAgentId(phaseNum as number, { pipelineType })).toBe(expectedAgent);
-    },
-  );
+  ])('%s phase %d resolves to %s', (pipelineType, phaseNum, expectedAgent) => {
+    expect(getPhaseAgentId(phaseNum as number, { pipelineType })).toBe(expectedAgent);
+  });
 });
-
 
 describe('development-v2 vs development legacy — no behavioral regression', () => {
   it('development legacy max phase is 14', () => {

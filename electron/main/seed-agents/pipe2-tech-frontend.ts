@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const PIPE2_TECH_FRONTEND_ID = 'pipe2-tech-frontend';

@@ -55,9 +55,7 @@ export function CompactionTriggerSettings({ settings, onUpdate }: Props) {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-3">
             <label className="text-xs text-zinc-400">Janela de contexto (override)</label>
-            <span className="text-[10px] text-zinc-500 font-mono">
-              {formatTokens(contextWindow)} tokens
-            </span>
+            <span className="text-[10px] text-zinc-500 font-mono">{formatTokens(contextWindow)} tokens</span>
           </div>
           <input
             type="number"
@@ -67,25 +65,22 @@ export function CompactionTriggerSettings({ settings, onUpdate }: Props) {
             onChange={(e) => {
               const value = Number(e.target.value);
               onUpdate({
-                orchestratorContextWindowTokens:
-                  Number.isFinite(value) && value > 0 ? Math.floor(value) : 0,
+                orchestratorContextWindowTokens: Number.isFinite(value) && value > 0 ? Math.floor(value) : 0,
               });
             }}
             placeholder="Auto"
             className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none focus:border-amber-500/50"
           />
           <p className="text-[10px] text-zinc-600">
-            Detectada automaticamente pelo modelo ativo. Preencha apenas para
-            modelos locais ou desconhecidos que nao reportam a janela.
+            Detectada automaticamente pelo modelo ativo. Preencha apenas para modelos locais ou desconhecidos que nao
+            reportam a janela.
           </p>
         </div>
 
         <div className={`space-y-2 ${autoEnabled ? '' : 'opacity-40'}`}>
           <div className="flex items-center justify-between gap-3">
             <label className="text-xs text-zinc-400">Compactar em</label>
-            <span className="text-[10px] text-amber-300 font-mono">
-              {thresholdPercent}%
-            </span>
+            <span className="text-[10px] text-amber-300 font-mono">{thresholdPercent}%</span>
           </div>
           <input
             type="range"
@@ -111,9 +106,7 @@ export function CompactionTriggerSettings({ settings, onUpdate }: Props) {
         <div className={`space-y-1.5 ${autoEnabled ? '' : 'opacity-40'}`}>
           <div className="flex items-center justify-between gap-3">
             <label className="text-xs text-zinc-400">Alvo pos-compactacao (auto-compact)</label>
-            <span className="text-[10px] text-zinc-500 font-mono">
-              {formatTokens(targetTokens)} tokens
-            </span>
+            <span className="text-[10px] text-zinc-500 font-mono">{formatTokens(targetTokens)} tokens</span>
           </div>
           <input
             type="number"
@@ -124,8 +117,7 @@ export function CompactionTriggerSettings({ settings, onUpdate }: Props) {
             onChange={(e) => {
               const value = Number(e.target.value);
               onUpdate({
-                chatCompactionTargetTokens:
-                  Number.isFinite(value) && value > 0 ? Math.floor(value) : 50_000,
+                chatCompactionTargetTokens: Number.isFinite(value) && value > 0 ? Math.floor(value) : 50_000,
               });
             }}
             placeholder="50000"

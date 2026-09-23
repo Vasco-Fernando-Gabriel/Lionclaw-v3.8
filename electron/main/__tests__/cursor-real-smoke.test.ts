@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'fs';
 import path from 'path';
@@ -6,10 +5,7 @@ import path from 'path';
 const SMOKE_HOME = process.env['LIONCLAW_TEST_HOME'] ?? '';
 
 import { executeAgent } from '../agent-runtime/execute';
-import {
-  buildCursorSessionKey,
-  loadCursorSession,
-} from '../agent-runtime/cursor-sidecar/session-registry';
+import { buildCursorSessionKey, loadCursorSession } from '../agent-runtime/cursor-sidecar/session-registry';
 import type { AgentQueryConfig } from '../agent-config-resolver';
 import type { AgentExecutionRequest, AgentExecutionResult } from '../agent-runtime/types';
 
@@ -20,8 +16,7 @@ const PROOF_CONTENT = 'LION-CURSOR-F1-OK';
 
 const config: AgentQueryConfig = {
   model: MODEL,
-  systemPrompt:
-    'Voce e o coder de teste do LionClaw. Execute exatamente a tarefa pedida, sem passos extras.',
+  systemPrompt: 'Voce e o coder de teste do LionClaw. Execute exatamente a tarefa pedida, sem passos extras.',
   allowedTools: [],
   mcpServers: [],
   maxTurns: undefined,
@@ -51,24 +46,19 @@ describe.runIf(SMOKE_ENABLED)('smoke REAL do runtime cursor (LIONCLAW_CURSOR_SMO
   beforeAll(() => {
     if (SMOKE_HOME.length === 0) {
       throw new Error(
-        'LIONCLAW_CURSOR_SMOKE=1 exige LIONCLAW_TEST_HOME apontando para um diretorio '
-          + 'temporario vazio (isola sessoes e o espelho do vault do ~/.lionclaw real).',
+        'LIONCLAW_CURSOR_SMOKE=1 exige LIONCLAW_TEST_HOME apontando para um diretorio ' +
+          'temporario vazio (isola sessoes e o espelho do vault do ~/.lionclaw real).',
       );
     }
     repoDir = path.join(SMOKE_HOME, 'repo-descartavel');
     fs.mkdirSync(repoDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(repoDir, 'README.md'),
-      '# Repo descartavel do smoke cursor F1\n',
-      'utf8',
-    );
+    fs.writeFileSync(path.join(repoDir, 'README.md'), '# Repo descartavel do smoke cursor F1\n', 'utf8');
   });
 
   afterAll(() => {
     try {
       fs.rmSync(SMOKE_HOME, { recursive: true, force: true });
-    } catch {
-    }
+    } catch {}
   });
 
   it(
@@ -129,6 +119,5 @@ describe.runIf(SMOKE_ENABLED)('smoke REAL do runtime cursor (LIONCLAW_CURSOR_SMO
 });
 
 describe.runIf(!SMOKE_ENABLED)('smoke real do cursor (desligado)', () => {
-  it.skip('exige LIONCLAW_CURSOR_SMOKE=1 (gasta tokens do plano Cursor)', () => {
-  });
+  it.skip('exige LIONCLAW_CURSOR_SMOKE=1 (gasta tokens do plano Cursor)', () => {});
 });

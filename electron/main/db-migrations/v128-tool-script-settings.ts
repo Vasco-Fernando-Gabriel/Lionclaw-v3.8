@@ -7,7 +7,6 @@ import {
   TOOL_SCRIPT_DEFAULT_MAX_TOOL_CALLS,
 } from '../tool-script/tool-script-types';
 
-
 const TOOL_SCRIPT_SETTING_SEEDS: ReadonlyArray<readonly [string, string]> = [
   ['tool_script_enabled', 'true'],
   ['tool_script_tools', JSON.stringify(TOOL_SCRIPT_DEFAULT_TOOLS)],
@@ -18,9 +17,7 @@ const TOOL_SCRIPT_SETTING_SEEDS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 export function applyMigrationV128(db: Database.Database): void {
-  const insert = db.prepare(
-    "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
-  );
+  const insert = db.prepare("INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))");
   for (const [key, value] of TOOL_SCRIPT_SETTING_SEEDS) {
     insert.run(key, value);
   }

@@ -8,7 +8,6 @@ import { dynamicWorkflowCoderGlm } from '../seed-agents/dynamic-workflow-coder-g
 import { dynamicWorkflowFixer } from '../seed-agents/dynamic-workflow-fixer';
 import { dynamicWorkflowDocWriter } from '../seed-agents/dynamic-workflow-doc-writer';
 
-
 const OLD_CMDS = JSON.stringify(['npm run typecheck', 'npm run test', 'npm install', 'npm ci']);
 
 function makeDb(): Database.Database {
@@ -25,11 +24,19 @@ function makeDb(): Database.Database {
 }
 
 function insert(db: Database.Database, id: string, maxTurns: number | null, commands: string | null): void {
-  db.prepare('INSERT INTO agents (id, name, max_turns, allowed_commands) VALUES (?, ?, ?, ?)').run(id, id, maxTurns, commands);
+  db.prepare('INSERT INTO agents (id, name, max_turns, allowed_commands) VALUES (?, ?, ?, ?)').run(
+    id,
+    id,
+    maxTurns,
+    commands,
+  );
 }
 
 function row(db: Database.Database, id: string): { max_turns: number | null; allowed_commands: string | null } {
-  return db.prepare('SELECT max_turns, allowed_commands FROM agents WHERE id = ?').get(id) as { max_turns: number | null; allowed_commands: string | null };
+  return db.prepare('SELECT max_turns, allowed_commands FROM agents WHERE id = ?').get(id) as {
+    max_turns: number | null;
+    allowed_commands: string | null;
+  };
 }
 
 describe('migration v151 - writers do dynamic-workflow (maxTurns + allowedCommands)', () => {
@@ -55,8 +62,14 @@ describe('migration v151 - writers do dynamic-workflow (maxTurns + allowedComman
     insert(db, 'dynamic-workflow-doc-writer', 25, '[]');
     insert(db, 'outro-agente', 80, OLD_CMDS);
     applyMigrationV151(db);
-    expect(row(db, 'dynamic-workflow-coder')).toEqual({ max_turns: 42, allowed_commands: JSON.stringify(['npm run typecheck', 'make']) });
-    expect(row(db, 'dynamic-workflow-fixer')).toEqual({ max_turns: 150, allowed_commands: JSON.stringify(['pnpm test']) });
+    expect(row(db, 'dynamic-workflow-coder')).toEqual({
+      max_turns: 42,
+      allowed_commands: JSON.stringify(['npm run typecheck', 'make']),
+    });
+    expect(row(db, 'dynamic-workflow-fixer')).toEqual({
+      max_turns: 150,
+      allowed_commands: JSON.stringify(['pnpm test']),
+    });
     expect(row(db, 'dynamic-workflow-doc-writer').max_turns).toBe(25);
     expect(row(db, 'outro-agente')).toEqual({ max_turns: 80, allowed_commands: OLD_CMDS });
   });
@@ -71,7 +84,12 @@ describe('migration v151 - writers do dynamic-workflow (maxTurns + allowedComman
   });
 
   it('R10: os .ts dos seeds carregam os MESMOS valores da migration', () => {
-    for (const seed of [dynamicWorkflowCoder, dynamicWorkflowCoderCodex, dynamicWorkflowCoderGlm, dynamicWorkflowFixer]) {
+    for (const seed of [
+      dynamicWorkflowCoder,
+      dynamicWorkflowCoderCodex,
+      dynamicWorkflowCoderGlm,
+      dynamicWorkflowFixer,
+    ]) {
       expect(seed.maxTurns).toBe(__V151_INTERNAL.NEW_CODE_WRITER_MAX_TURNS);
       expect(seed.allowedCommands).toEqual(__V151_INTERNAL.NEW_CODE_WRITER_COMMANDS);
     }

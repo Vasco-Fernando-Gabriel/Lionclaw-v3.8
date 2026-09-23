@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   createChatTurnStreamFlags,
@@ -45,16 +44,12 @@ describe('SB-10 AC-B26 — rede de seguranca do turno de chat:send', () => {
 
   it('AC-B26: SO na lane DESKTOP — telegram/cron (contrato proprio) nunca emitem', () => {
     const flags = createChatTurnStreamFlags();
-    expect(
-      shouldEmitChatTurnFallbackError(flags, { isDesktopLane: false, silent: false }),
-    ).toBe(false);
+    expect(shouldEmitChatTurnFallbackError(flags, { isDesktopLane: false, silent: false })).toBe(false);
   });
 
   it('AC-B26: turno silent (nada streama) -> suprimido', () => {
     const flags = createChatTurnStreamFlags();
-    expect(
-      shouldEmitChatTurnFallbackError(flags, { isDesktopLane: true, silent: true }),
-    ).toBe(false);
+    expect(shouldEmitChatTurnFallbackError(flags, { isDesktopLane: true, silent: true })).toBe(false);
   });
 
   it('AC-B26: turno delegado ao retry interno (resume falhou) -> a rede externa fica muda', () => {

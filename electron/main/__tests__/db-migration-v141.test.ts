@@ -10,16 +10,20 @@ describe('migration v141 chat parent runtime metrics', () => {
     applyMigrationV141(db);
     expect(() => applyMigrationV141(db)).not.toThrow();
 
-    expect(db.prepare("SELECT * FROM sessions WHERE id = 's1'").get()).toEqual(expect.objectContaining({
-      title: 'preservar',
-      parent_cost_by_runtime: '{}',
-      parent_cost_status_by_runtime: '{}',
-      parent_subscription_equivalent_cost_usd: 0,
-    }));
-    expect(db.prepare('PRAGMA table_info(sessions)').all()).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'parent_cost_by_runtime' }),
-      expect.objectContaining({ name: 'parent_cost_status_by_runtime' }),
-      expect.objectContaining({ name: 'parent_subscription_equivalent_cost_usd' }),
-    ]));
+    expect(db.prepare("SELECT * FROM sessions WHERE id = 's1'").get()).toEqual(
+      expect.objectContaining({
+        title: 'preservar',
+        parent_cost_by_runtime: '{}',
+        parent_cost_status_by_runtime: '{}',
+        parent_subscription_equivalent_cost_usd: 0,
+      }),
+    );
+    expect(db.prepare('PRAGMA table_info(sessions)').all()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'parent_cost_by_runtime' }),
+        expect.objectContaining({ name: 'parent_cost_status_by_runtime' }),
+        expect.objectContaining({ name: 'parent_subscription_equivalent_cost_usd' }),
+      ]),
+    );
   });
 });

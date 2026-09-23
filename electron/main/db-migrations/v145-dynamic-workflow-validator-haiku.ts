@@ -13,9 +13,7 @@ const OLD_MODEL = 'claude-sonnet-4-6';
 const NEW_MODEL = 'claude-haiku-4-5-20251001';
 
 export function applyMigrationV145(db: Database.Database): void {
-  const update = db.prepare(
-    'UPDATE agents SET model = ? WHERE id = ? AND model = ?',
-  );
+  const update = db.prepare('UPDATE agents SET model = ? WHERE id = ? AND model = ?');
   for (const id of VALIDATOR_IDS) {
     update.run(NEW_MODEL, id, OLD_MODEL);
   }

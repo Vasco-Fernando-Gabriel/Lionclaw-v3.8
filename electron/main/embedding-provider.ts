@@ -1,4 +1,3 @@
-
 import { createLogger } from './logger';
 import { getSetting } from './db';
 import { getSecret } from './secrets-vault';
@@ -9,8 +8,7 @@ const OPENAI_TIMEOUT_MS = 15_000;
 const OLLAMA_TIMEOUT_MS = 30_000;
 
 type ProviderAttempt =
-  | { embedding: number[] }
-  | { failure: { reason: string; status?: number; notConfigured?: boolean } };
+  { embedding: number[] } | { failure: { reason: string; status?: number; notConfigured?: boolean } };
 
 export const EMBEDDING_DIMS = 1536;
 export const EMBEDDING_MODEL = 'text-embedding-3-small';
@@ -22,7 +20,6 @@ function normalizeL2(vec: number[]): number[] {
   if (norm === 0) return vec;
   return vec.map((v) => v / norm);
 }
-
 
 async function generateEmbeddingOpenAI(text: string): Promise<ProviderAttempt> {
   const apiKey = await getSecret('OPENAI_API_KEY');
@@ -80,7 +77,6 @@ async function generateEmbeddingOpenAI(text: string): Promise<ProviderAttempt> {
   }
 }
 
-
 async function generateEmbeddingOllama(text: string): Promise<ProviderAttempt> {
   const ollamaEnabled = getSetting('ollama_enabled') === 'true';
   if (!ollamaEnabled) {
@@ -135,7 +131,6 @@ async function generateEmbeddingOllama(text: string): Promise<ProviderAttempt> {
     clearTimeout(timer);
   }
 }
-
 
 export interface EmbeddingResult {
   embedding: number[];

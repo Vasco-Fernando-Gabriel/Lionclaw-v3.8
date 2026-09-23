@@ -12,10 +12,9 @@ import {
   getActivityStats,
   getAllTags,
 } from '../scheduler';
+import { deleteSessionsWithTimeline } from '../session-timeline';
 import {
-  deleteSessionById,
   getScheduledSessions,
-  deleteScheduledSessions,
   getAllTasks,
   getTask,
   insertTask,
@@ -54,17 +53,9 @@ export function registerSchedulerHandlers(_ctx: IpcContext): void {
     return getTaskRuns(taskId);
   });
 
-  ipcMain.handle(
-    'scheduler:review-run',
-    (
-      _event,
-      runId: number,
-      status: 'validated' | 'rejected',
-      note?: string,
-    ) => {
-      reviewTaskRun(runId, status, note);
-    },
-  );
+  ipcMain.handle('scheduler:review-run', (_event, runId: number, status: 'validated' | 'rejected', note?: string) => {
+    reviewTaskRun(runId, status, note);
+  });
 
   ipcMain.handle('scheduler:pending-count', () => {
     return getPendingReviewCount();
@@ -74,12 +65,13 @@ export function registerSchedulerHandlers(_ctx: IpcContext): void {
     return getScheduledSessions();
   });
 
-  ipcMain.handle('scheduler:delete-session', (_event, sessionId: string) => {
-    deleteSessionById(sessionId);
+  ipcMain.handle('scheduler:delete-session', async (_event, sessionId: string) => {
+    await deleteSessionsWithTimeline([sessionId]);
   });
 
-  ipcMain.handle('scheduler:cleanup-sessions', () => {
-    deleteScheduledSessions();
+  ipcMain.handle('scheduler:cleanup-sessions', async () => {
+    const sessionIds = getScheduledSessions().map((session) => session.id);
+    await deleteSessionsWithTimeline(sessionIds);
   });
 
   ipcMain.handle(
@@ -98,12 +90,9 @@ export function registerSchedulerHandlers(_ctx: IpcContext): void {
     },
   );
 
-  ipcMain.handle(
-    'scheduler:get-activity-stats',
-    (_event, from: string, to: string) => {
-      return getActivityStats(from, to);
-    },
-  );
+  ipcMain.handle('scheduler:get-activity-stats', (_event, from: string, to: string) => {
+    return getActivityStats(from, to);
+  });
 
   ipcMain.handle('scheduler:get-all-tags', () => {
     return getAllTags();
@@ -144,12 +133,9 @@ export function registerSchedulerHandlers(_ctx: IpcContext): void {
     },
   );
 
-  ipcMain.handle(
-    'tasks:update',
-    (_event, id: string, updates: Record<string, unknown>) => {
-      return updateTaskDb(id, updates);
-    },
-  );
+  ipcMain.handle('tasks:update', (_event, id: string, updates: Record<string, unknown>) => {
+    return updateTaskDb(id, updates);
+  });
 
   ipcMain.handle('tasks:delete', (_event, id: string) => {
     deleteTaskDb(id);

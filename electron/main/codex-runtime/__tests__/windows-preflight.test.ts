@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../../logger', () => ({
@@ -22,10 +21,7 @@ vi.mock('../../codex-windows-prep', () => prep);
 vi.mock('../../db', () => dbm);
 vi.mock('../../pipeline-shared/ipc-emitter', () => ipc);
 
-import {
-  runOfficialPreFlight,
-  resetOfficialPreparedRepos,
-} from '../windows-preflight';
+import { runOfficialPreFlight, resetOfficialPreparedRepos } from '../windows-preflight';
 
 const realPlatform = process.platform;
 
@@ -94,9 +90,7 @@ describe('runOfficialPreFlight', () => {
   it('Windows + current prepared consent + actionable issues: runs prep, then re-detects', () => {
     setPlatform('win32');
     prep.resolveGitRoot.mockReturnValue('C:/repo');
-    prep.detectCodexWindowsIssues
-      .mockReturnValueOnce([{ severity: 'high' }])
-      .mockReturnValueOnce([]);
+    prep.detectCodexWindowsIssues.mockReturnValueOnce([{ severity: 'high' }]).mockReturnValueOnce([]);
     prep.countActionableIssues.mockReturnValueOnce(1).mockReturnValueOnce(0);
     dbm.getCodexWindowsPrepConsent.mockReturnValue({ prepVersion: 3, action: 'prepared' });
     prep.runPrep.mockReturnValue({ applied: true, filesAffected: 4 });

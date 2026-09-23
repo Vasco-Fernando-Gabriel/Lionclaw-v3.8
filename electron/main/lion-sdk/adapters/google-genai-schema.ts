@@ -1,13 +1,6 @@
-
-import {
-  Type,
-  type FunctionDeclaration,
-  type GenerateContentConfig,
-  type Schema,
-} from '@google/genai';
+import { Type, type FunctionDeclaration, type GenerateContentConfig, type Schema } from '@google/genai';
 
 import type { LionToolSchema } from '../tool-registry';
-
 
 function mapJsonTypeToGoogleType(jsonType: unknown): Type | undefined {
   if (typeof jsonType !== 'string') return undefined;
@@ -67,11 +60,7 @@ export function convertJsonSchemaToGoogleSchema(node: unknown): Schema {
     }
   }
 
-  if (
-    src.properties !== null &&
-    typeof src.properties === 'object' &&
-    !Array.isArray(src.properties)
-  ) {
+  if (src.properties !== null && typeof src.properties === 'object' && !Array.isArray(src.properties)) {
     const propsIn = src.properties as Record<string, unknown>;
     const propsOut: Record<string, Schema> = {};
     for (const [key, value] of Object.entries(propsIn)) {
@@ -87,14 +76,11 @@ export function convertJsonSchemaToGoogleSchema(node: unknown): Schema {
   return out;
 }
 
-
 export function toGoogleSafeName(name: string): string {
   return name;
 }
 
-export function convertLionToolToGoogleFunctionDeclaration(
-  tool: LionToolSchema,
-): FunctionDeclaration {
+export function convertLionToolToGoogleFunctionDeclaration(tool: LionToolSchema): FunctionDeclaration {
   const parameters = convertJsonSchemaToGoogleSchema(tool.input_schema);
   const decl: FunctionDeclaration = {
     name: toGoogleSafeName(tool.name),
@@ -106,9 +92,7 @@ export function convertLionToolToGoogleFunctionDeclaration(
   return decl;
 }
 
-export function buildGoogleToolConfig(
-  tools: LionToolSchema[] | undefined,
-): GenerateContentConfig['tools'] | undefined {
+export function buildGoogleToolConfig(tools: LionToolSchema[] | undefined): GenerateContentConfig['tools'] | undefined {
   if (!tools || tools.length === 0) return undefined;
   const functionDeclarations = tools.map(convertLionToolToGoogleFunctionDeclaration);
   return [{ functionDeclarations }];

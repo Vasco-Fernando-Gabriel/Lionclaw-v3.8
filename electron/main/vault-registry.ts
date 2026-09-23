@@ -1,11 +1,5 @@
 import { createLogger } from './logger';
-import {
-  getSecret,
-  getSecretNonInteractive,
-  setSecret,
-  deleteSecret,
-  getSecretReadError,
-} from './secrets-vault';
+import { getSecret, getSecretNonInteractive, setSecret, deleteSecret, getSecretReadError } from './secrets-vault';
 import { HIGGSFIELD_SESSION_SECRET_KEY } from './higgsfield-auth';
 import { BLOTATO_API_KEY_SECRET } from './blotato-auth';
 
@@ -91,7 +85,8 @@ const VAULT_ENTRIES: Omit<VaultEntry, 'configured'>[] = [
   {
     key: 'GOOGLE_GEMINI_API_KEY',
     label: 'Google Gemini API Key',
-    description: 'Chave da API Gemini (Google AI Studio). Necessario para geracao de imagens com Nano Banana. Gratuito ate 500 imagens/dia.',
+    description:
+      'Chave da API Gemini (Google AI Studio). Necessario para geracao de imagens com Nano Banana. Gratuito ate 500 imagens/dia.',
     service: 'google',
     required: false,
     placeholder: 'AIza...',
@@ -100,7 +95,8 @@ const VAULT_ENTRIES: Omit<VaultEntry, 'configured'>[] = [
   {
     key: HIGGSFIELD_SESSION_SECRET_KEY,
     label: 'Higgsfield MCP',
-    description: 'Sessao OAuth da Higgsfield usada pelo MCP remoto para geracao de imagens, videos e analise de criativos.',
+    description:
+      'Sessao OAuth da Higgsfield usada pelo MCP remoto para geracao de imagens, videos e analise de criativos.',
     service: 'higgsfield',
     required: false,
     placeholder: 'Autentique pelo botao Conectar.',
@@ -109,7 +105,8 @@ const VAULT_ENTRIES: Omit<VaultEntry, 'configured'>[] = [
   {
     key: BLOTATO_API_KEY_SECRET,
     label: 'Blotato API Key',
-    description: 'Chave da Blotato para publicacao em redes sociais (Instagram, TikTok, etc) via MCP remoto. Se rotacionar, desative e reative o MCP para o spawn ler a nova chave.',
+    description:
+      'Chave da Blotato para publicacao em redes sociais (Instagram, TikTok, etc) via MCP remoto. Se rotacionar, desative e reative o MCP para o spawn ler a nova chave.',
     service: 'blotato',
     required: false,
     placeholder: 'blt_...',
@@ -118,7 +115,8 @@ const VAULT_ENTRIES: Omit<VaultEntry, 'configured'>[] = [
   {
     key: 'CURSOR_API_KEY',
     label: 'Cursor API Key',
-    description: 'User API key do Cursor (cursor.com/dashboard > API). Necessaria para o runtime Cursor (@cursor/sdk). A cobranca real e o plano de assinatura do Cursor; o custo em USD exibido e equivalente-API.',
+    description:
+      'User API key do Cursor (cursor.com/dashboard > API). Necessaria para o runtime Cursor (@cursor/sdk). A cobranca real e o plano de assinatura do Cursor; o custo em USD exibido e equivalente-API.',
     service: 'cursor',
     required: false,
     placeholder: 'key_...',
@@ -127,7 +125,8 @@ const VAULT_ENTRIES: Omit<VaultEntry, 'configured'>[] = [
   {
     key: 'COHERE_API_KEY',
     label: 'Cohere API Key',
-    description: 'Chave da API Cohere. Necessaria para reranking na Knowledge Base (melhora a qualidade dos resultados de busca).',
+    description:
+      'Chave da API Cohere. Necessaria para reranking na Knowledge Base (melhora a qualidade dos resultados de busca).',
     service: 'cohere',
     required: false,
     placeholder: 'co-...',
@@ -157,7 +156,7 @@ export async function getVaultEntries(): Promise<VaultEntry[]> {
 }
 
 export async function setVaultSecret(key: string, value: string): Promise<void> {
-  const entry = VAULT_ENTRIES.find(e => e.key === key);
+  const entry = VAULT_ENTRIES.find((e) => e.key === key);
   if (!entry) {
     throw new Error(`Chave desconhecida: ${key}. Use registerVaultEntry() primeiro.`);
   }
@@ -188,7 +187,7 @@ export function invalidateVaultStatusCache(key?: string): void {
 }
 
 export function registerVaultEntry(entry: Omit<VaultEntry, 'configured'>): void {
-  const exists = VAULT_ENTRIES.find(e => e.key === entry.key);
+  const exists = VAULT_ENTRIES.find((e) => e.key === entry.key);
   if (!exists) {
     VAULT_ENTRIES.push(entry);
     logger.info({ key: entry.key, service: entry.service }, 'vault: new entry registered');
@@ -261,7 +260,8 @@ export function registerExternalProviderVaultEntries(): void {
   registerVaultEntry({
     key: 'ORCHESTRATOR_VERTEX_API_KEY',
     label: 'Vertex / Gemini Agent Platform API Key',
-    description: 'Chave Google Cloud usada por SubAgents Gemini e pelo orquestrador Vertex no chat. Compartilhada entre Settings > Vertex Gemini e AgentForm.',
+    description:
+      'Chave Google Cloud usada por SubAgents Gemini e pelo orquestrador Vertex no chat. Compartilhada entre Settings > Vertex Gemini e AgentForm.',
     service: 'gemini-agent-platform',
     required: false,
     placeholder: '...',
@@ -271,7 +271,8 @@ export function registerExternalProviderVaultEntries(): void {
   registerVaultEntry({
     key: 'ORCHESTRATOR_MINIMAX_API_KEY',
     label: 'MiniMax TokenPlan API Key',
-    description: 'Chave MiniMax compartilhada entre Settings > Provedores externos (chat) e SubAgents MiniMax TokenPlan.',
+    description:
+      'Chave MiniMax compartilhada entre Settings > Provedores externos (chat) e SubAgents MiniMax TokenPlan.',
     service: 'minimax-tp',
     required: false,
     placeholder: '...',

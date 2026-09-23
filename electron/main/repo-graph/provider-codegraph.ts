@@ -1,12 +1,8 @@
-
 import fs from 'fs';
 import path from 'path';
 import { spawn, spawnSync } from 'child_process';
 import { createLogger } from '../logger';
-import {
-  minimalInternalRuntimeEnv,
-  resolveCodegraphPhysicalRuntime,
-} from '../distribution-runtime';
+import { minimalInternalRuntimeEnv, resolveCodegraphPhysicalRuntime } from '../distribution-runtime';
 import { composeMinimalContext } from './minimal-context';
 import type {
   RepoGraphProviderStats,
@@ -154,15 +150,11 @@ export class CodegraphCliProvider implements RepoGraphReader, RepoGraphWriter {
   private readonly platform: NodeJS.Platform;
   private readonly execPath: string;
 
-  constructor(
-    binaryPath?: string,
-    opts?: { platform?: NodeJS.Platform; execPath?: string },
-  ) {
+  constructor(binaryPath?: string, opts?: { platform?: NodeJS.Platform; execPath?: string }) {
     this.binaryPath = binaryPath ?? resolveCodegraphBinary();
     this.platform = opts?.platform ?? process.platform;
     this.execPath = opts?.execPath ?? process.execPath;
   }
-
 
   private requireBinary(): string {
     if (!this.binaryPath || !fs.existsSync(this.binaryPath)) {
@@ -173,12 +165,12 @@ export class CodegraphCliProvider implements RepoGraphReader, RepoGraphWriter {
 
   private runCli(args: string[], opts: CliRunOptions): Promise<CliRunResult> {
     const binary = this.requireBinary();
-    const { file, args: spawnArgs, runAsNode, windowsHide } = resolveCodegraphSpawn(
-      binary,
-      args,
-      this.platform,
-      this.execPath,
-    );
+    const {
+      file,
+      args: spawnArgs,
+      runAsNode,
+      windowsHide,
+    } = resolveCodegraphSpawn(binary, args, this.platform, this.execPath);
     return new Promise<CliRunResult>((resolve, reject) => {
       const child = spawn(file, spawnArgs, {
         cwd: opts.cwd,
@@ -204,11 +196,9 @@ export class CodegraphCliProvider implements RepoGraphReader, RepoGraphWriter {
           setTimeout(() => {
             try {
               if (child.exitCode === null) child.kill('SIGKILL');
-            } catch {
-            }
+            } catch {}
           }, 2_000).unref();
-        } catch {
-        }
+        } catch {}
       };
 
       const timer = setTimeout(() => {
@@ -275,7 +265,9 @@ export class CodegraphCliProvider implements RepoGraphReader, RepoGraphWriter {
     }
     if (result.exitCode !== 0) {
       throw new Error(
-        `codegraph ${args[0]} falhou (exit ${result.exitCode}): ${stripAnsi(result.stderr || result.stdout).trim().slice(0, 300)}`,
+        `codegraph ${args[0]} falhou (exit ${result.exitCode}): ${stripAnsi(result.stderr || result.stdout)
+          .trim()
+          .slice(0, 300)}`,
       );
     }
     return parseCodegraphJson(result.stdout);
@@ -284,7 +276,6 @@ export class CodegraphCliProvider implements RepoGraphReader, RepoGraphWriter {
   private graphDbPath(rootPath: string): string {
     return path.join(rootPath, '.codegraph', 'codegraph.db');
   }
-
 
   async detect(rootPath: string): Promise<RepoGraphProviderStatus> {
     if (!this.binaryPath || !fs.existsSync(this.binaryPath)) {
@@ -298,7 +289,12 @@ export class CodegraphCliProvider implements RepoGraphReader, RepoGraphWriter {
         timeoutMs: QUERY_TIMEOUT_MS,
       });
       if (result.exitCode !== 0) {
-        return { exists: true, error: stripAnsi(result.stderr || result.stdout).trim().slice(0, 300) };
+        return {
+          exists: true,
+          error: stripAnsi(result.stderr || result.stdout)
+            .trim()
+            .slice(0, 300),
+        };
       }
       const statusText = stripAnsi(result.stdout).trim();
       return { exists: true, stats: parseStatusText(result.stdout), statusText };
@@ -332,10 +328,7 @@ export class CodegraphCliProvider implements RepoGraphReader, RepoGraphWriter {
     return this.callEdge('callees', input);
   }
 
-  private async callEdge(
-    command: 'callers' | 'callees',
-    input: RepoGraphCallInput,
-  ): Promise<RepoGraphCallResult> {
+  private async callEdge(command: 'callers' | 'callees', input: RepoGraphCallInput): Promise<RepoGraphCallResult> {
     const args = [command, input.symbol];
     if (input.limit !== undefined) args.push('--limit', String(input.limit));
     args.push('--json');
@@ -388,7 +381,6 @@ export class CodegraphCliProvider implements RepoGraphReader, RepoGraphWriter {
     return composeMinimalContext(this, input);
   }
 
-
   async build(input: RepoGraphBuildInput): Promise<RepoGraphRunResult> {
     const hasGraph = fs.existsSync(this.graphDbPath(input.rootPath));
     const args = hasGraph ? ['index', '--force'] : ['init', '--index'];
@@ -399,10 +391,7 @@ export class CodegraphCliProvider implements RepoGraphReader, RepoGraphWriter {
     return this.runWrite(['sync'], input);
   }
 
-  private async runWrite(
-    args: string[],
-    input: RepoGraphBuildInput,
-  ): Promise<RepoGraphRunResult> {
+  private async runWrite(args: string[], input: RepoGraphBuildInput): Promise<RepoGraphRunResult> {
     const startedAt = Date.now();
     const dataless = this.findDatalessSource(input.rootPath);
     if (dataless) {
@@ -465,25 +454,81 @@ export class CodegraphCliProvider implements RepoGraphReader, RepoGraphWriter {
   private findDatalessSource(rootPath: string): string | null {
     if (this.platform !== 'darwin') return null;
     const sourcePatterns = [
-      '*.ts', '*.tsx', '*.js', '*.jsx', '*.mjs', '*.cjs', '*.json', '*.py', '*.go',
-      '*.rs', '*.java', '*.kt', '*.swift', '*.c', '*.cc', '*.cpp', '*.h', '*.hpp',
-      '*.cs', '*.rb', '*.php', '*.vue', '*.svelte', '*.md', '*.yaml', '*.yml',
-      '*.toml', '*.sql', '*.sh', '*.css', '*.scss', '*.html',
+      '*.ts',
+      '*.tsx',
+      '*.js',
+      '*.jsx',
+      '*.mjs',
+      '*.cjs',
+      '*.json',
+      '*.py',
+      '*.go',
+      '*.rs',
+      '*.java',
+      '*.kt',
+      '*.swift',
+      '*.c',
+      '*.cc',
+      '*.cpp',
+      '*.h',
+      '*.hpp',
+      '*.cs',
+      '*.rb',
+      '*.php',
+      '*.vue',
+      '*.svelte',
+      '*.md',
+      '*.yaml',
+      '*.yml',
+      '*.toml',
+      '*.sql',
+      '*.sh',
+      '*.css',
+      '*.scss',
+      '*.html',
     ];
     const patternArgs = sourcePatterns.flatMap((pattern, index) =>
       index === 0 ? ['-name', pattern] : ['-o', '-name', pattern],
     );
-    const result = spawnSync('/usr/bin/find', [
-      '.',
-      '(', '-name', '.git', '-o', '-name', 'node_modules', '-o', '-name', 'out',
-      '-o', '-name', 'release', '-o', '-name', '.codegraph', ')', '-prune', '-o',
-      '-type', 'f', '(', ...patternArgs, ')', '-flags', '+dataless', '-print', '-quit',
-    ], {
-      cwd: rootPath,
-      encoding: 'utf8',
-      timeout: 10_000,
-      shell: false,
-    });
+    const result = spawnSync(
+      '/usr/bin/find',
+      [
+        '.',
+        '(',
+        '-name',
+        '.git',
+        '-o',
+        '-name',
+        'node_modules',
+        '-o',
+        '-name',
+        'out',
+        '-o',
+        '-name',
+        'release',
+        '-o',
+        '-name',
+        '.codegraph',
+        ')',
+        '-prune',
+        '-o',
+        '-type',
+        'f',
+        '(',
+        ...patternArgs,
+        ')',
+        '-flags',
+        '+dataless',
+        '-print',
+        '-quit',
+      ],
+      {
+        cwd: rootPath,
+        encoding: 'utf8',
+        timeout: 10_000,
+        shell: false,
+      },
+    );
     if (result.error || result.status !== 0) {
       logger.warn({ rootPath, err: result.error, stderr: result.stderr }, 'preflight dataless falhou; sync seguirá');
       return null;
@@ -492,7 +537,6 @@ export class CodegraphCliProvider implements RepoGraphReader, RepoGraphWriter {
     return relative ? path.join(rootPath, relative.replace(/^\.\//, '')) : null;
   }
 }
-
 
 export function mapQueryResults(raw: unknown): RepoGraphSymbol[] {
   if (!Array.isArray(raw)) return [];
@@ -516,4 +560,3 @@ export function mapSymbol(node: Record<string, unknown>): RepoGraphSymbol {
     isExported: node['isExported'] as boolean | undefined,
   };
 }
-

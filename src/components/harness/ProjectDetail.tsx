@@ -73,9 +73,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             key={tab.id}
             onClick={() => setTab(tab.id)}
             className={`px-4 py-1.5 text-sm rounded-lg transition-colors ${
-              activeTab === tab.id
-                ? 'bg-zinc-800 text-amber-500 font-medium'
-                : 'text-zinc-400 hover:text-zinc-200'
+              activeTab === tab.id ? 'bg-zinc-800 text-amber-500 font-medium' : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
             {tab.label}

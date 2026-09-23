@@ -108,9 +108,7 @@ async function downloadArtifact(assets) {
   const body = await httpGet(assets.url);
   const actual = createHash('sha256').update(body).digest('hex');
   if (actual !== expectedSha) {
-    throw new Error(
-      `sha256 divergente para ${assets.shaEntry}: esperado ${expectedSha}, obtido ${actual}`,
-    );
+    throw new Error(`sha256 divergente para ${assets.shaEntry}: esperado ${expectedSha}, obtido ${actual}`);
   }
   fs.mkdirSync(CACHE_DIR, { recursive: true });
   fs.writeFileSync(cached, body);
@@ -186,9 +184,7 @@ async function main() {
     fs.mkdirSync(destDir, { recursive: true });
     fs.copyFileSync(process.execPath, destBinary);
     if (!target.startsWith('win32-')) fs.chmodSync(destBinary, 0o755);
-    writeManifest(
-      manifestPath, target, process.version.replace(/^v/, ''), 'system-copy', binaryName, destBinary,
-    );
+    writeManifest(manifestPath, target, process.version.replace(/^v/, ''), 'system-copy', binaryName, destBinary);
     console.log(
       `[cursor-node] payload OK via --from-system (${process.version}, ${target}) — ` +
         'decisao explicita de build offline; o default e o download pinado de nodejs.org',

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../../logger', () => ({
@@ -19,12 +18,7 @@ vi.mock('../../agent-runtime/kimi-availability', async () => {
   };
 });
 
-import {
-  KimiAcpDriver,
-  KimiAcpRunHandle,
-  getKimiAcpDriver,
-  shutdownKimiRuntime,
-} from '../acp-driver';
+import { KimiAcpDriver, KimiAcpRunHandle, getKimiAcpDriver, shutdownKimiRuntime } from '../acp-driver';
 import { KimiAuthError, KimiUnavailableError } from '../../agent-runtime/kimi-availability';
 import { PERM_DEFAULT_NO_BYPASS } from '../../agent-runtime/permission-profiles';
 import { FakeAcpTransport, fakeAcpTransportFactory } from './fake-acp-transport';
@@ -43,10 +37,7 @@ function sessionNewResult() {
       {
         id: 'model',
         currentValue: 'kimi-code/k3',
-        options: [
-          { value: 'kimi-code/kimi-for-coding' },
-          { value: 'kimi-code/k3' },
-        ],
+        options: [{ value: 'kimi-code/kimi-for-coding' }, { value: 'kimi-code/k3' }],
       },
       { id: 'thinking', currentValue: 'on', options: [{ value: 'on' }] },
       {
@@ -72,11 +63,13 @@ function baseOpts(over: Partial<KimiAcpRunOptions> = {}): KimiAcpRunOptions {
   };
 }
 
-function makeResponder(opts: {
-  promptResult?: unknown;
-  promptDelayMs?: number;
-  onPrompt?: () => void;
-} = {}) {
+function makeResponder(
+  opts: {
+    promptResult?: unknown;
+    promptDelayMs?: number;
+    onPrompt?: () => void;
+  } = {},
+) {
   return (method: string): unknown => {
     if (method === 'initialize') return { protocolVersion: 1 };
     if (method === 'session/new') return sessionNewResult();
@@ -113,34 +106,43 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
   it('one-shot exige permission explicita e aplica modo default fail-closed', async () => {
     const missingFactory = vi.fn(fakeAcpTransportFactory(new FakeAcpTransport()));
     const missingDriver = new KimiAcpDriver(missingFactory);
-    await expect(missingDriver.createRun(baseOpts({ profile: 'one-shot', permission: undefined })))
-      .rejects.toThrow(/permission profile fail-closed/);
+    await expect(missingDriver.createRun(baseOpts({ profile: 'one-shot', permission: undefined }))).rejects.toThrow(
+      /permission profile fail-closed/,
+    );
     expect(missingFactory).not.toHaveBeenCalled();
 
     const fake = new FakeAcpTransport();
     fake.responder = makeResponder();
     const driver = new KimiAcpDriver(fakeAcpTransportFactory(fake));
-    const handle = await driver.createRun(baseOpts({
-      profile: 'one-shot',
-      permission: { mode: 'default', dangerouslySkipPermissions: false },
-    }));
+    const handle = await driver.createRun(
+      baseOpts({
+        profile: 'one-shot',
+        permission: { mode: 'default', dangerouslySkipPermissions: false },
+      }),
+    );
     await handle.send('resuma sem tools');
-    expect(fake.requests.find((request) => request.method === 'session/set_mode')?.params)
-      .toEqual({ sessionId: SESSION_ID, modeId: 'default' });
+    expect(fake.requests.find((request) => request.method === 'session/set_mode')?.params).toEqual({
+      sessionId: SESSION_ID,
+      modeId: 'default',
+    });
     await handle.close();
   });
 
   it('agent-scoped com PERM_DEFAULT_NO_BYPASS usa default e nega Write/Bash', async () => {
     const fake = new FakeAcpTransport();
     fake.responder = makeResponder();
-    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(baseOpts({
-      profile: 'agent-scoped',
-      permission: PERM_DEFAULT_NO_BYPASS,
-    }));
+    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(
+      baseOpts({
+        profile: 'agent-scoped',
+        permission: PERM_DEFAULT_NO_BYPASS,
+      }),
+    );
     await handle.send('leia sem alterar');
 
-    expect(fake.requests.find((request) => request.method === 'session/set_mode')?.params)
-      .toEqual({ sessionId: SESSION_ID, modeId: 'default' });
+    expect(fake.requests.find((request) => request.method === 'session/set_mode')?.params).toEqual({
+      sessionId: SESSION_ID,
+      modeId: 'default',
+    });
 
     const options = [
       { optionId: 'approve_once', kind: 'allow_once' },
@@ -171,9 +173,7 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
   it('rejeita tier explicito em K2.7 boolean-only antes do spawn', async () => {
     const factory = vi.fn(fakeAcpTransportFactory(new FakeAcpTransport()));
     const driver = new KimiAcpDriver(factory);
-    await expect(driver.createRun(baseOpts({ effort: 'max' }))).rejects.toThrow(
-      /reasoning booleano.*effort explicito/,
-    );
+    await expect(driver.createRun(baseOpts({ effort: 'max' }))).rejects.toThrow(/reasoning booleano.*effort explicito/);
     expect(factory).not.toHaveBeenCalled();
   });
 
@@ -262,7 +262,12 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
           update: { sessionUpdate: 'tool_call', toolCallId: 'tc1', title: 'Bash', kind: 'execute', status: 'pending' },
         });
         fake.pushNotification('session/update', {
-          update: { sessionUpdate: 'tool_call_update', toolCallId: 'tc1', status: 'in_progress', rawInput: { cmd: 'echo hi' } },
+          update: {
+            sessionUpdate: 'tool_call_update',
+            toolCallId: 'tc1',
+            status: 'in_progress',
+            rawInput: { cmd: 'echo hi' },
+          },
         });
         fake.pushNotification('session/update', {
           update: { sessionUpdate: 'tool_call_update', toolCallId: 'tc1', status: 'completed', rawOutput: 'hi' },
@@ -275,7 +280,7 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
     const res = await handle.send('go', cb);
 
     expect(seen.texts).toEqual(['Hello ', 'world']);
-    expect(res.content).toBe('Hello world'); // thinking NOT in content
+    expect(res.content).toBe('Hello world');
     expect(seen.thinking).toEqual(['reasoning']);
     expect(seen.tools).toEqual(['Bash']);
     expect(res.toolUses).toBe(1);
@@ -334,13 +339,15 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
     const fake = new FakeAcpTransport();
     fake.responder = makeResponder();
     const canUseTool = vi.fn(async () => ({ behavior: 'allow' as const }));
-    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(baseOpts({
-      permission: {
-        mode: 'default',
-        dangerouslySkipPermissions: false,
-        canUseTool,
-      },
-    }));
+    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(
+      baseOpts({
+        permission: {
+          mode: 'default',
+          dangerouslySkipPermissions: false,
+          canUseTool,
+        },
+      }),
+    );
 
     fake.pushServerRequest('req-untrans-guard', 'session/request_permission', {
       sessionId: SESSION_ID,
@@ -362,17 +369,18 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
   it('normaliza path, filePath e file_path antes de chamar o permission guard', async () => {
     const fake = new FakeAcpTransport();
     fake.responder = makeResponder();
-    const canUseTool = vi.fn(async (
-      _toolName: string,
-      _input: Record<string, unknown>,
-    ) => ({ behavior: 'allow' as const }));
-    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(baseOpts({
-      permission: {
-        mode: 'default',
-        dangerouslySkipPermissions: false,
-        canUseTool,
-      },
+    const canUseTool = vi.fn(async (_toolName: string, _input: Record<string, unknown>) => ({
+      behavior: 'allow' as const,
     }));
+    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(
+      baseOpts({
+        permission: {
+          mode: 'default',
+          dangerouslySkipPermissions: false,
+          canUseTool,
+        },
+      }),
+    );
     const options = [
       { optionId: 'approve_once', kind: 'allow_once' },
       { optionId: 'reject', kind: 'reject_once' },
@@ -434,13 +442,15 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
     const fake = new FakeAcpTransport();
     fake.responder = makeResponder();
     const canUseTool = vi.fn(async () => ({ behavior: 'allow' as const }));
-    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(baseOpts({
-      permission: {
-        mode: 'default',
-        dangerouslySkipPermissions: false,
-        canUseTool,
-      },
-    }));
+    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(
+      baseOpts({
+        permission: {
+          mode: 'default',
+          dangerouslySkipPermissions: false,
+          canUseTool,
+        },
+      }),
+    );
     fake.pushServerRequest('req-conflict', 'session/request_permission', {
       toolCall: {
         toolCallId: 'write-conflict',
@@ -529,12 +539,12 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
     fake.responder = makeResponder();
     const driver = new KimiAcpDriver(fakeAcpTransportFactory(fake));
     const handle = await driver.createRun(baseOpts());
-    await handle.send('oi'); // session/new is lazy: the first turn triggers it + the mode set
+    await handle.send('oi');
 
     const idxNew = fake.requests.findIndex((r) => r.method === 'session/new');
     const idxMode = fake.requests.findIndex((r) => r.method === 'session/set_mode');
     expect(idxNew).toBeGreaterThanOrEqual(0);
-    expect(idxMode).toBeGreaterThan(idxNew); // mode is set AFTER session/new
+    expect(idxMode).toBeGreaterThan(idxNew);
     expect(fake.requests[idxMode]?.params).toEqual({ sessionId: SESSION_ID, modeId: 'yolo' });
 
     await handle.close();
@@ -618,10 +628,12 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
       if (method === 'session/prompt') return { stopReason: 'end_turn' };
       return {};
     };
-    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(baseOpts({
-      model: 'kimi-code/k3',
-      effort: 'max',
-    }));
+    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(
+      baseOpts({
+        model: 'kimi-code/k3',
+        effort: 'max',
+      }),
+    );
 
     await expect(handle.send('go')).resolves.toMatchObject({ status: 'finished' });
     const thinkingSet = fake.requests.find(
@@ -654,10 +666,12 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
       if (method === 'session/prompt') return { stopReason: 'end_turn' };
       return {};
     };
-    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(baseOpts({
-      model: 'kimi-code/k3',
-      effort: 'max',
-    }));
+    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(
+      baseOpts({
+        model: 'kimi-code/k3',
+        effort: 'max',
+      }),
+    );
 
     await expect(handle.send('go')).resolves.toMatchObject({ status: 'finished' });
     const thinkingSet = fake.requests.find(
@@ -672,10 +686,12 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
   it('usa session/new e set_config_option como autoridade do modelo', async () => {
     const fake = new FakeAcpTransport();
     fake.responder = makeResponder();
-    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(baseOpts({
-      model: 'kimi-code/k3',
-      effort: 'high',
-    }));
+    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(
+      baseOpts({
+        model: 'kimi-code/k3',
+        effort: 'high',
+      }),
+    );
 
     await expect(handle.send('go')).resolves.toMatchObject({ status: 'finished' });
     expect(fake.requests.some((request) => request.method === 'session/prompt')).toBe(true);
@@ -687,13 +703,15 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
     fake.responder = makeResponder();
     const canUseTool = vi.fn(async () => ({ behavior: 'allow' as const }));
     const driver = new KimiAcpDriver(fakeAcpTransportFactory(fake));
-    const handle = await driver.createRun(baseOpts({
-      permission: {
-        mode: 'default',
-        dangerouslySkipPermissions: false,
-        canUseTool,
-      },
-    }));
+    const handle = await driver.createRun(
+      baseOpts({
+        permission: {
+          mode: 'default',
+          dangerouslySkipPermissions: false,
+          canUseTool,
+        },
+      }),
+    );
     fake.pushServerRequest('req-read', 'session/request_permission', {
       toolCall: {
         toolCallId: 'tc-read',
@@ -733,13 +751,15 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
     const fake = new FakeAcpTransport();
     fake.responder = makeResponder();
     const canUseTool = vi.fn(async () => ({ behavior: 'allow' as const }));
-    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(baseOpts({
-      permission: {
-        mode: 'default',
-        dangerouslySkipPermissions: false,
-        canUseTool,
-      },
-    }));
+    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(
+      baseOpts({
+        permission: {
+          mode: 'default',
+          dangerouslySkipPermissions: false,
+          canUseTool,
+        },
+      }),
+    );
     const options = [
       { optionId: 'allow-always', kind: 'allow_always' },
       { optionId: 'reject-once', kind: 'reject_once' },
@@ -779,9 +799,11 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
     ) {
       const fake = new FakeAcpTransport();
       fake.responder = makeResponder();
-      const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(baseOpts({
-        permission: { mode: 'default', dangerouslySkipPermissions: false, canUseTool },
-      }));
+      const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(
+        baseOpts({
+          permission: { mode: 'default', dangerouslySkipPermissions: false, canUseTool },
+        }),
+      );
       fake.pushServerRequest(requestId, 'session/request_permission', {
         toolCall: {
           toolCallId,
@@ -844,16 +866,18 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
     process.env['LION_KIMI_SECRET_CANARY'] = 'must-not-leak';
     try {
       const driver = new KimiAcpDriver(factory);
-      const first = await driver.createRun(baseOpts({
-        runId: 'k3-low',
-        model: 'kimi-code/k3',
-        effort: 'low',
-        env: {
-          PATH: '/safe/bin',
-          AWS_SECRET_ACCESS_KEY: 'must-not-leak',
-          KIMI_MODEL_THINKING_EFFORT: 'max',
-        },
-      }));
+      const first = await driver.createRun(
+        baseOpts({
+          runId: 'k3-low',
+          model: 'kimi-code/k3',
+          effort: 'low',
+          env: {
+            PATH: '/safe/bin',
+            AWS_SECRET_ACCESS_KEY: 'must-not-leak',
+            KIMI_MODEL_THINKING_EFFORT: 'max',
+          },
+        }),
+      );
       const second = await driver.createRun(baseOpts({ runId: 'k27' }));
       expect(configs[0].env['PATH']).toBe('/safe/bin');
       expect(configs[0].env['KIMI_MODEL_THINKING_EFFORT']).toBe('low');
@@ -945,9 +969,11 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
       promptDelayMs: 1000,
       onPrompt: () => setTimeout(() => ac.abort(), 5),
     });
-    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(baseOpts({
-      cancelGraceMs: 10,
-    }));
+    const handle = await new KimiAcpDriver(fakeAcpTransportFactory(fake)).createRun(
+      baseOpts({
+        cancelGraceMs: 10,
+      }),
+    );
 
     await expect(handle.send('go', undefined, ac.signal)).rejects.toThrow(/cancel grace \(10ms\)/);
     expect(fake.killed).toContain('cancel-grace-timeout');
@@ -1032,7 +1058,7 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
     };
     const driverB = new KimiAcpDriver(fakeAcpTransportFactory(fakeB));
     const handleB = await driverB.createRun(baseOpts({ idleTimeoutMs: 5000 }));
-    const res = await handleB.send('go'); // resolves because willRetry:true did NOT settle it
+    const res = await handleB.send('go');
     expect(res.status).toBe('finished');
     await handleB.close();
   });
@@ -1070,9 +1096,12 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
     const fake = new FakeAcpTransport();
     fake.responder = makeResponder();
     let releaseWait!: (closed: boolean) => void;
-    const waitClosed = vi.fn(() => new Promise<boolean>((resolve) => {
-      releaseWait = resolve;
-    }));
+    const waitClosed = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseWait = resolve;
+        }),
+    );
     fake.waitClosed = waitClosed;
     const driver = new KimiAcpDriver(fakeAcpTransportFactory(fake));
     const handle = await driver.createRun(baseOpts());
@@ -1087,7 +1116,9 @@ describe('KimiAcpDriver.createRun + handle wiring', () => {
     expect(secondShutdown).toBe(firstShutdown);
     await expect(driver.createRun(baseOpts())).rejects.toThrow(/shutting down/i);
     let shutdownSettled = false;
-    void firstShutdown.then(() => { shutdownSettled = true; });
+    void firstShutdown.then(() => {
+      shutdownSettled = true;
+    });
     await Promise.resolve();
     expect(shutdownSettled).toBe(false);
 
@@ -1149,7 +1180,10 @@ describe('getKimiAcpDriver singleton (AC-S5.2)', () => {
     const current = getKimiAcpDriver();
     let releaseShutdown!: () => void;
     const shutdownSpy = vi.spyOn(KimiAcpDriver.prototype, 'shutdown').mockImplementation(
-      () => new Promise<void>((resolve) => { releaseShutdown = resolve; }),
+      () =>
+        new Promise<void>((resolve) => {
+          releaseShutdown = resolve;
+        }),
     );
 
     const first = shutdownKimiRuntime();
@@ -1183,7 +1217,7 @@ describe('createRun runs KI-2 reaping BEFORE register (AC-S5.3)', () => {
       runId: 'forced-collision',
     });
 
-    const original = await driver.createRun(opts) as KimiAcpRunHandle;
+    const original = (await driver.createRun(opts)) as KimiAcpRunHandle;
     await expect(driver.createRun(opts)).rejects.toThrow(/duplicate live Kimi ACP run identity/i);
 
     expect(driver._registrySizeForTests()).toBe(1);
@@ -1267,9 +1301,7 @@ describe('createRun runs KI-2 reaping BEFORE register (AC-S5.3)', () => {
     const driver = new KimiAcpDriver(fakeAcpTransportFactory(fake));
     const ac = new AbortController();
     ac.abort();
-    await expect(driver.createRun(baseOpts({ abortSignal: ac.signal }))).rejects.toBeInstanceOf(
-      KimiUnavailableError,
-    );
+    await expect(driver.createRun(baseOpts({ abortSignal: ac.signal }))).rejects.toBeInstanceOf(KimiUnavailableError);
   });
 
   it('createRun throws when the binary is not resolvable', async () => {
@@ -1315,7 +1347,7 @@ describe('KimiAcpDriver.shutdown() reaps registered MCP bridges (AC-B3.4 backsto
 
   it('a registered live bridge is stopped by driver.shutdown() (no real kimi process)', async () => {
     const registry = getKimiBridgeRegistry();
-    await registry.stopAll(); // clean baseline (singleton may carry bridges from earlier suites)
+    await registry.stopAll();
 
     const stop = vi.fn(async () => undefined);
     registry.register(fakeBridge('b-shutdown', stop));

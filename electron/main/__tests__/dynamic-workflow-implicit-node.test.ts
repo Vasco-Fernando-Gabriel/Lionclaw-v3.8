@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import {
   createWorkflowHostApi,
@@ -31,7 +30,6 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-
 type Axes = NonNullable<ReturnType<NonNullable<HostApiRunContext['resolveAgentAxes']>>>;
 
 const AGENT_AXES: Record<string, Axes> = {
@@ -61,7 +59,6 @@ const AGENT_AXES: Record<string, Axes> = {
 function resolveAgentAxes(agentType: string): Axes | null {
   return AGENT_AXES[agentType] ?? null;
 }
-
 
 interface Harness {
   deps: HostApiDeps;
@@ -279,7 +276,6 @@ function policyHashOf(h: Harness, nodeId: string): string | null {
   return run?.policyHash ?? null;
 }
 
-
 describe('F1d implicit node: id estavel/deterministico', () => {
   it('dois agent({label:"a"}) + um agent({agentType:"Y"}) geram ids ESTAVEIS e DISTINTOS', async () => {
     const h = makeHarness();
@@ -292,11 +288,7 @@ describe('F1d implicit node: id estavel/deterministico', () => {
     await api.agent({ agentType: 'a-writer', prompt: 'p3' } as never);
 
     const ids = ctx.manifest.nodes.map((n) => n.id);
-    expect(ids).toEqual([
-      'cc:Build:a:0',
-      'cc:Build:a:1',
-      'cc:Build:a-writer:0',
-    ]);
+    expect(ids).toEqual(['cc:Build:a:0', 'cc:Build:a:1', 'cc:Build:a-writer:0']);
     expect(new Set(ids).size).toBe(3);
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
@@ -324,7 +316,6 @@ describe('F1d implicit node: id estavel/deterministico', () => {
     expect(a.hashes.every((x) => typeof x === 'string' && x.length > 0)).toBe(true);
   });
 });
-
 
 describe('F1d implicit node: eixos vem do agentType', () => {
   it('agentType workspace-write+bash -> grants workspace-write+bash+rede+commands', async () => {
@@ -382,7 +373,6 @@ describe('F1d implicit node: eixos vem do agentType', () => {
   });
 });
 
-
 describe('F1d implicit node: resume reusa pelo journal (determinismo)', () => {
   it('resume claude-code com nodes implicitos: PASS 2 NAO re-roda (prefixo intacto)', async () => {
     const adapter = vi.fn((input: RunNodeAgentInput) =>
@@ -422,7 +412,6 @@ describe('F1d implicit node: resume reusa pelo journal (determinismo)', () => {
   });
 });
 
-
 describe('F1d implicit node: guards (agent-missing)', () => {
   it('agentType inexistente no catalogo -> fatal agent-missing', async () => {
     const h = makeHarness();
@@ -457,7 +446,6 @@ describe('F1d implicit node: guards (agent-missing)', () => {
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
 });
-
 
 describe('denylist de runtime: dynamic-workflow-builder nunca e invocavel', () => {
   it('agent({ agentType: dynamic-workflow-builder }) -> fatal agent-denylisted com o motivo', async () => {
@@ -527,9 +515,7 @@ describe('denylist de runtime: dynamic-workflow-builder nunca e invocavel', () =
       sideEffectKey: null,
       createdAt: '2026-06-26T00:00:00.000Z',
     };
-    const adapter = vi.fn((input: RunNodeAgentInput) =>
-      Promise.resolve(makeResult(input, '{"never":1}')),
-    );
+    const adapter = vi.fn((input: RunNodeAgentInput) => Promise.resolve(makeResult(input, '{"never":1}')));
     const h = makeHarness({ adapter, initialJournal: [seeded] });
     const ctx = makeCtx({ manifest });
     saveNodeCheckpoint(
@@ -563,15 +549,9 @@ describe('denylist de runtime: dynamic-workflow-builder nunca e invocavel', () =
   });
 });
 
-
-function makeSchemaResult(
-  input: RunNodeAgentInput,
-  structured: unknown,
-): NodeRunResult {
+function makeSchemaResult(input: RunNodeAgentInput, structured: unknown): NodeRunResult {
   const base = makeResult(input, JSON.stringify(structured));
-  return input.outputSchema !== undefined
-    ? { ...base, structuredOutput: structured }
-    : base;
+  return input.outputSchema !== undefined ? { ...base, structuredOutput: structured } : base;
 }
 
 const INLINE_SCHEMA = {
@@ -796,7 +776,6 @@ describe('F1f schema no call-site: node PRE-DECLARADO ignora arg.schema', () => 
   });
 });
 
-
 describe('F3 model override: effectiveModel chega ao adapter (claude-code)', () => {
   it('agent({ model }) -> o adapter recebe input.effectiveModel = override', async () => {
     const seen: RunNodeAgentInput[] = [];
@@ -839,9 +818,7 @@ describe('F3 model override: effectiveModel chega ao adapter (claude-code)', () 
 
 describe('F3 model override: HASH CONDICIONAL (resume legado intacto)', () => {
   async function argHashFor(arg: Record<string, unknown>): Promise<string> {
-    const adapter = vi.fn((input: RunNodeAgentInput) =>
-      Promise.resolve(makeResult(input, '{"ok":1}')),
-    );
+    const adapter = vi.fn((input: RunNodeAgentInput) => Promise.resolve(makeResult(input, '{"ok":1}')));
     const h = makeHarness({ adapter });
     const ctx = makeCtx();
     const api = createWorkflowHostApi(ctx, h.deps);
@@ -882,16 +859,10 @@ describe('F3 model override: HASH CONDICIONAL (resume legado intacto)', () => {
       schemaRef: undefined,
       writeSet: ['src/**'],
     };
-    expect(computeNodeInputHash(base)).toBe(
-      computeNodeInputHash({ ...base, effectiveModel: undefined }),
-    );
-    expect(computeNodeInputHash({ ...base, effectiveModel: 'm1' })).not.toBe(
-      computeNodeInputHash(base),
-    );
+    expect(computeNodeInputHash(base)).toBe(computeNodeInputHash({ ...base, effectiveModel: undefined }));
+    expect(computeNodeInputHash({ ...base, effectiveModel: 'm1' })).not.toBe(computeNodeInputHash(base));
   });
 });
-
-
 
 describe('S4 effort override: effectiveEffort chega ao adapter (claude-code)', () => {
   it('agent({ effort }) -> o adapter recebe input.effectiveEffort = override', async () => {
@@ -929,20 +900,18 @@ describe('S4 effort override: effectiveEffort chega ao adapter (claude-code)', (
   });
 
   it('effort INVALIDO -> fatal effort-invalid ANTES de qualquer dispatch (adapter nunca chamado)', async () => {
-    const adapter = vi.fn((input: RunNodeAgentInput) =>
-      Promise.resolve(makeResult(input, '{"ok":1}')),
-    );
+    const adapter = vi.fn((input: RunNodeAgentInput) => Promise.resolve(makeResult(input, '{"ok":1}')));
     const h = makeHarness({ adapter });
     const ctx = makeCtx();
     const api = createWorkflowHostApi(ctx, h.deps);
     await api.phase('Build');
 
-    await expect(
-      api.agent({ agentType: 'a-reader', prompt: 'p', effort: 'turbo' } as never),
-    ).rejects.toMatchObject({ code: 'effort-invalid' });
-    await expect(
-      api.agent({ agentType: 'a-reader', prompt: 'p', effort: 'mega' } as never),
-    ).rejects.toBeInstanceOf(WorkflowHostFatalError);
+    await expect(api.agent({ agentType: 'a-reader', prompt: 'p', effort: 'turbo' } as never)).rejects.toMatchObject({
+      code: 'effort-invalid',
+    });
+    await expect(api.agent({ agentType: 'a-reader', prompt: 'p', effort: 'mega' } as never)).rejects.toBeInstanceOf(
+      WorkflowHostFatalError,
+    );
     expect(adapter).not.toHaveBeenCalled();
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
@@ -950,9 +919,7 @@ describe('S4 effort override: effectiveEffort chega ao adapter (claude-code)', (
 
 describe('S4 effort override: HASH CONDICIONAL (resume legado intacto)', () => {
   async function argHashFor(arg: Record<string, unknown>): Promise<string> {
-    const adapter = vi.fn((input: RunNodeAgentInput) =>
-      Promise.resolve(makeResult(input, '{"ok":1}')),
-    );
+    const adapter = vi.fn((input: RunNodeAgentInput) => Promise.resolve(makeResult(input, '{"ok":1}')));
     const h = makeHarness({ adapter });
     const ctx = makeCtx();
     const api = createWorkflowHostApi(ctx, h.deps);
@@ -995,16 +962,10 @@ describe('S4 effort override: HASH CONDICIONAL (resume legado intacto)', () => {
       schemaRef: undefined,
       writeSet: ['src/**'],
     };
-    expect(computeNodeInputHash(base)).toBe(
-      computeNodeInputHash({ ...base, effectiveEffort: undefined }),
-    );
-    expect(computeNodeInputHash({ ...base, effectiveEffort: 'xhigh' })).not.toBe(
-      computeNodeInputHash(base),
-    );
+    expect(computeNodeInputHash(base)).toBe(computeNodeInputHash({ ...base, effectiveEffort: undefined }));
+    expect(computeNodeInputHash({ ...base, effectiveEffort: 'xhigh' })).not.toBe(computeNodeInputHash(base));
   });
 });
-
-
 
 describe('D8: computeNodeInputHash com `adjustment` CONDICIONAL (hash literal do baseline)', () => {
   const base = {

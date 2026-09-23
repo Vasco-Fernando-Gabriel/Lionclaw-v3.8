@@ -1,4 +1,3 @@
-
 import path from 'path';
 import { describe, it, expect } from 'vitest';
 import { resolveSpecPath, resolveSpecProgressPath } from '../pipeline-paths';
@@ -40,24 +39,18 @@ describe('resolveSpecPath', () => {
 describe('resolveSpecProgressPath', () => {
   it('always returns {projectPath}/SPEC_PROGRESS.md', () => {
     const project = { projectPath: '/abs/projects/foo' };
-    expect(resolveSpecProgressPath(project)).toBe(
-      path.join('/abs/projects/foo', 'SPEC_PROGRESS.md'),
-    );
+    expect(resolveSpecProgressPath(project)).toBe(path.join('/abs/projects/foo', 'SPEC_PROGRESS.md'));
   });
 
   it('does not consider any specPath field — purely projectPath-based', () => {
     const project = {
       projectPath: '/abs/projects/bar',
     };
-    expect(resolveSpecProgressPath(project)).toBe(
-      path.join('/abs/projects/bar', 'SPEC_PROGRESS.md'),
-    );
+    expect(resolveSpecProgressPath(project)).toBe(path.join('/abs/projects/bar', 'SPEC_PROGRESS.md'));
   });
 
   it('handles relative project paths consistently with path.join semantics', () => {
     const project = { projectPath: 'relative/projects/baz' };
-    expect(resolveSpecProgressPath(project)).toBe(
-      path.join('relative/projects/baz', 'SPEC_PROGRESS.md'),
-    );
+    expect(resolveSpecProgressPath(project)).toBe(path.join('relative/projects/baz', 'SPEC_PROGRESS.md'));
   });
 });

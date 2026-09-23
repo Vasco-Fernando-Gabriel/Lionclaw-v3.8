@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-
 describe('kimi:status golden shape (canal aditivo, R2)', () => {
   it('subscription: logado via /login', () => {
     const result = {

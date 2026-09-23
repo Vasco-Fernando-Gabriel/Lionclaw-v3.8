@@ -1,8 +1,6 @@
-
 import { autoPhasesOf, loopPhasesOf } from '../../../src/types/pipeline';
 import { getPhaseAgentId } from './registry';
 import { getDevV2Briefing } from './dev-v2-briefings';
-
 
 export type PhaseStateArg = {
   continueSessions: Map<string, { alive?: boolean }>;
@@ -29,29 +27,98 @@ export interface MessageRouterEngine {
     briefing?: string | null,
   ): Promise<void>;
 
-  handleSecurityPhase4Message(projectId: string, message: string, state: PhaseStateArg, project: ProjectArg): Promise<void>;
-  handleSecurityPhase5Message(projectId: string, message: string, state: PhaseStateArg, project: ProjectArg): Promise<void>;
-  handleSecurityPhase6SpecReviewMessage(projectId: string, message: string, state: PhaseStateArg, project: ProjectArg): Promise<void>;
-  handleSecurityPhase7Message(projectId: string, message: string, state: PhaseStateArg, project: ProjectArg): Promise<void>;
-  handleSecurityPhase9Message(projectId: string, message: string, state: PhaseStateArg, project: ProjectArg): Promise<void>;
+  handleSecurityPhase4Message(
+    projectId: string,
+    message: string,
+    state: PhaseStateArg,
+    project: ProjectArg,
+  ): Promise<void>;
+  handleSecurityPhase5Message(
+    projectId: string,
+    message: string,
+    state: PhaseStateArg,
+    project: ProjectArg,
+  ): Promise<void>;
+  handleSecurityPhase6SpecReviewMessage(
+    projectId: string,
+    message: string,
+    state: PhaseStateArg,
+    project: ProjectArg,
+  ): Promise<void>;
+  handleSecurityPhase7Message(
+    projectId: string,
+    message: string,
+    state: PhaseStateArg,
+    project: ProjectArg,
+  ): Promise<void>;
+  handleSecurityPhase9Message(
+    projectId: string,
+    message: string,
+    state: PhaseStateArg,
+    project: ProjectArg,
+  ): Promise<void>;
 
-  handleBugPhase1DiscoveryMessage(projectId: string, message: string, state: PhaseStateArg, project: ProjectArg): Promise<void>;
-  handleBugPhase3ConsolidationMessage(projectId: string, message: string, state: PhaseStateArg, project: ProjectArg): Promise<void>;
-  handleBugPhase5SpecValidatorMessage(projectId: string, message: string, state: PhaseStateArg, project: ProjectArg): Promise<void>;
+  handleBugPhase1DiscoveryMessage(
+    projectId: string,
+    message: string,
+    state: PhaseStateArg,
+    project: ProjectArg,
+  ): Promise<void>;
+  handleBugPhase3ConsolidationMessage(
+    projectId: string,
+    message: string,
+    state: PhaseStateArg,
+    project: ProjectArg,
+  ): Promise<void>;
+  handleBugPhase5SpecValidatorMessage(
+    projectId: string,
+    message: string,
+    state: PhaseStateArg,
+    project: ProjectArg,
+  ): Promise<void>;
 
-  handleArchitecturePhase2TriageMessage(projectId: string, message: string, state: PhaseStateArg, project: ProjectArg): Promise<void>;
-  handleArchitecturePhase4DecisionMessage(projectId: string, message: string, state: PhaseStateArg, project: ProjectArg): Promise<void>;
-  handleArchitecturePhase6SpecValidationMessage(projectId: string, message: string, state: PhaseStateArg, project: ProjectArg): Promise<void>;
-  handleArchitecturePhase7SpecEnricherMessage(projectId: string, message: string, state: PhaseStateArg, project: ProjectArg): Promise<void>;
+  handleArchitecturePhase2TriageMessage(
+    projectId: string,
+    message: string,
+    state: PhaseStateArg,
+    project: ProjectArg,
+  ): Promise<void>;
+  handleArchitecturePhase4DecisionMessage(
+    projectId: string,
+    message: string,
+    state: PhaseStateArg,
+    project: ProjectArg,
+  ): Promise<void>;
+  handleArchitecturePhase6SpecValidationMessage(
+    projectId: string,
+    message: string,
+    state: PhaseStateArg,
+    project: ProjectArg,
+  ): Promise<void>;
+  handleArchitecturePhase7SpecEnricherMessage(
+    projectId: string,
+    message: string,
+    state: PhaseStateArg,
+    project: ProjectArg,
+  ): Promise<void>;
 
-  handlePhase1MessageDevV2(projectId: string, message: string, state: PhaseStateArg, briefing: string | null): Promise<void>;
-  handlePhase3MessageDevV2(projectId: string, message: string, state: PhaseStateArg, briefing: string | null): Promise<void>;
+  handlePhase1MessageDevV2(
+    projectId: string,
+    message: string,
+    state: PhaseStateArg,
+    briefing: string | null,
+  ): Promise<void>;
+  handlePhase3MessageDevV2(
+    projectId: string,
+    message: string,
+    state: PhaseStateArg,
+    briefing: string | null,
+  ): Promise<void>;
   handleDevV2Phase12SpecReview(projectId: string, message: string, state: PhaseStateArg): Promise<void>;
   handleDevV2Phase13SpecEnricher(projectId: string, message: string, state: PhaseStateArg): Promise<void>;
 
   buildDesignLockPathsBlock(project: ProjectArg): string | null;
 }
-
 
 export interface RouterDispatchCtx {
   engine: MessageRouterEngine;
@@ -69,7 +136,6 @@ interface ConversationHandlerDescriptor {
   refuseChat?: boolean;
 }
 
-
 const DEV_V2_BRIEFING_PHASES = new Set([1, 2, 3, 8, 9, 11, 15]);
 const DEV_V2_LOCK_PREFIX_PHASES = new Set([8, 9, 10, 11]);
 
@@ -83,9 +149,7 @@ function devV2LockPrefix(ctx: RouterDispatchCtx, phase: number): string {
   const lockPathsBlock = ctx.engine.buildDesignLockPathsBlock(ctx.project);
   const sessionEntry = ctx.state.continueSessions.get(`phase${phase}`);
   const isFirstTurn = !sessionEntry?.alive;
-  return lockPathsBlock && DEV_V2_LOCK_PREFIX_PHASES.has(phase) && isFirstTurn
-    ? `${lockPathsBlock}\n\n`
-    : '';
+  return lockPathsBlock && DEV_V2_LOCK_PREFIX_PHASES.has(phase) && isFirstTurn ? `${lockPathsBlock}\n\n` : '';
 }
 
 function devV2TechInvoke(phase: number, withBriefing: boolean): (ctx: RouterDispatchCtx) => Promise<void> {
@@ -93,10 +157,15 @@ function devV2TechInvoke(phase: number, withBriefing: boolean): (ctx: RouterDisp
     const briefing = withBriefing ? devV2Briefing(ctx, phase) : null;
     const lockPrefix = devV2LockPrefix(ctx, phase);
     const body = briefing ? `${briefing}\n\n${ctx.message}` : ctx.message;
-    return ctx.engine.handleTechPhaseMessage(ctx.projectId, `${lockPrefix}${body}`, ctx.state, phase, ctx.resolveTechAgentId(phase));
+    return ctx.engine.handleTechPhaseMessage(
+      ctx.projectId,
+      `${lockPrefix}${body}`,
+      ctx.state,
+      phase,
+      ctx.resolveTechAgentId(phase),
+    );
   };
 }
-
 
 const DEV_FEATURE_ROUTES: Record<number, ConversationHandlerDescriptor> = {
   1: { invoke: (c) => c.engine.handlePhase1Message(c.projectId, c.message, c.state) },
@@ -121,8 +190,12 @@ const SECURITY_ROUTES: Record<number, ConversationHandlerDescriptor> = {
 const ARCHITECTURE_ROUTES: Record<number, ConversationHandlerDescriptor> = {
   2: { invoke: (c) => c.engine.handleArchitecturePhase2TriageMessage(c.projectId, c.message, c.state, c.project) },
   4: { invoke: (c) => c.engine.handleArchitecturePhase4DecisionMessage(c.projectId, c.message, c.state, c.project) },
-  6: { invoke: (c) => c.engine.handleArchitecturePhase6SpecValidationMessage(c.projectId, c.message, c.state, c.project) },
-  7: { invoke: (c) => c.engine.handleArchitecturePhase7SpecEnricherMessage(c.projectId, c.message, c.state, c.project) },
+  6: {
+    invoke: (c) => c.engine.handleArchitecturePhase6SpecValidationMessage(c.projectId, c.message, c.state, c.project),
+  },
+  7: {
+    invoke: (c) => c.engine.handleArchitecturePhase7SpecEnricherMessage(c.projectId, c.message, c.state, c.project),
+  },
   9: { invoke: (c) => c.engine.handlePhase12Message(c.projectId, c.message, c.state, 9) },
 };
 
@@ -146,11 +219,15 @@ const DEV_V2_ROUTES: Record<number, ConversationHandlerDescriptor> = {
   15: {
     invoke: (c) => {
       const briefing = devV2Briefing(c, 15);
-      return c.engine.handlePhase12Message(c.projectId, briefing ? `${briefing}\n\n${c.message}` : c.message, c.state, 15);
+      return c.engine.handlePhase12Message(
+        c.projectId,
+        briefing ? `${briefing}\n\n${c.message}` : c.message,
+        c.state,
+        15,
+      );
     },
   },
 };
-
 
 function routesForType(pipelineType: string | undefined): Record<number, ConversationHandlerDescriptor> {
   if (pipelineType === 'architecture-review') return ARCHITECTURE_ROUTES;
@@ -167,10 +244,7 @@ export function resolveConversationDescriptor(
   return routesForType(pipelineType)[phase];
 }
 
-export async function dispatchConversationMessage(
-  ctx: RouterDispatchCtx,
-  phase: number,
-): Promise<RouterOutcome> {
+export async function dispatchConversationMessage(ctx: RouterDispatchCtx, phase: number): Promise<RouterOutcome> {
   const descriptor = resolveConversationDescriptor(ctx.project.pipelineType, phase);
   if (!descriptor) return 'none';
   if (descriptor.refuseChat) return 'refused';
@@ -178,10 +252,7 @@ export async function dispatchConversationMessage(
   return 'routed';
 }
 
-export function isPureConversationPhase(
-  phase: number,
-  project: { pipelineType?: string } | undefined,
-): boolean {
+export function isPureConversationPhase(phase: number, project: { pipelineType?: string } | undefined): boolean {
   const type = project?.pipelineType;
   return !autoPhasesOf(type).has(phase) && !loopPhasesOf(type).has(phase);
 }

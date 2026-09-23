@@ -1,5 +1,3 @@
-
-
 export interface PipelinePhaseChangedEvent {
   projectId: string;
   phase: number | null;
@@ -81,10 +79,7 @@ type AnyListener = (payload: unknown) => void;
 class PipelineEventBus {
   private listeners = new Map<string, Set<AnyListener>>();
 
-  on<K extends PipelineBusChannel>(
-    event: K,
-    listener: (payload: PipelineBusEvents[K]) => void,
-  ): () => void;
+  on<K extends PipelineBusChannel>(event: K, listener: (payload: PipelineBusEvents[K]) => void): () => void;
   on(event: string, listener: (payload: unknown) => void): () => void;
   on(event: string, listener: (payload: never) => void): () => void {
     const wrapped = listener as AnyListener;
@@ -112,8 +107,7 @@ class PipelineEventBus {
     for (const listener of Array.from(set)) {
       try {
         listener(payload);
-      } catch {
-      }
+      } catch {}
     }
   }
 

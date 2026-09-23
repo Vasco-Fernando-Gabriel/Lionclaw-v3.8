@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 interface TableInfoRow {
   cid: number;
   name: string;

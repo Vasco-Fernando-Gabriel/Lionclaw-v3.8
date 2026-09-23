@@ -29,7 +29,6 @@ import { GraphPage } from '@/pages/GraphPage';
 import { NoteListView } from '@/components/graph-view/NoteListView';
 import { UploadTab } from '@/components/graph-view/UploadTab';
 
-
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -50,32 +49,34 @@ type PrimaryTabId = 'documentos' | 'upload' | 'busca' | 'benchmark' | 'configura
 type GraphSubTabId = 'graph-view' | 'entities' | 'projects' | 'decisions' | 'meetings' | 'references' | 'graph-upload';
 
 const PRIMARY_TAB_CONFIG: Array<{ id: PrimaryTabId; label: string; icon: typeof BookOpen }> = [
-  { id: 'documentos',    label: 'Documentos',    icon: FileText },
-  { id: 'upload',        label: 'Upload',        icon: Upload },
-  { id: 'busca',         label: 'Busca',         icon: Search },
-  { id: 'benchmark',     label: 'Benchmark',     icon: FlaskConical },
+  { id: 'documentos', label: 'Documentos', icon: FileText },
+  { id: 'upload', label: 'Upload', icon: Upload },
+  { id: 'busca', label: 'Busca', icon: Search },
+  { id: 'benchmark', label: 'Benchmark', icon: FlaskConical },
   { id: 'configuracoes', label: 'Configuracoes', icon: Settings },
-  { id: 'graph',         label: 'Graph',         icon: Network },
+  { id: 'graph', label: 'Graph', icon: Network },
 ];
 
 const GRAPH_SUB_TAB_CONFIG: Array<{ id: GraphSubTabId; label: string; icon: typeof BookOpen }> = [
-  { id: 'graph-view',    label: 'Grafo',         icon: Network },
-  { id: 'entities',      label: 'Entidades',     icon: Users },
-  { id: 'projects',      label: 'Projetos',      icon: FolderKanban },
-  { id: 'decisions',     label: 'Decisoes',      icon: Scale },
-  { id: 'meetings',      label: 'Reunioes',      icon: CalendarCheck },
-  { id: 'references',    label: 'Referencias',   icon: BookMarked },
-  { id: 'graph-upload',  label: 'Upload',        icon: Upload },
+  { id: 'graph-view', label: 'Grafo', icon: Network },
+  { id: 'entities', label: 'Entidades', icon: Users },
+  { id: 'projects', label: 'Projetos', icon: FolderKanban },
+  { id: 'decisions', label: 'Decisoes', icon: Scale },
+  { id: 'meetings', label: 'Reunioes', icon: CalendarCheck },
+  { id: 'references', label: 'Referencias', icon: BookMarked },
+  { id: 'graph-upload', label: 'Upload', icon: Upload },
 ];
 
 function useMgraphMode() {
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {
-    window.lionclaw.settings.get().then(s => setEnabled(!!s.mgraphMode)).catch(() => {});
+    window.lionclaw.settings
+      .get()
+      .then((s) => setEnabled(!!s.mgraphMode))
+      .catch(() => {});
   }, []);
   return enabled;
 }
-
 
 function StatusBadge({ status }: { status: KnowledgeSource['status'] }) {
   const map: Record<KnowledgeSource['status'], { label: string; className: string }> = {
@@ -92,7 +93,6 @@ function StatusBadge({ status }: { status: KnowledgeSource['status'] }) {
   );
 }
 
-
 function FileTypeBadge({ type }: { type: string }) {
   const colors: Record<string, string> = {
     pdf: 'bg-red-500/20 text-red-400',
@@ -108,7 +108,6 @@ function FileTypeBadge({ type }: { type: string }) {
     </span>
   );
 }
-
 
 function AgentSelector({
   agents,
@@ -146,7 +145,6 @@ function AgentSelector({
   );
 }
 
-
 const STRATEGY_BY_TYPE: Record<string, ChunkStrategy[]> = {
   pdf: ['recursive', 'semantic', 'page', 'agentic'],
   docx: ['recursive', 'semantic', 'agentic'],
@@ -163,7 +161,6 @@ const STRATEGY_LABELS: Record<ChunkStrategy, string> = {
   agentic: 'Agentico',
 };
 
-
 function scoreColor(score: number): string {
   if (score >= 0.8) return 'text-green-400';
   if (score >= 0.6) return 'text-amber-400';
@@ -175,7 +172,6 @@ function scoreBg(score: number): string {
   if (score >= 0.6) return 'bg-amber-500/20';
   return 'bg-red-500/20';
 }
-
 
 function TabDocumentos({
   agents,
@@ -237,12 +233,7 @@ function TabDocumentos({
     async (source: KnowledgeSource) => {
       setReprocessId(source.id);
       try {
-        await reprocessSource(
-          source.id,
-          source.chunkStrategy as ChunkStrategy,
-          source.chunkSize,
-          source.chunkOverlap,
-        );
+        await reprocessSource(source.id, source.chunkStrategy as ChunkStrategy, source.chunkSize, source.chunkOverlap);
       } finally {
         setReprocessId(null);
       }
@@ -283,10 +274,7 @@ function TabDocumentos({
         ) : (
           <div className="space-y-2">
             {sources.map((source) => (
-              <div
-                key={source.id}
-                className="bg-zinc-900 border border-zinc-800 rounded-xl p-4"
-              >
+              <div key={source.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
                 <div className="flex items-start gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -301,32 +289,20 @@ function TabDocumentos({
                         </span>
                       )}
                     </div>
-                    {source.title && (
-                      <p className="text-xs text-zinc-500 mt-0.5 truncate">{source.fileName}</p>
-                    )}
+                    {source.title && <p className="text-xs text-zinc-500 mt-0.5 truncate">{source.fileName}</p>}
                     <div className="flex items-center gap-4 mt-2 flex-wrap">
-                      <span className="text-[10px] text-zinc-500">
-                        {formatBytes(source.fileSize)}
-                      </span>
-                      <span className="text-[10px] text-zinc-500">
-                        {source.chunksCount} chunks
-                      </span>
-                      <span className="text-[10px] text-zinc-500">
-                        Estrategia: {source.chunkStrategy}
-                      </span>
+                      <span className="text-[10px] text-zinc-500">{formatBytes(source.fileSize)}</span>
+                      <span className="text-[10px] text-zinc-500">{source.chunksCount} chunks</span>
+                      <span className="text-[10px] text-zinc-500">Estrategia: {source.chunkStrategy}</span>
                       {source.qualityScore != null && source.qualityScore > 0 && (
                         <span className={`text-[10px] font-medium ${scoreColor(source.qualityScore)}`}>
                           Score: {(source.qualityScore * 100).toFixed(0)}%
                         </span>
                       )}
                       {source.bestStrategy && (
-                        <span className="text-[10px] text-amber-400">
-                          Melhor: {source.bestStrategy}
-                        </span>
+                        <span className="text-[10px] text-amber-400">Melhor: {source.bestStrategy}</span>
                       )}
-                      <span className="text-[10px] text-zinc-600">
-                        {formatDate(source.createdAt)}
-                      </span>
+                      <span className="text-[10px] text-zinc-600">{formatDate(source.createdAt)}</span>
                     </div>
                     {source.status === 'failed' && source.errorMessage && (
                       <div className="flex items-center gap-1 mt-2">
@@ -353,7 +329,11 @@ function TabDocumentos({
                         disabled={deletingId === source.id}
                         className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 text-xs transition-colors animate-pulse disabled:opacity-50"
                       >
-                        {deletingId === source.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                        {deletingId === source.id ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={12} />
+                        )}
                         Confirmar?
                       </button>
                     ) : (
@@ -376,7 +356,6 @@ function TabDocumentos({
   );
 }
 
-
 function TabUpload({
   agents,
   selectedAgentId,
@@ -396,7 +375,7 @@ function TabUpload({
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  const fileExt = selectedFile ? selectedFile.name.split('.').pop()?.toLowerCase() ?? '' : '';
+  const fileExt = selectedFile ? (selectedFile.name.split('.').pop()?.toLowerCase() ?? '') : '';
   const availableStrategies = fileExt ? (STRATEGY_BY_TYPE[fileExt] ?? ['recursive', 'semantic', 'agentic']) : [];
 
   useEffect(() => {
@@ -446,17 +425,13 @@ function TabUpload({
       <div className="max-w-xl space-y-4">
         {/* Agent */}
         <div>
-          <label className="block text-[10px] uppercase text-zinc-500 font-medium mb-1.5 tracking-wider">
-            Agente
-          </label>
+          <label className="block text-[10px] uppercase text-zinc-500 font-medium mb-1.5 tracking-wider">Agente</label>
           <AgentSelector agents={agents} value={selectedAgentId} onChange={onSelectAgent} />
         </div>
 
         {/* File picker */}
         <div>
-          <label className="block text-[10px] uppercase text-zinc-500 font-medium mb-1.5 tracking-wider">
-            Arquivo
-          </label>
+          <label className="block text-[10px] uppercase text-zinc-500 font-medium mb-1.5 tracking-wider">Arquivo</label>
           <div
             onClick={() => fileInputRef.current?.click()}
             className="flex items-center gap-3 bg-zinc-800 border border-dashed border-zinc-700 hover:border-amber-500/50 rounded-xl p-4 cursor-pointer transition-colors"
@@ -524,7 +499,10 @@ function TabUpload({
                 ))
               )}
             </select>
-            <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+            <ChevronDown
+              size={14}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"
+            />
           </div>
         </div>
 
@@ -557,9 +535,7 @@ function TabUpload({
             {/* Chunk overlap */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-[10px] uppercase text-zinc-500 font-medium tracking-wider">
-                  Sobreposicao
-                </label>
+                <label className="text-[10px] uppercase text-zinc-500 font-medium tracking-wider">Sobreposicao</label>
                 <span className="text-xs text-zinc-400 font-mono">{chunkOverlap}</span>
               </div>
               <input
@@ -631,11 +607,15 @@ function TabUpload({
                             : 'bg-zinc-800 text-zinc-600'
                       }`}
                     >
-                      {isDone ? <CheckCircle size={12} /> : isCurrent ? <Loader2 size={12} className="animate-spin" /> : stageIdx + 1}
+                      {isDone ? (
+                        <CheckCircle size={12} />
+                      ) : isCurrent ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        stageIdx + 1
+                      )}
                     </div>
-                    <span className="text-[9px] text-zinc-600 text-center leading-tight">
-                      {STAGE_LABELS[stage]}
-                    </span>
+                    <span className="text-[9px] text-zinc-600 text-center leading-tight">{STAGE_LABELS[stage]}</span>
                   </div>
                 );
               })}
@@ -660,7 +640,6 @@ function TabUpload({
     </div>
   );
 }
-
 
 function TabBusca({
   agents,
@@ -749,15 +728,15 @@ function TabBusca({
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex items-center gap-4 flex-wrap text-xs text-zinc-400">
                 <span>
                   Estrategia:{' '}
-                  <span className="text-amber-400">{STRATEGY_DISPLAY[searchResults.strategy] ?? searchResults.strategy}</span>
+                  <span className="text-amber-400">
+                    {STRATEGY_DISPLAY[searchResults.strategy] ?? searchResults.strategy}
+                  </span>
                 </span>
                 <span>
-                  Query usada:{' '}
-                  <span className="text-zinc-300 italic">"{searchResults.query_used}"</span>
+                  Query usada: <span className="text-zinc-300 italic">"{searchResults.query_used}"</span>
                 </span>
                 <span>
-                  Latencia:{' '}
-                  <span className="text-zinc-300 font-mono">{searchResults.latency_ms}ms</span>
+                  Latencia: <span className="text-zinc-300 font-mono">{searchResults.latency_ms}ms</span>
                 </span>
                 <span>
                   Resultados: <span className="text-zinc-300">{searchResults.results.length}</span>
@@ -817,7 +796,6 @@ function TabBusca({
   );
 }
 
-
 function BenchmarkResultTable({ result }: { result: BenchmarkResult }) {
   const strategies = Object.keys(result.strategies);
   const modes = strategies.length > 0 ? Object.keys(result.strategies[strategies[0]]) : [];
@@ -827,9 +805,7 @@ function BenchmarkResultTable({ result }: { result: BenchmarkResult }) {
       <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
         <Trophy size={18} className="text-amber-400" />
         <div>
-          <p className="text-sm font-medium text-amber-300">
-            Vencedor: {result.winner}
-          </p>
+          <p className="text-sm font-medium text-amber-300">Vencedor: {result.winner}</p>
           <p className="text-xs text-zinc-400">
             Score: {(result.winner_score * 100).toFixed(1)}% | Tempo: {result.execution_time_s.toFixed(1)}s
           </p>
@@ -856,18 +832,26 @@ function BenchmarkResultTable({ result }: { result: BenchmarkResult }) {
           <tbody>
             {strategies.map((strat) => (
               <tr key={strat} className="border-b border-zinc-800/50 last:border-0">
-                <td className={`px-3 py-2.5 font-medium ${strat === result.winner ? 'text-amber-400' : 'text-zinc-300'}`}>
+                <td
+                  className={`px-3 py-2.5 font-medium ${strat === result.winner ? 'text-amber-400' : 'text-zinc-300'}`}
+                >
                   {strat}
                   {strat === result.winner && <span className="ml-1 text-[10px]">crown</span>}
                 </td>
                 {modes.map((mode) => {
                   const data = result.strategies[strat]?.[mode];
                   if (!data) {
-                    return <td key={mode} className="px-3 py-2.5 text-center text-zinc-700">-</td>;
+                    return (
+                      <td key={mode} className="px-3 py-2.5 text-center text-zinc-700">
+                        -
+                      </td>
+                    );
                   }
                   return (
                     <td key={mode} className="px-3 py-2.5 text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded font-mono font-medium ${scoreBg(data.avg_score)} ${scoreColor(data.avg_score)}`}>
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded font-mono font-medium ${scoreBg(data.avg_score)} ${scoreColor(data.avg_score)}`}
+                      >
                         {(data.avg_score * 100).toFixed(0)}%
                       </span>
                       <div className="text-[10px] text-zinc-600 mt-0.5">
@@ -883,9 +867,18 @@ function BenchmarkResultTable({ result }: { result: BenchmarkResult }) {
       </div>
 
       <div className="flex gap-3 text-[10px]">
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-500/20 inline-block" />{'Otimo (>=80%)'}</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-500/20 inline-block" />Regular (60-79%)</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500/20 inline-block" />Ruim ({'<'}60%)</span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-green-500/20 inline-block" />
+          {'Otimo (>=80%)'}
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-amber-500/20 inline-block" />
+          Regular (60-79%)
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-red-500/20 inline-block" />
+          Ruim ({'<'}60%)
+        </span>
       </div>
     </div>
   );
@@ -915,9 +908,7 @@ function TabBenchmark({
   }, [selectedAgentId, loadSources]);
 
   const toggleSource = (id: string) => {
-    setSelectedSourceIds((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
-    );
+    setSelectedSourceIds((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
   };
 
   const handleRun = async () => {
@@ -950,9 +941,7 @@ function TabBenchmark({
       <div className="max-w-2xl space-y-5">
         {/* Agent */}
         <div>
-          <label className="block text-[10px] uppercase text-zinc-500 font-medium mb-1.5 tracking-wider">
-            Agente
-          </label>
+          <label className="block text-[10px] uppercase text-zinc-500 font-medium mb-1.5 tracking-wider">Agente</label>
           <AgentSelector agents={agents} value={selectedAgentId} onChange={onSelectAgent} />
         </div>
 
@@ -978,9 +967,7 @@ function TabBenchmark({
                     onChange={() => toggleSource(source.id)}
                     className="accent-amber-500 w-3.5 h-3.5"
                   />
-                  <span className="text-sm text-zinc-200 flex-1 truncate">
-                    {source.title || source.fileName}
-                  </span>
+                  <span className="text-sm text-zinc-200 flex-1 truncate">{source.title || source.fileName}</span>
                   <span className="text-[10px] text-zinc-500">{source.chunksCount} chunks</span>
                 </label>
               ))}
@@ -1063,9 +1050,13 @@ function TabBenchmark({
           className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isRunning || benchmarkProgress ? (
-            <><Loader2 size={16} className="animate-spin" /> Executando...</>
+            <>
+              <Loader2 size={16} className="animate-spin" /> Executando...
+            </>
           ) : (
-            <><FlaskConical size={16} /> Executar Benchmark</>
+            <>
+              <FlaskConical size={16} /> Executar Benchmark
+            </>
           )}
         </button>
 
@@ -1102,9 +1093,10 @@ function TabBenchmark({
                 <div
                   className="h-full bg-gradient-to-r from-amber-600 to-amber-400 rounded-full transition-all duration-500"
                   style={{
-                    width: benchmarkProgress.total > 0
-                      ? `${(benchmarkProgress.current / benchmarkProgress.total) * 100}%`
-                      : '0%',
+                    width:
+                      benchmarkProgress.total > 0
+                        ? `${(benchmarkProgress.current / benchmarkProgress.total) * 100}%`
+                        : '0%',
                   }}
                 />
               </div>
@@ -1130,7 +1122,6 @@ function TabBenchmark({
   );
 }
 
-
 function TabConfiguracoes({
   agents,
   selectedAgentId,
@@ -1148,8 +1139,8 @@ function TabConfiguracoes({
 
   const [localConfig, setLocalConfig] = useState({
     hydeEnabled: true,
-    hydeThreshold: 0.50,
-    minScore: 0.40,
+    hydeThreshold: 0.5,
+    minScore: 0.4,
     defaultStrategy: 'recursive' as ChunkStrategy,
     rerankEnabled: true,
     rerankTopK: 3,
@@ -1215,9 +1206,7 @@ function TabConfiguracoes({
         {/* Cohere API Key */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <h3 className="text-sm font-medium text-zinc-200 mb-3">Cohere API Key</h3>
-          <p className="text-xs text-zinc-500 mb-3">
-            Necessaria para reranking semantico de resultados.
-          </p>
+          <p className="text-xs text-zinc-500 mb-3">Necessaria para reranking semantico de resultados.</p>
           <div className="flex gap-2">
             <input
               type="password"
@@ -1270,8 +1259,8 @@ function TabConfiguracoes({
                   </div>
                   <p className="text-[10px] text-zinc-600 mb-2">
                     Quando o melhor resultado da busca tem score abaixo deste valor, o sistema gera um documento
-                    hipotetico (via Haiku) e refaz a busca para tentar encontrar resultados mais relevantes.
-                    Valores mais altos ativam HyDE com mais frequencia (mais preciso, mais lento e mais caro).
+                    hipotetico (via Haiku) e refaz a busca para tentar encontrar resultados mais relevantes. Valores
+                    mais altos ativam HyDE com mais frequencia (mais preciso, mais lento e mais caro).
                   </p>
                   <input
                     type="range"
@@ -1288,9 +1277,7 @@ function TabConfiguracoes({
               {/* Min score */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-[10px] uppercase text-zinc-500 font-medium tracking-wider">
-                    Score minimo
-                  </label>
+                  <label className="text-[10px] uppercase text-zinc-500 font-medium tracking-wider">Score minimo</label>
                   <span className="text-xs text-zinc-400 font-mono">{localConfig.minScore.toFixed(2)}</span>
                 </div>
                 <input
@@ -1312,14 +1299,21 @@ function TabConfiguracoes({
                 <div className="relative">
                   <select
                     value={localConfig.defaultStrategy}
-                    onChange={(e) => setLocalConfig((c) => ({ ...c, defaultStrategy: e.target.value as ChunkStrategy }))}
+                    onChange={(e) =>
+                      setLocalConfig((c) => ({ ...c, defaultStrategy: e.target.value as ChunkStrategy }))
+                    }
                     className="appearance-none w-full bg-zinc-800 border border-zinc-700 text-zinc-100 rounded-lg px-3 py-2 pr-8 text-sm outline-none focus:border-amber-500/50 cursor-pointer"
                   >
                     {(Object.keys(STRATEGY_LABELS) as ChunkStrategy[]).map((s) => (
-                      <option key={s} value={s}>{STRATEGY_LABELS[s]}</option>
+                      <option key={s} value={s}>
+                        {STRATEGY_LABELS[s]}
+                      </option>
                     ))}
                   </select>
-                  <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                  <ChevronDown
+                    size={14}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"
+                  />
                 </div>
               </div>
 
@@ -1358,9 +1352,7 @@ function TabConfiguracoes({
               {/* Search top K */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-[10px] uppercase text-zinc-500 font-medium tracking-wider">
-                    Search Top K
-                  </label>
+                  <label className="text-[10px] uppercase text-zinc-500 font-medium tracking-wider">Search Top K</label>
                   <span className="text-xs text-zinc-400 font-mono">{localConfig.searchTopK}</span>
                 </div>
                 <input
@@ -1394,7 +1386,6 @@ function TabConfiguracoes({
   );
 }
 
-
 export function KnowledgePage() {
   const [tab, setTab] = useState<PrimaryTabId>('documentos');
   const [graphSubTab, setGraphSubTab] = useState<GraphSubTabId>('graph-view');
@@ -1403,7 +1394,10 @@ export function KnowledgePage() {
   const mgraphMode = useMgraphMode();
 
   useEffect(() => {
-    window.lionclaw.agents.list().then(setAgents).catch(() => setAgents([]));
+    window.lionclaw.agents
+      .list()
+      .then(setAgents)
+      .catch(() => setAgents([]));
   }, []);
 
   useEffect(() => {
@@ -1419,9 +1413,7 @@ export function KnowledgePage() {
     [setSelectedAgent],
   );
 
-  const visiblePrimaryTabs = mgraphMode
-    ? PRIMARY_TAB_CONFIG
-    : PRIMARY_TAB_CONFIG.filter((t) => t.id !== 'graph');
+  const visiblePrimaryTabs = mgraphMode ? PRIMARY_TAB_CONFIG : PRIMARY_TAB_CONFIG.filter((t) => t.id !== 'graph');
 
   const currentGraphSubTab = GRAPH_SUB_TAB_CONFIG.find((t) => t.id === graphSubTab);
 
@@ -1446,9 +1438,7 @@ export function KnowledgePage() {
               key={id}
               onClick={() => setTab(id)}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-colors whitespace-nowrap shrink-0 ${
-                isActive
-                  ? 'bg-zinc-800 text-zinc-200'
-                  : 'text-zinc-500 hover:text-zinc-300'
+                isActive ? 'bg-zinc-800 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
               <Icon size={12} />
@@ -1471,9 +1461,7 @@ export function KnowledgePage() {
                 key={id}
                 onClick={() => setGraphSubTab(id)}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-colors whitespace-nowrap shrink-0 ${
-                  isActive
-                    ? 'bg-zinc-800 text-zinc-200'
-                    : 'text-zinc-500 hover:text-zinc-300'
+                  isActive ? 'bg-zinc-800 text-zinc-200' : 'text-zinc-500 hover:text-zinc-300'
                 }`}
               >
                 <Icon size={12} />
@@ -1486,39 +1474,19 @@ export function KnowledgePage() {
 
       {/* KB tab content */}
       {tab === 'documentos' && (
-        <TabDocumentos
-          agents={agents}
-          selectedAgentId={selectedAgentId}
-          onSelectAgent={handleSelectAgent}
-        />
+        <TabDocumentos agents={agents} selectedAgentId={selectedAgentId} onSelectAgent={handleSelectAgent} />
       )}
       {tab === 'upload' && (
-        <TabUpload
-          agents={agents}
-          selectedAgentId={selectedAgentId}
-          onSelectAgent={handleSelectAgent}
-        />
+        <TabUpload agents={agents} selectedAgentId={selectedAgentId} onSelectAgent={handleSelectAgent} />
       )}
       {tab === 'busca' && (
-        <TabBusca
-          agents={agents}
-          selectedAgentId={selectedAgentId}
-          onSelectAgent={handleSelectAgent}
-        />
+        <TabBusca agents={agents} selectedAgentId={selectedAgentId} onSelectAgent={handleSelectAgent} />
       )}
       {tab === 'benchmark' && (
-        <TabBenchmark
-          agents={agents}
-          selectedAgentId={selectedAgentId}
-          onSelectAgent={handleSelectAgent}
-        />
+        <TabBenchmark agents={agents} selectedAgentId={selectedAgentId} onSelectAgent={handleSelectAgent} />
       )}
       {tab === 'configuracoes' && (
-        <TabConfiguracoes
-          agents={agents}
-          selectedAgentId={selectedAgentId}
-          onSelectAgent={handleSelectAgent}
-        />
+        <TabConfiguracoes agents={agents} selectedAgentId={selectedAgentId} onSelectAgent={handleSelectAgent} />
       )}
 
       {/* Graph sub-tab content */}
@@ -1527,15 +1495,17 @@ export function KnowledgePage() {
           <GraphPage />
         </div>
       )}
-      {tab === 'graph' && (graphSubTab === 'entities' || graphSubTab === 'projects' || graphSubTab === 'decisions' || graphSubTab === 'meetings' || graphSubTab === 'references') && currentGraphSubTab && (
-        <div className="flex-1 min-h-0 flex">
-          <NoteListView
-            type={graphSubTab}
-            icon={currentGraphSubTab.icon}
-            label={currentGraphSubTab.label}
-          />
-        </div>
-      )}
+      {tab === 'graph' &&
+        (graphSubTab === 'entities' ||
+          graphSubTab === 'projects' ||
+          graphSubTab === 'decisions' ||
+          graphSubTab === 'meetings' ||
+          graphSubTab === 'references') &&
+        currentGraphSubTab && (
+          <div className="flex-1 min-h-0 flex">
+            <NoteListView type={graphSubTab} icon={currentGraphSubTab.icon} label={currentGraphSubTab.label} />
+          </div>
+        )}
       {tab === 'graph' && graphSubTab === 'graph-upload' && (
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <UploadTab />

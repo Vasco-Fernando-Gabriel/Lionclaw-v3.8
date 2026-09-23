@@ -69,8 +69,8 @@ export function NewBoardModal({ onClose }: NewBoardModalProps) {
             <div className="text-center py-4 space-y-3">
               <FolderGit2 size={26} className="text-zinc-600 mx-auto" />
               <p className="text-sm text-zinc-400 leading-relaxed">
-                Um quadro pertence a um repositório registrado, e nenhum repositório
-                está registrado ainda. Registre um na página Repositórios e volte aqui.
+                Um quadro pertence a um repositório registrado, e nenhum repositório está registrado ainda. Registre um
+                na página Repositórios e volte aqui.
               </p>
               <button
                 onClick={() => {

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import os from 'os';
 import path from 'path';
@@ -48,13 +47,10 @@ const mockApplyMemoryUpdates = vi.fn<(updates: unknown) => Promise<void>>(async 
 const mockApplyUserProfileUpdates = vi.fn<(updates: unknown) => Promise<void>>(async () => {
   if (!inLock) throw new Error('applyUserProfileUpdates chamado FORA do lock');
 });
-const mockRunStructuredMemoryLlm = vi.fn<
-  (prompt: string, options?: unknown) => Promise<string>
->();
+const mockRunStructuredMemoryLlm = vi.fn<(prompt: string, options?: unknown) => Promise<string>>();
 
 vi.mock('../memory-pipeline', () => ({
-  runStructuredMemoryLlm: (prompt: string, options?: unknown) =>
-    mockRunStructuredMemoryLlm(prompt, options),
+  runStructuredMemoryLlm: (prompt: string, options?: unknown) => mockRunStructuredMemoryLlm(prompt, options),
   tryWithMemoryGateLock: async (fn: () => Promise<unknown>) => {
     inLock = true;
     try {
@@ -64,8 +60,7 @@ vi.mock('../memory-pipeline', () => ({
     }
   },
   applyMemoryUpdates: (updates: unknown) => mockApplyMemoryUpdates(updates),
-  applyUserProfileUpdates: (updates: unknown) =>
-    mockApplyUserProfileUpdates(updates),
+  applyUserProfileUpdates: (updates: unknown) => mockApplyUserProfileUpdates(updates),
 }));
 
 vi.mock('electron', () => ({
@@ -154,9 +149,7 @@ describe('runTurnDreaming — schema do USER.md (12.3)', () => {
     expect(result.apply.remove).toEqual(['- linha do memory']);
     expect(result.apply.userRemove).toEqual(['- Usa JavaScript [2026-01-01]']);
     expect('userAdd' in result.apply).toBe(false);
-    const warned = warnSpy.mock.calls.some(c =>
-      String(c[1] ?? c[0]).includes('apply.userAdd descartado'),
-    );
+    const warned = warnSpy.mock.calls.some((c) => String(c[1] ?? c[0]).includes('apply.userAdd descartado'));
     expect(warned).toBe(true);
   });
 
@@ -167,9 +160,7 @@ describe('runTurnDreaming — schema do USER.md (12.3)', () => {
           remove: [],
           update: [],
           userRemove: [],
-          userUpdate: [
-            { oldText: '- x', newText: '- y', section: 'secao_que_nao_existe' },
-          ],
+          userUpdate: [{ oldText: '- x', newText: '- y', section: 'secao_que_nao_existe' }],
         },
         quarantine: [],
         discarded: [],
@@ -199,9 +190,7 @@ describe('maybeRunTurnDreaming — aplicacao dentro do lock (AC-53)', () => {
 
   it('aplica userRemove + userUpdate line-matched via applyUserProfileUpdates; update sem match e ignorado', async () => {
     writeMemoryAndUser();
-    mockGetSetting.mockImplementation((key: string) =>
-      key === 'dreaming_turn_based_enabled' ? 'true' : null,
-    );
+    mockGetSetting.mockImplementation((key: string) => (key === 'dreaming_turn_based_enabled' ? 'true' : null));
 
     mockRunStructuredMemoryLlm.mockResolvedValue(
       JSON.stringify({
@@ -237,21 +226,15 @@ describe('maybeRunTurnDreaming — aplicacao dentro do lock (AC-53)', () => {
       add: Array<{ section: string; text: string }>;
       remove: string[];
     };
-    expect(input.add).toEqual([
-      { section: 'stack_ferramentas', text: 'Usa TypeScript [2026-07-01]' },
-    ]);
+    expect(input.add).toEqual([{ section: 'stack_ferramentas', text: 'Usa TypeScript [2026-07-01]' }]);
     expect(input.remove).toEqual(['- Usa JavaScript [2026-01-01]']);
-    const warned = warnSpy.mock.calls.some(c =>
-      String(c[1] ?? c[0]).includes('userUpdate sem line-match exato'),
-    );
+    const warned = warnSpy.mock.calls.some((c) => String(c[1] ?? c[0]).includes('userUpdate sem line-match exato'));
     expect(warned).toBe(true);
   });
 
   it('sem propostas de USER.md, applyUserProfileUpdates nao e chamado', async () => {
     writeMemoryAndUser();
-    mockGetSetting.mockImplementation((key: string) =>
-      key === 'dreaming_turn_based_enabled' ? 'true' : null,
-    );
+    mockGetSetting.mockImplementation((key: string) => (key === 'dreaming_turn_based_enabled' ? 'true' : null));
 
     mockRunStructuredMemoryLlm.mockResolvedValue(
       JSON.stringify({

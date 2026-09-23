@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { vi } from 'vitest';
 
@@ -49,12 +48,16 @@ describe('codexWindow', () => {
 
 describe('glmWindow', () => {
   it('reconhece 5h (unit=3/number=5) e semanal (unit=6/number=1) de TOKENS_LIMIT', () => {
-    expect(
-      glmWindow({ type: 'TOKENS_LIMIT', unit: 3, number: 5, percentage: 42 }),
-    ).toMatchObject({ id: 'five_hour', label: '5 horas', usedPercent: 42 });
-    expect(
-      glmWindow({ type: 'TOKENS_LIMIT', unit: 6, number: 1, percentage: 7 }),
-    ).toMatchObject({ id: 'seven_day', label: 'Semanal', usedPercent: 7 });
+    expect(glmWindow({ type: 'TOKENS_LIMIT', unit: 3, number: 5, percentage: 42 })).toMatchObject({
+      id: 'five_hour',
+      label: '5 horas',
+      usedPercent: 42,
+    });
+    expect(glmWindow({ type: 'TOKENS_LIMIT', unit: 6, number: 1, percentage: 7 })).toMatchObject({
+      id: 'seven_day',
+      label: 'Semanal',
+      usedPercent: 7,
+    });
   });
 
   it('descarta tipos/unidades desconhecidos', () => {
@@ -70,19 +73,13 @@ describe('minimaxUsedPercent', () => {
       { current_weekly_total_count: 100, current_weekly_remaining_percent: 30 }, // 70 usado
       { current_weekly_total_count: 0, current_weekly_remaining_percent: 1 }, // nao provisionado
     ];
-    expect(
-      minimaxUsedPercent(entries, 'current_weekly_remaining_percent', 'current_weekly_total_count'),
-    ).toBe(70);
+    expect(minimaxUsedPercent(entries, 'current_weekly_remaining_percent', 'current_weekly_total_count')).toBe(70);
   });
 
   it('sem provisionados, pior caso entre todos; sem valores, null', () => {
     const entries = [{ current_weekly_total_count: 0, current_weekly_remaining_percent: 55 }];
-    expect(
-      minimaxUsedPercent(entries, 'current_weekly_remaining_percent', 'current_weekly_total_count'),
-    ).toBe(45);
-    expect(
-      minimaxUsedPercent([], 'current_weekly_remaining_percent', 'current_weekly_total_count'),
-    ).toBeNull();
+    expect(minimaxUsedPercent(entries, 'current_weekly_remaining_percent', 'current_weekly_total_count')).toBe(45);
+    expect(minimaxUsedPercent([], 'current_weekly_remaining_percent', 'current_weekly_total_count')).toBeNull();
   });
 });
 

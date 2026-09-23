@@ -23,25 +23,23 @@ function KanbanColumn({ title, count, colorDot, items, onViewSession }: ColumnPr
         <span className="text-xs text-zinc-500 ml-auto">{count}</span>
       </div>
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {items.map(item => (
+        {items.map((item) => (
           <ActivityCard
             key={`${item.taskId}-${item.runId}-${item.scheduledFor}`}
             item={item}
             onViewSession={onViewSession}
           />
         ))}
-        {items.length === 0 && (
-          <p className="text-xs text-zinc-600 text-center py-8">Nenhuma atividade</p>
-        )}
+        {items.length === 0 && <p className="text-xs text-zinc-600 text-center py-8">Nenhuma atividade</p>}
       </div>
     </div>
   );
 }
 
 export function KanbanView({ activities, onViewSession }: Props) {
-  const scheduled = activities.filter(a => a.status === 'scheduled');
-  const running = activities.filter(a => a.status === 'running');
-  const done = activities.filter(a => a.status === 'success' || a.status === 'error');
+  const scheduled = activities.filter((a) => a.status === 'scheduled');
+  const running = activities.filter((a) => a.status === 'running');
+  const done = activities.filter((a) => a.status === 'success' || a.status === 'error');
 
   return (
     <div className="grid grid-cols-3 gap-4 h-full">

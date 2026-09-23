@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -25,11 +24,7 @@ vi.mock('../skills', () => ({
 vi.mock('../ask-question', () => ({ sendAskQuestion: vi.fn() }));
 
 import { getAgent, getCompletedDocsCount } from '../db';
-import {
-  handleAgentDetails,
-  dispatch,
-  type JsonRpcContext,
-} from '../local-ipc/jsonrpc-methods';
+import { handleAgentDetails, dispatch, type JsonRpcContext } from '../local-ipc/jsonrpc-methods';
 
 const mockGetAgent = getAgent as ReturnType<typeof vi.fn>;
 const mockGetCompletedDocsCount = getCompletedDocsCount as ReturnType<typeof vi.fn>;

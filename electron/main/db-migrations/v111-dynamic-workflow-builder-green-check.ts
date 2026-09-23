@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const OLD_SECTION = `Por que: o validador adversarial e ESTATICO (so LE o codigo, nao roda testes) e o gate de entrega so confere no FIM. Quem garante verde durante o desenvolvimento e o PROPRIO coder, rodando os comandos. Um coder que reporta pronto com verificacao vermelha e o defeito numero 1 a evitar. Gere o CODER_CONTRACT com essa disciplina LITERAL ("rode ate verde; so declare pronto com tudo passando") - NUNCA o generico "valide antes de declarar pronto", que deixa passar teste vermelho.
 
 ## Regras do workflow.js (subset ESM restrito)`;

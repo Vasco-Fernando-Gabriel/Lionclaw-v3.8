@@ -4,8 +4,8 @@ export function applyMigrationV119(db: Database.Database): void {
   const gateCallOld =
     "        const review = await gate({ id: PLAN_REVIEW_GATE_ID, mode: 'human', kind: 'plan-review' });";
   const gateCallNew =
-    "        // DOIS ids de plan-review predeclarados (espelho do delivery); o modo e fonte\n" +
-    "        // do MANIFEST e o .js escolhe pela autonomia ATUAL (tabela de autonomia): so\n" +
+    '        // DOIS ids de plan-review predeclarados (espelho do delivery); o modo e fonte\n' +
+    '        // do MANIFEST e o .js escolhe pela autonomia ATUAL (tabela de autonomia): so\n' +
     "        // 'auto-drive' vira orquestrador; 'semi'/'full' mantem o humano-estrito.\n" +
     "        const planGateId = ctx.autonomy === 'auto-drive' ? PLAN_REVIEW_ORCHESTRATOR_GATE_ID : PLAN_REVIEW_HUMAN_GATE_ID;\n" +
     "        const planGateMode = ctx.autonomy === 'auto-drive' ? 'orchestrator' : 'human';\n" +
@@ -20,7 +20,7 @@ export function applyMigrationV119(db: Database.Database): void {
   ).run(gateCallOld, gateCallNew, gateCallOld);
 
   const autonomyOld =
-    '- A autonomia atual e lida defensivamente de ctx.autonomy; flags opcionais (ex: pauseAfterPlan) de ctx.input. Ambos podem estar ausentes: trate com fallback seguro (autonomia != \'full\' -> gate de entrega humano).';
+    "- A autonomia atual e lida defensivamente de ctx.autonomy; flags opcionais (ex: pauseAfterPlan) de ctx.input. Ambos podem estar ausentes: trate com fallback seguro (autonomia != 'full' -> gate de entrega humano).";
   const autonomyNew =
     "- A autonomia atual e lida defensivamente de ctx.autonomy (conjunto fechado 'semi' | 'full' | 'auto-drive'); flags opcionais (ex: pauseAfterPlan) de ctx.input. Ambos podem estar ausentes: trate com fallback seguro (humano). Tabela: 'semi' -> humano em plan-review E entrega; 'full' -> humano no plan-review, orquestrador na entrega; 'auto-drive' -> orquestrador em AMBOS (plan-review E entrega). Selecao de entrega: (autonomia === 'full' || autonomia === 'auto-drive') -> gate-delivery-orchestrator, senao gate-delivery-human. Selecao de plan-review: autonomia === 'auto-drive' -> gate-plan-review-orchestrator, senao gate-plan-review-human.";
   db.prepare(

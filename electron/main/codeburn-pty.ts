@@ -11,13 +11,13 @@ function resolveNodeBinary(): string | null {
     const cmd = process.platform === 'win32' ? 'where node' : 'which node';
     const found = execSync(cmd, { encoding: 'utf-8', timeout: 3000 }).trim().split('\n')[0];
     if (found && fs.existsSync(found)) return found;
-  } catch {
-  }
-  const candidates = process.platform === 'darwin'
-    ? ['/opt/homebrew/bin/node', '/usr/local/bin/node', '/usr/bin/node']
-    : process.platform === 'win32'
-      ? ['C:\\Program Files\\nodejs\\node.exe']
-      : ['/usr/bin/node', '/usr/local/bin/node'];
+  } catch {}
+  const candidates =
+    process.platform === 'darwin'
+      ? ['/opt/homebrew/bin/node', '/usr/local/bin/node', '/usr/bin/node']
+      : process.platform === 'win32'
+        ? ['C:\\Program Files\\nodejs\\node.exe']
+        : ['/usr/bin/node', '/usr/local/bin/node'];
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
   }
@@ -67,15 +67,12 @@ function resolveCodeburnEntry(): string | null {
     process.resourcesPath
       ? path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'codeburn', 'dist', 'cli.js')
       : '',
-    process.resourcesPath
-      ? path.join(process.resourcesPath, 'node_modules', 'codeburn', 'dist', 'cli.js')
-      : '',
+    process.resourcesPath ? path.join(process.resourcesPath, 'node_modules', 'codeburn', 'dist', 'cli.js') : '',
   ].filter(Boolean);
   for (const c of candidates) {
     try {
       if (fs.existsSync(c)) return c;
-    } catch {
-    }
+    } catch {}
   }
   return null;
 }
@@ -86,8 +83,7 @@ function killSession(senderId: number): void {
   sessions.delete(senderId);
   try {
     session.window.webContents.removeListener('destroyed', session.windowDestroyHandler);
-  } catch {
-  }
+  } catch {}
   try {
     session.pty.kill();
   } catch (err) {
@@ -105,7 +101,10 @@ export function spawnCodeburn(
 
   const mod = loadPty();
   if (!mod) {
-    return { ok: false, error: `node-pty nao carregou: ${ptyLoadError ?? 'erro desconhecido'} (rode "npm run rebuild:electron")` };
+    return {
+      ok: false,
+      error: `node-pty nao carregou: ${ptyLoadError ?? 'erro desconhecido'} (rode "npm run rebuild:electron")`,
+    };
   }
 
   const entry = resolveCodeburnEntry();

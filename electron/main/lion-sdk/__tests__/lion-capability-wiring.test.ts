@@ -1,8 +1,6 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { OrchestratorSelection } from '../../orchestrator-selection';
 import type { ChatFeatureToggles } from '../../../../src/types';
-
 
 const settings = new Map<string, string>();
 
@@ -28,7 +26,6 @@ vi.mock('../../logger', () => ({
 }));
 
 vi.mock('../../pricing', () => ({ calculateCost: vi.fn(() => 0.5) }));
-
 
 const BROAD_CONFIG: Record<string, { command: string; args: string[] }> = {
   'google-drive': { command: 'node', args: ['drive.js'] },
@@ -62,8 +59,20 @@ const REGISTRY = [
 
 const MOCK_SERVERS = [
   { id: 'google-drive', name: 'Google Drive', description: 'Drive', isActive: true, indexMode: 'tools' as const },
-  { id: 'lionclaw-pipeline-control', name: 'Pipeline Control', description: 'Pipe', isActive: true, indexMode: 'tools' as const },
-  { id: 'lionclaw-dynamic-workflows', name: 'Dynamic Workflows', description: 'Dyn', isActive: true, indexMode: 'tools' as const },
+  {
+    id: 'lionclaw-pipeline-control',
+    name: 'Pipeline Control',
+    description: 'Pipe',
+    isActive: true,
+    indexMode: 'tools' as const,
+  },
+  {
+    id: 'lionclaw-dynamic-workflows',
+    name: 'Dynamic Workflows',
+    description: 'Dyn',
+    isActive: true,
+    indexMode: 'tools' as const,
+  },
 ];
 
 function applyS5aFilter(
@@ -110,8 +119,7 @@ const setupMCPsForSession = vi.fn(async (config: Record<string, unknown>) => ({
   tools: [] as unknown[],
 }));
 vi.mock('../../mcp-tool-bridge', () => ({
-  setupMCPsForSession: (...a: unknown[]) =>
-    setupMCPsForSession(...(a as [Record<string, unknown>])),
+  setupMCPsForSession: (...a: unknown[]) => setupMCPsForSession(...(a as [Record<string, unknown>])),
   teardownMCPsForSession: vi.fn(async () => {}),
   callMCPTool: vi.fn(async () => ({ content: [{ type: 'text', text: 'ok' }] })),
 }));
@@ -119,7 +127,6 @@ vi.mock('../../mcp-tool-bridge', () => ({
 vi.mock('../../permission-guard', () => ({
   createPermissionGuard: vi.fn(() => vi.fn(async () => ({ behavior: 'allow' }))),
 }));
-
 
 vi.mock('../../skills', () => ({ listSkills: vi.fn(() => []) }));
 vi.mock('../../title-generator', () => ({ ensureInitialSessionTitle: vi.fn() }));
@@ -184,9 +191,11 @@ vi.mock('../runtime', () => ({
   runLionLoop: (...a: unknown[]) => runLionLoop(...(a as [CapturedLoopOpts])),
 }));
 
-
 import { executeLionSdkQuery } from '../index';
-import { desktopLane, telegramLane } from '../../sdk-lane';
+import { telegramLane } from '../../sdk-lane';
+import { getDesktopLane } from '../../desktop-lanes';
+
+const desktopLane = getDesktopLane('sid');
 import {
   registerChatCapabilityTurn,
   setActiveChatTurn,
@@ -224,8 +233,7 @@ async function runTurn(lane: SdkLane = desktopLane): Promise<{ systemPrompt: str
 
 function mcpConfigCapabilities(): unknown {
   expect(getMCPConfigForAgent).toHaveBeenCalledTimes(1);
-  return (getMCPConfigForAgent.mock.calls[0][1] as { capabilities?: unknown } | undefined)
-    ?.capabilities;
+  return (getMCPConfigForAgent.mock.calls[0][1] as { capabilities?: unknown } | undefined)?.capabilities;
 }
 
 beforeEach(() => {

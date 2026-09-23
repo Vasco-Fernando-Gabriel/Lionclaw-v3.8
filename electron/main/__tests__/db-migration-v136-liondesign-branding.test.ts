@@ -34,8 +34,10 @@ describe('migration v136 - branding LionDesign', () => {
     const db = databaseWith('old-defaults');
     applyMigrationV136(db as never);
     for (const seed of seeds) {
-      const row = db.prepare('SELECT description, system_prompt FROM agents WHERE id = ?')
-        .get(seed.id) as { description: string; system_prompt: string };
+      const row = db.prepare('SELECT description, system_prompt FROM agents WHERE id = ?').get(seed.id) as {
+        description: string;
+        system_prompt: string;
+      };
       expect(row).toEqual({ description: seed.description, system_prompt: seed.systemPrompt });
     }
     db.close();

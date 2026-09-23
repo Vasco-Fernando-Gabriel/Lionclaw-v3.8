@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ChatFeatureToggles } from '../../../src/types';
 
@@ -50,12 +49,9 @@ vi.mock('../mcp-manager', () => ({
   getMcpToolRegistryEntries: vi.fn(() => MOCK_REGISTRY),
 }));
 
-const buildSystemPromptMock = vi.fn(
-  (_agentId?: string, _opts?: Record<string, unknown>) => 'LION-PROMPT',
-);
+const buildSystemPromptMock = vi.fn((_agentId?: string, _opts?: Record<string, unknown>) => 'LION-PROMPT');
 vi.mock('../prompt-builder', () => ({
-  buildSystemPrompt: (...a: unknown[]) =>
-    buildSystemPromptMock(...(a as [string?, Record<string, unknown>?])),
+  buildSystemPrompt: (...a: unknown[]) => buildSystemPromptMock(...(a as [string?, Record<string, unknown>?])),
   loadGeneratedAgentContext: () => 'PERSONA',
 }));
 
@@ -67,12 +63,10 @@ const captured = vi.hoisted(() => ({
   runs: [] as Array<{ sessionOptions: { systemPrompt: string } }>,
 }));
 vi.mock('../agent-runtime/codex-session-factory', () => ({
-  resolveCodexSessionForRun: vi.fn(
-    async (args: { sessionOptions: { systemPrompt: string } }) => {
-      captured.runs.push(args);
-      return { threadId: null, close: () => undefined };
-    },
-  ),
+  resolveCodexSessionForRun: vi.fn(async (args: { sessionOptions: { systemPrompt: string } }) => {
+    captured.runs.push(args);
+    return { threadId: null, close: () => undefined };
+  }),
 }));
 
 vi.mock('../codex-chat-spawn-extras', () => ({
@@ -121,7 +115,6 @@ beforeEach(() => {
   captured.runs.length = 0;
 });
 
-
 describe('W5: CODEX_SDK_SYSTEM_PROMPT_V5 + buildCodexSdkSystemPromptV5', () => {
   it('V5 e BYTE-IDENTICA a V4 (parity do modo full, AC-C5)', () => {
     expect(CODEX_SDK_SYSTEM_PROMPT_V5).toEqual(CODEX_SDK_SYSTEM_PROMPT_V4);
@@ -129,15 +122,11 @@ describe('W5: CODEX_SDK_SYSTEM_PROMPT_V5 + buildCodexSdkSystemPromptV5', () => {
 
   it('modo full sem capabilities -> a PROPRIA constante V5 (mesma referencia); igual a V4 builder', () => {
     expect(buildCodexSdkSystemPromptV5(undefined, undefined)).toBe(CODEX_SDK_SYSTEM_PROMPT_V5);
-    expect(buildCodexSdkSystemPromptV5(undefined, undefined)).toEqual(
-      buildCodexSdkSystemPromptV4(undefined),
-    );
+    expect(buildCodexSdkSystemPromptV5(undefined, undefined)).toEqual(buildCodexSdkSystemPromptV4(undefined));
   });
 
   it('pipelineControl OFF em modo full -> mesmo resultado do builder V4 (stub identico)', () => {
-    expect(buildCodexSdkSystemPromptV5({ ...OFF }, undefined)).toEqual(
-      buildCodexSdkSystemPromptV4({ ...OFF }),
-    );
+    expect(buildCodexSdkSystemPromptV5({ ...OFF }, undefined)).toEqual(buildCodexSdkSystemPromptV4({ ...OFF }));
   });
 
   it('modo index: bullet de frota nativa substituido pelo bullet do indice + meta-tools; vizinhos intactos', () => {
@@ -170,7 +159,6 @@ describe('W5: CODEX_SDK_SYSTEM_PROMPT_V5 + buildCodexSdkSystemPromptV5', () => {
     expect(custom).not.toContain('mcp_invoke');
   });
 });
-
 
 async function createSession(
   mcpComposition: typeof INDEX_COMPOSITION | typeof FULL_COMPOSITION,
@@ -229,15 +217,10 @@ describe('W5: createChatCodexSession em modo FULL (AC-C5 parity)', () => {
     const legacyCatalog = buildCodexMcpCatalogPrompt(
       MOCK_SERVERS.filter((s) => s.isActive).map((s) => ({ id: s.id, description: s.description })),
     );
-    expect(systemPrompt).toEqual(
-      [CODEX_SDK_SYSTEM_PROMPT_V6, 'PERSONA', 'LION-PROMPT', legacyCatalog].join('\n\n'),
-    );
+    expect(systemPrompt).toEqual([CODEX_SDK_SYSTEM_PROMPT_V6, 'PERSONA', 'LION-PROMPT', legacyCatalog].join('\n\n'));
     expect(systemPrompt).toContain('Bug Pipe (`pipelineType: "bug"`, 9 phases)');
     const withoutBugBlock = CODEX_SDK_SYSTEM_PROMPT_V6.split('\n')
-      .filter(
-        (line) =>
-          !line.startsWith('- Bug Pipe (') && !line.startsWith('- Phase 3 of the bug pipeline'),
-      )
+      .filter((line) => !line.startsWith('- Bug Pipe (') && !line.startsWith('- Phase 3 of the bug pipeline'))
       .join('\n');
     expect(withoutBugBlock).toEqual(CODEX_SDK_SYSTEM_PROMPT_V4);
     const promptOpts = buildSystemPromptMock.mock.calls[0][1] as Record<string, unknown>;
@@ -251,9 +234,7 @@ describe('W5: createChatCodexSession em modo FULL (AC-C5 parity)', () => {
     });
     expect(meta).not.toBeNull();
     const activeIds = new Set(MOCK_SERVERS.filter((s) => s.isActive).map((s) => s.id));
-    const expectedJson = serializeMcpSchemasForContext(
-      MOCK_REGISTRY.filter((r) => activeIds.has(r.mcpId)),
-    );
+    const expectedJson = serializeMcpSchemasForContext(MOCK_REGISTRY.filter((r) => activeIds.has(r.mcpId)));
     expect(expectedJson).toContain('google-drive');
     expect(expectedJson).not.toContain('mcp__gateway__mcp_invoke');
     expect(meta!.mcpSchemasTokens).toBe(estimateTokensRough(expectedJson));

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
@@ -37,14 +36,8 @@ vi.mock('../mcp-invoke', () => ({
 import { getMCPConfigForAgent } from '../mcp-manager';
 import { invokeMcpTool, getMcpToolSchema } from '../mcp-invoke';
 import { dispatch, type JsonRpcContext } from '../local-ipc/jsonrpc-methods';
-import {
-  setActiveChatTurn,
-  __resetChatCapabilityContextForTests,
-} from '../chat-capability-context';
-import {
-  createAccumulator,
-  translateEvent,
-} from '../codex-runtime/official-event-translator';
+import { setActiveChatTurn, __resetChatCapabilityContextForTests } from '../chat-capability-context';
+import { createAccumulator, translateEvent } from '../codex-runtime/official-event-translator';
 import { CODEX_GATEWAY_SERVER_ID } from '../mcp-display';
 
 const mockGetConfig = getMCPConfigForAgent as ReturnType<typeof vi.fn>;
@@ -60,6 +53,7 @@ function rpc(method: string, params: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  setActiveChatTurn({ sessionId: 'gateway-1-aa', lane: 'desktop', turnId: '2' });
   mockGetConfig.mockResolvedValue({
     'google-gmail': { command: 'node', args: ['/x/gmail.js'] },
     shopify: { command: 'node', args: ['/x/shopify.js'] },
@@ -75,7 +69,6 @@ beforeEach(() => {
 afterEach(() => {
   __resetChatCapabilityContextForTests();
 });
-
 
 describe('mcp_invoke — surface codex-sdk', () => {
   it('chega INTEGRO ao wrapper central e ao resolve de escopo (nunca coagido p/ claude-sdk)', async () => {
@@ -102,26 +95,24 @@ describe('mcp_invoke — surface codex-sdk', () => {
   });
 
   it('surface desconhecido segue normalizando para claude-sdk (comportamento historico)', async () => {
-    await rpc('mcp_invoke', { server: 'shopify', tool: 'list_products', surface: 'bogus' });
-    expect(mockInvoke).toHaveBeenCalledWith(
-      expect.objectContaining({ surface: 'claude-sdk' }),
-    );
+    await rpc('mcp_invoke', {
+      server: 'shopify',
+      tool: 'list_products',
+      surface: 'bogus',
+      sessionId: 'gateway-1-aa',
+      turnId: '2',
+    });
+    expect(mockInvoke).toHaveBeenCalledWith(expect.objectContaining({ surface: 'claude-sdk' }));
   });
 });
 
 describe('visibilidade codex (wiring-audit de mcp-manager.ts)', () => {
   it("surface 'codex-sdk' cai no branch ['all','codex-lion-only']", () => {
-    const src = fs.readFileSync(
-      path.join(REPO_ROOT, 'electron/main/mcp-manager.ts'),
-      'utf8',
-    );
-    expect(src).toMatch(
-      /includeCodexLionOnly\s*=\s*surface === 'codex-sdk'[^;]*'lion-sdk'[^;]*'kimi-sdk'/,
-    );
+    const src = fs.readFileSync(path.join(REPO_ROOT, 'electron/main/mcp-manager.ts'), 'utf8');
+    expect(src).toMatch(/includeCodexLionOnly\s*=\s*surface === 'codex-sdk'[^;]*'lion-sdk'[^;]*'kimi-sdk'/);
     expect(src).toContain("? ['all', 'codex-lion-only']");
   });
 });
-
 
 describe('mcp_get_schema — escopo por surface (gap da fase 1 corrigido)', () => {
   const SURFACES = ['claude-sdk', 'claude-compat-sdk', 'codex-sdk'] as const;
@@ -178,7 +169,6 @@ describe('mcp_get_schema — escopo por surface (gap da fase 1 corrigido)', () =
   });
 });
 
-
 describe('lane no dispatch do mcp_invoke', () => {
   beforeEach(() => {
     setActiveChatTurn({ sessionId: 'sess-desktop', lane: 'desktop', turnId: 'turn-d' });
@@ -192,23 +182,24 @@ describe('lane no dispatch do mcp_invoke', () => {
       surface: 'codex-sdk',
       lane: 'telegram',
     });
-    expect(mockInvoke).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'sess-telegram', turnId: 'turn-t' }),
-    );
+    expect(mockInvoke).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'sess-telegram', turnId: 'turn-t' }));
   });
 
-  it('param lane AUSENTE => fallback desktop byte-identico (gateway claude/compat)', async () => {
-    await rpc('mcp_invoke', { server: 'shopify', tool: 'list_products' });
-    expect(mockInvoke).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'sess-desktop', turnId: 'turn-d' }),
-    );
+  it('param lane AUSENTE => desktop; a sessao vem do binding (gateway claude/compat)', async () => {
+    await rpc('mcp_invoke', { server: 'shopify', tool: 'list_products', sessionId: 'sess-desktop' });
+    expect(mockInvoke).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'sess-desktop', turnId: 'turn-d' }));
   });
 
-  it('lane desconhecida normaliza para desktop (nunca lane inventada)', async () => {
-    await rpc('mcp_invoke', { server: 'shopify', tool: 'list_products', lane: 'marte' });
-    expect(mockInvoke).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'sess-desktop', turnId: 'turn-d' }),
-    );
+  it('lane desconhecida normaliza para desktop (nunca lane inventada) e exige o binding', async () => {
+    await rpc('mcp_invoke', { server: 'shopify', tool: 'list_products', lane: 'marte', sessionId: 'sess-desktop' });
+    expect(mockInvoke).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'sess-desktop', turnId: 'turn-d' }));
+  });
+
+  it('desktop SEM sessionId no binding => turn_binding_required (nunca "o turno ativo da lane")', async () => {
+    const res = await rpc('mcp_invoke', { server: 'shopify', tool: 'list_products' });
+    expect((res.result as { isError?: boolean; content: string }).isError).toBe(true);
+    expect((res.result as { content: string }).content).toContain('turn_binding_required');
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it('mcp_get_schema aceita o param lane sem quebrar (read puro, sem turno)', async () => {
@@ -223,12 +214,8 @@ describe('lane no dispatch do mcp_invoke', () => {
   });
 });
 
-
 describe('gateway/src/index.ts — contrato dos calls (audit da fonte)', () => {
-  const src = fs.readFileSync(
-    path.join(REPO_ROOT, 'mcp-servers/gateway/src/index.ts'),
-    'utf8',
-  );
+  const src = fs.readFileSync(path.join(REPO_ROOT, 'mcp-servers/gateway/src/index.ts'), 'utf8');
 
   it("union do SURFACE ganha 'codex-sdk' (via env LIONCLAW_MCP_SURFACE)", () => {
     expect(src).toContain("'claude-sdk' | 'claude-compat-sdk' | 'codex-sdk'");
@@ -244,11 +231,10 @@ describe('gateway/src/index.ts — contrato dos calls (audit da fonte)', () => {
 
   it('lane vem do env LIONCLAW_MCP_LANE e so vira param quando presente', () => {
     expect(src).toContain("process.env['LIONCLAW_MCP_LANE']");
-    const occurrences = src.split("...(LANE !== undefined ? { lane: LANE } : {})").length - 1;
+    const occurrences = src.split('...(LANE !== undefined ? { lane: LANE } : {})').length - 1;
     expect(occurrences).toBe(2);
   });
 });
-
 
 describe('translator do app-server — alvo real da meta-tool do gateway', () => {
   function itemEvent(item: Record<string, unknown>, method = 'item/started') {
@@ -293,11 +279,7 @@ describe('translator do app-server — alvo real da meta-tool do gateway', () =>
       acc,
       { callbacks: { onToolUseComplete } },
     );
-    expect(onToolUseComplete).toHaveBeenCalledWith(
-      'mcp:shopify.list_products',
-      expect.anything(),
-      { callId: 'c2' },
-    );
+    expect(onToolUseComplete).toHaveBeenCalledWith('mcp:shopify.list_products', expect.anything(), { callId: 'c2' });
   });
 
   it('args parciais/malformados mantem o label do gateway (nunca token mentiroso)', () => {

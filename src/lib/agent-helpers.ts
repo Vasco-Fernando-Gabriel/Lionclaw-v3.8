@@ -1,4 +1,3 @@
-
 import { MODEL_CATALOG } from './provider-presets';
 import type { AgentConfig } from '../types/index';
 
@@ -11,7 +10,7 @@ export function resolveContextWindow(agent: AgentConfig): number | null {
     return contextWindow ?? null;
   }
 
-  const catalogedModel = MODEL_CATALOG[provider]?.find(m => m.id === model);
+  const catalogedModel = MODEL_CATALOG[provider]?.find((m) => m.id === model);
   return catalogedModel?.contextWindow ?? null;
 }
 

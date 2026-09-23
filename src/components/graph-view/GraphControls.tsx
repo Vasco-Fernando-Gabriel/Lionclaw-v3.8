@@ -18,7 +18,7 @@ export function GraphControls({ onFilterChange, onSearchChange, onRefresh, onZoo
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const toggleType = (type: string) => {
-    setActiveTypes(prev => {
+    setActiveTypes((prev) => {
       const next = new Set(prev);
       if (next.has(type)) {
         next.delete(type);
@@ -38,30 +38,27 @@ export function GraphControls({ onFilterChange, onSearchChange, onRefresh, onZoo
     debounceRef.current = setTimeout(() => {
       onSearchChange(searchText);
     }, 300);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [searchText, onSearchChange]);
 
   return (
     <div className="flex items-center gap-3 px-4 py-2 bg-zinc-900/80 border-b border-zinc-800">
       {/* Type filters */}
       <div className="flex items-center gap-1.5">
-        {NOTE_TYPES.map(type => {
+        {NOTE_TYPES.map((type) => {
           const active = activeTypes.has(type);
           return (
             <button
               key={type}
               onClick={() => toggleType(type)}
               className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-mono transition-all ${
-                active
-                  ? 'bg-zinc-800 text-zinc-200'
-                  : 'bg-zinc-900 text-zinc-600 opacity-50'
+                active ? 'bg-zinc-800 text-zinc-200' : 'bg-zinc-900 text-zinc-600 opacity-50'
               }`}
               title={type}
             >
-              <span
-                className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ backgroundColor: NODE_COLORS[type] }}
-              />
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: NODE_COLORS[type] }} />
               {type}
             </button>
           );
@@ -76,7 +73,7 @@ export function GraphControls({ onFilterChange, onSearchChange, onRefresh, onZoo
             type="text"
             placeholder="Buscar..."
             value={searchText}
-            onChange={e => setSearchText(e.target.value)}
+            onChange={(e) => setSearchText(e.target.value)}
             className="pl-7 pr-3 py-1.5 w-48 bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-zinc-600"
           />
         </div>

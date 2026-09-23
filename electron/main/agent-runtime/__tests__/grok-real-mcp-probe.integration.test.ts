@@ -11,18 +11,20 @@ const { getMcpToolSchema, invokeMcpTool } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../mcp-manager', () => ({
-  getMcpToolRegistryEntries: () => [{
-    mcpId: 'skills',
-    toolName: 'load_skill',
-    description: 'Carrega uma skill do LionClaw pelo nome.',
-    inputSchema: JSON.stringify({
-      type: 'object',
-      properties: { name: { type: 'string' } },
-      required: ['name'],
-      additionalProperties: false,
-    }),
-    lastDiscoveredAt: '2026-07-18T00:00:00.000Z',
-  }],
+  getMcpToolRegistryEntries: () => [
+    {
+      mcpId: 'skills',
+      toolName: 'load_skill',
+      description: 'Carrega uma skill do LionClaw pelo nome.',
+      inputSchema: JSON.stringify({
+        type: 'object',
+        properties: { name: { type: 'string' } },
+        required: ['name'],
+        additionalProperties: false,
+      }),
+      lastDiscoveredAt: '2026-07-18T00:00:00.000Z',
+    },
+  ],
 }));
 
 vi.mock('../../mcp-invoke', () => ({ getMcpToolSchema, invokeMcpTool }));
@@ -49,27 +51,32 @@ describe.skipIf(process.env['LIONCLAW_REAL_GROK_PROBE'] !== '1')('Grok real MCP 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30_000);
     try {
-      const result = await grokExecutor.run({
-        agentId: 'grok-real-mcp-dev-probe',
-        prompt: [
-          'Use obrigatoriamente mcp_invoke com server="skills", tool="load_skill" e args={"name":"bridge-probe"}.',
-          'Depois responda exatamente o output retornado pela ferramenta.',
-        ].join(' '),
-        cwd: process.cwd(),
-        abortController: controller,
-        permission: {
-          mode: 'default',
-          dangerouslySkipPermissions: false,
-          canUseTool: async () => ({ behavior: 'allow' as const }),
+      const result = await grokExecutor.run(
+        {
+          agentId: 'grok-real-mcp-dev-probe',
+          prompt: [
+            'Use obrigatoriamente mcp_invoke com server="skills", tool="load_skill" e args={"name":"bridge-probe"}.',
+            'Depois responda exatamente o output retornado pela ferramenta.',
+          ].join(' '),
+          cwd: process.cwd(),
+          abortController: controller,
+          permission: {
+            mode: 'default',
+            dangerouslySkipPermissions: false,
+            canUseTool: async () => ({ behavior: 'allow' as const }),
+          },
         },
-      }, config);
+        config,
+      );
 
-      expect(invokeMcpTool).toHaveBeenCalledWith(expect.objectContaining({
-        serverId: 'skills',
-        toolName: 'load_skill',
-        args: { name: 'bridge-probe' },
-        surface: 'grok-sdk',
-      }));
+      expect(invokeMcpTool).toHaveBeenCalledWith(
+        expect.objectContaining({
+          serverId: 'skills',
+          toolName: 'load_skill',
+          args: { name: 'bridge-probe' },
+          surface: 'grok-sdk',
+        }),
+      );
       expect(result.output).toContain('LIONCLAW_GROK_MCP_OK');
     } finally {
       clearTimeout(timer);

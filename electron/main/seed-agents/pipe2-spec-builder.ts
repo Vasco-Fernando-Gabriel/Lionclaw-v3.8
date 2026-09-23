@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const PIPE2_SPEC_BUILDER_ID = 'pipe2-spec-builder';
@@ -8,7 +7,7 @@ export const pipe2SpecBuilder: Omit<AgentConfig, 'sortOrder'> = {
   name: 'Pipe2 Spec Builder',
   description:
     'Gera a SPEC do pipeline development-v2 incorporando rotas, telas, componentes, tokens e path do artifact HTML. Torna o design lock implementavel pelo Coder sem reabrir LionDesign.',
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'enabled' as const,
   thinkingBudget: 15000,

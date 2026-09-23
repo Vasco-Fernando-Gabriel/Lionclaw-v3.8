@@ -1,10 +1,6 @@
-
 import Database from 'better-sqlite3';
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  applyMigrationV124,
-  __V124_INTERNAL,
-} from '../db-migrations/v124-orchestrator-single-source';
+import { applyMigrationV124, __V124_INTERNAL } from '../db-migrations/v124-orchestrator-single-source';
 import { PRODUCT_DEFAULT_ORCHESTRATOR } from '../orchestrator-defaults';
 import { CLAUDE_DEFAULT_MODEL } from '../../../src/constants/claude-models';
 import { CODEX_DEFAULT_MODEL } from '../../../src/constants/codex-models';
@@ -23,9 +19,7 @@ function setSetting(db: Database.Database, key: string, value: string): void {
 }
 
 function getSettingValue(db: Database.Database, key: string): string | undefined {
-  const row = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(key) as
-    | { value: string }
-    | undefined;
+  const row = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(key) as { value: string } | undefined;
   return row?.value;
 }
 
@@ -100,9 +94,7 @@ describe('v124: applyMigrationV124 (4 ramos + alias + idempotencia)', () => {
 
     expect(getSettingValue(db, 'orchestrator_runtime')).toBe('claude-compat-sdk');
     expect(getSettingValue(db, 'orchestrator_provider')).toBe('zai');
-    expect(getSettingValue(db, 'orchestrator_model')).toBe(
-      CLAUDE_COMPAT_PRESETS[0]?.models[0]?.id,
-    );
+    expect(getSettingValue(db, 'orchestrator_model')).toBe(CLAUDE_COMPAT_PRESETS[0]?.models[0]?.id);
     expect(getSettingValue(db, 'default_model')).toBeUndefined();
   });
 
@@ -158,15 +150,9 @@ describe('v124: applyMigrationV124 (4 ramos + alias + idempotencia)', () => {
   it('passo 3b: settings vazios gravam PRODUCT_DEFAULT_ORCHESTRATOR completo', () => {
     applyMigrationV124(db);
 
-    expect(getSettingValue(db, 'orchestrator_runtime')).toBe(
-      PRODUCT_DEFAULT_ORCHESTRATOR.runtime,
-    );
-    expect(getSettingValue(db, 'orchestrator_provider')).toBe(
-      PRODUCT_DEFAULT_ORCHESTRATOR.provider,
-    );
-    expect(getSettingValue(db, 'orchestrator_model')).toBe(
-      PRODUCT_DEFAULT_ORCHESTRATOR.model,
-    );
+    expect(getSettingValue(db, 'orchestrator_runtime')).toBe(PRODUCT_DEFAULT_ORCHESTRATOR.runtime);
+    expect(getSettingValue(db, 'orchestrator_provider')).toBe(PRODUCT_DEFAULT_ORCHESTRATOR.provider);
+    expect(getSettingValue(db, 'orchestrator_model')).toBe(PRODUCT_DEFAULT_ORCHESTRATOR.model);
     expect(getSettingValue(db, 'default_model')).toBeUndefined();
   });
 
@@ -201,8 +187,6 @@ describe('v124: applyMigrationV124 (4 ramos + alias + idempotencia)', () => {
     const firstModel = getSettingValue(db, 'orchestrator_model');
     applyMigrationV124(db);
     expect(getSettingValue(db, 'orchestrator_model')).toBe(firstModel);
-    expect(getSettingValue(db, 'orchestrator_model')).toBe(
-      PRODUCT_DEFAULT_ORCHESTRATOR.model,
-    );
+    expect(getSettingValue(db, 'orchestrator_model')).toBe(PRODUCT_DEFAULT_ORCHESTRATOR.model);
   });
 });

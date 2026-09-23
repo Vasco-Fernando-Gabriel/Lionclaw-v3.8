@@ -8,7 +8,6 @@ import {
   bugSpecValidator,
 } from '../seed-agents';
 
-
 const BUG_PIPELINE_SEEDS = [
   bugDiscovery,
   bugRootCauseAnalyst,

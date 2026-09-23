@@ -37,20 +37,13 @@ export function CriteriaList({ projectId, sprintId }: CriteriaListProps) {
   return (
     <div className="px-4 pb-3 pt-1 space-y-2">
       {evaluation.summary && (
-        <p className="text-xs text-zinc-400 italic border-l-2 border-zinc-700 pl-2">
-          {evaluation.summary}
-        </p>
+        <p className="text-xs text-zinc-400 italic border-l-2 border-zinc-700 pl-2">{evaluation.summary}</p>
       )}
       {evaluation.criteria.map((criterion) => (
-        <div
-          key={criterion.id}
-          className="flex items-start gap-2 bg-zinc-900 rounded p-2 border border-zinc-800"
-        >
+        <div key={criterion.id} className="flex items-start gap-2 bg-zinc-900 rounded p-2 border border-zinc-800">
           <span
             className={`mt-0.5 shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-              criterion.result === 'pass'
-                ? 'bg-green-500/20 text-green-400'
-                : 'bg-red-500/20 text-red-400'
+              criterion.result === 'pass' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
             }`}
           >
             {criterion.result === 'pass' ? 'PASS' : 'FAIL'}

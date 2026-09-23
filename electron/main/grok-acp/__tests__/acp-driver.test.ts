@@ -49,24 +49,40 @@ describe('Grok ACP driver', () => {
   });
 
   it('mantem ordem global -> agent flags -> stdio', () => {
-    expect(buildGrokAgentArgv({
-      model: 'grok-4.5',
-      effort: 'low',
-      sandbox: 'workspace',
-      permission: { mode: 'bypassPermissions', dangerouslySkipPermissions: true },
-    })).toEqual([
-      '--no-auto-update', '--no-subagents', '--no-memory', '--sandbox', 'workspace',
-      'agent', '--no-leader', '--model', 'grok-4.5', '--effort', 'low', '--always-approve', 'stdio',
+    expect(
+      buildGrokAgentArgv({
+        model: 'grok-4.5',
+        effort: 'low',
+        sandbox: 'workspace',
+        permission: { mode: 'bypassPermissions', dangerouslySkipPermissions: true },
+      }),
+    ).toEqual([
+      '--no-auto-update',
+      '--no-subagents',
+      '--no-memory',
+      '--sandbox',
+      'workspace',
+      'agent',
+      '--no-leader',
+      '--model',
+      'grok-4.5',
+      '--effort',
+      'low',
+      '--always-approve',
+      'stdio',
     ]);
   });
 
   it('monta o PTY Linux sem echo e escapa binario/args antes do shell do script', () => {
-    const invocation = buildLinuxSandboxPtyInvocation({
-      binary: "/tmp/grok';touch /tmp/injected;'",
-      args: ['--sandbox', 'profile with spaces', 'agent', 'stdio'],
-      cwd: home,
-      env: {},
-    }, '/usr/bin/script');
+    const invocation = buildLinuxSandboxPtyInvocation(
+      {
+        binary: "/tmp/grok';touch /tmp/injected;'",
+        args: ['--sandbox', 'profile with spaces', 'agent', 'stdio'],
+        cwd: home,
+        env: {},
+      },
+      '/usr/bin/script',
+    );
     expect(invocation.executable).toBe('/usr/bin/script');
     expect(invocation.args).toContain('never');
     const command = invocation.args[invocation.args.indexOf('--command') + 1];
@@ -83,9 +99,11 @@ describe('Grok ACP driver', () => {
       expect(transport.requests.some(({ method }) => method === 'session/new')).toBe(true);
       expect(transport.requests.some(({ method }) => method === 'session/prompt')).toBe(false);
     });
-    const driver = new GrokAcpDriver(fakeGrokTransportFactory(transport, (config) => {
-      captured.push({ args: config.args, cwd: config.cwd, env: config.env });
-    }));
+    const driver = new GrokAcpDriver(
+      fakeGrokTransportFactory(transport, (config) => {
+        captured.push({ args: config.args, cwd: config.cwd, env: config.env });
+      }),
+    );
     const onText = vi.fn();
     const onThinking = vi.fn();
     const handle = await driver.createRun({
@@ -124,16 +142,18 @@ describe('Grok ACP driver', () => {
       onRequest: async () => new Promise(() => undefined),
     });
     const timedDriver = new GrokAcpDriver(fakeGrokTransportFactory(timed));
-    await expect(timedDriver.createRun({
-      workDir: home,
-      model: 'grok-4.5',
-      effort: 'medium',
-      thinking: true,
-      systemPrompt: '',
-      executable: '/fake/grok',
-      env: buildGrokChildEnv(path.join(home, 'runtime', 'grok-home'), {}),
-      handshakeTimeoutMs: 5,
-    })).rejects.toThrow(/timed out/);
+    await expect(
+      timedDriver.createRun({
+        workDir: home,
+        model: 'grok-4.5',
+        effort: 'medium',
+        thinking: true,
+        systemPrompt: '',
+        executable: '/fake/grok',
+        env: buildGrokChildEnv(path.join(home, 'runtime', 'grok-home'), {}),
+        handshakeTimeoutMs: 5,
+      }),
+    ).rejects.toThrow(/timed out/);
     expect(timed.killed).toBe(true);
 
     const aborted = new FakeGrokAcpTransport({
@@ -160,9 +180,12 @@ describe('Grok ACP driver', () => {
   it('compartilha o teardown concorrente e bloqueia novos runs ate o child fechar', async () => {
     const transport = normalScript();
     let releaseWait!: (closed: boolean) => void;
-    const waitClosed = vi.fn(() => new Promise<boolean>((resolve) => {
-      releaseWait = resolve;
-    }));
+    const waitClosed = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseWait = resolve;
+        }),
+    );
     transport.waitClosed = waitClosed;
     const driver = new GrokAcpDriver(fakeGrokTransportFactory(transport));
     await driver.createRun({
@@ -179,15 +202,17 @@ describe('Grok ACP driver', () => {
     const second = driver.shutdown();
     expect(second).toBe(first);
     await vi.waitFor(() => expect(waitClosed).toHaveBeenCalledTimes(1));
-    await expect(driver.createRun({
-      workDir: home,
-      model: 'grok-4.5',
-      effort: 'medium',
-      thinking: true,
-      systemPrompt: '',
-      executable: '/fake/grok',
-      env: buildGrokChildEnv(path.join(home, 'runtime', 'grok-home'), {}),
-    })).rejects.toThrow(/shutting down/i);
+    await expect(
+      driver.createRun({
+        workDir: home,
+        model: 'grok-4.5',
+        effort: 'medium',
+        thinking: true,
+        systemPrompt: '',
+        executable: '/fake/grok',
+        env: buildGrokChildEnv(path.join(home, 'runtime', 'grok-home'), {}),
+      }),
+    ).rejects.toThrow(/shutting down/i);
     releaseWait(true);
     await Promise.all([first, second]);
     expect(waitClosed).toHaveBeenCalledTimes(1);
@@ -196,9 +221,12 @@ describe('Grok ACP driver', () => {
   it('faz chamadas concorrentes de close aguardarem o mesmo teardown', async () => {
     const transport = normalScript();
     let releaseWait!: (closed: boolean) => void;
-    transport.waitClosed = vi.fn(() => new Promise<boolean>((resolve) => {
-      releaseWait = resolve;
-    }));
+    transport.waitClosed = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseWait = resolve;
+        }),
+    );
     const driver = new GrokAcpDriver(fakeGrokTransportFactory(transport));
     const handle = await driver.createRun({
       workDir: home,
@@ -214,7 +242,9 @@ describe('Grok ACP driver', () => {
     const second = handle.close();
     expect(second).toBe(first);
     let settled = false;
-    void second.then(() => { settled = true; });
+    void second.then(() => {
+      settled = true;
+    });
     await Promise.resolve();
     expect(settled).toBe(false);
     releaseWait(true);
@@ -228,7 +258,9 @@ describe('Grok ACP driver', () => {
       onRequest: async (method) => {
         if (method === 'initialize') return { authMethods: [{ id: 'cached_token' }] };
         if (method === 'authenticate') {
-          return new Promise((resolve) => { releaseAuth = resolve; });
+          return new Promise((resolve) => {
+            releaseAuth = resolve;
+          });
         }
         throw new Error(`unexpected ${method}`);
       },
@@ -262,16 +294,18 @@ describe('Grok ACP driver', () => {
       },
     });
     const driver = new GrokAcpDriver(fakeGrokTransportFactory(transport));
-    const error = await driver.createRun({
-      workDir: home,
-      model: 'grok-4.5',
-      effort: 'medium',
-      thinking: true,
-      systemPrompt: '',
-      executable: '/fake/grok',
-      env: buildGrokChildEnv(path.join(home, 'runtime', 'grok-home'), {}),
-      handshakeTimeoutMs: 5,
-    }).catch((value: unknown) => value);
+    const error = await driver
+      .createRun({
+        workDir: home,
+        model: 'grok-4.5',
+        effort: 'medium',
+        thinking: true,
+        systemPrompt: '',
+        executable: '/fake/grok',
+        env: buildGrokChildEnv(path.join(home, 'runtime', 'grok-home'), {}),
+        handshakeTimeoutMs: 5,
+      })
+      .catch((value: unknown) => value);
     expect(error).toBeInstanceOf(GrokProcessError);
     expect(error).not.toBeInstanceOf(GrokAuthError);
     expect(transport.killed).toBe(true);
@@ -289,15 +323,17 @@ describe('Grok ACP driver', () => {
       },
     });
     const driver = new GrokAcpDriver(fakeGrokTransportFactory(transport));
-    await expect(driver.createRun({
-      workDir: home,
-      model: 'grok-4.5',
-      effort: 'medium',
-      thinking: true,
-      systemPrompt: '',
-      executable: '/fake/grok',
-      env: buildGrokChildEnv(path.join(home, 'runtime', 'grok-home'), {}),
-    })).rejects.toBeInstanceOf(GrokAuthError);
+    await expect(
+      driver.createRun({
+        workDir: home,
+        model: 'grok-4.5',
+        effort: 'medium',
+        thinking: true,
+        systemPrompt: '',
+        executable: '/fake/grok',
+        env: buildGrokChildEnv(path.join(home, 'runtime', 'grok-home'), {}),
+      }),
+    ).rejects.toBeInstanceOf(GrokAuthError);
   });
 
   it.each([
@@ -334,15 +370,17 @@ describe('Grok ACP driver', () => {
         throw new Error(`unexpected ${method}`);
       },
     });
-    await expect(new GrokAcpDriver(fakeGrokTransportFactory(transport)).createRun({
-      workDir: home,
-      model: 'grok-4.5',
-      effort: 'medium',
-      thinking: true,
-      systemPrompt: '',
-      executable: '/fake/grok',
-      env: buildGrokChildEnv(path.join(home, 'runtime', 'grok-home'), {}),
-    })).rejects.toBeInstanceOf(GrokAuthError);
+    await expect(
+      new GrokAcpDriver(fakeGrokTransportFactory(transport)).createRun({
+        workDir: home,
+        model: 'grok-4.5',
+        effort: 'medium',
+        thinking: true,
+        systemPrompt: '',
+        executable: '/fake/grok',
+        env: buildGrokChildEnv(path.join(home, 'runtime', 'grok-home'), {}),
+      }),
+    ).rejects.toBeInstanceOf(GrokAuthError);
     expect(transport.killed).toBe(true);
   });
 
@@ -355,15 +393,17 @@ describe('Grok ACP driver', () => {
       },
     });
     const driver = new GrokAcpDriver(fakeGrokTransportFactory(transport));
-    await expect(driver.createRun({
-      workDir: home,
-      model: 'grok-4.5',
-      effort: 'medium',
-      thinking: true,
-      systemPrompt: '',
-      executable: '/fake/grok',
-      env: buildGrokChildEnv(path.join(home, 'runtime', 'grok-home'), {}),
-    })).rejects.toBeInstanceOf(GrokAuthError);
+    await expect(
+      driver.createRun({
+        workDir: home,
+        model: 'grok-4.5',
+        effort: 'medium',
+        thinking: true,
+        systemPrompt: '',
+        executable: '/fake/grok',
+        env: buildGrokChildEnv(path.join(home, 'runtime', 'grok-home'), {}),
+      }),
+    ).rejects.toBeInstanceOf(GrokAuthError);
     expect(transport.killed).toBe(true);
   });
 
@@ -456,7 +496,8 @@ describe('Grok ACP driver', () => {
       onRequest: async (method) => {
         if (method === 'initialize') return { authMethods: [{ id: 'cached_token' }] };
         if (method === 'authenticate') return { authenticated: true, subscription: { active: true } };
-        if (method === 'session/new') return { sessionId: 'terminal-sem-modelo', models: { currentModelId: 'grok-4.5' } };
+        if (method === 'session/new')
+          return { sessionId: 'terminal-sem-modelo', models: { currentModelId: 'grok-4.5' } };
         if (method === 'session/prompt') {
           return { stopReason: 'end_turn', _meta: { usage: { inputTokens: 1, outputTokens: 1 } } };
         }
@@ -624,7 +665,11 @@ describe('Grok ACP driver', () => {
         if (method === 'session/prompt') {
           fake.emitServerRequest(9, 'session/request_permission', {
             sessionId: 's2',
-            toolCall: { toolCallId: 'tool-1', title: 'write', rawInput: { variant: 'Write', file_path: '/tmp/x', content: 'x' } },
+            toolCall: {
+              toolCallId: 'tool-1',
+              title: 'write',
+              rawInput: { variant: 'Write', file_path: '/tmp/x', content: 'x' },
+            },
             options: [
               { kind: 'allow_once', optionId: 'allow-once' },
               { kind: 'reject_once', optionId: 'reject-once' },
@@ -711,11 +756,7 @@ describe('Grok ACP driver', () => {
   });
 
   describe('contrato CanUseTool do Agent SDK 0.3 (D11)', () => {
-    function permissionTransport(
-      sessionId: string,
-      requestId: number,
-      toolCallId: string,
-    ): FakeGrokAcpTransport {
+    function permissionTransport(sessionId: string, requestId: number, toolCallId: string): FakeGrokAcpTransport {
       return new FakeGrokAcpTransport({
         onRequest: async (method, _params, fake) => {
           if (method === 'initialize') return { authMethods: [{ id: 'cached_token' }] };
@@ -724,14 +765,21 @@ describe('Grok ACP driver', () => {
           if (method === 'session/prompt') {
             fake.emitServerRequest(requestId, 'session/request_permission', {
               sessionId,
-              toolCall: { toolCallId, title: 'write', rawInput: { variant: 'Write', file_path: '/tmp/x', content: 'x' } },
+              toolCall: {
+                toolCallId,
+                title: 'write',
+                rawInput: { variant: 'Write', file_path: '/tmp/x', content: 'x' },
+              },
               options: [
                 { kind: 'allow_once', optionId: 'allow-once' },
                 { kind: 'reject_once', optionId: 'reject-once' },
               ],
             });
             await Promise.resolve();
-            return { stopReason: 'end_turn', _meta: { modelId: 'grok-4.5', usage: { inputTokens: 1, outputTokens: 1 } } };
+            return {
+              stopReason: 'end_turn',
+              _meta: { modelId: 'grok-4.5', usage: { inputTokens: 1, outputTokens: 1 } },
+            };
           }
           return {};
         },
@@ -875,13 +923,15 @@ describe('Grok ACP driver', () => {
         if (method === 'authenticate') return { authenticated: true, subscription: { active: true } };
         if (method === 'session/new') return { sessionId: 'native-tools', models: { currentModelId: 'grok-4.5' } };
         if (method === 'session/prompt') {
-          fixtures.forEach(([, rawInput], index) => fake.emitServerRequest(index + 1, 'session/request_permission', {
-            toolCall: { toolCallId: `tool-${index + 1}`, rawInput },
-            options: [
-              { kind: 'allow_once', optionId: 'allow-once' },
-              { kind: 'reject_once', optionId: 'reject-once' },
-            ],
-          }));
+          fixtures.forEach(([, rawInput], index) =>
+            fake.emitServerRequest(index + 1, 'session/request_permission', {
+              toolCall: { toolCallId: `tool-${index + 1}`, rawInput },
+              options: [
+                { kind: 'allow_once', optionId: 'allow-once' },
+                { kind: 'reject_once', optionId: 'reject-once' },
+              ],
+            }),
+          );
           return { stopReason: 'end_turn', _meta: { modelId: 'grok-4.5', usage: { inputTokens: 1, outputTokens: 1 } } };
         }
         return {};
@@ -1104,7 +1154,9 @@ describe('Grok ACP driver', () => {
         if (method === 'authenticate') return { authenticated: true, subscription: { active: true } };
         if (method === 'session/new') return { sessionId: 's3', models: { currentModelId: 'grok-4.5' } };
         if (method === 'session/prompt') {
-          return new Promise((resolve) => { resolvePrompt = resolve; });
+          return new Promise((resolve) => {
+            resolvePrompt = resolve;
+          });
         }
         throw new Error(`unexpected ${method}`);
       },
@@ -1147,7 +1199,10 @@ describe('Grok ACP driver', () => {
         if (method === 'initialize') return { authMethods: [{ id: 'cached_token' }] };
         if (method === 'authenticate') return { authenticated: true, subscription: { active: true } };
         if (method === 'session/new') return { sessionId: 'cancel-mismatch', models: { currentModelId: 'grok-4.5' } };
-        if (method === 'session/prompt') return new Promise((resolve) => { resolvePrompt = resolve; });
+        if (method === 'session/prompt')
+          return new Promise((resolve) => {
+            resolvePrompt = resolve;
+          });
         throw new Error(`unexpected ${method}`);
       },
       onNotify: (method) => {
@@ -1182,7 +1237,8 @@ describe('Grok ACP driver', () => {
       onRequest: async (method) => {
         if (method === 'initialize') return { authMethods: [{ id: 'cached_token' }] };
         if (method === 'authenticate') return { authenticated: true, subscription: { active: true } };
-        if (method === 'session/new') return { sessionId: 'abort-before-prompt', models: { currentModelId: 'grok-4.5' } };
+        if (method === 'session/new')
+          return { sessionId: 'abort-before-prompt', models: { currentModelId: 'grok-4.5' } };
         throw new Error(`unexpected ${method}`);
       },
     });
@@ -1225,9 +1281,7 @@ describe('Grok ACP driver', () => {
     });
     const abort = new AbortController();
     const response = handle.send('pare', {}, abort.signal);
-    await vi.waitFor(() => expect(
-      transport.requests.some(({ method }) => method === 'session/prompt'),
-    ).toBe(true));
+    await vi.waitFor(() => expect(transport.requests.some(({ method }) => method === 'session/prompt')).toBe(true));
     const rejected = expect(response).rejects.toThrow(/cancel grace \(5ms\)/);
     abort.abort();
     await rejected;

@@ -21,26 +21,13 @@ import type {
   DynamicWorkflowStreamChunkKind,
 } from '../types/dynamic-workflow';
 
-
-type UnionEquals<A, B> = [A] extends [B]
-  ? [B] extends [A]
-    ? true
-    : false
-  : false;
+type UnionEquals<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
 describe('dynamic-workflow types (unions exatos da SPEC-010)', () => {
   it('DynamicWorkflowRunStatus e exatamente o union da 10.2 (9 valores)', () => {
     const exact: UnionEquals<
       DynamicWorkflowRunStatus,
-      | 'created'
-      | 'running'
-      | 'paused'
-      | 'blocked'
-      | 'interrupted'
-      | 'delivered'
-      | 'completed'
-      | 'failed'
-      | 'aborted'
+      'created' | 'running' | 'paused' | 'blocked' | 'interrupted' | 'delivered' | 'completed' | 'failed' | 'aborted'
     > = true;
     expect(exact).toBe(true);
     expect([...DYNAMIC_WORKFLOW_RUN_STATUSES]).toEqual([
@@ -54,22 +41,13 @@ describe('dynamic-workflow types (unions exatos da SPEC-010)', () => {
       'failed',
       'aborted',
     ]);
-    expect(new Set(DYNAMIC_WORKFLOW_RUN_STATUSES).size).toBe(
-      DYNAMIC_WORKFLOW_RUN_STATUSES.length,
-    );
+    expect(new Set(DYNAMIC_WORKFLOW_RUN_STATUSES).size).toBe(DYNAMIC_WORKFLOW_RUN_STATUSES.length);
   });
 
   it('DynamicWorkflowNodeStatus e exatamente o union da 10.2 (8 valores; sem awaiting-user)', () => {
     const exact: UnionEquals<
       DynamicWorkflowNodeStatus,
-      | 'pending'
-      | 'running'
-      | 'completed'
-      | 'failed'
-      | 'blocked'
-      | 'skipped'
-      | 'interrupted'
-      | 'cancelled'
+      'pending' | 'running' | 'completed' | 'failed' | 'blocked' | 'skipped' | 'interrupted' | 'cancelled'
     > = true;
     expect(exact).toBe(true);
     expect([...DYNAMIC_WORKFLOW_NODE_STATUSES]).toEqual([
@@ -82,28 +60,14 @@ describe('dynamic-workflow types (unions exatos da SPEC-010)', () => {
       'interrupted',
       'cancelled',
     ]);
-    expect(
-      (DYNAMIC_WORKFLOW_NODE_STATUSES as readonly string[]).includes(
-        'awaiting-user',
-      ),
-    ).toBe(false);
-    expect(
-      (DYNAMIC_WORKFLOW_RUN_STATUSES as readonly string[]).includes(
-        'awaiting-user',
-      ),
-    ).toBe(false);
+    expect((DYNAMIC_WORKFLOW_NODE_STATUSES as readonly string[]).includes('awaiting-user')).toBe(false);
+    expect((DYNAMIC_WORKFLOW_RUN_STATUSES as readonly string[]).includes('awaiting-user')).toBe(false);
   });
 
   it('DynamicWorkflowFailureClass e exatamente o union da 10.4 + cancelled (7 classes)', () => {
     const exact: UnionEquals<
       DynamicWorkflowFailureClass,
-      | 'provider-limit'
-      | 'provider-auth'
-      | 'provider-error'
-      | 'timeout'
-      | 'schema'
-      | 'logic'
-      | 'cancelled'
+      'provider-limit' | 'provider-auth' | 'provider-error' | 'timeout' | 'schema' | 'logic' | 'cancelled'
     > = true;
     expect(exact).toBe(true);
     expect([...DYNAMIC_WORKFLOW_FAILURE_CLASSES]).toEqual([
@@ -118,16 +82,9 @@ describe('dynamic-workflow types (unions exatos da SPEC-010)', () => {
   });
 
   it('DynamicWorkflowGateMode e exatamente o union da 11.1', () => {
-    const exact: UnionEquals<
-      DynamicWorkflowGateMode,
-      'auto' | 'orchestrator' | 'human'
-    > = true;
+    const exact: UnionEquals<DynamicWorkflowGateMode, 'auto' | 'orchestrator' | 'human'> = true;
     expect(exact).toBe(true);
-    expect([...DYNAMIC_WORKFLOW_GATE_MODES]).toEqual([
-      'auto',
-      'orchestrator',
-      'human',
-    ]);
+    expect([...DYNAMIC_WORKFLOW_GATE_MODES]).toEqual(['auto', 'orchestrator', 'human']);
   });
 
   it('decision do gate inclui override-approved/override-rejected (14.1.1/AC-17)', () => {
@@ -147,12 +104,7 @@ describe('dynamic-workflow types (unions exatos da SPEC-010)', () => {
   it('messages.source = sources de intervencao (14.1.1) + emissores internos (12.1)', () => {
     const exact: UnionEquals<
       DynamicWorkflowMessageSource,
-      | 'human'
-      | 'orchestrator'
-      | 'workflow-orchestrator-agent'
-      | 'agent'
-      | 'runner'
-      | 'closer'
+      'human' | 'orchestrator' | 'workflow-orchestrator-agent' | 'agent' | 'runner' | 'closer'
     > = true;
     expect(exact).toBe(true);
     expect([...DYNAMIC_WORKFLOW_MESSAGE_SOURCES]).toEqual([
@@ -196,15 +148,10 @@ describe('dynamic-workflow types (unions exatos da SPEC-010)', () => {
   });
 
   it('unions auxiliares exatos: access (8.1), pendingDecision (13.3.2), stream kind (R2-F6)', () => {
-    const accessExact: UnionEquals<
-      DynamicWorkflowNodeAccess,
-      'read-only' | 'workspace-write'
-    > = true;
+    const accessExact: UnionEquals<DynamicWorkflowNodeAccess, 'read-only' | 'workspace-write'> = true;
     expect(accessExact).toBe(true);
-    const pendingExact: UnionEquals<
-      DynamicWorkflowPendingDecisionType,
-      'gate' | 'question' | 'error' | 'provider'
-    > = true;
+    const pendingExact: UnionEquals<DynamicWorkflowPendingDecisionType, 'gate' | 'question' | 'error' | 'provider'> =
+      true;
     expect(pendingExact).toBe(true);
     const kindExact: UnionEquals<
       DynamicWorkflowStreamChunkKind,

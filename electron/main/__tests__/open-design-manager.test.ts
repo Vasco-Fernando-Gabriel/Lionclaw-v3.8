@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-
 vi.mock('../db', () => ({
   getHarnessProject: vi.fn(),
   updateHarnessProject: vi.fn(),
@@ -20,7 +19,11 @@ vi.mock('electron', () => ({
     getAppPath: () => '/tmp/lionclaw-test-approot',
     getPath: (_name: string) => '/tmp/lionclaw-test-userdata',
   },
-  BrowserWindow: class { static getAllWindows() { return []; } },
+  BrowserWindow: class {
+    static getAllWindows() {
+      return [];
+    }
+  },
   ipcMain: { on: vi.fn(), handle: vi.fn() },
 }));
 
@@ -65,7 +68,14 @@ describe('open-design/config', () => {
       const od = { enabled: true, runId: 'run-abc' };
       mockGetHarnessProject.mockReturnValue({
         id: 'proj-1',
-        config: { maxRoundsPerSprint: 3, usePlaywright: false, evaluatorAgentId: 'e', plannerAgentId: 'p', stack: [], openDesign: od },
+        config: {
+          maxRoundsPerSprint: 3,
+          usePlaywright: false,
+          evaluatorAgentId: 'e',
+          plannerAgentId: 'p',
+          stack: [],
+          openDesign: od,
+        },
       } as never);
       expect(getOpenDesignConfig('proj-1')).toEqual(od);
     });
@@ -99,7 +109,6 @@ describe('open-design/config', () => {
     });
   });
 });
-
 
 describe('open-design secrets policy', () => {
   it('never persists apiKey, token, or secret from setup payload', () => {
@@ -172,15 +181,16 @@ describe('open-design secrets policy', () => {
   });
 });
 
-
 describe('open-design/installer preflight (Sprint 1)', () => {
   const vendorRoot = path.join('/tmp/lionclaw-test-approot', 'vendor', 'open-design');
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockExecFile.mockImplementation((_bin: string, _args: string[], _opts: unknown, cb: (e: Error | null, out: string) => void) => {
-      cb(null, '10.33.2\n');
-    });
+    mockExecFile.mockImplementation(
+      (_bin: string, _args: string[], _opts: unknown, cb: (e: Error | null, out: string) => void) => {
+        cb(null, '10.33.2\n');
+      },
+    );
   });
 
   it('returns ready when vendor + node_modules both present', async () => {

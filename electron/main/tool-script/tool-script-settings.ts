@@ -1,4 +1,3 @@
-
 import { createLogger } from '../logger';
 import { getSetting } from '../db';
 import {
@@ -47,12 +46,8 @@ function enabledToolsSetting(): readonly string[] {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) throw new Error('nao e array');
     const known = new Set(TOOL_SCRIPT_DEFAULT_TOOLS);
-    const requested = new Set(
-      parsed.filter((t): t is string => typeof t === 'string'),
-    );
-    const tools = TOOL_SCRIPT_DEFAULT_TOOLS.filter(
-      (t) => known.has(t) && requested.has(t),
-    );
+    const requested = new Set(parsed.filter((t): t is string => typeof t === 'string'));
+    const tools = TOOL_SCRIPT_DEFAULT_TOOLS.filter((t) => known.has(t) && requested.has(t));
     if (tools.length === 0) {
       logger.warn({ raw }, 'tool_script_tools sem tool conhecida; usando as default');
       return TOOL_SCRIPT_DEFAULT_TOOLS;
@@ -73,17 +68,8 @@ export function readToolScriptSettings(): ToolScriptEffectiveSettings {
     enabled: isToolScriptSettingEnabled(),
     enabledTools: enabledToolsSetting(),
     timeoutMs: positiveIntSetting('tool_script_timeout_ms', TOOL_SCRIPT_DEFAULT_TIMEOUT_MS),
-    maxStdoutBytes: positiveIntSetting(
-      'tool_script_max_stdout_bytes',
-      TOOL_SCRIPT_DEFAULT_MAX_STDOUT_BYTES,
-    ),
-    maxStderrBytes: positiveIntSetting(
-      'tool_script_max_stderr_bytes',
-      TOOL_SCRIPT_DEFAULT_MAX_STDERR_BYTES,
-    ),
-    maxToolCalls: positiveIntSetting(
-      'tool_script_max_tool_calls',
-      TOOL_SCRIPT_DEFAULT_MAX_TOOL_CALLS,
-    ),
+    maxStdoutBytes: positiveIntSetting('tool_script_max_stdout_bytes', TOOL_SCRIPT_DEFAULT_MAX_STDOUT_BYTES),
+    maxStderrBytes: positiveIntSetting('tool_script_max_stderr_bytes', TOOL_SCRIPT_DEFAULT_MAX_STDERR_BYTES),
+    maxToolCalls: positiveIntSetting('tool_script_max_tool_calls', TOOL_SCRIPT_DEFAULT_MAX_TOOL_CALLS),
   };
 }

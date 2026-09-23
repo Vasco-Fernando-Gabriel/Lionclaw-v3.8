@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'fs';
 import path from 'path';
 
-
 interface CallerExpectation {
   file: string;
   expectedExecuteAgentCalls: number;
@@ -54,9 +53,18 @@ describe('R8 caller permission snapshot — pipeline-engine, harness-engine, cod
   it('S1.1 enrich uses PERM_DEFAULT_WITH_GUARD + createEnrichPermissionGuard in harness-engine', () => {
     const source = readFileSync(path.join(repoRoot, 'electron/main/harness-engine.ts'), 'utf-8');
     const guardUses = countOccurrences(source, 'PERM_DEFAULT_WITH_GUARD');
-    expect(guardUses, 'harness-engine should reference PERM_DEFAULT_WITH_GUARD at least 2x (1 import + 1 callsite)').toBeGreaterThanOrEqual(2);
-    expect(source.includes("import { setActiveEnrichSpecPath, createEnrichPermissionGuard } from './permission-guard'"), 'harness-engine should import createEnrichPermissionGuard').toBe(true);
-    expect(countOccurrences(source, 'createEnrichPermissionGuard('), 'harness-engine should call createEnrichPermissionGuard()').toBeGreaterThanOrEqual(1);
+    expect(
+      guardUses,
+      'harness-engine should reference PERM_DEFAULT_WITH_GUARD at least 2x (1 import + 1 callsite)',
+    ).toBeGreaterThanOrEqual(2);
+    expect(
+      source.includes("import { setActiveEnrichSpecPath, createEnrichPermissionGuard } from './permission-guard'"),
+      'harness-engine should import createEnrichPermissionGuard',
+    ).toBe(true);
+    expect(
+      countOccurrences(source, 'createEnrichPermissionGuard('),
+      'harness-engine should call createEnrichPermissionGuard()',
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it('codex-agents-mcp preserva o caminho dedicado com ownership host-side', () => {

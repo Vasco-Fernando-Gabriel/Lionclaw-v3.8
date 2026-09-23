@@ -3,10 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MessageBubble, collectImageThumbs } from '../MessageBubble';
-import {
-  VISION_TRANSCRIPTION_MARKER,
-  splitVisionTranscription,
-} from '@/constants/vision';
+import { VISION_TRANSCRIPTION_MARKER, splitVisionTranscription } from '@/constants/vision';
 import type { ChatAttachment, ChatAttachmentMeta } from '@/types';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -61,9 +58,8 @@ const META_IMG: ChatAttachmentMeta = {
 function findChip(): HTMLButtonElement | null {
   const buttons = Array.from(container.querySelectorAll('button'));
   return (
-    (buttons.find((b) =>
-      (b.textContent || '').includes('Imagem transcrita pelo vision'),
-    ) as HTMLButtonElement | undefined) ?? null
+    (buttons.find((b) => (b.textContent || '').includes('Imagem transcrita pelo vision')) as
+      HTMLButtonElement | undefined) ?? null
   );
 }
 
@@ -122,12 +118,7 @@ describe('MessageBubble - transcricao do vision colapsada', () => {
   });
 
   it('mensagem que e SO o bloco: chip presente, sem paragrafo vazio', () => {
-    render(
-      <MessageBubble
-        role="user"
-        content={`${VISION_TRANSCRIPTION_MARKER}\n${TRANSCRIPTION}`}
-      />,
-    );
+    render(<MessageBubble role="user" content={`${VISION_TRANSCRIPTION_MARKER}\n${TRANSCRIPTION}`} />);
     expect(findChip()).not.toBeNull();
     expect(container.querySelector('p.whitespace-pre-wrap.selectable')).toBeNull();
     expect(container.textContent).not.toContain(TRANSCRIPTION);
@@ -142,22 +133,14 @@ describe('MessageBubble - transcricao do vision colapsada', () => {
 
 describe('MessageBubble - miniatura da imagem', () => {
   it('attachments vivos: miniatura presente com o preview', () => {
-    render(
-      <MessageBubble role="user" content="olha" attachments={[LIVE_IMG]} />,
-    );
+    render(<MessageBubble role="user" content="olha" attachments={[LIVE_IMG]} />);
     const img = container.querySelector('img[alt="print.png"]') as HTMLImageElement | null;
     expect(img).not.toBeNull();
     expect(img!.getAttribute('src')).toBe('data:image/png;base64,LIVETHUMB');
   });
 
   it('attachmentsMeta persistida (rehidratacao): miniatura volta a aparecer', () => {
-    render(
-      <MessageBubble
-        role="user"
-        content={CONTENT_WITH_BLOCK}
-        attachmentsMeta={[META_IMG]}
-      />,
-    );
+    render(<MessageBubble role="user" content={CONTENT_WITH_BLOCK} attachmentsMeta={[META_IMG]} />);
     const img = container.querySelector('img[alt="foto.jpg"]') as HTMLImageElement | null;
     expect(img).not.toBeNull();
     expect(img!.getAttribute('src')).toBe('data:image/jpeg;base64,METATHUMB');
@@ -165,10 +148,7 @@ describe('MessageBubble - miniatura da imagem', () => {
   });
 
   it('dedupe por id quando o anexo vivo e a metadata coexistem', () => {
-    const thumbs = collectImageThumbs(
-      [LIVE_IMG],
-      [{ ...META_IMG, id: LIVE_IMG.id }, META_IMG],
-    );
+    const thumbs = collectImageThumbs([LIVE_IMG], [{ ...META_IMG, id: LIVE_IMG.id }, META_IMG]);
     expect(thumbs).toHaveLength(2);
     expect(thumbs.map((t) => t.id)).toEqual(['img-live', 'img-meta']);
     expect(thumbs[0].src).toBe('data:image/png;base64,LIVETHUMB');

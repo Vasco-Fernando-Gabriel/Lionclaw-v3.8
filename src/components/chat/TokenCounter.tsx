@@ -15,6 +15,7 @@ interface TokenCounterProps {
   contextWindowTokens?: number;
   compactionThresholdPercent?: number;
   contextSource?: 'estimate' | 'provider';
+  modelLabel?: string;
   costUsd?: number | null;
   estimated?: boolean;
   costStatus?: 'known' | 'unknown' | 'estimated-partial';
@@ -62,7 +63,10 @@ function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, value));
 }
 
-function contextTone(percent: number, threshold: number): {
+function contextTone(
+  percent: number,
+  threshold: number,
+): {
   text: string;
   fill: string;
   border: string;
@@ -109,11 +113,7 @@ export function resolveTokenCounterCostDisplay(
   if (costStatus === 'estimated-partial' && typeof costUsd === 'number' && costUsd >= 0) {
     return formatCostDisplay(costUsd);
   }
-  if (
-    typeof costUsd === 'number'
-    && costUsd >= 0
-    && costEstimationKind === 'subscription-equivalent-payg'
-  ) {
+  if (typeof costUsd === 'number' && costUsd >= 0 && costEstimationKind === 'subscription-equivalent-payg') {
     return formatSubscriptionEquivalentCost(costUsd);
   }
   if (costUsd === 0) return 'Local · $0';
@@ -142,6 +142,7 @@ export function TokenCounter({
   contextWindowTokens,
   compactionThresholdPercent,
   contextSource,
+  modelLabel,
   costUsd,
   estimated,
   costStatus,
@@ -167,9 +168,7 @@ export function TokenCounter({
   const costDisplay = resolveTokenCounterCostDisplay(costUsd, costStatus, costEstimationKind);
 
   const threshold = Math.min(95, Math.max(50, compactionThresholdPercent ?? 70));
-  const contextPercent = showContextBar
-    ? clampPercent((animatedContext / (contextWindowTokens || 1)) * 100)
-    : 0;
+  const contextPercent = showContextBar ? clampPercent((animatedContext / (contextWindowTokens || 1)) * 100) : 0;
   const tone = contextTone(contextPercent, threshold);
   const markerLeft = clampPercent(threshold);
 
@@ -209,9 +208,11 @@ export function TokenCounter({
                 <span className="text-zinc-700">|</span>
                 <span
                   className="text-zinc-500"
-                  title={costEstimationKind === 'subscription-equivalent-payg'
-                    ? 'Equivalente da API; nao e cobranca da assinatura.'
-                    : costUnknownReason}
+                  title={
+                    costEstimationKind === 'subscription-equivalent-payg'
+                      ? 'Equivalente da API; nao e cobranca da assinatura.'
+                      : costUnknownReason
+                  }
                 >
                   {costDisplay}
                 </span>
@@ -229,11 +230,7 @@ export function TokenCounter({
             {`⟦ ${compactionModelLabel} ⟧`}
           </span>
         )}
-        {showCompactionOnly && (
-          <div className="text-[11px] font-mono text-amber-300 animate-pulse">
-            compactando
-          </div>
-        )}
+        {showCompactionOnly && <div className="text-[11px] font-mono text-amber-300 animate-pulse">compactando</div>}
         {isDreaming && (
           <span className="bg-amber-500/15 text-amber-400 rounded-full px-2 py-0.5 text-xs flex items-center gap-1.5">
             Dreaming
@@ -245,11 +242,16 @@ export function TokenCounter({
         <div className="mt-2 space-y-1">
           <div className="flex items-center justify-between gap-3 text-[10px] font-mono">
             <span className="text-zinc-600">
-              ctx:{' '}
-              <span className={tone.text}>{formatTokenCount(animatedContext)}</span>
+              ctx: <span className={tone.text}>{formatTokenCount(animatedContext)}</span>
               <span className="text-zinc-700"> / </span>
               <span className="text-zinc-500">{formatTokenCount(contextWindowTokens || 0)}</span>
               {contextSource === 'estimate' && <span className="text-zinc-700"> est</span>}
+              {modelLabel && (
+                <span className="text-zinc-500" data-testid="token-counter-model">
+                  {' · '}
+                  {modelLabel}
+                </span>
+              )}
             </span>
             <span className={isCompacting ? 'text-amber-300 animate-pulse' : 'text-zinc-600'}>
               {isCompacting ? 'compactando' : `${contextPercent.toFixed(0)}%`}
@@ -260,10 +262,7 @@ export function TokenCounter({
               className={`h-full rounded-full transition-all duration-300 ${tone.fill} ${isCompacting ? 'animate-pulse' : ''}`}
               style={{ width: `${contextPercent}%` }}
             />
-            <div
-              className="absolute top-0 h-full w-px bg-zinc-200/70"
-              style={{ left: `${markerLeft}%` }}
-            />
+            <div className="absolute top-0 h-full w-px bg-zinc-200/70" style={{ left: `${markerLeft}%` }} />
           </div>
         </div>
       )}

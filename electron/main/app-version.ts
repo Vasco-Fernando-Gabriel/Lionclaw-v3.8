@@ -3,10 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 function readPackageVersion(): string {
-  const candidates = [
-    path.join(__dirname, '../../package.json'),
-    path.join(process.cwd(), 'package.json'),
-  ];
+  const candidates = [path.join(__dirname, '../../package.json'), path.join(process.cwd(), 'package.json')];
 
   for (const candidate of candidates) {
     try {
@@ -16,8 +13,7 @@ function readPackageVersion(): string {
       if (typeof parsed.version === 'string' && parsed.version.length > 0) {
         return parsed.version;
       }
-    } catch {
-    }
+    } catch {}
   }
 
   return '0.0.0';

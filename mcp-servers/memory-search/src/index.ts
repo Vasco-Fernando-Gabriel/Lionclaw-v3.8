@@ -6,7 +6,6 @@ import path from 'path';
 import os from 'os';
 import { z } from 'zod';
 
-
 const DB_PATH = path.join(os.homedir(), '.lionclaw', 'data', 'lionclaw.db');
 const OPENAI_TIMEOUT_MS = 15_000;
 const OLLAMA_TIMEOUT_MS = 10_000;
@@ -15,7 +14,6 @@ const EMBEDDING_DIMS = 1536;
 const EMBEDDING_MODEL = 'text-embedding-3-small';
 const COHERE_RERANK_MODEL = 'rerank-multilingual-v3.0';
 const COHERE_RATE_LIMIT_MS = 650;
-
 
 let db: Database.Database | null = null;
 
@@ -28,33 +26,70 @@ function getDb(): Database.Database {
   return db;
 }
 
-
 function getSetting(key: string): string | undefined {
   const row = getDb().prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
   return row?.value;
 }
 
-
 const DIACRITICS_MAP: Record<string, string> = {
-  'à': 'a', 'á': 'a', 'â': 'a', 'ã': 'a', 'ä': 'a', 'å': 'a',
-  'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e',
-  'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i',
-  'ò': 'o', 'ó': 'o', 'ô': 'o', 'õ': 'o', 'ö': 'o',
-  'ù': 'u', 'ú': 'u', 'û': 'u', 'ü': 'u',
-  'ý': 'y', 'ÿ': 'y',
-  'ñ': 'n', 'ç': 'c',
-  'À': 'A', 'Á': 'A', 'Â': 'A', 'Ã': 'A', 'Ä': 'A', 'Å': 'A',
-  'È': 'E', 'É': 'E', 'Ê': 'E', 'Ë': 'E',
-  'Ì': 'I', 'Í': 'I', 'Î': 'I', 'Ï': 'I',
-  'Ò': 'O', 'Ó': 'O', 'Ô': 'O', 'Õ': 'O', 'Ö': 'O',
-  'Ù': 'U', 'Ú': 'U', 'Û': 'U', 'Ü': 'U',
-  'Ý': 'Y', 'Ñ': 'N', 'Ç': 'C',
+  'à': 'a',
+  'á': 'a',
+  'â': 'a',
+  'ã': 'a',
+  'ä': 'a',
+  'å': 'a',
+  'è': 'e',
+  'é': 'e',
+  'ê': 'e',
+  'ë': 'e',
+  'ì': 'i',
+  'í': 'i',
+  'î': 'i',
+  'ï': 'i',
+  'ò': 'o',
+  'ó': 'o',
+  'ô': 'o',
+  'õ': 'o',
+  'ö': 'o',
+  'ù': 'u',
+  'ú': 'u',
+  'û': 'u',
+  'ü': 'u',
+  'ý': 'y',
+  'ÿ': 'y',
+  'ñ': 'n',
+  'ç': 'c',
+  'À': 'A',
+  'Á': 'A',
+  'Â': 'A',
+  'Ã': 'A',
+  'Ä': 'A',
+  'Å': 'A',
+  'È': 'E',
+  'É': 'E',
+  'Ê': 'E',
+  'Ë': 'E',
+  'Ì': 'I',
+  'Í': 'I',
+  'Î': 'I',
+  'Ï': 'I',
+  'Ò': 'O',
+  'Ó': 'O',
+  'Ô': 'O',
+  'Õ': 'O',
+  'Ö': 'O',
+  'Ù': 'U',
+  'Ú': 'U',
+  'Û': 'U',
+  'Ü': 'U',
+  'Ý': 'Y',
+  'Ñ': 'N',
+  'Ç': 'C',
 };
 
 function stripDiacritics(text: string): string {
   return text.replace(/[^\x00-\x7F]/g, (char) => DIACRITICS_MAP[char] ?? char);
 }
-
 
 function normalizeL2(vec: number[]): number[] {
   let norm = 0;
@@ -63,7 +98,6 @@ function normalizeL2(vec: number[]): number[] {
   if (norm === 0) return vec;
   return vec.map((v) => v / norm);
 }
-
 
 async function generateEmbeddingOpenAI(text: string): Promise<number[] | null> {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -103,7 +137,6 @@ async function generateEmbeddingOpenAI(text: string): Promise<number[] | null> {
     clearTimeout(timer);
   }
 }
-
 
 async function generateEmbeddingOllama(text: string): Promise<number[] | null> {
   const ollamaEnabled = getSetting('ollama_enabled') === 'true';
@@ -145,7 +178,6 @@ async function generateQueryEmbedding(text: string): Promise<number[] | null> {
   if (openaiResult) return openaiResult;
   return generateEmbeddingOllama(text);
 }
-
 
 let lastCohereCallAt = 0;
 
@@ -203,8 +235,10 @@ async function cohereRerank(
   }
 }
 
-
-function searchBM25(query: string, limit: number): Array<{ id: number; content: string; topic: string; created_at: string }> {
+function searchBM25(
+  query: string,
+  limit: number,
+): Array<{ id: number; content: string; topic: string; created_at: string }> {
   const sanitized = query.replace(/["*(){}[\]^~\\:]/g, ' ').trim();
   if (!sanitized) return [];
 
@@ -215,61 +249,80 @@ function searchBM25(query: string, limit: number): Array<{ id: number; content: 
   const orQuery = terms.join(' OR ');
 
   try {
-    return getDb().prepare(`
+    return getDb()
+      .prepare(
+        `
       SELECT sm.id, sm.content, sm.topic, sm.created_at
       FROM semantic_memories_fts fts
       JOIN semantic_memories sm ON sm.id = fts.rowid
       WHERE semantic_memories_fts MATCH ?
       ORDER BY bm25(semantic_memories_fts) ASC
       LIMIT ?
-    `).all(orQuery, limit) as Array<{ id: number; content: string; topic: string; created_at: string }>;
+    `,
+      )
+      .all(orQuery, limit) as Array<{ id: number; content: string; topic: string; created_at: string }>;
   } catch {
     return [];
   }
 }
 
-
-function searchVector(queryBuf: Buffer, limit: number): Array<{ id: number; content: string; topic: string; created_at: string }> {
+function searchVector(
+  queryBuf: Buffer,
+  limit: number,
+): Array<{ id: number; content: string; topic: string; created_at: string }> {
   try {
-    return getDb().prepare(`
+    return getDb()
+      .prepare(
+        `
       SELECT sm.id, sm.content, sm.topic, sm.created_at
       FROM semantic_memories_vec v
       JOIN semantic_memories sm ON CAST(sm.id AS TEXT) = v.id
       WHERE v.embedding MATCH ?
       AND k = ?
       ORDER BY distance ASC
-    `).all(queryBuf, limit) as Array<{ id: number; content: string; topic: string; created_at: string }>;
+    `,
+      )
+      .all(queryBuf, limit) as Array<{ id: number; content: string; topic: string; created_at: string }>;
   } catch {
     try {
-      return getDb().prepare(`
+      return getDb()
+        .prepare(
+          `
         SELECT sm.id, sm.content, sm.topic, sm.created_at,
                vec_distance_cosine(v.embedding, ?) AS distance
         FROM semantic_memories_vec v
         JOIN semantic_memories sm ON CAST(sm.id AS TEXT) = v.id
         ORDER BY distance ASC
         LIMIT ?
-      `).all(queryBuf, limit) as Array<{ id: number; content: string; topic: string; created_at: string }>;
+      `,
+        )
+        .all(queryBuf, limit) as Array<{ id: number; content: string; topic: string; created_at: string }>;
     } catch {
       return [];
     }
   }
 }
 
-
-function searchLike(query: string, limit: number): Array<{ id: number; content: string; topic: string; created_at: string }> {
+function searchLike(
+  query: string,
+  limit: number,
+): Array<{ id: number; content: string; topic: string; created_at: string }> {
   try {
-    return getDb().prepare(`
+    return getDb()
+      .prepare(
+        `
       SELECT id, content, topic, created_at
       FROM semantic_memories
       WHERE content LIKE ?
       ORDER BY created_at DESC
       LIMIT ?
-    `).all(`%${query}%`, limit) as Array<{ id: number; content: string; topic: string; created_at: string }>;
+    `,
+      )
+      .all(`%${query}%`, limit) as Array<{ id: number; content: string; topic: string; created_at: string }>;
   } catch {
     return [];
   }
 }
-
 
 interface MemoryRow {
   id: number;
@@ -302,17 +355,12 @@ function reciprocalRankFusion(
     .map(({ score, item }) => ({ ...item, rrf_score: score }));
 }
 
-
 interface SearchResult extends MemoryRow {
   score: number;
   sources: string[];
 }
 
-async function hybridSearch(
-  query: string,
-  limit: number,
-  topic?: string,
-): Promise<SearchResult[]> {
+async function hybridSearch(query: string, limit: number, topic?: string): Promise<SearchResult[]> {
   const candidateLimit = Math.max(limit * 3, 30);
   const rankedLists: MemoryRow[][] = [];
   const sourceMap = new Map<number, Set<string>>();
@@ -359,7 +407,7 @@ async function hybridSearch(
       return {
         ...original,
         score: r.relevanceScore,
-        sources: [...(Array.from(sourceMap.get(r.id) || [])), 'rerank'],
+        sources: [...Array.from(sourceMap.get(r.id) || []), 'rerank'],
       };
     });
   }
@@ -372,18 +420,20 @@ async function hybridSearch(
   }));
 }
 
-
 function getMemoryStats(): { total: number; withEmbedding: number; ftsIndexed: number } {
   const d = getDb();
   const total = (d.prepare('SELECT COUNT(*) as c FROM semantic_memories').get() as { c: number }).c;
-  const withEmbedding = (d.prepare('SELECT COUNT(*) as c FROM semantic_memories WHERE embedding IS NOT NULL').get() as { c: number }).c;
+  const withEmbedding = (
+    d.prepare('SELECT COUNT(*) as c FROM semantic_memories WHERE embedding IS NOT NULL').get() as { c: number }
+  ).c;
   let ftsIndexed = 0;
   try {
     ftsIndexed = (d.prepare('SELECT COUNT(*) as c FROM semantic_memories_fts').get() as { c: number }).c;
-  } catch { /* FTS table may not exist */ }
+  } catch {
+    /* FTS table may not exist */
+  }
   return { total, withEmbedding, ftsIndexed };
 }
-
 
 const server = new McpServer({
   name: 'memory-search',
@@ -402,7 +452,9 @@ Exemplos de quando usar:
 - "o que conversamos ontem sobre deploy?"
 - qualquer referencia a conversas, decisoes ou contexto passado`,
   {
-    query: z.string().describe('O que buscar na memoria. Pode ser uma pergunta, palavras-chave, ou descricao do que quer lembrar.'),
+    query: z
+      .string()
+      .describe('O que buscar na memoria. Pode ser uma pergunta, palavras-chave, ou descricao do que quer lembrar.'),
     topic: z.string().optional().describe('Topico opcional para filtrar (ex: "deploy", "projeto X")'),
     limit: z.number().optional().default(10).describe('Numero maximo de resultados (padrao: 10)'),
   },
@@ -412,31 +464,39 @@ Exemplos de quando usar:
 
       if (results.length === 0) {
         return {
-          content: [{
-            type: 'text' as const,
-            text: `Nenhuma memoria encontrada para: "${query}". O banco de memorias pode estar vazio ou o termo nao corresponde a nenhum conteudo armazenado.`,
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: `Nenhuma memoria encontrada para: "${query}". O banco de memorias pode estar vazio ou o termo nao corresponde a nenhum conteudo armazenado.`,
+            },
+          ],
         };
       }
 
-      const formatted = results.map((r, i) => {
-        const date = r.created_at?.split(' ')[0] || 'data desconhecida';
-        const sources = r.sources.join('+');
-        return `### [${i + 1}] ${r.topic || 'Sem topico'} (${date}) [${sources}] score=${r.score.toFixed(4)}\n${r.content}`;
-      }).join('\n\n---\n\n');
+      const formatted = results
+        .map((r, i) => {
+          const date = r.created_at?.split(' ')[0] || 'data desconhecida';
+          const sources = r.sources.join('+');
+          return `### [${i + 1}] ${r.topic || 'Sem topico'} (${date}) [${sources}] score=${r.score.toFixed(4)}\n${r.content}`;
+        })
+        .join('\n\n---\n\n');
 
       return {
-        content: [{
-          type: 'text' as const,
-          text: `Encontrei ${results.length} memorias relevantes:\n\n${formatted}`,
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: `Encontrei ${results.length} memorias relevantes:\n\n${formatted}`,
+          },
+        ],
       };
     } catch (error) {
       return {
-        content: [{
-          type: 'text' as const,
-          text: `Erro na busca de memoria: ${error instanceof Error ? error.message : String(error)}`,
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: `Erro na busca de memoria: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
         isError: true,
       };
     }
@@ -452,23 +512,26 @@ server.tool(
       const stats = getMemoryStats();
       const hasCohere = !!process.env.COHERE_API_KEY;
       return {
-        content: [{
-          type: 'text' as const,
-          text: `Estatisticas de memoria:\n- Total de memorias: ${stats.total}\n- Com embedding vetorial: ${stats.withEmbedding}\n- Indexadas no FTS5 (BM25): ${stats.ftsIndexed}\n- Cohere reranking: ${hasCohere ? 'ativo' : 'inativo (sem API key)'}`,
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: `Estatisticas de memoria:\n- Total de memorias: ${stats.total}\n- Com embedding vetorial: ${stats.withEmbedding}\n- Indexadas no FTS5 (BM25): ${stats.ftsIndexed}\n- Cohere reranking: ${hasCohere ? 'ativo' : 'inativo (sem API key)'}`,
+          },
+        ],
       };
     } catch (error) {
       return {
-        content: [{
-          type: 'text' as const,
-          text: `Erro ao obter stats: ${error instanceof Error ? error.message : String(error)}`,
-        }],
+        content: [
+          {
+            type: 'text' as const,
+            text: `Erro ao obter stats: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
         isError: true,
       };
     }
   },
 );
-
 
 async function main() {
   const transport = new StdioServerTransport();

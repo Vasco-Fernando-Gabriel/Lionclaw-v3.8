@@ -32,13 +32,7 @@ export interface WorkflowOutputsTabProps {
   artifacts: DynamicWorkflowArtifact[];
 }
 
-export function WorkflowOutputsTab({
-  runId,
-  run,
-  touched,
-  liveTouchedFiles,
-  artifacts,
-}: WorkflowOutputsTabProps) {
+export function WorkflowOutputsTab({ runId, run, touched, liveTouchedFiles, artifacts }: WorkflowOutputsTabProps) {
   const api = useMemo(readOptionalApi, []);
   const [bundle, setBundle] = useState<RunBundleEntry[] | null>(null);
   const [bundleError, setBundleError] = useState<string | null>(null);
@@ -80,13 +74,9 @@ export function WorkflowOutputsTab({
         <SectionTitle>
           Arquivos tocados
           <Count n={files.length} />
-          {hiddenCount > 0 && (
-            <span className="font-mono text-[10px] text-zinc-500">+{hiddenCount}</span>
-          )}
+          {hiddenCount > 0 && <span className="font-mono text-[10px] text-zinc-500">+{hiddenCount}</span>}
           {!filesFromEvents && files.length > 0 && (
-            <span className="ml-1 text-[10px] normal-case tracking-normal text-zinc-500">
-              (stream ao vivo)
-            </span>
+            <span className="ml-1 text-[10px] normal-case tracking-normal text-zinc-500">(stream ao vivo)</span>
           )}
         </SectionTitle>
         {files.length === 0 ? (
@@ -155,9 +145,7 @@ export function WorkflowOutputsTab({
                   <span className="ml-1 font-mono text-[11px] text-zinc-500">#{w.attempt}</span>
                   {w.phaseId && <span className="ml-1.5 text-[10px] text-zinc-500">{w.phaseId}</span>}
                 </span>
-                <span className="shrink-0 font-mono text-[11px] text-zinc-500">
-                  {w.touchedFiles.length} arq
-                </span>
+                <span className="shrink-0 font-mono text-[11px] text-zinc-500">{w.touchedFiles.length} arq</span>
                 <span
                   className={`shrink-0 font-mono text-[11px] ${w.worktreeCommitSha ? 'text-amber-300' : 'text-zinc-500'}`}
                   title={w.worktreeCommitSha ?? 'sem commit'}
@@ -187,9 +175,7 @@ export function WorkflowOutputsTab({
                   .then((r) => {
                     if (r && 'error' in r) setOpenError(r.error);
                   })
-                  .catch((err: unknown) =>
-                    setOpenError(err instanceof Error ? err.message : String(err)),
-                  );
+                  .catch((err: unknown) => setOpenError(err instanceof Error ? err.message : String(err)));
               }}
               className="ml-auto flex items-center gap-1 rounded-md border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 transition-colors hover:bg-zinc-800"
               data-testid="outputs-open-run-dir"
@@ -201,9 +187,7 @@ export function WorkflowOutputsTab({
         </div>
         {openError && <p className="mb-1 text-[11px] text-red-300">{openError}</p>}
         {!api.getRunBundle ? (
-          <Empty testId="outputs-bundle-unavailable">
-            Pacote do run indisponivel nesta versao.
-          </Empty>
+          <Empty testId="outputs-bundle-unavailable">Pacote do run indisponivel nesta versao.</Empty>
         ) : bundleLoading && !bundle ? (
           <Empty>Lendo o pacote do run...</Empty>
         ) : bundleError ? (
@@ -224,9 +208,7 @@ export function WorkflowOutputsTab({
                   <span className="min-w-0 flex-1 truncate font-mono text-zinc-300">{entry.relativePath}</span>
                   <span className="shrink-0 font-mono text-[11px] text-zinc-500">{formatBytes(entry.sizeBytes)}</span>
                   {at && (
-                    <span className="shrink-0 font-mono text-[11px] text-zinc-500">
-                      {formatLocalDateTime(at)}
-                    </span>
+                    <span className="shrink-0 font-mono text-[11px] text-zinc-500">{formatLocalDateTime(at)}</span>
                   )}
                 </div>
               );

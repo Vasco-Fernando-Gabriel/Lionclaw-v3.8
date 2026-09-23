@@ -1,8 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import {
-  useErrorToastStore,
-  ERROR_TOAST_AUTO_DISMISS_MS,
-} from '@/stores/error-toast-store';
+import { useErrorToastStore, ERROR_TOAST_AUTO_DISMISS_MS } from '@/stores/error-toast-store';
 
 beforeEach(() => {
   vi.useFakeTimers();

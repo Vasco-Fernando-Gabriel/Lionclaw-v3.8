@@ -9,14 +9,13 @@ import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 
-
 const LIONCLAW_HOME = process.env['LIONCLAW_HOME'] ?? path.join(os.homedir(), '.lionclaw');
 const STATE_FILE = path.join(LIONCLAW_HOME, 'data', '.kb-active-agent');
 
-const SOCKET_PATH = process.platform === 'win32'
-  ? '\\\\.\\pipe\\lionclaw-kb-search'
-  : path.join(LIONCLAW_HOME, 'data', '.kb-search.sock');
-
+const SOCKET_PATH =
+  process.platform === 'win32'
+    ? '\\\\.\\pipe\\lionclaw-kb-search'
+    : path.join(LIONCLAW_HOME, 'data', '.kb-search.sock');
 
 function getActiveAgentId(): string {
   const envAgentId = process.env['KB_AGENT_ID'];
@@ -28,7 +27,6 @@ function getActiveAgentId(): string {
     return '';
   }
 }
-
 
 async function waitForSocket(maxWaitMs = 5000): Promise<boolean> {
   if (process.platform !== 'win32') {
@@ -44,8 +42,13 @@ async function waitForSocket(maxWaitMs = 5000): Promise<boolean> {
   while (Date.now() - start < maxWaitMs) {
     const ok = await new Promise<boolean>((resolve) => {
       const probe = net.createConnection(SOCKET_PATH);
-      probe.on('connect', () => { probe.destroy(); resolve(true); });
-      probe.on('error', () => { resolve(false); });
+      probe.on('connect', () => {
+        probe.destroy();
+        resolve(true);
+      });
+      probe.on('error', () => {
+        resolve(false);
+      });
     });
     if (ok) return true;
     await new Promise((r) => setTimeout(r, 250));
@@ -93,7 +96,9 @@ function searchViaBridge(agentId: string, query: string): Promise<unknown> {
             }
             return;
           }
-        } catch { /* ignore parse errors */ }
+        } catch {
+          /* ignore parse errors */
+        }
       }
     });
 
@@ -103,7 +108,6 @@ function searchViaBridge(agentId: string, query: string): Promise<unknown> {
     });
   });
 }
-
 
 const server = new McpServer({
   name: 'knowledge-base',
@@ -115,7 +119,9 @@ server.tool(
   'Busca informacoes na sua base de conhecimento. Use quando precisar de informacoes especificas sobre documentos indexados para voce. Retorna os trechos mais relevantes rankeados por relevancia semantica. IMPORTANTE: sempre passe agent_id com o seu identificador (ex: "researcher").',
   {
     query: z.string().describe('O que voce quer encontrar na base de conhecimento'),
-    agent_id: z.string().describe('Seu identificador como agente. Voce DEVE passar seu proprio id aqui (ex: "researcher").'),
+    agent_id: z
+      .string()
+      .describe('Seu identificador como agente. Voce DEVE passar seu proprio id aqui (ex: "researcher").'),
   },
   async ({ query, agent_id }) => {
     const agentId = agent_id || getActiveAgentId();
@@ -141,12 +147,16 @@ server.tool(
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       return {
-        content: [{ type: 'text' as const, text: `ERRO DE CONEXÃO: Não foi possível acessar a base de conhecimento. ${errMsg}` }],
+        content: [
+          {
+            type: 'text' as const,
+            text: `ERRO DE CONEXÃO: Não foi possível acessar a base de conhecimento. ${errMsg}`,
+          },
+        ],
       };
     }
   },
 );
-
 
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();

@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 vi.mock('../../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
@@ -41,10 +39,7 @@ import {
   stripUnmaterializedToolInstructions,
   type KimiToolProfile,
 } from '../kimi-session-config';
-import {
-  KIMI_SUBAGENT_TOOL_NAME,
-  KIMI_USER_QUESTION_TOOL_NAME,
-} from '../kimi-external-tools';
+import { KIMI_SUBAGENT_TOOL_NAME, KIMI_USER_QUESTION_TOOL_NAME } from '../kimi-external-tools';
 import type { AgentQueryConfig } from '../../agent-config-resolver';
 import type { RepoChatContext } from '../../repo-graph/turn-context';
 
@@ -75,7 +70,7 @@ function makeConfig(overrides: Partial<AgentQueryConfig> = {}): AgentQueryConfig
 }
 
 function args(profile: KimiToolProfile, config: AgentQueryConfig) {
-  return { profile, config, cwd: '/tmp/work', abortController: new AbortController() };
+  return { profile, config, cwd: '/tmp/work', abortController: new AbortController(), sessionId: 'sess-1' };
 }
 
 describe('buildKimiSessionTools - per-profile gate (SPEC-011 §9)', () => {
@@ -240,9 +235,9 @@ describe('buildKimiSessionTools - per-profile gate (SPEC-011 §9)', () => {
   });
 
   it('(g) bogus profile throws at the never-guard default', async () => {
-    await expect(
-      buildKimiSessionTools(args('bogus' as unknown as KimiToolProfile, makeConfig())),
-    ).rejects.toThrow(/unhandled KimiToolProfile/);
+    await expect(buildKimiSessionTools(args('bogus' as unknown as KimiToolProfile, makeConfig()))).rejects.toThrow(
+      /unhandled KimiToolProfile/,
+    );
   });
 
   it('(h) appends the kimi-only AgentSwarm steering; mentions lion_run_subagent ONLY when materialized', async () => {
@@ -320,14 +315,7 @@ describe('stripUnmaterializedToolInstructions - pure function', () => {
   });
 
   it('removes the skills block AND a separate unmaterialized mcp__ block in one call', () => {
-    const prompt = [
-      'Header.',
-      '',
-      SKILLS_BLOCK,
-      '',
-      '## Memoria',
-      'Use mcp__memory-search__search.',
-    ].join('\n');
+    const prompt = ['Header.', '', SKILLS_BLOCK, '', '## Memoria', 'Use mcp__memory-search__search.'].join('\n');
     const out = stripUnmaterializedToolInstructions(prompt, new Set());
     expect(out).not.toContain('## Skills Disponiveis (via MCP)');
     expect(out).not.toContain('## Memoria');

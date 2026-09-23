@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { PT_BR_BLOCK } from './_shared/language-pt-br';
 import { GIT_RESTRICTIONS_BLOCK } from './_shared/git-restrictions';

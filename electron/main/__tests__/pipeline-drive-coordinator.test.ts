@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Mock } from 'vitest';
 import type { DriveState } from '../../../src/types';
@@ -58,10 +57,35 @@ function fakeSetDriveState(projectId: string, patch: Partial<DriveState>): Drive
   return merged;
 }
 
+function fakeGetDriveSessionId(projectId: string): string | null {
+  return projects.get(projectId)?.config.drive?.sessionId ?? null;
+}
+function fakeIsDriveEngaged(projectId: string): boolean {
+  const drive = fakeGetDriveState(projectId);
+  return !!drive && drive.driver === 'orchestrator' && drive.status !== 'stopped';
+}
+function fakeListHarnessProjectsBySession(sessionId: string): FakeProject[] {
+  return [...projects.values()].filter((p) => p.config.drive?.sessionId === sessionId);
+}
+function fakeFindEngagedDriveBySession(sessionId: string): FakeProject | null {
+  return fakeListHarnessProjectsBySession(sessionId).find((p) => fakeIsDriveEngaged(p.id)) ?? null;
+}
+function fakeGetOpenLaneSessionById(id: string): { id: string; laneBadge: number; title: string } | null {
+  if (!id || closedLanes.has(id)) return null;
+  return { id, laneBadge: Number(id.replace(/\D/g, '')) || 1, title: id };
+}
+const closedLanes = new Set<string>();
+
 vi.mock('../db', () => ({
   getHarnessProject: vi.fn((id: string) => fakeGetHarnessProject(id)),
   listHarnessProjects: vi.fn(() => fakeListHarnessProjects()),
+  listHarnessProjectsBySession: vi.fn((id: string) => fakeListHarnessProjectsBySession(id)),
+  findEngagedDriveBySession: vi.fn((id: string) => fakeFindEngagedDriveBySession(id)),
   getDriveState: vi.fn((id: string) => fakeGetDriveState(id)),
+  getDriveSessionId: vi.fn((id: string) => fakeGetDriveSessionId(id)),
+  isDriveEngaged: vi.fn((id: string) => fakeIsDriveEngaged(id)),
+  getOpenLaneSessionById: vi.fn((id: string) => fakeGetOpenLaneSessionById(id)),
+  getSession: vi.fn((id: string) => ({ id })),
   setDriveState: vi.fn((id: string, patch: Partial<DriveState>) => fakeSetDriveState(id, patch)),
   getLatestUserTurnIndex: vi.fn(() => 0),
 }));
@@ -92,7 +116,7 @@ import { pushAssistantMessage, pushDrivePaused } from '../chat-push';
 import { notifyDriveHandoff } from '../telegram-bridge';
 import { submitMessage } from '../orchestrator';
 import { pipelineEventBus } from '../pipeline-event-bus';
-import { _resetDriveLockForTesting, activeDriveProjectId } from '../drive-lock';
+import { _resetDriveLockForTesting, driveOwnerOfProject } from '../drive-lock';
 import {
   PipelineDriveCoordinator,
   MAX_ORCHESTRATOR_TURNS_PER_PHASE,
@@ -100,12 +124,7 @@ import {
   DRIVE_TOKEN_BUDGET,
   DRIVE_TICK_INTERVAL_MS,
 } from '../pipeline-drive-coordinator';
-import {
-  reportDriveTurnUsage,
-  reportDriveTurnComplete,
-  _resetDriveUsageSinkForTesting,
-} from '../drive-usage-sink';
-
+import { reportDriveTurnUsage, reportDriveTurnComplete, _resetDriveUsageSinkForTesting } from '../drive-usage-sink';
 
 function seedProject(over: Partial<FakeProject> = {}): FakeProject {
   const p: FakeProject = {
@@ -141,10 +160,9 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
     _resetDriveUsageSinkForTesting();
   });
 
-
   describe('startDrive', () => {
     it('inicia o drive, grava DriveState e dispara o 1o turno', () => {
-      seedProject({ pipelineCurrentPhase: 1 }); // fase 1 = Discovery (conversation)
+      seedProject({ pipelineCurrentPhase: 1 });
       const coord = makeCoordinator();
 
       const res = coord.startDrive('proj_a', 'sess_1', 'semi');
@@ -156,7 +174,7 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
         expect(res.drive.mode).toBe('semi');
         expect(res.drive.sessionId).toBe('sess_1');
       }
-      expect(activeDriveProjectId()).toBe('proj_a');
+      expect(driveOwnerOfProject('proj_a')).toBe('sess_1');
       expect(submitMock).toHaveBeenCalledTimes(1);
       const [prompt, opts] = submitMock.mock.calls[0];
       expect(prompt).toContain('[DRIVE DE PIPELINE]');
@@ -170,7 +188,7 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
       if (!res.ok) expect(res.error).toContain('nao encontrado');
     });
 
-    it('lock global: 2o drive (outro projeto) com um ja ativo retorna erro (AC-16)', () => {
+    it('lock por lane: 2o drive (outro projeto) na MESMA lane retorna erro (AC-16)', () => {
       seedProject({ id: 'proj_a' });
       seedProject({ id: 'proj_b' });
       const coord = makeCoordinator();
@@ -178,13 +196,94 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
       const first = coord.startDrive('proj_a', 'sess_1', 'semi');
       expect(first.ok).toBe(true);
 
-      const second = coord.startDrive('proj_b', 'sess_2', 'semi');
+      const second = coord.startDrive('proj_b', 'sess_1', 'semi');
       expect(second.ok).toBe(false);
-      if (!second.ok) expect(second.error).toContain('ja existe um drive ativo');
-      expect(activeDriveProjectId()).toBe('proj_a');
+      if (!second.ok) {
+        expect(second.code).toBe('lane_busy');
+        expect(second.error).toContain('ja existe um drive ativo no projeto "Demo" (proj_a)');
+        expect(second.error).toContain('dirigido pela Lane 1: "sess_1"');
+        expect(second.error).toContain('ou use outra lane.');
+      }
+      expect(driveOwnerOfProject('proj_a')).toBe('sess_1');
+      expect(driveOwnerOfProject('proj_b')).toBeNull();
+    });
+
+    it('lane_busy com detentor awaiting-human usa a variante "aguardando a sua resposta" (5.4)', () => {
+      seedProject({ id: 'proj_a' });
+      seedProject({ id: 'proj_b' });
+      const coord = makeCoordinator();
+      coord.startDrive('proj_a', 'sess_1', 'semi');
+      fakeSetDriveState('proj_a', { status: 'awaiting-human' });
+
+      const second = coord.startDrive('proj_b', 'sess_1', 'semi');
+
+      expect(second.ok).toBe(false);
+      if (!second.ok) {
+        expect(second.code).toBe('lane_busy');
+        expect(second.error).toContain('aguardando a sua resposta na Lane 1: "sess_1"');
+      }
+    });
+
+    it('projeto ENGAJADO na MESMA lane e ok idempotente e nao remexe o startedAt (5.2)', () => {
+      seedProject({ pipelineCurrentPhase: 1 });
+      const coord = makeCoordinator();
+      const first = coord.startDrive('proj_a', 'sess_1', 'semi');
+      expect(first.ok).toBe(true);
+      const startedAt = fakeGetDriveState('proj_a')?.startedAt;
+
+      const again = coord.startDrive('proj_a', 'sess_1', 'full');
+
+      expect(again.ok).toBe(true);
+      expect(fakeGetDriveState('proj_a')?.startedAt).toBe(startedAt);
+      expect(fakeGetDriveState('proj_a')?.mode).toBe('semi');
+      expect(fakeGetDriveSessionId('proj_a')).toBe('sess_1');
+    });
+
+    it('projeto ENGAJADO em OUTRA lane recusa drive_owned_by_other_lane e nao migra a coluna (5.2)', () => {
+      seedProject({ pipelineCurrentPhase: 1 });
+      const coord = makeCoordinator();
+      coord.startDrive('proj_a', 'sess_1', 'semi');
+
+      const other = coord.startDrive('proj_a', 'sess_2', 'semi');
+
+      expect(other.ok).toBe(false);
+      if (!other.ok) {
+        expect(other.code).toBe('drive_owned_by_other_lane');
+        expect(other.error).toBe(
+          'o projeto "Demo" e dirigido pela Lane 1: "sess_1" e nao esta disponivel nesta lane. ' +
+            'Para mover o drive, retome-o pelo Pipeline escolhendo esta lane.',
+        );
+      }
+      expect(fakeGetDriveSessionId('proj_a')).toBe('sess_1');
+      expect(driveOwnerOfProject('proj_a')).toBe('sess_1');
+    });
+
+    it('projeto ENGAJADO em awaiting-human em outra lane tambem recusa (F3/F16)', () => {
+      seedProject({ pipelineCurrentPhase: 1 });
+      const coord = makeCoordinator();
+      coord.startDrive('proj_a', 'sess_1', 'semi');
+      fakeSetDriveState('proj_a', { status: 'awaiting-human' });
+
+      const other = coord.startDrive('proj_a', 'sess_2', 'semi');
+
+      expect(other.ok).toBe(false);
+      if (!other.ok) expect(other.code).toBe('drive_owned_by_other_lane');
+      expect(fakeGetDriveSessionId('proj_a')).toBe('sess_1');
+    });
+
+    it('projeto parado (nao engajado) inicia numa lane nova e sobrescreve a coluna', () => {
+      seedProject({ pipelineCurrentPhase: 1 });
+      const coord = makeCoordinator();
+      coord.startDrive('proj_a', 'sess_1', 'semi');
+      coord.stopDrive('proj_a', 'ui-stop');
+
+      const again = coord.startDrive('proj_a', 'sess_2', 'semi');
+
+      expect(again.ok).toBe(true);
+      expect(fakeGetDriveSessionId('proj_a')).toBe('sess_2');
+      expect(driveOwnerOfProject('proj_a')).toBe('sess_2');
     });
   });
-
 
   describe('recoverInterruptedDrives (AC-20)', () => {
     it('drive "driving" no boot vira awaiting-human e posta no chat (nao retoma sozinho)', () => {
@@ -234,7 +333,6 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
       expect(pushMock).not.toHaveBeenCalled();
     });
   });
-
 
   describe('semi vs full + control gate (C-02)', () => {
     it('SEMI: dispara turno em fase conversacional com prompt mandando escalar control gate via pipeline_escalate', () => {
@@ -286,7 +384,6 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
     });
   });
 
-
   describe('fase OD (C-03): faixa silenciosa, zero turno, sem handoffTemporary', () => {
     it('entrada na fase OD NAO dispara turno (faixa silenciosa, drive segue driving)', () => {
       seedProject({ pipelineType: 'development-v2', pipelineCurrentPhase: 5 });
@@ -329,7 +426,7 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
         const drive = fakeGetDriveState('proj_a');
         expect(drive?.status).toBe('driving');
         expect(drive?.handoff).toBe('none');
-        expect(activeDriveProjectId()).toBe('proj_a');
+        expect(driveOwnerOfProject('proj_a')).toBe('sess_1');
         expect(submitMock).toHaveBeenCalledTimes(1);
       } finally {
         vi.useRealTimers();
@@ -377,7 +474,6 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
     });
   });
 
-
   describe('stopDrive ao soltar o Coder (C-02)', () => {
     it('transicao para fase de tipo loop (Coder) para o drive e libera o lock', () => {
       vi.useFakeTimers();
@@ -386,8 +482,8 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
         const coord = makeCoordinator();
         coord.startDrive('proj_a', 'sess_1', 'full');
         expect(fakeGetDriveState('proj_a')?.status).toBe('driving');
-        expect(activeDriveProjectId()).toBe('proj_a');
-        vi.advanceTimersByTime(1); // libera a trava reentrante do 1o turno
+        expect(driveOwnerOfProject('proj_a')).toBe('sess_1');
+        vi.advanceTimersByTime(1);
         submitMock.mockClear();
 
         project.pipelineCurrentPhase = 13;
@@ -399,7 +495,7 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
         });
 
         expect(fakeGetDriveState('proj_a')?.status).toBe('stopped');
-        expect(activeDriveProjectId()).toBeNull();
+        expect(driveOwnerOfProject('proj_a')).toBeNull();
         expect(submitMock).not.toHaveBeenCalled();
 
         vi.advanceTimersByTime(DRIVE_TICK_INTERVAL_MS * 2);
@@ -410,23 +506,21 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
     });
   });
 
-
   describe('anti-runaway (AC-12)', () => {
     it('max-turns por fase: apos o teto, escala + para o drive (lock liberado)', () => {
       vi.useFakeTimers();
       try {
         seedProject({ pipelineCurrentPhase: 1 });
         const coord = makeCoordinator();
-        coord.startDrive('proj_a', 'sess_1', 'semi'); // 1o turno (turnsThisPhase=1)
-        vi.advanceTimersByTime(1); // libera a trava do 1o turno
+        coord.startDrive('proj_a', 'sess_1', 'semi');
+        vi.advanceTimersByTime(1);
 
         for (let i = 0; i < MAX_ORCHESTRATOR_TURNS_PER_PHASE + 2; i++) {
-          const currentTurnId = (
-            submitMock.mock.calls.at(-1)?.[1] as { driveTurnId?: string } | undefined
-          )?.driveTurnId;
+          const currentTurnId = (submitMock.mock.calls.at(-1)?.[1] as { driveTurnId?: string } | undefined)
+            ?.driveTurnId;
           reportDriveTurnComplete('proj_a', currentTurnId);
           pipelineEventBus.emit('pipeline:stream', { projectId: 'proj_a', phase: 1, type: 'done' });
-          vi.advanceTimersByTime(1); // libera a trava reentrante (setTimeout 0)
+          vi.advanceTimersByTime(1);
         }
       } finally {
         vi.useRealTimers();
@@ -434,13 +528,13 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
 
       const drive = fakeGetDriveState('proj_a');
       expect(drive?.status).toBe('stopped');
-      expect(activeDriveProjectId()).toBeNull();
+      expect(driveOwnerOfProject('proj_a')).toBeNull();
       const lastPush = pushMock.mock.calls.at(-1)?.[1] as string;
       expect(lastPush).toContain('anti-loop');
     });
 
     it('budget de tokens: sprint-complete acima do budget escala + para o drive', () => {
-      seedProject({ pipelineType: 'development', pipelineCurrentPhase: 13 }); // fase loop (Coder)
+      seedProject({ pipelineType: 'development', pipelineCurrentPhase: 13 });
       const coord = makeCoordinator();
       coord.startDrive('proj_a', 'sess_1', 'full');
       submitMock.mockClear();
@@ -456,7 +550,7 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
 
       const drive = fakeGetDriveState('proj_a');
       expect(drive?.status).toBe('stopped');
-      expect(activeDriveProjectId()).toBeNull();
+      expect(driveOwnerOfProject('proj_a')).toBeNull();
       const messages = pushMock.mock.calls.map((c) => c[1] as string);
       expect(messages.some((m) => m.includes('budget de tokens'))).toBe(true);
     });
@@ -466,7 +560,7 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
       try {
         const project = seedProject({ pipelineType: 'development', pipelineCurrentPhase: 1 });
         const coord = makeCoordinator();
-        coord.startDrive('proj_a', 'sess_1', 'semi'); // 1o turno (drive=1)
+        coord.startDrive('proj_a', 'sess_1', 'semi');
         vi.advanceTimersByTime(1);
 
         for (let i = 0; i < MAX_TURNS_PER_DRIVE + 2; i++) {
@@ -488,7 +582,7 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
 
       const drive = fakeGetDriveState('proj_a');
       expect(drive?.status).toBe('stopped');
-      expect(activeDriveProjectId()).toBeNull();
+      expect(driveOwnerOfProject('proj_a')).toBeNull();
       const lastPush = pushMock.mock.calls.at(-1)?.[1] as string;
       expect(lastPush).toContain('neste drive');
     });
@@ -500,31 +594,38 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
       submitMock.mockClear();
       pushMock.mockClear();
 
-      reportDriveTurnUsage('sess_1', DRIVE_TOKEN_BUDGET + 1);
+      reportDriveTurnUsage({
+        sessionId: 'sess_1',
+        projectId: 'proj_a',
+        tokens: DRIVE_TOKEN_BUDGET + 1,
+      });
 
       const drive = fakeGetDriveState('proj_a');
       expect(drive?.status).toBe('stopped');
-      expect(activeDriveProjectId()).toBeNull();
+      expect(driveOwnerOfProject('proj_a')).toBeNull();
       const messages = pushMock.mock.calls.map((c) => c[1] as string);
       expect(messages.some((m) => m.includes('budget de tokens'))).toBe(true);
     });
 
-    it('drive-turn usage: report de sessao diferente do drive e ignorado', () => {
+    it('drive-turn usage: report de projeto diferente do drive e ignorado (casa por projectId)', () => {
       seedProject({ pipelineType: 'development', pipelineCurrentPhase: 1 });
       const coord = makeCoordinator();
       coord.startDrive('proj_a', 'sess_1', 'full');
 
-      reportDriveTurnUsage('sess_OUTRA', DRIVE_TOKEN_BUDGET + 1);
+      reportDriveTurnUsage({
+        sessionId: 'sess_1',
+        projectId: 'proj_OUTRO',
+        tokens: DRIVE_TOKEN_BUDGET + 1,
+      });
 
       expect(fakeGetDriveState('proj_a')?.status).toBe('driving');
-      expect(activeDriveProjectId()).toBe('proj_a');
+      expect(driveOwnerOfProject('proj_a')).toBe('sess_1');
     });
   });
 
-
   describe('escalateFromOrchestrator (C-02/C-04, awaiting-human)', () => {
     it('com drive ativo: escala -> getDriveState fica awaiting-human (pausa, sem stop)', () => {
-      seedProject({ pipelineCurrentPhase: 3 }); // PRD Validator (control gate)
+      seedProject({ pipelineCurrentPhase: 3 });
       const coord = makeCoordinator();
       const started = coord.startDrive('proj_a', 'sess_1', 'semi');
       expect(started.ok).toBe(true);
@@ -535,7 +636,7 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
 
       expect(res.ok).toBe(true);
       expect(fakeGetDriveState('proj_a')?.status).toBe('awaiting-human');
-      expect(activeDriveProjectId()).toBe('proj_a');
+      expect(driveOwnerOfProject('proj_a')).toBe('sess_1');
       expect(pushMock).toHaveBeenCalledTimes(1);
       expect(pushMock.mock.calls[0][1]).toContain('cedo a decisao');
     });
@@ -548,7 +649,6 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
       if (!res.ok) expect(res.error).toContain('nenhum drive ativo');
     });
   });
-
 
   describe('isolamento', () => {
     it('eventos de um projeto SEM drive ativo sao ignorados', () => {
@@ -565,7 +665,6 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
       expect(pushMock).not.toHaveBeenCalled();
     });
   });
-
 
   function driveTurnIdOfCall(n: number): string {
     const opts = submitMock.mock.calls[n]?.[1] as { driveTurnId?: string } | undefined;
@@ -585,10 +684,10 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
     });
 
     it('W2-AC1: evento durante turno em voo -> UM follow-up apos o turno encerrar', () => {
-      seedProject({ pipelineCurrentPhase: 1 }); // fase 1 conversacional
+      seedProject({ pipelineCurrentPhase: 1 });
       const coord = makeCoordinator();
-      coord.startDrive('proj_a', 'sess_1', 'semi'); // 1o turno (gate fechado)
-      flushReacting(); // libera a trava reentrante do 1o turno
+      coord.startDrive('proj_a', 'sess_1', 'semi');
+      flushReacting();
       expect(submitMock).toHaveBeenCalledTimes(1);
       const turn1 = driveTurnIdOfCall(0);
 
@@ -603,7 +702,7 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
     it('W2-AC8: turn-complete de turno DEFASADO nao limpa o gate do turno novo', () => {
       seedProject({ pipelineCurrentPhase: 1 });
       const coord = makeCoordinator();
-      coord.startDrive('proj_a', 'sess_1', 'semi'); // turno 1 em voo
+      coord.startDrive('proj_a', 'sess_1', 'semi');
       flushReacting();
       const turn1 = driveTurnIdOfCall(0);
 
@@ -619,7 +718,7 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
       seedProject({ pipelineCurrentPhase: 1 });
       const coord = makeCoordinator();
 
-      coord.startDrive('proj_a', 'sess_1', 'semi'); // turno do 1o drive
+      coord.startDrive('proj_a', 'sess_1', 'semi');
       flushReacting();
       const turnA = driveTurnIdOfCall(0);
       expect(turnA).not.toBe('');
@@ -627,7 +726,7 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
       coord.stopDrive('proj_a', 'teste');
       submitMock.mockClear();
 
-      coord.startDrive('proj_a', 'sess_1', 'semi'); // turno do 2o drive
+      coord.startDrive('proj_a', 'sess_1', 'semi');
       flushReacting();
       const turnB = driveTurnIdOfCall(0);
       expect(turnB).not.toBe('');
@@ -635,25 +734,30 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
       expect(turnB).not.toBe(turnA);
 
       pipelineEventBus.emit('pipeline:stream', { projectId: 'proj_a', phase: 1, type: 'done' });
-      expect(submitMock).toHaveBeenCalledTimes(1); // turno novo em voo; evento coalesce
-      reportDriveTurnComplete('proj_a', turnA); // id ANTIGO -> ignorado (id nao bate)
-      expect(submitMock).toHaveBeenCalledTimes(1); // gate intacto, sem follow-up espurio
-      reportDriveTurnComplete('proj_a', turnB); // id corrente -> libera + follow-up
+      expect(submitMock).toHaveBeenCalledTimes(1);
+      reportDriveTurnComplete('proj_a', turnA);
+      expect(submitMock).toHaveBeenCalledTimes(1);
+      reportDriveTurnComplete('proj_a', turnB);
       expect(submitMock).toHaveBeenCalledTimes(2);
     });
 
     it('W2-AC7: turn-complete + usage + phase-changed do mesmo turno = UM follow-up', () => {
       seedProject({ pipelineCurrentPhase: 1 });
       const coord = makeCoordinator();
-      coord.startDrive('proj_a', 'sess_1', 'semi'); // turno 1 em voo
+      coord.startDrive('proj_a', 'sess_1', 'semi');
       flushReacting();
       const turn1 = driveTurnIdOfCall(0);
 
       pipelineEventBus.emit('pipeline:stream', { projectId: 'proj_a', phase: 1, type: 'done' });
       expect(submitMock).toHaveBeenCalledTimes(1);
 
-      reportDriveTurnComplete('proj_a', turn1); // turn-complete
-      reportDriveTurnUsage('sess_1', 10); // usage Claude SDK
+      reportDriveTurnComplete('proj_a', turn1);
+      reportDriveTurnUsage({
+        sessionId: 'sess_1',
+        projectId: 'proj_a',
+        driveTurnId: turn1,
+        tokens: 10,
+      });
       pipelineEventBus.emit('pipeline:phase-changed', {
         projectId: 'proj_a',
         phase: 1,
@@ -666,7 +770,7 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
     it('W2-AC4: turno sem usage (codex/lion) libera o gate no turn-complete (sem timeout)', () => {
       seedProject({ pipelineCurrentPhase: 1 });
       const coord = makeCoordinator();
-      coord.startDrive('proj_a', 'sess_1', 'full'); // turno 1
+      coord.startDrive('proj_a', 'sess_1', 'full');
       flushReacting();
       const turn1 = driveTurnIdOfCall(0);
 
@@ -680,7 +784,7 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
     it('W2-AC5: turno abortado/com erro libera o gate pelo caminho finally', () => {
       seedProject({ pipelineCurrentPhase: 1 });
       const coord = makeCoordinator();
-      coord.startDrive('proj_a', 'sess_1', 'semi'); // turno 1 em voo
+      coord.startDrive('proj_a', 'sess_1', 'semi');
       flushReacting();
       const turn1 = driveTurnIdOfCall(0);
 
@@ -694,7 +798,7 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
     it('sem follow-up pendente: turn-complete so libera o gate (nenhum turno extra)', () => {
       seedProject({ pipelineCurrentPhase: 1 });
       const coord = makeCoordinator();
-      coord.startDrive('proj_a', 'sess_1', 'semi'); // turno 1
+      coord.startDrive('proj_a', 'sess_1', 'semi');
       flushReacting();
       const turn1 = driveTurnIdOfCall(0);
 
@@ -715,10 +819,9 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
     });
   });
 
-
   describe('tryInterceptChatForDrive (C-07)', () => {
     it('drive awaiting-human na sessao ativa: intercepta -> resumeDrive (driving) e retorna true', () => {
-      seedProject({ pipelineCurrentPhase: 3 }); // control gate
+      seedProject({ pipelineCurrentPhase: 3 });
       const coord = makeCoordinator();
       coord.startDrive('proj_a', 'sess_1', 'semi');
       coord.escalateFromOrchestrator('proj_a', 'cedo a voce');
@@ -764,7 +867,6 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
     });
   });
 
-
   describe('pushDrivePaused no escalate (C-08)', () => {
     it('escalateFromOrchestrator emite pushDrivePaused (limpa o relogio do chat)', () => {
       seedProject({ pipelineCurrentPhase: 3 });
@@ -778,7 +880,6 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
       expect(pausedMock.mock.calls[0][0]).toBe('sess_1');
     });
   });
-
 
   describe('aviso da faixa de design (C-12 sidecar)', () => {
     it('entrar na fase open-design-studio sob drive dev-v2 avisa UMA vez (chat + Telegram)', async () => {
@@ -827,7 +928,6 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
       expect(submitMock).not.toHaveBeenCalled();
     });
   });
-
 
   describe('turno de conclusao (C-13)', () => {
     it('pipeline-completed (phase null) apos stopDrive: enfileira UM turno de resumo via sessionId persistida + dispara Telegram (C-13)', async () => {
@@ -888,8 +988,8 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
         awaitingUser: false,
       });
 
-      const completionTurns = submitMock.mock.calls.filter((c) =>
-        typeof c[0] === 'string' && (c[0] as string).includes('CONCLUIR'),
+      const completionTurns = submitMock.mock.calls.filter(
+        (c) => typeof c[0] === 'string' && (c[0] as string).includes('CONCLUIR'),
       );
       expect(completionTurns.length).toBe(0);
     });
@@ -910,8 +1010,8 @@ describe('PipelineDriveCoordinator (SPEC 4.4/4.5/4.6, S9-b)', () => {
       pipelineEventBus.emit('pipeline:phase-changed', completion);
       pipelineEventBus.emit('pipeline:phase-changed', completion);
 
-      const completionTurns = submitMock.mock.calls.filter((c) =>
-        typeof c[0] === 'string' && (c[0] as string).includes('CONCLUIR'),
+      const completionTurns = submitMock.mock.calls.filter(
+        (c) => typeof c[0] === 'string' && (c[0] as string).includes('CONCLUIR'),
       );
       expect(completionTurns.length).toBe(1);
     });

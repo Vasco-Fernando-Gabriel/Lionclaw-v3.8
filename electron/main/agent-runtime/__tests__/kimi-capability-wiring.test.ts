@@ -1,7 +1,5 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ChatFeatureToggles } from '../../../../src/types';
-
 
 const settings = new Map<string, string>();
 
@@ -15,19 +13,13 @@ vi.mock('../../logger', () => ({
 }));
 
 vi.mock('@moonshot-ai/kimi-agent-sdk', () => ({
-  createExternalTool: (def: {
-    name: string;
-    description: string;
-    parameters: unknown;
-    handler: unknown;
-  }) => ({
+  createExternalTool: (def: { name: string; description: string; parameters: unknown; handler: unknown }) => ({
     name: def.name,
     description: def.description,
     parameters: def.parameters,
     handler: def.handler,
   }),
 }));
-
 
 const KIMI_SURFACE_CONFIG: Record<string, { command: string; args: string[] }> = {
   'google-drive': { command: 'node', args: ['drive.js'] },
@@ -36,15 +28,45 @@ const KIMI_SURFACE_CONFIG: Record<string, { command: string; args: string[] }> =
 };
 
 const REGISTRY = [
-  { mcpId: 'google-drive', toolName: 'list_files', description: 'List files', inputSchema: null, lastDiscoveredAt: '2026-07-01T00:00:00.000Z' },
-  { mcpId: 'lionclaw-pipeline-control', toolName: 'pipeline_drive', description: 'Drive de pipeline', inputSchema: null, lastDiscoveredAt: '2026-07-01T00:00:00.000Z' },
-  { mcpId: 'lionclaw-dynamic-workflows', toolName: 'dynamic_workflow_generate', description: 'Gera workflow', inputSchema: null, lastDiscoveredAt: '2026-07-01T00:00:00.000Z' },
+  {
+    mcpId: 'google-drive',
+    toolName: 'list_files',
+    description: 'List files',
+    inputSchema: null,
+    lastDiscoveredAt: '2026-07-01T00:00:00.000Z',
+  },
+  {
+    mcpId: 'lionclaw-pipeline-control',
+    toolName: 'pipeline_drive',
+    description: 'Drive de pipeline',
+    inputSchema: null,
+    lastDiscoveredAt: '2026-07-01T00:00:00.000Z',
+  },
+  {
+    mcpId: 'lionclaw-dynamic-workflows',
+    toolName: 'dynamic_workflow_generate',
+    description: 'Gera workflow',
+    inputSchema: null,
+    lastDiscoveredAt: '2026-07-01T00:00:00.000Z',
+  },
 ];
 
 const MOCK_SERVERS = [
   { id: 'google-drive', name: 'Google Drive', description: 'Drive', isActive: true, indexMode: 'tools' as const },
-  { id: 'lionclaw-pipeline-control', name: 'Pipeline Control', description: 'Pipe', isActive: true, indexMode: 'tools' as const },
-  { id: 'lionclaw-dynamic-workflows', name: 'Dynamic Workflows', description: 'Dyn', isActive: true, indexMode: 'tools' as const },
+  {
+    id: 'lionclaw-pipeline-control',
+    name: 'Pipeline Control',
+    description: 'Pipe',
+    isActive: true,
+    indexMode: 'tools' as const,
+  },
+  {
+    id: 'lionclaw-dynamic-workflows',
+    name: 'Dynamic Workflows',
+    description: 'Dyn',
+    isActive: true,
+    indexMode: 'tools' as const,
+  },
 ];
 
 function applyS5aFilter(
@@ -91,19 +113,14 @@ const setupMCPsForSession = vi.fn(async (config: Record<string, unknown>) => ({
   tools: [] as unknown[],
 }));
 vi.mock('../../mcp-tool-bridge', () => ({
-  setupMCPsForSession: (...a: unknown[]) =>
-    setupMCPsForSession(...(a as [Record<string, unknown>])),
+  setupMCPsForSession: (...a: unknown[]) => setupMCPsForSession(...(a as [Record<string, unknown>])),
   teardownMCPsForSession: vi.fn(async () => {}),
   callMCPTool: vi.fn(async () => ({ content: [{ type: 'text', text: 'ok' }] })),
 }));
 
-
-const buildSystemPromptMock = vi.fn(
-  (_agentId?: string, _opts?: Record<string, unknown>) => 'KIMI-SYS',
-);
+const buildSystemPromptMock = vi.fn((_agentId?: string, _opts?: Record<string, unknown>) => 'KIMI-SYS');
 vi.mock('../../prompt-builder', () => ({
-  buildSystemPrompt: (...a: unknown[]) =>
-    buildSystemPromptMock(...(a as [string?, Record<string, unknown>?])),
+  buildSystemPrompt: (...a: unknown[]) => buildSystemPromptMock(...(a as [string?, Record<string, unknown>?])),
   loadGeneratedAgentContext: () => '',
 }));
 
@@ -134,7 +151,6 @@ vi.mock('../../paths', () => ({
   getAgentCwd: () => '/tmp/kimi-wiring',
   getLionClawHome: () => '/tmp/lion-home',
 }));
-
 
 import { buildKimiSessionTools } from '../kimi-session-config';
 import {
@@ -183,9 +199,7 @@ function names(tools: KimiExternalTool[]): string[] {
 }
 
 function capturedMcpConfigCapabilities(): unknown[] {
-  return getMCPConfigForAgent.mock.calls.map(
-    (c) => (c[1] as { capabilities?: unknown } | undefined)?.capabilities,
-  );
+  return getMCPConfigForAgent.mock.calls.map((c) => (c[1] as { capabilities?: unknown } | undefined)?.capabilities);
 }
 
 beforeEach(() => {
@@ -193,7 +207,6 @@ beforeEach(() => {
   settings.clear();
   settings.set('mcp_prompt_mode', 'full');
 });
-
 
 describe('S5c kimi: composicao (buildKimiSessionTools threada capabilities ate o getMCPConfigForAgent)', () => {
   it('modo full, caps OFF -> helpers gated FORA da materializacao; negocio presente; capabilities chegam ao filtro', async () => {
@@ -253,7 +266,6 @@ describe('S5c kimi: composicao (buildKimiSessionTools threada capabilities ate o
   });
 });
 
-
 describe('S5c kimi: buildAllowlistTool threada capabilities ao getMCPConfigForAgent do handler', () => {
   it('caps OFF -> handler do tool gated nao resolve o server (indisponivel), sem spawn', async () => {
     const tool = await buildAllowlistTool(PIPE_TOOL, { ...OFF });
@@ -273,7 +285,6 @@ describe('S5c kimi: buildAllowlistTool threada capabilities ao getMCPConfigForAg
     expect(capturedMcpConfigCapabilities()).toContainEqual(undefined);
   });
 });
-
 
 describe('S5c kimi: createChatKimiSession threada capabilities para prompt e sessao', () => {
   const permission = { mode: 'default' as const, dangerouslySkipPermissions: false };

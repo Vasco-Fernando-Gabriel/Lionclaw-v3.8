@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const OLD_PIPE2_SPEC_VALIDATOR_PROMPT = `Valide a SPEC contra PRD, stories e design lock.
 Falhe a validacao se:
 - houver tela do design ausente na SPEC,

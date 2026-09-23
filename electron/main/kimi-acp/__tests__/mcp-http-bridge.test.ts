@@ -1,14 +1,8 @@
-
 import http from 'http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  KIMI_MCP_MAX_BODY_BYTES,
-  startKimiMcpBridge,
-  type KimiMcpBridge,
-} from '../mcp-http-bridge';
+import { KIMI_MCP_MAX_BODY_BYTES, startKimiMcpBridge, type KimiMcpBridge } from '../mcp-http-bridge';
 import { getKimiBridgeRegistry } from '../mcp-bridge-registry';
 import type { KimiExternalTool } from '../../agent-runtime/kimi-external-tools';
-
 
 function fakeTool(name: string): KimiExternalTool {
   return {
@@ -31,22 +25,18 @@ function request(
 ): Promise<HttpResult> {
   return new Promise((resolve, reject) => {
     let settled = false;
-    const req = http.request(
-      url,
-      { method: options.method, headers: options.headers ?? {} },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on('data', (c: Buffer) => chunks.push(c));
-        res.on('end', () => {
-          settled = true;
-          resolve({
-            status: res.statusCode ?? 0,
-            headers: res.headers,
-            body: Buffer.concat(chunks).toString('utf8'),
-          });
+    const req = http.request(url, { method: options.method, headers: options.headers ?? {} }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (c: Buffer) => chunks.push(c));
+      res.on('end', () => {
+        settled = true;
+        resolve({
+          status: res.statusCode ?? 0,
+          headers: res.headers,
+          body: Buffer.concat(chunks).toString('utf8'),
         });
-      },
-    );
+      });
+    });
     req.on('error', (error) => {
       if (!settled) reject(error);
     });
@@ -60,7 +50,13 @@ function request(
 function openSse(
   url: string,
   headers: Record<string, string>,
-): Promise<{ status: number; contentType: string; firstChunk: string; req: http.ClientRequest; res: http.IncomingMessage }> {
+): Promise<{
+  status: number;
+  contentType: string;
+  firstChunk: string;
+  req: http.ClientRequest;
+  res: http.IncomingMessage;
+}> {
   return new Promise((resolve, reject) => {
     const req = http.request(url, { method: 'GET', headers }, (res) => {
       res.once('data', (c: Buffer) => {
@@ -72,8 +68,7 @@ function openSse(
           res,
         });
       });
-      res.on('error', () => {
-      });
+      res.on('error', () => {});
     });
     req.on('error', reject);
     req.end();
@@ -87,7 +82,6 @@ function authHeaders(token: string, extra?: Record<string, string>): Record<stri
 function portFromUrl(url: string): number {
   return Number(new URL(url).port);
 }
-
 
 describe('mcp-http-bridge (B1 skeleton)', () => {
   const live: KimiMcpBridge[] = [];
@@ -136,7 +130,11 @@ describe('mcp-http-bridge (B1 skeleton)', () => {
         jsonrpc: '2.0',
         id: 1,
         method: 'initialize',
-        params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'kimi-code', version: '0.0.0' } },
+        params: {
+          protocolVersion: '2025-11-25',
+          capabilities: {},
+          clientInfo: { name: 'kimi-code', version: '0.0.0' },
+        },
       }),
     });
     expect(res.status).toBe(200);
@@ -268,9 +266,15 @@ describe('mcp-http-bridge (B1 skeleton)', () => {
     let release!: () => void;
     let started!: () => void;
     let aborted!: () => void;
-    const startedPromise = new Promise<void>((resolve) => { started = resolve; });
-    const abortedPromise = new Promise<void>((resolve) => { aborted = resolve; });
-    const releasePromise = new Promise<void>((resolve) => { release = resolve; });
+    const startedPromise = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const abortedPromise = new Promise<void>((resolve) => {
+      aborted = resolve;
+    });
+    const releasePromise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const tool: KimiExternalTool = {
       name: 'lion_wait',
       description: 'wait',
@@ -296,7 +300,9 @@ describe('mcp-http-bridge (B1 skeleton)', () => {
     await startedPromise;
 
     let stopSettled = false;
-    const stopping = bridge.stop().then(() => { stopSettled = true; });
+    const stopping = bridge.stop().then(() => {
+      stopSettled = true;
+    });
     await abortedPromise;
     await Promise.resolve();
     expect(stopSettled).toBe(false);
@@ -309,19 +315,25 @@ describe('mcp-http-bridge (B1 skeleton)', () => {
   it('stop fecha bounded mesmo quando o handler ignora o abort', async () => {
     let started!: () => void;
     let aborted!: () => void;
-    const startedPromise = new Promise<void>((resolve) => { started = resolve; });
-    const abortedPromise = new Promise<void>((resolve) => { aborted = resolve; });
-    const bridge = await start([{
-      name: 'lion_never_settles',
-      description: 'never settles',
-      parameters: { type: 'object', properties: {} },
-      handler: vi.fn(async (_params, context) => {
-        started();
-        context?.signal?.addEventListener('abort', aborted, { once: true });
-        await new Promise<void>(() => undefined);
-        return { output: 'unreachable', message: 'unreachable' };
-      }),
-    }]);
+    const startedPromise = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const abortedPromise = new Promise<void>((resolve) => {
+      aborted = resolve;
+    });
+    const bridge = await start([
+      {
+        name: 'lion_never_settles',
+        description: 'never settles',
+        parameters: { type: 'object', properties: {} },
+        handler: vi.fn(async (_params, context) => {
+          started();
+          context?.signal?.addEventListener('abort', aborted, { once: true });
+          await new Promise<void>(() => undefined);
+          return { output: 'unreachable', message: 'unreachable' };
+        }),
+      },
+    ]);
     const call = request(bridge.url, {
       method: 'POST',
       headers: authHeaders(bridge.token),

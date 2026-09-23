@@ -1,4 +1,3 @@
-
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
@@ -41,14 +40,8 @@ import type {
 } from './types';
 import type { DynamicWorkflowStreamChunk } from '../../../src/types/dynamic-workflow';
 import type { CodexChatReasoningEffort } from '../../../src/types';
-import {
-  validateWorkflowPackage,
-  type ValidateWorkflowPackageInput,
-} from './workflow-validator';
-import {
-  DEV_DEFAULT_FIXER_AGENT_ID,
-  DEV_DEFAULT_VALIDATOR_AGENT_IDS,
-} from './dev-loop-ids';
+import { validateWorkflowPackage, type ValidateWorkflowPackageInput } from './workflow-validator';
+import { DEV_DEFAULT_FIXER_AGENT_ID, DEV_DEFAULT_VALIDATOR_AGENT_IDS } from './dev-loop-ids';
 import { DYNAMIC_WORKFLOW_CODER_ID } from '../seed-agents/dynamic-workflow-coder';
 import {
   DYNAMIC_WORKFLOW_AGENT_DENYLIST,
@@ -73,17 +66,8 @@ import {
   type WorkflowAdapterDeps,
   type RunNodeAgentInput,
 } from './workflow-agent-adapter';
-import {
-  computeNodeGrantsHash,
-  type NodePolicyGrants,
-  type PolicyWorkspace,
-} from './workflow-policy';
-import {
-  runGateChecks,
-  type GateCheckSpec,
-  type GateCheckResult,
-  type GateRunResult,
-} from './workflow-gates';
+import { computeNodeGrantsHash, type NodePolicyGrants, type PolicyWorkspace } from './workflow-policy';
+import { runGateChecks, type GateCheckSpec, type GateCheckResult, type GateRunResult } from './workflow-gates';
 import { writeArtifact, type WorkflowArtifactsDeps } from './workflow-artifacts';
 import {
   saveNodeCheckpoint,
@@ -92,15 +76,9 @@ import {
   type WorkflowCheckpointsDeps,
   type DynamicWorkflowNodeCheckpointFile,
 } from './workflow-checkpoints';
-import {
-  classifyFailureByRuntime,
-  type WorkflowFailureRuntime,
-} from './workflow-failure';
+import { classifyFailureByRuntime, type WorkflowFailureRuntime } from './workflow-failure';
 import { jsonSchemaToOutputSchema } from './workflow-schema';
-import type {
-  SchemaValidator,
-  WorkflowOutputSchema,
-} from './workflow-schema';
+import type { SchemaValidator, WorkflowOutputSchema } from './workflow-schema';
 
 const logger = createLogger('dynamic-workflow-host-api');
 
@@ -117,14 +95,10 @@ const FAILURE_RUNTIME_VALUES: ReadonlySet<WorkflowFailureRuntime> = new Set<Work
 ]);
 
 function coerceFailureRuntime(runtime: string): WorkflowFailureRuntime {
-  return FAILURE_RUNTIME_VALUES.has(runtime as WorkflowFailureRuntime)
-    ? (runtime as WorkflowFailureRuntime)
-    : 'cloud';
+  return FAILURE_RUNTIME_VALUES.has(runtime as WorkflowFailureRuntime) ? (runtime as WorkflowFailureRuntime) : 'cloud';
 }
 
-
 export const WORKFLOW_PARALLEL_SPRINT_CAP = 3;
-
 
 export const WORKFLOW_IMPLICIT_NODE_CAP = 1000;
 export const WORKFLOW_PARALLEL_ITEMS_CAP = 4096;
@@ -153,20 +127,20 @@ function segmentsCanOverlap(a: string[], b: string[]): boolean {
     const segA = a[i];
     const segB = b[j];
     if (segA === '**' || segB === '**') return true;
-    if (!segmentTokensCanOverlap(segA, segB)) return false; // literais distintos: disjunto
+    if (!segmentTokensCanOverlap(segA, segB)) return false;
     i++;
     j++;
   }
   const rest = i < a.length ? a.slice(i) : b.slice(j);
-  if (rest.length === 0) return true; // ambos terminaram juntos: mesmo path possivel
+  if (rest.length === 0) return true;
   return rest.every((s) => s === '**');
 }
 
 function segmentTokensCanOverlap(segA: string, segB: string): boolean {
   const wildA = segA.includes('*') || segA.includes('?');
   const wildB = segB.includes('*') || segB.includes('?');
-  if (!wildA && !wildB) return segA === segB; // ambos literais: so casam se iguais
-  return true; // pelo menos um curinga: conservador, pode overlapar
+  if (!wildA && !wildB) return segA === segB;
+  return true;
 }
 
 export function sprintWriteSetsDisjoint(
@@ -179,10 +153,10 @@ export function sprintWriteSetsDisjoint(
   if (a.includes('**') || b.includes('**')) return false;
   for (const gA of a) {
     for (const gB of b) {
-      if (globsCanOverlap(gA, gB)) return false; // achou par que pode overlapar
+      if (globsCanOverlap(gA, gB)) return false;
     }
   }
-  return true; // nenhum par pode overlapar: disjunto comprovado
+  return true;
 }
 
 export interface ParallelGroupSprint {
@@ -197,9 +171,7 @@ export function partitionSprintsForParallel(
   cap: number = WORKFLOW_PARALLEL_SPRINT_CAP,
 ): Array<{ sprintIds: string[] }> {
   const SEQUENTIAL_ONLY = true;
-  const limit = SEQUENTIAL_ONLY
-    ? 1
-    : Math.max(1, Math.min(WORKFLOW_PARALLEL_SPRINT_CAP, Math.floor(cap)));
+  const limit = SEQUENTIAL_ONLY ? 1 : Math.max(1, Math.min(WORKFLOW_PARALLEL_SPRINT_CAP, Math.floor(cap)));
   const ordered = [...sprints].sort((x, y) => x.index - y.index);
   const remaining = new Set(ordered.map((s) => s.sprintId));
   const batched = new Set<string>();
@@ -213,9 +185,7 @@ export function partitionSprintsForParallel(
       if (batch.length >= limit) break;
       const depsReady = s.dependencies.every((d) => batched.has(d) || !byId.has(d));
       if (!depsReady) continue;
-      const disjointFromBatch = batch.every((other) =>
-        sprintWriteSetsDisjoint(s.writeSet, other.writeSet),
-      );
+      const disjointFromBatch = batch.every((other) => sprintWriteSetsDisjoint(s.writeSet, other.writeSet));
       if (!disjointFromBatch) continue;
       batch.push(s);
     }
@@ -252,7 +222,6 @@ export function computeCanonicalFailureClass(input: {
     aborted: input.aborted,
   });
 }
-
 
 export class WorkflowHostFatalError extends Error {
   readonly isWorkflowHostFatal = true as const;
@@ -294,7 +263,6 @@ export const WORKFLOW_AGENT_EFFORTS: readonly CodexChatReasoningEffort[] = [
 export function isWorkflowAgentEffort(value: string): value is CodexChatReasoningEffort {
   return (WORKFLOW_AGENT_EFFORTS as readonly string[]).includes(value);
 }
-
 
 export interface AgentPrimitiveArg {
   id: string;
@@ -380,7 +348,6 @@ export interface ParallelOptions {
 
 export type WorkflowThunk = () => Promise<unknown> | unknown;
 
-
 export interface PendingGateResolution {
   decision: 'approve' | 'reject';
   approvedBy: string;
@@ -393,17 +360,12 @@ export interface GateGate {
   discardStaleGate?: (gateId: string) => void;
 }
 
-
 export interface HostApiCrud {
   upsertNodeRun: (input: DynamicWorkflowNodeRunUpsertInput) => DynamicWorkflowNodeRun;
   updateNodeRun: (id: string, patch: DynamicWorkflowNodeRunPatch) => void;
   insertEvent: (input: DynamicWorkflowEventInsertInput) => DynamicWorkflowEvent;
-  insertGateDecision: (
-    input: DynamicWorkflowGateDecisionInsertInput,
-  ) => DynamicWorkflowGateDecision;
-  registerArtifact: (
-    input: DynamicWorkflowArtifactInsertInput,
-  ) => DynamicWorkflowArtifact;
+  insertGateDecision: (input: DynamicWorkflowGateDecisionInsertInput) => DynamicWorkflowGateDecision;
+  registerArtifact: (input: DynamicWorkflowArtifactInsertInput) => DynamicWorkflowArtifact;
   insertMessage?: (input: DynamicWorkflowMessageInsertInput) => DynamicWorkflowMessage;
   getRunCheckpoint: (runId: string) => string | null;
   persistRunCheckpoint: (runId: string, checkpointJson: string) => void;
@@ -412,11 +374,7 @@ export interface HostApiCrud {
   createNodes?: (definitionId: string, nodes: DynamicWorkflowNodeCreateInput[]) => void;
   updateDefinition?: (definitionId: string, patch: DynamicWorkflowDefinitionPatch) => void;
   persistSprints?: (sprints: DynamicWorkflowSprintUpsertInput[]) => void;
-  setNodeSprintMeta?: (
-    definitionId: string,
-    nodeId: string,
-    patch: DynamicWorkflowNodeSprintPatch,
-  ) => void;
+  setNodeSprintMeta?: (definitionId: string, nodeId: string, patch: DynamicWorkflowNodeSprintPatch) => void;
   materializeSprintPlan?: (input: MaterializeDynamicWorkflowSprintPlanInput) => void;
   appendJournalEntry?: (input: DynamicWorkflowJournalAppendInput) => void;
   listJournalEntries?: (runId: string) => DynamicWorkflowJournalEntry[];
@@ -439,7 +397,10 @@ export function buildAdjustmentText(adjustments: readonly DynamicWorkflowMessage
       return true;
     })
     .sort((a, b) => a.id - b.id);
-  const text = ordered.map((a) => a.content.trim()).filter((c) => c.length > 0).join('\n\n');
+  const text = ordered
+    .map((a) => a.content.trim())
+    .filter((c) => c.length > 0)
+    .join('\n\n');
   return text.length > 0 ? text : undefined;
 }
 
@@ -455,14 +416,10 @@ function remapWorkflowToolOffsets(
   while (prefix < prefixLimit && previousContent[prefix] === nextContent[prefix]) prefix += 1;
 
   let suffix = 0;
-  const suffixLimit = Math.min(
-    previousContent.length - prefix,
-    nextContent.length - prefix,
-  );
+  const suffixLimit = Math.min(previousContent.length - prefix, nextContent.length - prefix);
   while (
     suffix < suffixLimit &&
-    previousContent[previousContent.length - 1 - suffix] ===
-      nextContent[nextContent.length - 1 - suffix]
+    previousContent[previousContent.length - 1 - suffix] === nextContent[nextContent.length - 1 - suffix]
   ) {
     suffix += 1;
   }
@@ -471,11 +428,7 @@ function remapWorkflowToolOffsets(
   const delta = nextContent.length - previousContent.length;
   for (const tool of tools) {
     const offset = tool.textOffset;
-    const remapped = offset <= prefix
-      ? offset
-      : offset >= previousChangedEnd
-        ? offset + delta
-        : prefix;
+    const remapped = offset <= prefix ? offset : offset >= previousChangedEnd ? offset + delta : prefix;
     tool.textOffset = Math.max(0, Math.min(nextContent.length, remapped));
   }
 }
@@ -488,10 +441,7 @@ export interface HostRunPatch {
   error?: string | null;
 }
 
-export type DynamicWorkflowNodeStatusRunSubset =
-  | 'running'
-  | 'blocked'
-  | 'failed';
+export type DynamicWorkflowNodeStatusRunSubset = 'running' | 'blocked' | 'failed';
 
 export interface HostApiDeps {
   crud: HostApiCrud;
@@ -499,13 +449,18 @@ export interface HostApiDeps {
   adapterDeps?: WorkflowAdapterDeps;
   runGateChecks?: typeof runGateChecks;
   gateGate: GateGate;
-  emit: (input: { runId: string; type: string; nodeId?: string | null; phaseId?: string | null; payload?: unknown }) => void;
+  emit: (input: {
+    runId: string;
+    type: string;
+    nodeId?: string | null;
+    phaseId?: string | null;
+    payload?: unknown;
+  }) => void;
   emitStreamChunk?: (chunk: DynamicWorkflowStreamChunk) => void;
   generateId?: (prefix: string) => string;
   now?: () => string;
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
 }
-
 
 export interface HostApiRunContext {
   runId: string;
@@ -539,9 +494,7 @@ export interface HostApiRunContext {
     sprintNodeIds: Array<{ sprintId: string; nodeIds: string[] }>;
   };
   runDir: string;
-  readNodeCheckpoint?: (
-    nodeId: string,
-  ) => DynamicWorkflowNodeCheckpointFile | null;
+  readNodeCheckpoint?: (nodeId: string) => DynamicWorkflowNodeCheckpointFile | null;
   workflowRevision?: string;
   protectedPaths?: string[];
   resolveGateChecks?: (checks: GateCheckSpec[], gateId: string) => GateCheckSpec[];
@@ -693,7 +646,6 @@ export function detectBuildScript(cwd: string): boolean | null {
   }
 }
 
-
 export interface WorkflowHostApi {
   phase: (arg: unknown) => Promise<unknown>;
   agent: (arg: unknown) => Promise<unknown>;
@@ -716,7 +668,6 @@ function defaultGenerateId(prefix: string): string {
   return `${prefix}_${randomBytes(12).toString('hex')}`;
 }
 
-
 export interface AgentSemaphore {
   run<T>(fn: () => Promise<T>): Promise<T>;
 }
@@ -724,10 +675,7 @@ export interface AgentSemaphore {
 export const CODEX_NODE_CONCURRENCY_CEILING = 3;
 
 export function effectiveMaxConcurrentAgents(ctx: HostApiRunContext): number {
-  return Math.min(
-    ctx.manifest.parallelism.maxConcurrentAgents,
-    CODEX_NODE_CONCURRENCY_CEILING,
-  );
+  return Math.min(ctx.manifest.parallelism.maxConcurrentAgents, CODEX_NODE_CONCURRENCY_CEILING);
 }
 
 export function createAgentSemaphore(max: number): AgentSemaphore {
@@ -815,11 +763,7 @@ export function isUserQuestionTool(toolName: string | undefined): boolean {
   return typeof toolName === 'string' && toolName.includes(USER_QUESTION_MCP_SERVER);
 }
 
-
-export function createWorkflowHostApi(
-  ctx: HostApiRunContext,
-  deps: HostApiDeps,
-): WorkflowHostApi {
+export function createWorkflowHostApi(ctx: HostApiRunContext, deps: HostApiDeps): WorkflowHostApi {
   const now = deps.now ?? defaultNow;
   const generateId = deps.generateId ?? defaultGenerateId;
   const adapterRun = deps.runNodeAgent ?? runNodeAgent;
@@ -844,13 +788,11 @@ export function createWorkflowHostApi(
 
   const ccSchemaRegistry = new Map<string, WorkflowOutputSchema>();
 
-  function resolveCanonicalSchema(
-    schemaRef: string | null,
-  ): WorkflowOutputSchema | undefined {
+  function resolveCanonicalSchema(schemaRef: string | null): WorkflowOutputSchema | undefined {
     if (!schemaRef) return undefined;
     const fromRegistry = ccSchemaRegistry.get(schemaRef);
     if (fromRegistry) return fromRegistry;
-    return ctx.resolveSchemaRef ? ctx.resolveSchemaRef(schemaRef) ?? undefined : undefined;
+    return ctx.resolveSchemaRef ? (ctx.resolveSchemaRef(schemaRef) ?? undefined) : undefined;
   }
 
   let planVersionCounter = 0;
@@ -879,9 +821,7 @@ export function createWorkflowHostApi(
   })();
 
   let journalPlanHashAsOf: string | null =
-    journalEntries.length > 0
-      ? journalEntries[0]!.planHash
-      : ctx.priorMaterialized?.planHash ?? null;
+    journalEntries.length > 0 ? journalEntries[0]!.planHash : (ctx.priorMaterialized?.planHash ?? null);
 
   function currentPlanHash(): string | null {
     return journalPlanHashAsOf;
@@ -949,8 +889,7 @@ export function createWorkflowHostApi(
   }
 
   function readRealNodeOutput(nodeId: string): unknown | undefined {
-    const reader =
-      ctx.readNodeCheckpoint ?? ((id: string) => readNodeCheckpoint(ctx.runDir, id));
+    const reader = ctx.readNodeCheckpoint ?? ((id: string) => readNodeCheckpoint(ctx.runDir, id));
     const file = reader(nodeId);
     if (!file) return undefined;
     return file.state;
@@ -995,7 +934,6 @@ export function createWorkflowHostApi(
     throw error;
   }
 
-
   function assertNotAborted(): void {
     if (blockedFatal) throw blockedFatal;
     if (ctx.abortSignal.aborted) {
@@ -1022,15 +960,10 @@ export function createWorkflowHostApi(
     }
   }
 
-
-
   async function phase(arg: unknown): Promise<unknown> {
     const name = typeof arg === 'string' ? arg : (arg as { name?: string })?.name;
     if (typeof name !== 'string' || name.length === 0) {
-      throw new WorkflowHostFatalError(
-        'phase-not-in-meta',
-        `phase('${String(name)}') nao declarada em meta.phases`,
-      );
+      throw new WorkflowHostFatalError('phase-not-in-meta', `phase('${String(name)}') nao declarada em meta.phases`);
     }
     if (!phaseIds.has(name)) {
       phaseIds.add(name);
@@ -1115,7 +1048,6 @@ export function createWorkflowHostApi(
     });
   }
 
-
   function resolveImplicitSchemaRef(
     schema: AgentPrimitiveArg['schema'],
     access: DynamicWorkflowNodeAccess,
@@ -1138,7 +1070,7 @@ export function createWorkflowHostApi(
     if (isString) return schema;
 
     const converted = jsonSchemaToOutputSchema(schema);
-    if (!converted) return null; // schema inline irreconhecivel: texto cru, sem trava.
+    if (!converted) return null;
     const ref = computeInlineSchemaRef(schema);
     ccSchemaRegistry.set(ref, converted);
     return ref;
@@ -1159,8 +1091,7 @@ export function createWorkflowHostApi(
       );
     }
 
-    const callPhase =
-      typeof argIn.phase === 'string' && argIn.phase.length > 0 ? argIn.phase : null;
+    const callPhase = typeof argIn.phase === 'string' && argIn.phase.length > 0 ? argIn.phase : null;
     if (callPhase && !phaseIds.has(callPhase)) {
       phaseIds.add(callPhase);
       ctx.manifest.phases.push({
@@ -1170,7 +1101,7 @@ export function createWorkflowHostApi(
       });
     }
     const phaseId = callPhase ?? (currentPhaseId || 'unknown');
-    const base = (argIn.label && argIn.label.length > 0 ? argIn.label : agentType);
+    const base = argIn.label && argIn.label.length > 0 ? argIn.label : agentType;
     const occ = implicitOccByBase.get(base) ?? 0;
     implicitOccByBase.set(base, occ + 1);
     const id = `cc:${phaseId}:${base}:${occ}`;
@@ -1215,12 +1146,8 @@ export function createWorkflowHostApi(
       allowNetwork: axes.allowNetwork,
       allowedCommands: axes.allowedCommands,
       allowedTools: axes.allowedTools,
-      ...(typeof argIn.model === 'string' && argIn.model.length > 0
-        ? { model: argIn.model }
-        : {}),
-      ...(typeof argIn.effort === 'string' && argIn.effort.length > 0
-        ? { effort: argIn.effort }
-        : {}),
+      ...(typeof argIn.model === 'string' && argIn.model.length > 0 ? { model: argIn.model } : {}),
+      ...(typeof argIn.effort === 'string' && argIn.effort.length > 0 ? { effort: argIn.effort } : {}),
     };
   }
 
@@ -1229,8 +1156,7 @@ export function createWorkflowHostApi(
 
     const promptRaw = (argIn as { prompt?: unknown }).prompt;
     if (promptRaw !== undefined && typeof promptRaw !== 'string') {
-      const looksPromise =
-        typeof (promptRaw as { then?: unknown } | null)?.then === 'function';
+      const looksPromise = typeof (promptRaw as { then?: unknown } | null)?.then === 'function';
       throw new WorkflowHostFatalError(
         'prompt-invalid',
         looksPromise
@@ -1265,10 +1191,7 @@ export function createWorkflowHostApi(
       );
     }
     if (seenNodeIds.has(arg.id)) {
-      throw new WorkflowHostFatalError(
-        'duplicate-node-id',
-        `node id '${arg.id}' usado mais de uma vez na execucao`,
-      );
+      throw new WorkflowHostFatalError('duplicate-node-id', `node id '${arg.id}' usado mais de uma vez na execucao`);
     }
     seenNodeIds.add(arg.id);
 
@@ -1286,15 +1209,9 @@ export function createWorkflowHostApi(
 
     const canonicalSchemaRef = manifestNode.schemaRef ?? null;
 
-    const effectiveModel =
-      typeof arg.model === 'string' && arg.model.length > 0
-        ? arg.model
-        : undefined;
+    const effectiveModel = typeof arg.model === 'string' && arg.model.length > 0 ? arg.model : undefined;
 
-    const rawEffort =
-      typeof arg.effort === 'string' && arg.effort.length > 0
-        ? arg.effort
-        : undefined;
+    const rawEffort = typeof arg.effort === 'string' && arg.effort.length > 0 ? arg.effort : undefined;
     if (rawEffort !== undefined && !isWorkflowAgentEffort(rawEffort)) {
       throw new WorkflowHostFatalError(
         'effort-invalid',
@@ -1305,8 +1222,7 @@ export function createWorkflowHostApi(
 
     const effectiveMaxTurns = clampMaxTurns(arg.maxTurns, arg.id);
 
-    let consumedAdjustments =
-      deps.crud.getConsumedAdjustmentsForNode?.(ctx.runId, arg.id) ?? [];
+    let consumedAdjustments = deps.crud.getConsumedAdjustmentsForNode?.(ctx.runId, arg.id) ?? [];
     let adjustment = buildAdjustmentText(consumedAdjustments);
     const consumedSwitch = agentSwitchFrom(consumedAdjustments);
     if (consumedSwitch) {
@@ -1376,8 +1292,7 @@ export function createWorkflowHostApi(
       const rawRealOutput = readRealNodeOutput(arg.id);
       if (rawRealOutput !== undefined) {
         const realOutput = unwrapLegacyOutputEnvelope(rawRealOutput, canonicalSchemaRef);
-        const realPayloadView =
-          typeof realOutput === 'string' ? parseNodeOutput(realOutput) : realOutput;
+        const realPayloadView = typeof realOutput === 'string' ? parseNodeOutput(realOutput) : realOutput;
         deps.emit({
           runId: ctx.runId,
           type: 'node-cache-hit',
@@ -1398,17 +1313,12 @@ export function createWorkflowHostApi(
       journalPrefixIntact = false;
       try {
         deps.crud.truncateJournalFrom?.(ctx.runId, claim.callIndex);
-      } catch {
-      }
+      } catch {}
     }
 
-    type AttemptOutcome =
-      | { kind: 'completed'; value: unknown }
-      | { kind: 'retry' }
-      | { kind: 'skip' };
+    type AttemptOutcome = { kind: 'completed'; value: unknown } | { kind: 'retry' } | { kind: 'skip' };
 
-    const grantsUserQuestion =
-      (grants.allowedMcpServers ?? []).includes('lionclaw-user-question');
+    const grantsUserQuestion = (grants.allowedMcpServers ?? []).includes('lionclaw-user-question');
     const isImplicitNode = implicitNodeIds.has(arg.id);
 
     const recomputeInputHash = (): void => {
@@ -1465,8 +1375,7 @@ export function createWorkflowHostApi(
     const runAttemptOnce = async (): Promise<AttemptOutcome> => {
       assertNotAborted();
 
-      const claimedAdjustments =
-        deps.crud.claimAdjustmentsForNode?.(ctx.runId, arg.id) ?? [];
+      const claimedAdjustments = deps.crud.claimAdjustmentsForNode?.(ctx.runId, arg.id) ?? [];
       if (claimedAdjustments.length > 0) {
         consumedAdjustments = [...consumedAdjustments, ...claimedAdjustments];
         adjustment = buildAdjustmentText(consumedAdjustments);
@@ -1474,9 +1383,7 @@ export function createWorkflowHostApi(
         if (switched && switched !== agentId) applyAgentSwitch(switched);
         recomputeInputHash();
       }
-      const effectivePrompt = adjustment
-        ? `${arg.prompt}${ADJUSTMENT_PROMPT_HEADER}${adjustment}`
-        : arg.prompt;
+      const effectivePrompt = adjustment ? `${arg.prompt}${ADJUSTMENT_PROMPT_HEADER}${adjustment}` : arg.prompt;
 
       const attempt = nextAttempt(arg.id);
       let sprintCwd: string | null = null;
@@ -1555,9 +1462,7 @@ export function createWorkflowHostApi(
         ...(effectiveEffort ? { effectiveEffort } : {}),
         ...(effectiveMaxTurns !== undefined ? { effectiveMaxTurns } : {}),
         ...(outputSchema ? { outputSchema } : {}),
-        ...(outputSchema && ctx.schemaValidator
-          ? { schemaValidator: ctx.schemaValidator }
-          : {}),
+        ...(outputSchema && ctx.schemaValidator ? { schemaValidator: ctx.schemaValidator } : {}),
         onStreamChunk: deps.emitStreamChunk
           ? (partial) => {
               if (partial.type === 'text' && partial.content) {
@@ -1666,12 +1571,15 @@ export function createWorkflowHostApi(
             source: 'agent',
             kind: 'node-output',
             content,
-            toolCallsJson: streamedTools.length > 0
-              ? JSON.stringify(streamedTools.map((tool) => ({
-                  ...tool,
-                  status: succeeded ? 'done' : 'incomplete',
-                })))
-              : null,
+            toolCallsJson:
+              streamedTools.length > 0
+                ? JSON.stringify(
+                    streamedTools.map((tool) => ({
+                      ...tool,
+                      status: succeeded ? 'done' : 'incomplete',
+                    })),
+                  )
+                : null,
             agentId,
           });
         }
@@ -1799,7 +1707,7 @@ export function createWorkflowHostApi(
         policyHash: result.policy.policyHash,
         policySnapshotJson: JSON.stringify(result.policy),
         outputJson: result.output ? JSON.stringify({ output: result.output }) : null,
-        error: result.ok ? null : result.errorMessage ?? null,
+        error: result.ok ? null : (result.errorMessage ?? null),
         failureClass: canonicalFailureClass,
         runtime: result.runtime,
         durationMs: result.durationMs,
@@ -1810,9 +1718,7 @@ export function createWorkflowHostApi(
 
       const scriptValue = nodeOutputForScript(result, canonicalSchemaRef);
       const payloadView =
-        result.structuredOutput !== undefined
-          ? result.structuredOutput
-          : parseNodeOutput(result.output);
+        result.structuredOutput !== undefined ? result.structuredOutput : parseNodeOutput(result.output);
 
       if (result.ok) {
         const verdict = extractValidatorVerdict(payloadView);
@@ -2001,9 +1907,8 @@ export function createWorkflowHostApi(
       });
 
       const resolution = await deps.gateGate.awaitDecision(gateId, mode);
-      const action = resolution.decision === 'reject'
-        ? 'abort'
-        : parseFailureGateAction(resolution.payload?.action) ?? 'retry';
+      const action =
+        resolution.decision === 'reject' ? 'abort' : (parseFailureGateAction(resolution.payload?.action) ?? 'retry');
       persistGateDecision(deps, ctx, {
         gateId,
         mode,
@@ -2059,11 +1964,7 @@ export function createWorkflowHostApi(
     return next;
   }
 
-
-  async function runParallel(
-    thunks: WorkflowThunk[],
-    options: ParallelOptions,
-  ): Promise<unknown[]> {
+  async function runParallel(thunks: WorkflowThunk[], options: ParallelOptions): Promise<unknown[]> {
     assertNotAborted();
     if (thunks.length > parallelItemsCap) {
       throw new WorkflowHostFatalError(
@@ -2132,12 +2033,9 @@ export function createWorkflowHostApi(
     return results;
   }
 
-
   async function runPipeline(
     items: unknown[],
-    stages: Array<
-      (prevResult: unknown, originalItem: unknown, index: number) => Promise<unknown> | unknown
-    >,
+    stages: Array<(prevResult: unknown, originalItem: unknown, index: number) => Promise<unknown> | unknown>,
   ): Promise<unknown[]> {
     assertNotAborted();
     if (items.length > parallelItemsCap) {
@@ -2196,7 +2094,6 @@ export function createWorkflowHostApi(
     return results;
   }
 
-
   async function runGate(arg: GatePrimitiveArg): Promise<GatePrimitiveResult> {
     assertNotAborted();
 
@@ -2205,10 +2102,7 @@ export function createWorkflowHostApi(
     }
     const manifestGate = gateById.get(arg.id);
     if (!manifestGate) {
-      throw new WorkflowHostFatalError(
-        'gate-not-in-manifest',
-        `gate '${arg.id}' nao existe no manifest`,
-      );
+      throw new WorkflowHostFatalError('gate-not-in-manifest', `gate '${arg.id}' nao existe no manifest`);
     }
     const mode = manifestGate.mode;
     if (arg.mode !== undefined && arg.mode !== mode) {
@@ -2254,9 +2148,7 @@ export function createWorkflowHostApi(
     if (mode === 'auto') {
       if (!checkResult.ok && checkResult.inconclusive) {
         const inconclusiveChecks = checkResult.checks.filter((c) => c.inconclusive === true);
-        const reasons = inconclusiveChecks
-          .map((c) => `${c.id}: ${c.reason ?? 'sem veredito'}`)
-          .join('; ');
+        const reasons = inconclusiveChecks.map((c) => `${c.id}: ${c.reason ?? 'sem veredito'}`).join('; ');
         logger.warn(
           {
             phase: 'gate-decision',
@@ -2292,9 +2184,7 @@ export function createWorkflowHostApi(
             },
           }),
         });
-        raiseBlockedFatal(
-          new WorkflowHostFatalError('gate-inconclusive', gateInconclusivePrompt),
-        );
+        raiseBlockedFatal(new WorkflowHostFatalError('gate-inconclusive', gateInconclusivePrompt));
       }
       const decision: DynamicWorkflowGateDecisionValue = checkResult.ok ? 'approved' : 'rejected';
       logger.info(
@@ -2328,15 +2218,8 @@ export function createWorkflowHostApi(
       return { ok: true, mode, findings, checks: checkResult.checks };
     }
 
-    if (
-      manifestGate.kind === 'delivery' &&
-      !checkResult.ok &&
-      findings.length === 0 &&
-      inconclusiveChecks.length > 0
-    ) {
-      const reasons = inconclusiveChecks
-        .map((c) => `${c.id}: ${c.reason ?? 'sem veredito'}`)
-        .join('; ');
+    if (manifestGate.kind === 'delivery' && !checkResult.ok && findings.length === 0 && inconclusiveChecks.length > 0) {
+      const reasons = inconclusiveChecks.map((c) => `${c.id}: ${c.reason ?? 'sem veredito'}`).join('; ');
       const deliveryInconclusivePrompt =
         `gate de entrega '${arg.id}' INCONCLUSIVO: nenhum check produziu veredito (toolchain/infra). ${reasons}. ` +
         'A entrega NAO pode ser julgada sem veredito mecanico. Conserte o ambiente e RETOME o run.';
@@ -2358,17 +2241,10 @@ export function createWorkflowHostApi(
           },
         }),
       });
-      raiseBlockedFatal(
-        new WorkflowHostFatalError('gate-inconclusive', deliveryInconclusivePrompt),
-      );
+      raiseBlockedFatal(new WorkflowHostFatalError('gate-inconclusive', deliveryInconclusivePrompt));
     }
 
-    if (
-      manifestGate.kind === 'delivery' &&
-      !checkResult.ok &&
-      findings.length > 0 &&
-      arg.escalateIfRed !== true
-    ) {
+    if (manifestGate.kind === 'delivery' && !checkResult.ok && findings.length > 0 && arg.escalateIfRed !== true) {
       const failureDirection =
         'A entrega reprovou nos checks deterministicos - conserte ate TODOS passarem (verde) e nao declare pronto antes disso. Falhas: ' +
         findings.map((f) => `${f.kind}/${f.id}: ${f.reason}`).join(' | ');
@@ -2422,9 +2298,8 @@ export function createWorkflowHostApi(
       type: 'gate' as const,
       id: arg.id,
       prompt:
-        (mode === 'human'
-          ? humanGatePrompt
-          : `gate '${arg.id}' aguardando aprovacao do orquestrador`) + inconclusiveNote,
+        (mode === 'human' ? humanGatePrompt : `gate '${arg.id}' aguardando aprovacao do orquestrador`) +
+        inconclusiveNote,
     };
     deps.crud.patchRun(ctx.runId, {
       status: 'blocked',
@@ -2463,10 +2338,7 @@ export function createWorkflowHostApi(
     });
 
     if (resolution.decision === 'reject') {
-      throw new WorkflowHostFatalError(
-        'gate-rejected',
-        `gate '${arg.id}' rejeitado por ${resolution.approvedBy}`,
-      );
+      throw new WorkflowHostFatalError('gate-rejected', `gate '${arg.id}' rejeitado por ${resolution.approvedBy}`);
     }
 
     deps.crud.patchRun(ctx.runId, { status: 'running', pendingDecisionJson: JSON.stringify({}) });
@@ -2482,11 +2354,7 @@ export function createWorkflowHostApi(
         : null;
     const isRedevApprove = decisionAction === 'redev' || decisionAction === 'replan';
 
-    if (
-      !isRedevApprove &&
-      isFinalGate(manifestGate, ctx.manifest) &&
-      ctx.onFinalGateApproved
-    ) {
+    if (!isRedevApprove && isFinalGate(manifestGate, ctx.manifest) && ctx.onFinalGateApproved) {
       await ctx.onFinalGateApproved(arg.id, resolution.approvedBy);
     }
 
@@ -2506,7 +2374,6 @@ export function createWorkflowHostApi(
       decisionPayload: resolution.payload,
     };
   }
-
 
   async function runArtifact(arg: ArtifactPrimitiveArg): Promise<unknown> {
     assertNotAborted();
@@ -2530,7 +2397,7 @@ export function createWorkflowHostApi(
 
     const artDeps: WorkflowArtifactsDeps = {
       registerArtifact: reusing
-        ? ((input) => ({
+        ? (input) => ({
             id: 'replayed',
             runId: input.runId,
             nodeId: input.nodeId ?? null,
@@ -2539,7 +2406,7 @@ export function createWorkflowHostApi(
             sha256: input.sha256,
             metadataJson: input.metadataJson ?? '{}',
             createdAt: now(),
-          }))
+          })
         : deps.crud.registerArtifact,
       generateId: () => generateId('dwfa'),
     };
@@ -2566,7 +2433,6 @@ export function createWorkflowHostApi(
     return { ok: true, path: written.absolutePath, sha256: written.sha256 };
   }
 
-
   async function runCheckpoint(arg: CheckpointPrimitiveArg): Promise<unknown> {
     assertNotAborted();
     if (!arg || typeof arg.id !== 'string' || arg.id.length === 0) {
@@ -2578,7 +2444,12 @@ export function createWorkflowHostApi(
     });
     const checkpointClaim = claimJournalCall(checkpointKey);
     if (checkpointClaim.decision === 'reuse' && checkpointClaim.entry?.sideEffectKey) {
-      deps.emit({ runId: ctx.runId, type: 'checkpoint-replayed', nodeId: arg.id, payload: { callIndex: checkpointClaim.callIndex } });
+      deps.emit({
+        runId: ctx.runId,
+        type: 'checkpoint-replayed',
+        nodeId: arg.id,
+        payload: { callIndex: checkpointClaim.callIndex },
+      });
       return { ok: true };
     }
     const cpDeps: WorkflowCheckpointsDeps = {
@@ -2601,17 +2472,12 @@ export function createWorkflowHostApi(
     return { ok: true };
   }
 
-
   async function runLog(arg: unknown): Promise<unknown> {
-    const message =
-      typeof arg === 'string'
-        ? arg
-        : (arg as { message?: string })?.message ?? '';
+    const message = typeof arg === 'string' ? arg : ((arg as { message?: string })?.message ?? '');
     const data = (arg as { data?: unknown })?.data;
     deps.emit({ runId: ctx.runId, type: 'log', payload: { message, data } });
     return undefined;
   }
-
 
   async function runValidateSprintPlan(arg: unknown): Promise<{
     ok: boolean;
@@ -2660,22 +2526,17 @@ export function createWorkflowHostApi(
     return { ok: errors.length === 0, plan, errors };
   }
 
-
   async function runGreenCheck(arg: GreenCheckPrimitiveArg): Promise<GreenCheckResult> {
     assertNotAborted();
 
     const sprintCwdForChecks =
-      typeof arg?.sprintIndex === 'number' && ctx.resolveSprintCwd
-        ? ctx.resolveSprintCwd(arg.sprintIndex)
-        : null;
+      typeof arg?.sprintIndex === 'number' && ctx.resolveSprintCwd ? ctx.resolveSprintCwd(arg.sprintIndex) : null;
     const buildScriptDetected = detectBuildScript(sprintCwdForChecks ?? ctx.workspaceRoot);
     const hasBuild = buildScriptDetected ?? ctx.hasBuildScript === true;
     const wantsBuild = arg?.final === true && hasBuild;
     const provided = Array.isArray(arg?.checks) ? (arg!.checks as GateCheckSpec[]) : null;
     const symbolicChecks: GateCheckSpec[] =
-      provided && provided.length > 0
-        ? provided
-        : defaultGreenCheckSpecs(wantsBuild);
+      provided && provided.length > 0 ? provided : defaultGreenCheckSpecs(wantsBuild);
 
     const specs = ctx.resolveGateChecks
       ? ctx.resolveGateChecks(symbolicChecks, GREEN_CHECK_PSEUDO_GATE_ID)
@@ -2714,9 +2575,7 @@ export function createWorkflowHostApi(
     });
 
     if (!result.ok && result.inconclusive) {
-      const reasons = inconclusiveChecks
-        .map((c) => `${c.id}: ${c.reason ?? 'sem veredito'}`)
-        .join('; ');
+      const reasons = inconclusiveChecks.map((c) => `${c.id}: ${c.reason ?? 'sem veredito'}`).join('; ');
       const prompt =
         `green-check INCONCLUSIVO: a toolchain nao produziu veredito (${reasons}). ` +
         'Isso e falha de AMBIENTE, nao do codigo do run. Conserte (ex: dependencias instaladas na worktree, binarios no PATH) e retome o run.';
@@ -2731,7 +2590,6 @@ export function createWorkflowHostApi(
 
     return { ok: result.ok, inconclusive: result.inconclusive, findings, checks: result.checks };
   }
-
 
   async function runMaterializeSprintPlan(arg: unknown): Promise<{
     sprints: Array<{ sprintId: string; nodeIds: string[] }>;
@@ -2756,9 +2614,7 @@ export function createWorkflowHostApi(
     const catalogIds = ctx.catalogAgentIds;
     if (Array.isArray(catalogIds) && catalogIds.length > 0) {
       const catalog = new Set(catalogIds);
-      const fallbackCoder = catalog.has(DYNAMIC_WORKFLOW_CODER_ID)
-        ? DYNAMIC_WORKFLOW_CODER_ID
-        : catalogIds[0]!;
+      const fallbackCoder = catalog.has(DYNAMIC_WORKFLOW_CODER_ID) ? DYNAMIC_WORKFLOW_CODER_ID : catalogIds[0]!;
       for (const sprint of plan.sprints) {
         if (!sprint) continue;
         if (typeof sprint.coderAgentId !== 'string' || !catalog.has(sprint.coderAgentId)) {
@@ -2853,10 +2709,7 @@ export function createWorkflowHostApi(
     const crudCreateNodes = deps.crud.createNodes;
     const crudUpdateDefinition = deps.crud.updateDefinition;
     const crudPersistSprints = deps.crud.persistSprints;
-    if (
-      !crudMaterialize &&
-      (!crudCreateNodes || !crudUpdateDefinition || !crudPersistSprints)
-    ) {
+    if (!crudMaterialize && (!crudCreateNodes || !crudUpdateDefinition || !crudPersistSprints)) {
       throw new WorkflowHostFatalError(
         'policy-invalid',
         'materializeSprintPlan: CRUD de runtime (materializeSprintPlan combinada OU createNodes/updateDefinition/persistSprints) nao injetada (host nao configurado para o fluxo de sprints)',
@@ -2899,9 +2752,7 @@ export function createWorkflowHostApi(
       schemaFileNames: ctx.schemaFileNames,
     };
     const report = validateWorkflowPackage(validationInput);
-    const blocking = report.issues.filter(
-      (i) => i.severity === 'error' && !COMPILER_ONLY_ISSUE_CODES.has(i.code),
-    );
+    const blocking = report.issues.filter((i) => i.severity === 'error' && !COMPILER_ONLY_ISSUE_CODES.has(i.code));
     if (blocking.length > 0) {
       const detail = blocking.map((i) => `${i.code}: ${i.message}`).join('; ');
       throw new WorkflowHostFatalError(
@@ -2924,9 +2775,7 @@ export function createWorkflowHostApi(
     }
     const definitionPatch: DynamicWorkflowDefinitionPatch = {
       manifestJson: JSON.stringify(ctx.manifest),
-      manifestHash: createHash('sha256')
-        .update(JSON.stringify(ctx.manifest))
-        .digest('hex'),
+      manifestHash: createHash('sha256').update(JSON.stringify(ctx.manifest)).digest('hex'),
     };
     const nodeSprintMeta = manifestNodes
       .filter((node) => node.sprintId !== undefined)
@@ -2985,14 +2834,12 @@ export function createWorkflowHostApi(
       },
     });
 
-
     recordJournalCall(materializeClaim.callIndex, materializeKey, {
       sideEffectKey: `materialize#${plan.planVersion}#${plan.planHash}`,
     });
 
     return { sprints: sprintNodeIds, planVersion: plan.planVersion, parallelGroups };
   }
-
 
   return {
     phase: (arg) => phase(arg),
@@ -3007,9 +2854,7 @@ export function createWorkflowHostApi(
     pipeline: (arg) => {
       const a = arg as {
         items?: unknown[];
-        stages?: Array<
-          (prevResult: unknown, originalItem: unknown, index: number) => Promise<unknown> | unknown
-        >;
+        stages?: Array<(prevResult: unknown, originalItem: unknown, index: number) => Promise<unknown> | unknown>;
       };
       return runPipeline(a?.items ?? [], a?.stages ?? []);
     },
@@ -3022,8 +2867,6 @@ export function createWorkflowHostApi(
     greenCheck: (arg) => runGreenCheck(arg as GreenCheckPrimitiveArg),
   };
 }
-
-
 
 const DEFAULT_MAX_DEV_ROUNDS = 3;
 export const MAX_DEV_ROUNDS_CEILING = 12;
@@ -3051,9 +2894,7 @@ export function renderPlanMarkdown(
   lines.push(`- sprints: ${plan.sprints.length}`);
   const parallel = parallelGroups.filter((g) => g.sprintIds.length > 1);
   if (parallel.length > 0) {
-    lines.push(
-      `- batches paralelos: ${parallel.map((g) => `[${g.sprintIds.join(', ')}]`).join(' ')}`,
-    );
+    lines.push(`- batches paralelos: ${parallel.map((g) => `[${g.sprintIds.join(', ')}]`).join(' ')}`);
   } else {
     lines.push('- execucao: sequencial (sem batches paralelos)');
   }
@@ -3139,7 +2980,6 @@ export function emitPlanArtifacts(
   }
 }
 
-
 export const GREEN_CHECK_PSEUDO_GATE_ID = '__green-check__';
 
 export function defaultGreenCheckSpecs(wantsBuild: boolean): GateCheckSpec[] {
@@ -3168,26 +3008,18 @@ export function defaultGreenCheckSpecs(wantsBuild: boolean): GateCheckSpec[] {
 }
 
 export function greenCheckFindingOf(check: GateCheckResult): GreenCheckFinding {
-  const where =
-    typeof check.detail?.command === 'string'
-      ? (check.detail.command as string)
-      : check.id;
+  const where = typeof check.detail?.command === 'string' ? (check.detail.command as string) : check.id;
   return {
     severity: 'P1',
     where,
-    problem: `green-check: ${check.kind} '${check.id}' vermelho${
-      check.reason ? ` (${check.reason})` : ''
-    }`,
+    problem: `green-check: ${check.kind} '${check.id}' vermelho${check.reason ? ` (${check.reason})` : ''}`,
     fix: 'rode o comando de verificacao localmente e conserte ate ficar verde (o host re-roda a cada rodada)',
   };
 }
 
 function effectiveMaxDevRounds(ctx: HostApiRunContext): number {
   const raw = ctx.sprintPlanConfig?.maxDevRounds;
-  const v =
-    typeof raw === 'number' && Number.isFinite(raw) && raw >= 1
-      ? Math.floor(raw)
-      : DEFAULT_MAX_DEV_ROUNDS;
+  const v = typeof raw === 'number' && Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : DEFAULT_MAX_DEV_ROUNDS;
   return Math.min(v, MAX_DEV_ROUNDS_CEILING);
 }
 
@@ -3242,11 +3074,9 @@ export function normalizeAndValidatePlan(
     seenIds.add(id);
 
     const name = typeof s.name === 'string' && s.name.length > 0 ? s.name : `Sprint ${idx}`;
-    const description =
-      typeof s.description === 'string' && s.description.length > 0 ? s.description : name;
+    const description = typeof s.description === 'string' && s.description.length > 0 ? s.description : name;
 
-    let coderAgentId =
-      typeof s.coderAgentId === 'string' && s.coderAgentId.length > 0 ? s.coderAgentId : fallbackCoder;
+    let coderAgentId = typeof s.coderAgentId === 'string' && s.coderAgentId.length > 0 ? s.coderAgentId : fallbackCoder;
     if (catalog && !catalog.has(coderAgentId)) coderAgentId = fallbackCoder;
 
     let validatorAgentIds = asStringArray(s.validatorAgentIds);
@@ -3265,7 +3095,11 @@ export function normalizeAndValidatePlan(
       const ac = asStringArray(fr.acceptanceCriteria).filter((c) => c.trim().length > 0);
       if (ac.length === 0) {
         errors.push(
-          planError('acceptance-criteria-missing', `feature '${fid}' da sprint '${id}' sem acceptanceCriteria verificavel`, id),
+          planError(
+            'acceptance-criteria-missing',
+            `feature '${fid}' da sprint '${id}' sem acceptanceCriteria verificavel`,
+            id,
+          ),
         );
       }
       return { id: fid, name: fname, acceptanceCriteria: ac };
@@ -3396,7 +3230,9 @@ export function computeCanonicalPlanHash(sprints: PlannedSprint[]): string {
       maxRounds: s.maxRounds,
     }))
     .sort((a, b) => a.index - b.index || a.id.localeCompare(b.id));
-  return createHash('sha256').update(JSON.stringify({ sprints: canonical })).digest('hex');
+  return createHash('sha256')
+    .update(JSON.stringify({ sprints: canonical }))
+    .digest('hex');
 }
 
 export function findProtectedWriteSetHit(
@@ -3416,19 +3252,13 @@ export function findProtectedWriteSetHit(
   return null;
 }
 
-function persistPlanRefOnRun(
-  deps: HostApiDeps,
-  ctx: HostApiRunContext,
-  planVersion: number,
-  planHash: string,
-): void {
+function persistPlanRefOnRun(deps: HostApiDeps, ctx: HostApiRunContext, planVersion: number, planHash: string): void {
   deps.emit({
     runId: ctx.runId,
     type: 'sprint-plan-ref',
     payload: { planVersion, planHash },
   });
 }
-
 
 export function clampAccess(
   argAccess: DynamicWorkflowNodeAccess | undefined,
@@ -3441,10 +3271,7 @@ export function clampAccess(
   return 'read-only';
 }
 
-export function clampList(
-  argList: string[] | undefined,
-  manifestList: string[] | undefined,
-): string[] {
+export function clampList(argList: string[] | undefined, manifestList: string[] | undefined): string[] {
   const ceiling = manifestList ?? [];
   if (ceiling.length === 0) return [];
   if (argList === undefined) return [...ceiling];
@@ -3460,22 +3287,15 @@ export function clampList(
   return out;
 }
 
-export function clampFlag(
-  argFlag: boolean | undefined,
-  manifestFlag: boolean | undefined,
-): boolean {
+export function clampFlag(argFlag: boolean | undefined, manifestFlag: boolean | undefined): boolean {
   const ceiling = manifestFlag === true;
   if (!ceiling) return false;
   return argFlag !== false;
 }
 
-export function clampCeiling(
-  argValue: number | undefined,
-  manifestValue: number | undefined,
-): number | undefined {
+export function clampCeiling(argValue: number | undefined, manifestValue: number | undefined): number | undefined {
   const argOk = typeof argValue === 'number' && Number.isFinite(argValue) && argValue > 0;
-  const manifestOk =
-    typeof manifestValue === 'number' && Number.isFinite(manifestValue) && manifestValue > 0;
+  const manifestOk = typeof manifestValue === 'number' && Number.isFinite(manifestValue) && manifestValue > 0;
   if (manifestOk && argOk) return Math.min(argValue, manifestValue);
   if (manifestOk) return manifestValue;
   return argOk ? argValue : manifestValue;
@@ -3489,23 +3309,15 @@ export function parseGateRedevAction(sideEffectKey: string): string | null {
   return action.length > 0 ? action : null;
 }
 
-export function isFinalGate(
-  gate: DynamicWorkflowManifestGate,
-  manifest: DynamicWorkflowManifest,
-): boolean {
+export function isFinalGate(gate: DynamicWorkflowManifestGate, manifest: DynamicWorkflowManifest): boolean {
   if (gate.mode !== 'human' && gate.mode !== 'orchestrator') return false;
   if (gate.kind === 'delivery') return true;
   if (gate.kind === 'plan-review') return false;
   if (gate.id === 'gate-global' || gate.id === 'gate-final') return true;
   const finalCandidates = manifest.gates.filter(
-    (g) =>
-      (g.mode === 'human' || g.mode === 'orchestrator') &&
-      g.kind !== 'plan-review',
+    (g) => (g.mode === 'human' || g.mode === 'orchestrator') && g.kind !== 'plan-review',
   );
-  return (
-    finalCandidates.length > 0 &&
-    finalCandidates[finalCandidates.length - 1].id === gate.id
-  );
+  return finalCandidates.length > 0 && finalCandidates[finalCandidates.length - 1].id === gate.id;
 }
 
 export function parseNodeOutput(output: string): unknown {

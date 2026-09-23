@@ -6,7 +6,6 @@ import { StreamTimeline } from '@/components/common/StreamTimeline';
 
 const STREAM_TAIL_CHARS = 40_000;
 
-
 interface AutoTransitionBannerProps {
   nextPhaseName: string;
 }
@@ -31,21 +30,16 @@ function AutoTransitionBanner({ nextPhaseName }: AutoTransitionBannerProps) {
       <div className="flex items-center gap-2">
         <CheckCircle2 size={13} className="text-green-400 shrink-0" />
         <span className="text-xs text-zinc-300">
-          Concluido. Avancando para{' '}
-          <span className="text-amber-300 font-medium">{nextPhaseName}</span>...
+          Concluido. Avancando para <span className="text-amber-300 font-medium">{nextPhaseName}</span>...
         </span>
       </div>
       {/* Progress bar */}
       <div className="h-1 bg-zinc-800 rounded overflow-hidden">
-        <div
-          className="h-1 bg-amber-500 rounded transition-all duration-75"
-          style={{ width: `${progress}%` }}
-        />
+        <div className="h-1 bg-amber-500 rounded transition-all duration-75" style={{ width: `${progress}%` }} />
       </div>
     </div>
   );
 }
-
 
 interface ErrorBannerProps {
   errorMessage: string;
@@ -113,7 +107,6 @@ function ErrorBanner({ errorMessage, retryCount, maxRetries, onRetry, onAbort }:
   );
 }
 
-
 function PhaseRunningBadge({ phaseName }: { phaseName: string }) {
   return (
     <div className="flex items-center gap-2">
@@ -127,7 +120,6 @@ function PhaseRunningBadge({ phaseName }: { phaseName: string }) {
   );
 }
 
-
 interface PipelineStreamViewProps {
   phaseName: string;
   nextPhaseName?: string;
@@ -136,11 +128,11 @@ interface PipelineStreamViewProps {
 const MAX_RETRIES = 3;
 
 export function PipelineStreamView({ phaseName, nextPhaseName }: PipelineStreamViewProps) {
-  const streamTimeline = useActiveProjectState(s => s.streamTimeline) ?? [];
-  const isStreaming = useActiveProjectState(s => s.isStreaming) ?? false;
-  const error = useActiveProjectState(s => s.error) ?? null;
-  const retryPhase = usePipelineStore(s => s.retryPhase);
-  const abortPipeline = usePipelineStore(s => s.abortPipeline);
+  const streamTimeline = useActiveProjectState((s) => s.streamTimeline) ?? [];
+  const isStreaming = useActiveProjectState((s) => s.isStreaming) ?? false;
+  const error = useActiveProjectState((s) => s.error) ?? null;
+  const retryPhase = usePipelineStore((s) => s.retryPhase);
+  const abortPipeline = usePipelineStore((s) => s.abortPipeline);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -202,9 +194,7 @@ export function PipelineStreamView({ phaseName, nextPhaseName }: PipelineStreamV
     <div className="flex flex-col flex-1 min-h-0 bg-zinc-950">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800 bg-zinc-900/60 shrink-0">
-        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
-          Stream da fase
-        </span>
+        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Stream da fase</span>
         {isStreaming ? (
           <PhaseRunningBadge phaseName={phaseName} />
         ) : (
@@ -242,9 +232,7 @@ export function PipelineStreamView({ phaseName, nextPhaseName }: PipelineStreamV
         />
 
         {/* Auto-transition banner */}
-        {showTransition && nextPhaseName && (
-          <AutoTransitionBanner nextPhaseName={nextPhaseName} />
-        )}
+        {showTransition && nextPhaseName && <AutoTransitionBanner nextPhaseName={nextPhaseName} />}
 
         {/* Error banner with retry */}
         {error && (

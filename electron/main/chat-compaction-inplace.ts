@@ -1,4 +1,3 @@
-
 import crypto from 'crypto';
 import {
   getDb,
@@ -11,11 +10,7 @@ import {
 import { createLogger } from './logger';
 import { estimateTokens } from './token-estimator';
 import { summarizeLightweight } from './memory-pipeline';
-import {
-  buildExecutionError,
-  EmptyProviderResponseError,
-  type AgentExecutionError,
-} from './agent-runtime/llm-error';
+import { buildExecutionError, EmptyProviderResponseError, type AgentExecutionError } from './agent-runtime/llm-error';
 import type { ChatMessage } from '../../src/types';
 
 const logger = createLogger('chat-compaction');
@@ -29,22 +24,22 @@ export { DEFAULT_CHAT_COMPACTION_TARGET_TOKENS, CHAT_COMPACTION_TARGET_TOKENS_SE
 
 const compactingChatSessions = new Set<string>();
 
+export function isChatSessionCompacting(sessionId: string): boolean {
+  return compactingChatSessions.has(sessionId);
+}
+
 function readPositiveNumberSetting(key: string, fallback: number): number {
   const raw = getSetting(key);
   const parsed = raw ? Number(raw) : NaN;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-export function buildChatCompactionSeed(
-  rollingSummary: string,
-  messages: ChatMessage[],
-  targetTokens: number,
-): string {
+export function buildChatCompactionSeed(rollingSummary: string, messages: ChatMessage[], targetTokens: number): string {
   const header = `[Resumo da conversa ate aqui]: ${rollingSummary}`;
   const SEPARATOR = '\n\n';
   let remaining = targetTokens - estimateTokens(header);
 
-  const convo = messages.filter(m => m.role === 'user' || m.role === 'assistant');
+  const convo = messages.filter((m) => m.role === 'user' || m.role === 'assistant');
   const turns: string[] = [];
   let current: string[] = [];
   for (const m of convo) {
@@ -98,9 +93,7 @@ export async function compactChatSessionInPlace(sessionId: string): Promise<Chat
   try {
     const boundary = session.compactedUpToMessageId;
     const allMessages = getSessionMessages(sessionId);
-    const deltaMessages = boundary !== undefined
-      ? allMessages.filter(m => m.id > boundary)
-      : allMessages;
+    const deltaMessages = boundary !== undefined ? allMessages.filter((m) => m.id > boundary) : allMessages;
     if (deltaMessages.length === 0) {
       logger.info({ sessionId, boundary }, 'chat: nada novo para compactar (delta vazio, no-op)');
       return { ok: true, noop: true };
@@ -115,15 +108,16 @@ export async function compactChatSessionInPlace(sessionId: string): Promise<Chat
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error({ err, sessionId }, 'chat: compactacao leve abortada (summarizer falhou); contexto intacto');
-      const typedError: AgentExecutionError = err instanceof EmptyProviderResponseError
-        ? {
-            code: err.code,
-            category: err.category,
-            userMessage: err.userMessage,
-            suggestedAction: err.suggestedAction,
-            raw: err.message,
-          }
-        : buildExecutionError('COMPACT-EMPTY', msg);
+      const typedError: AgentExecutionError =
+        err instanceof EmptyProviderResponseError
+          ? {
+              code: err.code,
+              category: err.category,
+              userMessage: err.userMessage,
+              suggestedAction: err.suggestedAction,
+              raw: err.message,
+            }
+          : buildExecutionError('COMPACT-EMPTY', msg);
       return { ok: false, error: msg, typedError };
     }
     if (!result) {

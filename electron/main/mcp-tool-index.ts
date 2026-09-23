@@ -1,10 +1,5 @@
-
 import { createLogger } from './logger';
-import {
-  getAllMCPServers,
-  getMcpToolRegistryEntries,
-  type MCPToolRegistryEntry,
-} from './mcp-manager';
+import { getAllMCPServers, getMcpToolRegistryEntries, type MCPToolRegistryEntry } from './mcp-manager';
 import { isDirectMcpHelper, PROMPT_CATALOG_MCP_HELPERS } from './mcp-risk-patterns';
 
 const logger = createLogger('mcp-tool-index');
@@ -111,14 +106,10 @@ export function buildMcpToolIndex(opts: McpToolIndexOptions): string {
     `Para consultar o contrato completo de uma tool antes de usar: ${schemaToolName}(server, tool).`,
   ].join('\n');
 
-  logger.debug(
-    { servers: servers.length, tools: allEntries.length, chars: body.length },
-    'MCP tool index montado',
-  );
+  logger.debug({ servers: servers.length, tools: allEntries.length, chars: body.length }, 'MCP tool index montado');
 
   return sanitizeMcpTokens(body, new Set([invokeToolName, schemaToolName]));
 }
-
 
 export interface DirectHelperCatalogOptions {
   serverIds: readonly string[];

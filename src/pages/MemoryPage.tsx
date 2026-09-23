@@ -1,18 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  Brain,
-  Search,
-  RefreshCw,
-  Sparkles,
-  User,
-  Shield,
-  Database,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react';
+import { Brain, Search, RefreshCw, Sparkles, User, Shield, Database, ChevronLeft, ChevronRight } from 'lucide-react';
 import { MarkdownEditor } from '@/components/common/MarkdownEditor';
+import { useChatStore } from '@/stores/chat-store';
 import type { DailySummary } from '@/types';
-
 
 type TabId = 'soul' | 'user' | 'rules' | 'working' | 'semantic' | 'summaries';
 
@@ -23,13 +13,13 @@ interface TabConfig {
   description: string;
 }
 
-
 const TABS: TabConfig[] = [
   {
     id: 'soul',
     label: 'Soul',
     icon: Sparkles,
-    description: 'Este e o prompt principal do agente. Edite livremente para customizar a personalidade, tom e comportamento do LionClaw.',
+    description:
+      'Este e o prompt principal do agente. Edite livremente para customizar a personalidade, tom e comportamento do LionClaw.',
   },
   {
     id: 'user',
@@ -67,7 +57,6 @@ const EDITABLE_TABS: TabId[] = ['soul', 'user', 'rules', 'working'];
 
 const SESSION_STORAGE_KEY = 'cerebro-active-tab';
 
-
 export function MemoryPage() {
   const [tab, setTab] = useState<TabId>(() => {
     return (sessionStorage.getItem(SESSION_STORAGE_KEY) as TabId) || 'soul';
@@ -76,7 +65,6 @@ export function MemoryPage() {
   useEffect(() => {
     sessionStorage.setItem(SESSION_STORAGE_KEY, tab);
   }, [tab]);
-
 
   const [soulContent, setSoulContent] = useState('');
   const [userContent, setUserContent] = useState('');
@@ -113,20 +101,31 @@ export function MemoryPage() {
     });
   }, []);
 
-  const getContent = useCallback((tabId: TabId): string => {
-    switch (tabId) {
-      case 'soul':    return soulContent;
-      case 'user':    return userContent;
-      case 'rules':   return rulesContent;
-      case 'working': return workingMemory;
-      default:        return '';
-    }
-  }, [soulContent, userContent, rulesContent, workingMemory]);
+  const getContent = useCallback(
+    (tabId: TabId): string => {
+      switch (tabId) {
+        case 'soul':
+          return soulContent;
+        case 'user':
+          return userContent;
+        case 'rules':
+          return rulesContent;
+        case 'working':
+          return workingMemory;
+        default:
+          return '';
+      }
+    },
+    [soulContent, userContent, rulesContent, workingMemory],
+  );
 
-  const isDirty = useCallback((tabId: TabId): boolean => {
-    if (!EDITABLE_TABS.includes(tabId)) return false;
-    return getContent(tabId) !== savedSnapshots.current[tabId];
-  }, [getContent]);
+  const isDirty = useCallback(
+    (tabId: TabId): boolean => {
+      if (!EDITABLE_TABS.includes(tabId)) return false;
+      return getContent(tabId) !== savedSnapshots.current[tabId];
+    },
+    [getContent],
+  );
 
   const showSavedFeedback = (tabId: TabId) => {
     setSavedFeedback(tabId);
@@ -136,10 +135,18 @@ export function MemoryPage() {
   const handleSave = async (tabId: TabId) => {
     const content = getContent(tabId);
     switch (tabId) {
-      case 'soul':    await window.lionclaw.soul.update(content);               break;
-      case 'user':    await window.lionclaw.user.update(content);               break;
-      case 'rules':   await window.lionclaw.rules.updateGlobal(content);        break;
-      case 'working': await window.lionclaw.memory.updateWorkingMemory(content); break;
+      case 'soul':
+        await window.lionclaw.soul.update(content);
+        break;
+      case 'user':
+        await window.lionclaw.user.update(content);
+        break;
+      case 'rules':
+        await window.lionclaw.rules.updateGlobal(content);
+        break;
+      case 'working':
+        await window.lionclaw.memory.updateWorkingMemory(content);
+        break;
     }
     savedSnapshots.current[tabId] = content;
     showSavedFeedback(tabId);
@@ -159,19 +166,18 @@ export function MemoryPage() {
   const handleCompact = async () => {
     setIsCompacting(true);
     try {
-      await window.lionclaw.memory.triggerCompaction();
+      await useChatStore.getState().startNewChat();
     } finally {
       setIsCompacting(false);
     }
   };
 
   const setters: Record<string, (v: string) => void> = {
-    soul:    setSoulContent,
-    user:    setUserContent,
-    rules:   setRulesContent,
+    soul: setSoulContent,
+    user: setUserContent,
+    rules: setRulesContent,
     working: setWorkingMemory,
   };
-
 
   const tabsRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -208,9 +214,7 @@ export function MemoryPage() {
     tabsRef.current?.scrollBy({ left: 200, behavior: 'smooth' });
   };
 
-
   const visibleTabs = TABS;
-
 
   if (isLoading) {
     return (
@@ -222,7 +226,6 @@ export function MemoryPage() {
 
   const currentTabConfig = visibleTabs.find((t) => t.id === tab);
 
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -233,10 +236,11 @@ export function MemoryPage() {
         <button
           onClick={handleCompact}
           disabled={isCompacting}
+          title="Clear de uma lane: salva a conversa em memoria e abre uma nova (mesma regra do botao Novo Chat)"
           className="flex items-center gap-1.5 px-3 py-1.5 border border-zinc-700 text-zinc-300 hover:bg-zinc-800 rounded-lg text-xs transition-colors disabled:opacity-50"
         >
           <RefreshCw size={12} className={isCompacting ? 'animate-spin' : ''} />
-          Compactar
+          Clear de lane
         </button>
       </div>
 
@@ -283,9 +287,7 @@ export function MemoryPage() {
                 >
                   <Icon size={12} />
                   {label}
-                  {dirty && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 ml-0.5" />
-                  )}
+                  {dirty && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 ml-0.5" />}
                 </button>
               </div>
             );
@@ -331,7 +333,10 @@ export function MemoryPage() {
                 className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 outline-none focus:border-amber-500/50"
               />
             </div>
-            <button onClick={handleSearch} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm">
+            <button
+              onClick={handleSearch}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm"
+            >
               Buscar
             </button>
           </div>
@@ -369,7 +374,9 @@ export function MemoryPage() {
                   <div className="mt-2">
                     <span className="text-[10px] text-amber-500 font-medium">DECISOES:</span>
                     <ul className="text-xs text-zinc-500 mt-1 space-y-0.5">
-                      {s.decisions.map((d, i) => <li key={i}>- {d}</li>)}
+                      {s.decisions.map((d, i) => (
+                        <li key={i}>- {d}</li>
+                      ))}
                     </ul>
                   </div>
                 )}
@@ -378,7 +385,6 @@ export function MemoryPage() {
           )}
         </div>
       )}
-
     </div>
   );
 }

@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 vi.mock('../../../db', () => ({
   getSessionMessages: vi.fn(),
@@ -16,7 +14,6 @@ import { getCachedSummary, saveCachedSummary } from '../db';
 import { compactIfNeeded } from '../index';
 import type { LionAdapter } from '../../adapters/types';
 import type { ChatMessage } from '../../../../../src/types';
-
 
 const SESSION_ID = 'test-session-001';
 
@@ -46,7 +43,6 @@ beforeEach(() => {
   (getCachedSummary as ReturnType<typeof vi.fn>).mockReturnValue(null);
 });
 
-
 describe('compactIfNeeded - abaixo do threshold', () => {
   it('nao compacta quando historico curto (< KEEP_RECENT_TURNS)', async () => {
     const msgs = makeMessages(5, 10);
@@ -72,7 +68,7 @@ describe('compactIfNeeded - abaixo do threshold', () => {
   });
 
   it('nao compacta quando tokens abaixo do threshold', async () => {
-    const msgs = makeMessages(15, 5); // 5 tokens cada = 75 total
+    const msgs = makeMessages(15, 5);
     (getSessionMessages as ReturnType<typeof vi.fn>).mockReturnValue(msgs);
 
     const adapter = makeAdapter();
@@ -81,7 +77,7 @@ describe('compactIfNeeded - abaixo do threshold', () => {
     const result = await compactIfNeeded({
       sessionId: SESSION_ID,
       newUserMsg: 'x'.repeat(10), // ~3 tokens
-      systemPrompt: 'sys',         // ~1 token
+      systemPrompt: 'sys', // ~1 token
       primaryAdapter: adapter,
       primaryModel: 'qwen2.5:27b', // maxContext = 130000, threshold = 91000
       primaryProvider: 'ollama',
@@ -198,7 +194,7 @@ describe('compactIfNeeded - acima do threshold', () => {
       primaryModel: 'unknown-model',
       primaryProvider: 'lmstudio',
       maxContextTokens: 1000,
-      thresholdRatio: 0.80,
+      thresholdRatio: 0.8,
       emitChunk,
     });
 

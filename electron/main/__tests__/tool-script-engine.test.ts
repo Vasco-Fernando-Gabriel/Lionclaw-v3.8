@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -28,23 +27,15 @@ import {
   type ToolScriptRpcDispatcher,
   type ToolScriptDispatchContext,
 } from '../tool-script/tool-script-types';
-import {
-  generateLionclawToolsStub,
-  assertValidStubToolName,
-} from '../tool-script/tool-script-python-stub';
+import { generateLionclawToolsStub, assertValidStubToolName } from '../tool-script/tool-script-python-stub';
 import {
   registerChatCapabilityTurn,
   __resetChatCapabilityContextForTests,
   type ChatCapabilityTurnContextInput,
 } from '../chat-capability-context';
 
-
 function resolveTestPython(): string {
-  for (const candidate of [
-    '/opt/homebrew/bin/python3',
-    '/usr/local/bin/python3',
-    '/usr/bin/python3',
-  ]) {
+  for (const candidate of ['/opt/homebrew/bin/python3', '/usr/local/bin/python3', '/usr/bin/python3']) {
     if (fs.existsSync(candidate)) return candidate;
   }
   return 'python3';
@@ -55,11 +46,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitFor(
-  cond: () => boolean,
-  timeoutMs = 5_000,
-  intervalMs = 25,
-): Promise<void> {
+async function waitFor(cond: () => boolean, timeoutMs = 5_000, intervalMs = 25): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (cond()) return;
@@ -98,9 +85,7 @@ function makeFakeDispatch(
 let testCwd: string;
 let turnCounter = 0;
 
-function registerTurn(
-  overrides: Partial<ChatCapabilityTurnContextInput> = {},
-): { sessionId: string; turnId: string } {
+function registerTurn(overrides: Partial<ChatCapabilityTurnContextInput> = {}): { sessionId: string; turnId: string } {
   turnCounter++;
   const sessionId = overrides.sessionId ?? `sess-ts-${turnCounter}`;
   const turnId = overrides.turnId ?? `turn-ts-${turnCounter}`;
@@ -161,16 +146,13 @@ afterEach(() => {
   fs.rmSync(testCwd, { recursive: true, force: true });
 });
 
-
 describe('so stdout volta', () => {
   it('resultado de RPC intermediaria NAO aparece no retorno; so o print final', async () => {
     const { calls, dispatch } = makeFakeDispatch(() => 'CONTEUDO-INTERMEDIARIO-9f8e7d');
     const result = await run(
-      [
-        'from lionclaw_tools import read_file',
-        'dados = read_file("/etc/fake.txt")',
-        'print("resultado-final")',
-      ].join('\n'),
+      ['from lionclaw_tools import read_file', 'dados = read_file("/etc/fake.txt")', 'print("resultado-final")'].join(
+        '\n',
+      ),
       dispatch,
     );
 
@@ -186,16 +168,11 @@ describe('so stdout volta', () => {
   });
 });
 
-
 describe('caps de stdout/stderr', () => {
   it('acima do cap MARCA; stdout vira head 40% + nota + tail 60% com persist (B.6/S4); stderr trunca simples', async () => {
     const { dispatch } = makeFakeDispatch(() => '');
     const result = await run(
-      [
-        'import sys',
-        'sys.stdout.write("A" * 1000)',
-        'sys.stderr.write("B" * 500)',
-      ].join('\n'),
+      ['import sys', 'sys.stdout.write("A" * 1000)', 'sys.stderr.write("B" * 500)'].join('\n'),
       dispatch,
       { maxStdoutBytes: 200, maxStderrBytes: 100 },
     );
@@ -205,11 +182,9 @@ describe('caps de stdout/stderr', () => {
     expect(result.stdout).toMatch(/\.\.\.\[\d+ bytes omitidos, resto em .+\]\.\.\./);
     expect(result.stdoutTruncated).toBe(true);
     expect(result.persistedPath).toBeDefined();
-    expect(
-      (result.persistedPath as string).startsWith(
-        path.join(testCwd, '.lionclaw', 'tool-script') + path.sep,
-      ),
-    ).toBe(true);
+    expect((result.persistedPath as string).startsWith(path.join(testCwd, '.lionclaw', 'tool-script') + path.sep)).toBe(
+      true,
+    );
     expect(fs.readFileSync(result.persistedPath as string, 'utf8')).toBe('A'.repeat(1000));
     expect(result.stderr).toBe('B'.repeat(100));
     expect(result.stderrTruncated).toBe(true);
@@ -228,7 +203,6 @@ describe('caps de stdout/stderr', () => {
     expect(result.persistedPath).toBeUndefined();
   });
 });
-
 
 describe('abort (AC-B8, metade motor)', () => {
   it('abortSignal mata o process group inteiro, incluindo neto (sleep 30)', async () => {
@@ -290,7 +264,6 @@ describe('abort (AC-B8, metade motor)', () => {
   });
 });
 
-
 describe('AC-B3: encadeamento de tools sem round-trip', () => {
   it('tool A alimenta o argumento da tool B; retorno = so o stdout final', async () => {
     const { calls, dispatch } = makeFakeDispatch((call) => {
@@ -321,7 +294,6 @@ describe('AC-B3: encadeamento de tools sem round-trip', () => {
   });
 });
 
-
 describe('socket path', () => {
   it('fica em os.tmpdir() com menos de 100 bytes (limite de 104 do macOS)', () => {
     const socketPath = createToolScriptSocketPath();
@@ -335,7 +307,6 @@ describe('socket path', () => {
   });
 });
 
-
 describe('timeout global pausavel (AC-B9 parcial)', () => {
   it('pauseTimeout durante a RPC segura o relogio: script sobrevive e completa', async () => {
     const { dispatch } = makeFakeDispatch(async (_call, ctx) => {
@@ -345,11 +316,10 @@ describe('timeout global pausavel (AC-B9 parcial)', () => {
       return 'RESULTADO-LENTO';
     });
 
-    const result = await run(
-      ['from lionclaw_tools import read_file', 'print(read_file("/x"))'].join('\n'),
-      dispatch,
-      { timeoutMs: 1_500, rpcTimeoutMs: 10_000 },
-    );
+    const result = await run(['from lionclaw_tools import read_file', 'print(read_file("/x"))'].join('\n'), dispatch, {
+      timeoutMs: 1_500,
+      rpcTimeoutMs: 10_000,
+    });
 
     expect(result.timedOut).toBe(false);
     expect(result.aborted).toBe(false);
@@ -367,7 +337,6 @@ describe('timeout global pausavel (AC-B9 parcial)', () => {
     expect(result.exitCode).toBe(-1);
   });
 });
-
 
 describe('correlacao concorrente por id', () => {
   it('4 threads simultaneas recebem cada uma o SEU resultado', async () => {
@@ -410,7 +379,6 @@ describe('correlacao concorrente por id', () => {
   });
 });
 
-
 describe('token por execucao', () => {
   it('frame com token invalido nao e processado nem respondido', async () => {
     const { calls, dispatch } = makeFakeDispatch(() => 'NUNCA');
@@ -441,7 +409,6 @@ describe('token por execucao', () => {
     expect(result.exitCode).toBe(0);
   });
 });
-
 
 describe('fail-closed do turn-context', () => {
   it('sem turn-context registrado -> erro claro, sem spawn', async () => {
@@ -486,7 +453,6 @@ describe('fail-closed do turn-context', () => {
   });
 });
 
-
 describe('limite de tool calls', () => {
   it('RPC alem do limite responde erro, o processo morre e os flags marcam', async () => {
     const { calls, dispatch } = makeFakeDispatch(() => 'ok');
@@ -518,7 +484,6 @@ describe('limite de tool calls', () => {
   });
 });
 
-
 describe('erro de tool no script', () => {
   it('throw do dispatcher vira ToolError capturavel; nao capturado vira traceback', async () => {
     const { dispatch } = makeFakeDispatch(() => {
@@ -548,7 +513,6 @@ describe('erro de tool no script', () => {
   });
 });
 
-
 describe('built-ins do stub', () => {
   it('json_parse/shell_quote/retry funcionam; retry reexecuta a tool', async () => {
     let instavelTentativas = 0;
@@ -574,7 +538,6 @@ describe('built-ins do stub', () => {
   });
 });
 
-
 describe('execucoes paralelas', () => {
   it('duas execucoes simultaneas nao se cruzam (socket/temp/token proprios)', async () => {
     const fakeA = makeFakeDispatch(async () => {
@@ -589,10 +552,7 @@ describe('execucoes paralelas', () => {
     const turnB = registerTurn();
 
     const script = (prefix: string): string =>
-      [
-        'from lionclaw_tools import read_file',
-        `print("${prefix}-" + read_file("/x"))`,
-      ].join('\n');
+      ['from lionclaw_tools import read_file', `print("${prefix}-" + read_file("/x"))`].join('\n');
 
     const [resultA, resultB] = await Promise.all([
       runToolScript(
@@ -614,7 +574,6 @@ describe('execucoes paralelas', () => {
   });
 });
 
-
 describe('limpeza em finally', () => {
   it('temp dirs e sockets da execucao sao removidos ao fim', async () => {
     const prevTmp = process.env.TMPDIR;
@@ -622,9 +581,7 @@ describe('limpeza em finally', () => {
     process.env.TMPDIR = isolated;
     try {
       const countArtifacts = (): number =>
-        fs
-          .readdirSync(isolated)
-          .filter((name) => name.startsWith('lc-toolscript-') || /^lcts-.*\.sock$/.test(name))
+        fs.readdirSync(isolated).filter((name) => name.startsWith('lc-toolscript-') || /^lcts-.*\.sock$/.test(name))
           .length;
 
       const before = countArtifacts();
@@ -639,17 +596,13 @@ describe('limpeza em finally', () => {
   });
 });
 
-
 describe('env do filho', () => {
   it('default nao vaza variaveis fora da allowlist; buildEnv injetado prevalece', async () => {
     process.env.LIONCLAW_FAKE_SECRET_S1 = 'nao-pode-vazar';
     try {
       const { dispatch } = makeFakeDispatch(() => '');
       const semSecret = await run(
-        [
-          'import os',
-          'print(os.environ.get("LIONCLAW_FAKE_SECRET_S1", "ausente"))',
-        ].join('\n'),
+        ['import os', 'print(os.environ.get("LIONCLAW_FAKE_SECRET_S1", "ausente"))'].join('\n'),
         dispatch,
       );
       expect(semSecret.stdout).toBe('ausente\n');
@@ -683,7 +636,6 @@ describe('env do filho', () => {
   });
 });
 
-
 describe('isToolScriptAvailable', () => {
   it('detecta python3 por caminho explicito e expoe o binario para o spawn', () => {
     __resetToolScriptPythonDetectionForTests();
@@ -694,7 +646,6 @@ describe('isToolScriptAvailable', () => {
     expect(getToolScriptPythonPath()).toBe(pythonPath);
   });
 });
-
 
 describe('gerador do stub Python', () => {
   it('variante unix usa AF_UNIX; variante tcp usa loopback (fallback win32)', () => {

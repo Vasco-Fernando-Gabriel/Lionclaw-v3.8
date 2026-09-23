@@ -1,8 +1,6 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-
 
 const getAgentMock = vi.fn();
 vi.mock('../../db', () => ({ getAgent: (...a: unknown[]) => getAgentMock(...a) }));
@@ -56,7 +54,6 @@ async function* streamOf(msgs: Array<Record<string, unknown>>): AsyncIterable<Re
   for (const m of msgs) yield m;
 }
 
-
 describe('AC-B6b — processAgentStream (ponto comum de cloud/zai/minimax-tp)', () => {
   it('AC-B6b: stream que termina sem texto e sem tool-use preenche resultError LLM-EMPTY', async () => {
     const r = await processAgentStream(streamOf([{ type: 'result', result: '' }]), {});
@@ -98,14 +95,17 @@ describe('AC-B6b — processAgentStream (ponto comum de cloud/zai/minimax-tp)', 
   });
 });
 
-
 describe('AC-B6b — local-executor', () => {
   it('AC-B6b: resposta vazia do ollama preenche error LLM-EMPTY', async () => {
     getAgentMock.mockReturnValue({
       localConfig: { provider: 'ollama', model: 'llama3', baseUrl: 'http://localhost:11434' },
     });
     ollamaChatWithToolsMock.mockResolvedValue({
-      content: '', toolCalls: [], promptTokens: 10, tokensUsed: 0, model: 'llama3',
+      content: '',
+      toolCalls: [],
+      promptTokens: 10,
+      tokensUsed: 0,
+      model: 'llama3',
     });
     const r = await localExecutor.run(makeReq(), baseConfig);
     expect(r.error?.code).toBe('LLM-EMPTY');
@@ -117,7 +117,11 @@ describe('AC-B6b — local-executor', () => {
       localConfig: { provider: 'ollama', model: 'llama3', baseUrl: 'http://localhost:11434' },
     });
     ollamaChatWithToolsMock.mockResolvedValue({
-      content: 'oi', toolCalls: [], promptTokens: 10, tokensUsed: 5, model: 'llama3',
+      content: 'oi',
+      toolCalls: [],
+      promptTokens: 10,
+      tokensUsed: 5,
+      model: 'llama3',
     });
     const r = await localExecutor.run(makeReq(), baseConfig);
     expect(r.error).toBeUndefined();
@@ -128,13 +132,16 @@ describe('AC-B6b — local-executor', () => {
       localConfig: { provider: 'ollama', model: 'llama3', baseUrl: 'http://localhost:11434' },
     });
     ollamaChatWithToolsMock.mockResolvedValue({
-      content: '', toolCalls: [{ tool: 'Bash', input: '{}' }], promptTokens: 10, tokensUsed: 5, model: 'llama3',
+      content: '',
+      toolCalls: [{ tool: 'Bash', input: '{}' }],
+      promptTokens: 10,
+      tokensUsed: 5,
+      model: 'llama3',
     });
     const r = await localExecutor.run(makeReq(), baseConfig);
     expect(r.error).toBeUndefined();
   });
 });
-
 
 describe('AC-B6b — external-executor', () => {
   it('AC-B6b: resposta vazia do endpoint externo preenche error LLM-EMPTY', async () => {
@@ -143,8 +150,14 @@ describe('AC-B6b — external-executor', () => {
       maxToolRounds: 5,
     });
     ollamaChatWithRetryMock.mockResolvedValue({
-      content: '', toolCalls: [], promptTokens: 10, tokensUsed: 0,
-      cacheHitTokens: 0, reportedCostUsd: undefined, apiRequests: 1, usageReported: true,
+      content: '',
+      toolCalls: [],
+      promptTokens: 10,
+      tokensUsed: 0,
+      cacheHitTokens: 0,
+      reportedCostUsd: undefined,
+      apiRequests: 1,
+      usageReported: true,
     });
     const r = await externalExecutor.run(makeReq(), baseConfig);
     expect(r.error?.code).toBe('LLM-EMPTY');
@@ -157,14 +170,19 @@ describe('AC-B6b — external-executor', () => {
       maxToolRounds: 5,
     });
     ollamaChatWithRetryMock.mockResolvedValue({
-      content: 'resposta', toolCalls: [], promptTokens: 10, tokensUsed: 5,
-      cacheHitTokens: 0, reportedCostUsd: undefined, apiRequests: 1, usageReported: true,
+      content: 'resposta',
+      toolCalls: [],
+      promptTokens: 10,
+      tokensUsed: 5,
+      cacheHitTokens: 0,
+      reportedCostUsd: undefined,
+      apiRequests: 1,
+      usageReported: true,
     });
     const r = await externalExecutor.run(makeReq(), baseConfig);
     expect(r.error).toBeUndefined();
   });
 });
-
 
 describe('AC-B6b — caracterizacao: cada runtime propaga o vazio-falho', () => {
   const read = (f: string): string => fs.readFileSync(path.join(__dirname, '..', f), 'utf-8');
@@ -174,7 +192,7 @@ describe('AC-B6b — caracterizacao: cada runtime propaga o vazio-falho', () => 
     (file) => {
       const src = read(file);
       expect(src).toContain('resultError = result.resultError;');
-      expect(src).toContain("...(resultError !== undefined ? { error: resultError } : {})");
+      expect(src).toContain('...(resultError !== undefined ? { error: resultError } : {})');
     },
   );
 
@@ -183,7 +201,7 @@ describe('AC-B6b — caracterizacao: cada runtime propaga o vazio-falho', () => 
     (file) => {
       const src = read(file);
       expect(src).toContain('emptyResponseExecutionError({');
-      expect(src).toContain("...(resultError !== undefined ? { error: resultError } : {})");
+      expect(src).toContain('...(resultError !== undefined ? { error: resultError } : {})');
     },
   );
 });

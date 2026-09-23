@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const AXIS_OLD = `Cobertura de testes + containment. Correcao vs SPEC e regressao de contrato NAO sao seus eixos: nao duplique findings fora do seu eixo.`;
 const AXIS_NEW = `Cobertura e qualidade de testes. Correcao vs SPEC e regressao de contrato NAO sao seus eixos: nao duplique findings fora do seu eixo.`;
 

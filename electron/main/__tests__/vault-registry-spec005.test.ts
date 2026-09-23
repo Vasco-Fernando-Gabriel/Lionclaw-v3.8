@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 vi.mock('../secrets-vault', () => ({
   getSecret: vi.fn().mockResolvedValue(null),
@@ -19,14 +17,9 @@ vi.mock('../logger', () => ({
   }),
 }));
 
-
-import {
-  registerExternalProviderVaultEntries,
-  getVaultEntries,
-} from '../vault-registry';
+import { registerExternalProviderVaultEntries, getVaultEntries } from '../vault-registry';
 
 import type { VaultEntry } from '../vault-registry';
-
 
 describe('vault-registry SPEC-005: new entries from registerExternalProviderVaultEntries', () => {
   beforeEach(() => {

@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import process from 'node:process';
 import { Agent, Cursor, JsonlLocalAgentStore } from '@cursor/sdk';
@@ -61,11 +60,7 @@ function buildCustomTools(config: CursorSidecarExecuteConfig): Record<string, SD
       description: decl.description,
       inputSchema: decl.inputSchema as Record<string, SDKJsonValue>,
       execute: async (args): Promise<SDKCustomToolResult> => {
-        const result = await rpcToolInvoke(
-          config.executionId,
-          decl.name,
-          args as Record<string, unknown>,
-        );
+        const result = await rpcToolInvoke(config.executionId, decl.name, args as Record<string, unknown>);
         if (result.error !== undefined) {
           return { content: [{ type: 'text', text: result.error }], isError: true };
         }
@@ -79,8 +74,8 @@ function buildCustomTools(config: CursorSidecarExecuteConfig): Record<string, SD
 function buildAgentOptions(config: CursorSidecarExecuteConfig): AgentOptions {
   if (config.guarded && config.allowedTools === undefined) {
     throw new Error(
-      'execucao guardada sem allowedTools: a policy de tools nao persiste no SDK '
-        + 'e DEVE ser reaplicada em todo execute/resume (fail-closed)',
+      'execucao guardada sem allowedTools: a policy de tools nao persiste no SDK ' +
+        'e DEVE ser reaplicada em todo execute/resume (fail-closed)',
     );
   }
   fs.mkdirSync(config.storeDir, { recursive: true });
@@ -88,9 +83,7 @@ function buildAgentOptions(config: CursorSidecarExecuteConfig): AgentOptions {
   return {
     model: { id: config.model },
     apiKey: config.apiKey,
-    ...(config.allowedTools !== undefined
-      ? { tools: config.allowedTools as ToolName[] }
-      : {}),
+    ...(config.allowedTools !== undefined ? { tools: config.allowedTools as ToolName[] } : {}),
     local: {
       cwd: config.cwd,
       store,
@@ -103,9 +96,7 @@ function buildAgentOptions(config: CursorSidecarExecuteConfig): AgentOptions {
 
 async function runExecution(config: CursorSidecarExecuteConfig): Promise<void> {
   const options = buildAgentOptions(config);
-  const agent = config.resumeAgentId
-    ? await Agent.resume(config.resumeAgentId, options)
-    : await Agent.create(options);
+  const agent = config.resumeAgentId ? await Agent.resume(config.resumeAgentId, options) : await Agent.create(options);
   currentAgent = agent;
 
   const run = await agent.send(config.prompt);
@@ -247,8 +238,7 @@ const decoder = createSidecarLineDecoder(
       case 'shutdown':
         try {
           currentAgent?.close();
-        } catch {
-        }
+        } catch {}
         process.exit(0);
         break;
       default:

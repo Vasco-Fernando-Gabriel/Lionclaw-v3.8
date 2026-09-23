@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
 
@@ -32,11 +31,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
 }));
 
 import { resolveCompactionSelection } from '../memory-pipeline';
-import {
-  runVisionPrompt,
-  VisionUnsupportedError,
-  normalizeVisionMediaType,
-} from '../memory-pipeline/oneshot-vision';
+import { runVisionPrompt, VisionUnsupportedError, normalizeVisionMediaType } from '../memory-pipeline/oneshot-vision';
 
 const resolveMock = resolveCompactionSelection as unknown as Mock;
 
@@ -65,9 +60,7 @@ describe('runVisionPrompt (SPEC 4.3, item 4)', () => {
       selection: { runtime: 'codex-sdk', provider: 'codex', model: 'gpt-x', source: 'settings' },
     });
 
-    await expect(runVisionPrompt([IMAGE_BLOCK, TEXT_BLOCK])).rejects.toBeInstanceOf(
-      VisionUnsupportedError,
-    );
+    await expect(runVisionPrompt([IMAGE_BLOCK, TEXT_BLOCK])).rejects.toBeInstanceOf(VisionUnsupportedError);
     expect(queryMock).not.toHaveBeenCalled();
   });
 

@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { PT_BR_BLOCK } from './_shared/language-pt-br';
 import { GIT_RESTRICTIONS_BLOCK } from './_shared/git-restrictions';
@@ -11,7 +10,7 @@ export const architectureMapper: Omit<AgentConfig, 'sortOrder'> = {
   name: 'Architecture Mapper',
   description:
     'Fase 1 do pipeline architecture-review: zoom-out de uma codebase. Mapeia modules top-level, fluxos, vocabulario de dominio e hotspots. Produz MD + JSON.',
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'enabled' as const,
   thinkingBudget: 8000,

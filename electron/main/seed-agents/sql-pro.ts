@@ -1,18 +1,18 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const SQL_PRO_ID = 'sql-pro';
 
 export const sqlPro: Omit<AgentConfig, 'sortOrder'> = {
   id: SQL_PRO_ID,
-  name: "Especialista SQL",
-  description: "Use quando precisar otimizar queries SQL complexas, projetar schemas de banco de dados eficientes ou resolver problemas de performance no PostgreSQL, MySQL, SQL Server e Oracle com técnicas avançadas de query",
-  model: "claude-opus-4-8",
+  name: 'Especialista SQL',
+  description:
+    'Use quando precisar otimizar queries SQL complexas, projetar schemas de banco de dados eficientes ou resolver problemas de performance no PostgreSQL, MySQL, SQL Server e Oracle com técnicas avançadas de query',
+  model: 'claude-opus-5-5',
   effort: 'medium' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,
   maxToolRounds: 5,
-  allowedTools: ["Read","Write","Edit","Bash","Glob","Grep"],
+  allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
   mcpServers: [],
   isActive: true,
   skills: [],

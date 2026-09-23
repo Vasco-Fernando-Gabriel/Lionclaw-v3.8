@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 vi.mock('../../db', () => ({
   createSession: vi.fn(),
@@ -66,9 +64,10 @@ vi.mock('../adapters/openai-compatible', () => ({
 
 vi.mock('../runtime', () => ({
   MAX_TOOL_TURNS: 5,
-  runLionLoop: vi.fn(async () => { throw new Error('abort-in-test'); }),
+  runLionLoop: vi.fn(async () => {
+    throw new Error('abort-in-test');
+  }),
 }));
-
 
 import { executeLionSdkQuery } from '../index';
 import type { OrchestratorSelection } from '../../orchestrator-selection';
@@ -88,14 +87,9 @@ beforeEach(() => {
 
 describe('compaction adapter isolation (FIX-2)', () => {
   it('primary adapter uses Ollama URL; compaction adapter uses LM Studio URL', async () => {
-    await executeLionSdkQuery(
-      'hello',
-      { sessionId: 'sid-test' },
-      () => null,
-      undefined,
-      PRIMARY_SELECTION,
-    ).catch(() => {
-    });
+    await executeLionSdkQuery('hello', { sessionId: 'sid-test' }, () => null, undefined, PRIMARY_SELECTION).catch(
+      () => {},
+    );
 
     const ollamaAdapters = createdAdapters.filter((a) => a.type === 'ollama');
     const lmAdapters = createdAdapters.filter((a) => a.type === 'lmstudio');

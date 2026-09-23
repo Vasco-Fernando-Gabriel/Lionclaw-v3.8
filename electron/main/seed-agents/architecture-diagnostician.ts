@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { PT_BR_BLOCK } from './_shared/language-pt-br';
 import { GIT_RESTRICTIONS_BLOCK } from './_shared/git-restrictions';
@@ -11,7 +10,7 @@ export const architectureDiagnostician: Omit<AgentConfig, 'sortOrder'> = {
   name: 'Architecture Diagnostician',
   description:
     'Fase 3 do pipeline architecture-review: recebe candidato escolhido e prova a friccao com evidencias do codigo. Identifica causa raiz arquitetural, classifica dependencias.',
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'enabled' as const,
   thinkingBudget: 8000,

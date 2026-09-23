@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { BASH_VALIDATION_BLOCK } from './_shared/bash-validation';
 

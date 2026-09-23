@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -17,17 +16,13 @@ function grabBlock(source: string, name: string): string {
 }
 
 function grabMarker(source: string, name: string): string {
-  const match = source.match(new RegExp("const " + name + " = '([^']*)';"));
+  const match = source.match(new RegExp('const ' + name + " = '([^']*)';"));
   if (!match) throw new Error('marcador ' + name + ' nao encontrado');
   return match[1];
 }
 
-const V104_SOURCE = readMigration(
-  'v104-dynamic-workflow-planner-validators-fixed.ts',
-);
-const V105_SOURCE = readMigration(
-  'v105-dynamic-workflow-planner-coder-catalog.ts',
-);
+const V104_SOURCE = readMigration('v104-dynamic-workflow-planner-validators-fixed.ts');
+const V105_SOURCE = readMigration('v105-dynamic-workflow-planner-coder-catalog.ts');
 
 describe('migration v105 dynamic-workflow planner coder catalog (R10, sem DB)', () => {
   it('a cadeia compoe: V104.NEW_BLOCK e EXATAMENTE o V105.OLD_BLOCK (V105 roda depois)', () => {

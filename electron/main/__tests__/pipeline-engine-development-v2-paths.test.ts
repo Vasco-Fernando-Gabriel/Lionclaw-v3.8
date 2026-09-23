@@ -1,37 +1,32 @@
-
 import { describe, it, expect } from 'vitest';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
 import { buildDesignLockPathsBlock } from '../pipeline-engine/dev-v2-lock-paths';
 
-
-function makeProject(overrides: {
-  pipelineType?: string;
-  locked?: boolean;
-  snapshotDir?: string;
-  manifestPath?: string;
-  contractPath?: string;
-  briefPath?: string;
-  lockReportPath?: string;
-  artifactHtmlPath?: string;
-  openDesignProjectId?: string | null;
-  conversationId?: string | null;
-  pipelineDocsId?: string | null;
-  projectPath?: string;
-} = {}) {
+function makeProject(
+  overrides: {
+    pipelineType?: string;
+    locked?: boolean;
+    snapshotDir?: string;
+    manifestPath?: string;
+    contractPath?: string;
+    briefPath?: string;
+    lockReportPath?: string;
+    artifactHtmlPath?: string;
+    openDesignProjectId?: string | null;
+    conversationId?: string | null;
+    pipelineDocsId?: string | null;
+    projectPath?: string;
+  } = {},
+) {
   const projectPath = overrides.projectPath ?? fs.mkdtempSync(path.join(os.tmpdir(), 'lionclaw-pe-paths-'));
   const snapshotDir =
-    overrides.snapshotDir
-    ?? path.join(projectPath, '.lionclaw', 'pipelines', 'development-v2', 'run-abc', 'open-design', 'snapshots', 'latest');
+    overrides.snapshotDir ??
+    path.join(projectPath, '.lionclaw', 'pipelines', 'development-v2', 'run-abc', 'open-design', 'snapshots', 'latest');
   const openDesignProjectId =
-    overrides.openDesignProjectId === null
-      ? undefined
-      : (overrides.openDesignProjectId ?? 'lionclaw-runabc');
-  const conversationId =
-    overrides.conversationId === null
-      ? undefined
-      : (overrides.conversationId ?? 'conv_xyz');
+    overrides.openDesignProjectId === null ? undefined : (overrides.openDesignProjectId ?? 'lionclaw-runabc');
+  const conversationId = overrides.conversationId === null ? undefined : (overrides.conversationId ?? 'conv_xyz');
   return {
     id: 'project-id-1',
     projectPath,
@@ -52,7 +47,6 @@ function makeProject(overrides: {
     },
   };
 }
-
 
 const TARGET_PHASES = [
   { phase: 6, name: 'PRD Completo (pipe2-prd-completo)' },
@@ -174,10 +168,7 @@ describe('Sprint 4 — StudioView wiring (static)', () => {
 });
 
 describe('Sprint 4 — public preload removal (defensive)', () => {
-  const preloadSrc = fs.readFileSync(
-    path.resolve(__dirname, '..', '..', 'preload', 'index.ts'),
-    'utf-8',
-  );
+  const preloadSrc = fs.readFileSync(path.resolve(__dirname, '..', '..', 'preload', 'index.ts'), 'utf-8');
 
   it('preload no longer exposes `openDesign.lock` as a method', () => {
     expect(preloadSrc).not.toMatch(/ipcRenderer\.invoke\(['"]open-design:lock['"]/);

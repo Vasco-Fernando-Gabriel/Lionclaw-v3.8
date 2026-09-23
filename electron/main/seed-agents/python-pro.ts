@@ -1,18 +1,18 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const PYTHON_PRO_ID = 'python-pro';
 
 export const pythonPro: Omit<AgentConfig, 'sortOrder'> = {
   id: PYTHON_PRO_ID,
-  name: "Especialista Python",
-  description: "Use quando precisar construir código Python com tipagem estrita, pronto para produção, para web APIs, utilitários de sistema ou aplicações complexas com padrões assíncronos modernos e ampla cobertura de tipos",
-  model: "claude-opus-4-8",
+  name: 'Especialista Python',
+  description:
+    'Use quando precisar construir código Python com tipagem estrita, pronto para produção, para web APIs, utilitários de sistema ou aplicações complexas com padrões assíncronos modernos e ampla cobertura de tipos',
+  model: 'claude-opus-5-5',
   effort: 'medium' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,
   maxToolRounds: 5,
-  allowedTools: ["Read","Write","Edit","Bash","Glob","Grep"],
+  allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
   mcpServers: [],
   isActive: true,
   skills: [],

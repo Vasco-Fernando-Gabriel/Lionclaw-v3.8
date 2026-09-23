@@ -8,14 +8,7 @@ import { validateRepoRootPath } from '../repo-graph/validate-root';
 import { GrokIsolationError } from '../grok-acp/errors';
 
 const execFileAsync = promisify(execFile);
-const INSTRUCTION_NAMES = new Set([
-  'Agents.md',
-  'Claude.md',
-  'CLAUDE.md',
-  'CLAUDE.local.md',
-  'AGENT.md',
-  'AGENTS.md',
-]);
+const INSTRUCTION_NAMES = new Set(['Agents.md', 'Claude.md', 'CLAUDE.md', 'CLAUDE.local.md', 'AGENT.md', 'AGENTS.md']);
 const MAX_SCANNED_ENTRIES = 100_000;
 const OPAQUE_PROJECT_DIRECTORIES = new Set([
   '.cache',
@@ -66,7 +59,9 @@ let sandboxSpawnTail: Promise<void> = Promise.resolve();
 
 export async function acquireGrokSandboxSpawnLock(): Promise<() => void> {
   let release!: () => void;
-  const turn = new Promise<void>((resolve) => { release = resolve; });
+  const turn = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   const previous = sandboxSpawnTail;
   sandboxSpawnTail = previous.then(() => turn);
   await previous;
@@ -107,10 +102,9 @@ function samePhysicalFile(left: string, right: string): boolean {
   try {
     const leftStat = fs.statSync(left);
     const rightStat = fs.statSync(right);
-    return leftStat.ino !== 0
-      && rightStat.ino !== 0
-      && leftStat.dev === rightStat.dev
-      && leftStat.ino === rightStat.ino;
+    return (
+      leftStat.ino !== 0 && rightStat.ino !== 0 && leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino
+    );
   } catch {
     return false;
   }
@@ -121,9 +115,10 @@ function isRulesMarkdown(relative: string): boolean {
   if (!relative.toLowerCase().endsWith('.md')) return false;
   for (let index = 0; index < parts.length - 1; index += 1) {
     if (
-      (parts[index] === '.grok' || parts[index] === '.claude' || parts[index] === '.cursor')
-      && parts[index + 1] === 'rules'
-    ) return true;
+      (parts[index] === '.grok' || parts[index] === '.claude' || parts[index] === '.cursor') &&
+      parts[index + 1] === 'rules'
+    )
+      return true;
   }
   return false;
 }
@@ -135,10 +130,12 @@ function isInstruction(relative: string): boolean {
 function isInitialInstruction(relative: string): boolean {
   const parts = relative.split(path.sep);
   if (parts.length === 1 && INSTRUCTION_NAMES.has(parts[0])) return true;
-  return parts.length === 3
-    && (parts[0] === '.grok' || parts[0] === '.claude' || parts[0] === '.cursor')
-    && parts[1] === 'rules'
-    && parts[2].toLowerCase().endsWith('.md');
+  return (
+    parts.length === 3 &&
+    (parts[0] === '.grok' || parts[0] === '.claude' || parts[0] === '.cursor') &&
+    parts[1] === 'rules' &&
+    parts[2].toLowerCase().endsWith('.md')
+  );
 }
 
 function isOpaqueProjectDirectory(relative: string, name: string): boolean {
@@ -157,28 +154,29 @@ export function isForbiddenGrokWorkspaceExtension(relative: string): boolean {
     const next = parts[index + 1] ?? '';
     if (part === '.grok') {
       if (
-        next === 'config.toml'
-        || next === 'mcp.json'
-        || next === 'sandbox.toml'
-        || next === 'lsp.json'
-        || ['skills', 'plugins', 'agents', 'hooks', 'marketplaces'].includes(next)
-      ) return true;
+        next === 'config.toml' ||
+        next === 'mcp.json' ||
+        next === 'sandbox.toml' ||
+        next === 'lsp.json' ||
+        ['skills', 'plugins', 'agents', 'hooks', 'marketplaces'].includes(next)
+      )
+        return true;
     }
     if (part === '.claude' || part === '.cursor') {
       if (
-        next === 'settings.json'
-        || next === 'settings.local.json'
-        || next === 'mcp.json'
-        || ['skills', 'plugins', 'agents', 'hooks', 'marketplaces'].includes(next)
-      ) return true;
+        next === 'settings.json' ||
+        next === 'settings.local.json' ||
+        next === 'mcp.json' ||
+        ['skills', 'plugins', 'agents', 'hooks', 'marketplaces'].includes(next)
+      )
+        return true;
     }
   }
   return false;
 }
 
 function protectedNamespacePath(relative: string): boolean {
-  return relative.split(path.sep).some((part) =>
-    part === '.grok' || part === '.claude' || part === '.cursor');
+  return relative.split(path.sep).some((part) => part === '.grok' || part === '.claude' || part === '.cursor');
 }
 
 export function collectGrokProjectSources(root: string): GrokProjectSource[] {
@@ -195,10 +193,16 @@ export function collectGrokProjectSources(root: string): GrokProjectSource[] {
       if (entry.isDirectory() && isOpaqueProjectDirectory(relative, entry.name)) continue;
       scanned += 1;
       if (scanned > MAX_SCANNED_ENTRIES) {
-        throw new GrokIsolationError(`Repositorio excede o limite de ${MAX_SCANNED_ENTRIES} entradas relevantes do snapshot Grok.`);
+        throw new GrokIsolationError(
+          `Repositorio excede o limite de ${MAX_SCANNED_ENTRIES} entradas relevantes do snapshot Grok.`,
+        );
       }
       if (entry.isSymbolicLink()) {
-        if (isInstruction(relative) || protectedNamespacePath(relative) || isForbiddenGrokWorkspaceExtension(relative)) {
+        if (
+          isInstruction(relative) ||
+          protectedNamespacePath(relative) ||
+          isForbiddenGrokWorkspaceExtension(relative)
+        ) {
           throw new GrokIsolationError(`Fonte/configuracao Grok via symlink nao e permitida: ${relative}`);
         }
         continue;
@@ -234,7 +238,11 @@ export function resolveGrokWorkspaceGrant(input: {
 }): GrokWorkspaceGrant {
   const neutral = path.join(getLionClawHome(), 'runtime', 'grok-workspace');
   fs.mkdirSync(neutral, { recursive: true, mode: 0o700 });
-  try { fs.chmodSync(neutral, 0o700); } catch { /* best effort on Windows */ }
+  try {
+    fs.chmodSync(neutral, 0o700);
+  } catch {
+    /* best effort on Windows */
+  }
   const neutralCwd = fs.realpathSync(neutral);
 
   if (input.lane !== 'desktop' || !input.repoRootSnapshot) {
@@ -283,7 +291,7 @@ function assertNoActiveMcpServers(value: unknown): void {
 }
 
 function record(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
 function assertNoCustomBackendConfig(inspected: Record<string, unknown>): void {
@@ -303,10 +311,11 @@ function assertNoCustomBackendConfig(inspected: Record<string, unknown>): void {
       }
       if (customCatalogs.has(key)) {
         const emptyArray = Array.isArray(child) && child.length === 0;
-        const emptyObject = child !== null
-          && typeof child === 'object'
-          && !Array.isArray(child)
-          && Object.keys(child as Record<string, unknown>).length === 0;
+        const emptyObject =
+          child !== null &&
+          typeof child === 'object' &&
+          !Array.isArray(child) &&
+          Object.keys(child as Record<string, unknown>).length === 0;
         if (!emptyArray && !emptyObject && child !== undefined && child !== null) {
           throw new GrokIsolationError(`grok inspect encontrou catalogo custom em ${key}.`);
         }
@@ -316,13 +325,7 @@ function assertNoCustomBackendConfig(inspected: Record<string, unknown>): void {
   }
 }
 
-const DISABLED_BUNDLED_SKILLS = new Set([
-  'check-work',
-  'code-review',
-  'create-skill',
-  'help',
-  'imagine',
-]);
+const DISABLED_BUNDLED_SKILLS = new Set(['check-work', 'code-review', 'create-skill', 'help', 'imagine']);
 const BUILT_IN_AGENTS = new Set(['general-purpose', 'explore', 'plan']);
 
 function assertManagedGrokInspect(
@@ -341,18 +344,26 @@ function assertManagedGrokInspect(
     ['managed', path.join(grokHome, 'managed_config.toml')],
     ['user', path.join(grokHome, 'config.toml')],
   ];
-  if (layers.length !== expectedLayers.length || layers.some((raw, index) => {
-    const layer = record(raw);
-    return layer['role'] !== expectedLayers[index]?.[0]
-      || path.resolve(String(layer['path'] ?? '')) !== path.resolve(expectedLayers[index]?.[1] ?? '');
-  })) {
+  if (
+    layers.length !== expectedLayers.length ||
+    layers.some((raw, index) => {
+      const layer = record(raw);
+      return (
+        layer['role'] !== expectedLayers[index]?.[0] ||
+        path.resolve(String(layer['path'] ?? '')) !== path.resolve(expectedLayers[index]?.[1] ?? '')
+      );
+    })
+  ) {
     throw new GrokIsolationError('grok inspect carregou camadas de configuracao fora do home gerenciado.');
   }
 
   const externalCompat = record(inspected['externalCompat']);
   const cells = Array.isArray(externalCompat['cells']) ? externalCompat['cells'] : [];
-  if (externalCompat['remoteSettingsLoaded'] !== false || cells.length === 0
-    || cells.some((raw) => record(raw)['enabled'] !== false)) {
+  if (
+    externalCompat['remoteSettingsLoaded'] !== false ||
+    cells.length === 0 ||
+    cells.some((raw) => record(raw)['enabled'] !== false)
+  ) {
     throw new GrokIsolationError('grok inspect encontrou compatibilidade externa habilitada.');
   }
 
@@ -365,9 +376,11 @@ function assertManagedGrokInspect(
     const source = record(skill['source']);
     if (source['type'] === 'bundled') {
       const sourcePath = path.resolve(String(source['path'] ?? ''));
-      if ((!DISABLED_BUNDLED_SKILLS.has(name) && !disabledSkillNames.has(name))
-        || skill['disabled'] !== true
-        || !inside(path.resolve(grokHome), sourcePath)) {
+      if (
+        (!DISABLED_BUNDLED_SKILLS.has(name) && !disabledSkillNames.has(name)) ||
+        skill['disabled'] !== true ||
+        !inside(path.resolve(grokHome), sourcePath)
+      ) {
         throw new GrokIsolationError(`grok inspect encontrou skill executavel ou externa: ${name || 'desconhecida'}.`);
       }
       bundledNames.add(name);
@@ -389,8 +402,7 @@ function assertManagedGrokInspect(
     }
     agentNames.add(name);
   }
-  if (agentNames.size !== BUILT_IN_AGENTS.size
-    || [...BUILT_IN_AGENTS].some((name) => !agentNames.has(name))) {
+  if (agentNames.size !== BUILT_IN_AGENTS.size || [...BUILT_IN_AGENTS].some((name) => !agentNames.has(name))) {
     throw new GrokIsolationError('grok inspect nao confirmou o catalogo builtin esperado de subagentes.');
   }
 }
@@ -402,22 +414,28 @@ export function assertGrokInspect(
   extras: GrokManagedCatalogExtras = EMPTY_CATALOG_EXTRAS,
 ): void {
   let inspectedCwd: string;
-  try { inspectedCwd = fs.realpathSync(String(inspected['cwd'] ?? '')); } catch {
+  try {
+    inspectedCwd = fs.realpathSync(String(inspected['cwd'] ?? ''));
+  } catch {
     throw new GrokIsolationError('grok inspect nao confirmou o CWD da sessao.');
   }
   if (inspectedCwd !== grant.sessionCwd) throw new GrokIsolationError('grok inspect usou CWD diferente do grant.');
   assertInstructionSet(grant, inspected['projectInstructions'], false);
   const disabledPlugins = new Set(extras.disabledPlugins);
   const plugins = inspected['plugins'];
-  if (!Array.isArray(plugins)) throw new GrokIsolationError('grok inspect encontrou configuracao nao permitida em plugins.');
+  if (!Array.isArray(plugins))
+    throw new GrokIsolationError('grok inspect encontrou configuracao nao permitida em plugins.');
   for (const raw of plugins) {
     const name = String(record(raw)['name'] ?? '');
     if (!disabledPlugins.has(name)) {
-      throw new GrokIsolationError(`grok inspect encontrou plugin fora da politica gerenciada: ${name || 'desconhecido'}.`);
+      throw new GrokIsolationError(
+        `grok inspect encontrou plugin fora da politica gerenciada: ${name || 'desconhecido'}.`,
+      );
     }
   }
   const hooks = inspected['hooks'];
-  if (!Array.isArray(hooks)) throw new GrokIsolationError('grok inspect encontrou configuracao nao permitida em hooks.');
+  if (!Array.isArray(hooks))
+    throw new GrokIsolationError('grok inspect encontrou configuracao nao permitida em hooks.');
   for (const raw of hooks) {
     const source = record(record(raw)['source']);
     const pluginName = String(source['plugin_name'] ?? '');
@@ -440,10 +458,7 @@ export function assertGrokInspect(
 function isNativeInitialInstruction(grant: GrokWorkspaceGrant, canonical: string): boolean {
   const parts = path.relative(grant.sessionCwd, canonical).split(path.sep);
   if (parts.length === 1 && INSTRUCTION_NAMES.has(parts[0]!)) return true;
-  return parts.length === 3
-    && parts[0] === '.grok'
-    && parts[1] === 'rules'
-    && parts[2]!.toLowerCase().endsWith('.md');
+  return parts.length === 3 && parts[0] === '.grok' && parts[1] === 'rules' && parts[2]!.toLowerCase().endsWith('.md');
 }
 
 function assertInstructionSet(
@@ -465,12 +480,16 @@ function assertInstructionSet(
     const candidate = row['file_path'] ?? row['path'];
     if (typeof candidate !== 'string') throw new GrokIsolationError('Grok reportou instruction sem path.');
     let canonical: string;
-    try { canonical = fs.realpathSync(candidate); } catch { throw new GrokIsolationError('Grok reportou instruction inexistente.'); }
-    const source = expected.get(canonical) ?? (
-      inside(grant.sessionCwd, canonical)
+    try {
+      canonical = fs.realpathSync(candidate);
+    } catch {
+      throw new GrokIsolationError('Grok reportou instruction inexistente.');
+    }
+    const source =
+      expected.get(canonical) ??
+      (inside(grant.sessionCwd, canonical)
         ? [...expected.values()].find((item) => samePhysicalFile(item.path, canonical))
-        : undefined
-    );
+        : undefined);
     if (!source) throw new GrokIsolationError(`Grok carregou instruction inesperada: ${path.basename(canonical)}`);
     if (withContent) {
       const content = row['content'];
@@ -480,17 +499,12 @@ function assertInstructionSet(
     }
     actual.add(source.path);
   }
-  if (
-    requireComplete
-    && (actual.size !== expected.size || [...expected.keys()].some((item) => !actual.has(item)))
-  ) {
+  if (requireComplete && (actual.size !== expected.size || [...expected.keys()].some((item) => !actual.has(item)))) {
     throw new GrokIsolationError('Grok nao atestou exatamente todas as instructions iniciais do snapshot.');
   }
 }
 
-export function collectGrokExternalCatalog(
-  inspected: Record<string, unknown>,
-): GrokManagedCatalogExtras {
+export function collectGrokExternalCatalog(inspected: Record<string, unknown>): GrokManagedCatalogExtras {
   const disabledSkills = new Set<string>();
   const ignoredSkillPaths = new Set<string>();
   const skills = Array.isArray(inspected['skills']) ? inspected['skills'] : [];
@@ -539,9 +553,7 @@ function catalogMissing(
     disabledPlugins: discovered.disabledPlugins.filter((name) => !plugins.has(name)),
     ignoredSkillPaths: discovered.ignoredSkillPaths.filter((item) => !ignored.has(item)),
   };
-  return missing.disabledSkills.length > 0
-    || missing.disabledPlugins.length > 0
-    || missing.ignoredSkillPaths.length > 0
+  return missing.disabledSkills.length > 0 || missing.disabledPlugins.length > 0 || missing.ignoredSkillPaths.length > 0
     ? missing
     : null;
 }
@@ -568,7 +580,9 @@ async function runGrokInspect(
   } catch (error) {
     throw new GrokIsolationError('Falha no grok inspect do workspace final.', { cause: error });
   }
-  try { return record(JSON.parse(stdout)); } catch (error) {
+  try {
+    return record(JSON.parse(stdout));
+  } catch (error) {
     throw new GrokIsolationError('grok inspect nao retornou JSON valido.', { cause: error });
   }
 }
@@ -600,22 +614,23 @@ export async function inspectGrokWorkspace(
   assertGrokInspect(grant, inspected, grokHome, allowed);
 }
 
-export function attestGrokSession(
-  grant: GrokWorkspaceGrant,
-  grokHome: string,
-  sessionId: string,
-): void {
+export function attestGrokSession(grant: GrokWorkspaceGrant, grokHome: string, sessionId: string): void {
   const cwdKey = encodeURIComponent(grant.sessionCwd);
   const contextPath = path.join(grokHome, 'sessions', cwdKey, sessionId, 'prompt_context.json');
   let context: Record<string, unknown>;
-  try { context = record(JSON.parse(fs.readFileSync(contextPath, 'utf8'))); } catch (error) {
+  try {
+    context = record(JSON.parse(fs.readFileSync(contextPath, 'utf8')));
+  } catch (error) {
     throw new GrokIsolationError('Sessao Grok nao produziu prompt_context.json atestavel.', { cause: error });
   }
   let workingDirectory: string;
-  try { workingDirectory = fs.realpathSync(String(context['working_directory'] ?? '')); } catch {
+  try {
+    workingDirectory = fs.realpathSync(String(context['working_directory'] ?? ''));
+  } catch {
     throw new GrokIsolationError('prompt_context.json nao confirmou o workspace.');
   }
-  if (workingDirectory !== grant.sessionCwd) throw new GrokIsolationError('prompt_context.json pertence a outro workspace.');
+  if (workingDirectory !== grant.sessionCwd)
+    throw new GrokIsolationError('prompt_context.json pertence a outro workspace.');
   if (context['memory_enabled'] !== false) throw new GrokIsolationError('Grok iniciou com memoria nativa habilitada.');
   assertInstructionSet(grant, context['agents_md_files'], true, false);
 }
@@ -640,12 +655,14 @@ export function ensureGrokSandboxProfile(
   baseOverride?: 'workspace' | 'read-only' | 'strict',
 ): string {
   const base = baseOverride ?? (grant.source === 'neutral' ? 'read-only' : 'workspace');
-  const identity = sha256([
-    base,
-    grant.source,
-    grant.processCwd,
-    ...grant.projectSources.map((source) => `${source.path}:${source.sha256}`),
-  ].join('\n')).slice(0, 16);
+  const identity = sha256(
+    [
+      base,
+      grant.source,
+      grant.processCwd,
+      ...grant.projectSources.map((source) => `${source.path}:${source.sha256}`),
+    ].join('\n'),
+  ).slice(0, 16);
   const profile = `lionclaw_${identity}`;
   const sandboxPath = path.join(grokHome, 'sandbox.toml');
   const protectedPaths = grant.projectSources.map((source) => JSON.stringify(source.path)).join(', ');
@@ -670,7 +687,11 @@ export function snapshotGrokSandboxAttestation(
 ): GrokSandboxAttestation {
   const eventsPath = path.join(grokHome, 'sandbox-events.jsonl');
   let offset = 0;
-  try { offset = fs.statSync(eventsPath).size; } catch { /* primeiro evento */ }
+  try {
+    offset = fs.statSync(eventsPath).size;
+  } catch {
+    /* primeiro evento */
+  }
   return {
     eventsPath,
     offset,
@@ -700,12 +721,19 @@ function sandboxApplied(attestation: GrokSandboxAttestation): boolean {
   return content.split(/\r?\n/).some((line) => {
     if (!line.trim()) return false;
     let event: Record<string, unknown>;
-    try { event = JSON.parse(line) as Record<string, unknown>; } catch { return false; }
-    if (event['event_type'] !== 'ProfileApplied'
-      || event['profile'] !== attestation.profile
-      || event['enforced'] !== true
-      || event['restrict_network'] !== true
-      || !String(event['platform'] ?? '').startsWith('linux/')) return false;
+    try {
+      event = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      return false;
+    }
+    if (
+      event['event_type'] !== 'ProfileApplied' ||
+      event['profile'] !== attestation.profile ||
+      event['enforced'] !== true ||
+      event['restrict_network'] !== true ||
+      !String(event['platform'] ?? '').startsWith('linux/')
+    )
+      return false;
     if (path.resolve(String(event['workspace'] ?? '')) !== attestation.workspace) return false;
     const denied = Array.isArray(event['deny_paths'])
       ? new Set(event['deny_paths'].map((item) => path.resolve(String(item))))
@@ -714,25 +742,17 @@ function sandboxApplied(attestation: GrokSandboxAttestation): boolean {
   });
 }
 
-export async function waitForGrokSandboxApplied(
-  attestation: GrokSandboxAttestation,
-  timeoutMs = 2_000,
-): Promise<void> {
+export async function waitForGrokSandboxApplied(attestation: GrokSandboxAttestation, timeoutMs = 2_000): Promise<void> {
   if (!attestation.kernelEventRequired) return;
   const deadline = Date.now() + timeoutMs;
   do {
     if (sandboxApplied(attestation)) return;
     await new Promise<void>((resolve) => setTimeout(resolve, 25));
   } while (Date.now() < deadline);
-  throw new GrokIsolationError(
-    `Grok nao comprovou aplicacao kernel-enforced do sandbox ${attestation.profile}.`,
-  );
+  throw new GrokIsolationError(`Grok nao comprovou aplicacao kernel-enforced do sandbox ${attestation.profile}.`);
 }
 
-export function grokInputTouchesProtectedSource(
-  grant: GrokWorkspaceGrant,
-  value: unknown,
-): boolean {
+export function grokInputTouchesProtectedSource(grant: GrokWorkspaceGrant, value: unknown): boolean {
   const strings: string[] = [];
   const visit = (item: unknown): void => {
     if (typeof item === 'string') strings.push(item);
@@ -743,6 +763,8 @@ export function grokInputTouchesProtectedSource(
   const protectedPaths = new Set(grant.projectSources.map((source) => source.path));
   return strings.some((text) => {
     if ([...protectedPaths].some((source) => text.includes(source))) return true;
-    return /(^|[\\/])(?:\.grok|\.claude|\.cursor)(?:[\\/]|$)|(?:^|[\\/])(?:AGENTS?|CLAUDE)(?:\.local)?\.md\b|\.mcp\.json\b/i.test(text);
+    return /(^|[\\/])(?:\.grok|\.claude|\.cursor)(?:[\\/]|$)|(?:^|[\\/])(?:AGENTS?|CLAUDE)(?:\.local)?\.md\b|\.mcp\.json\b/i.test(
+      text,
+    );
   });
 }

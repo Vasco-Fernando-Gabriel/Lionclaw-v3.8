@@ -1,10 +1,8 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { applyMigrationV82, __V82_INTERNAL } from '../db-migrations/v82-repo-graph';
-
 
 interface MockRun {
   execCalls: string[];
@@ -27,7 +25,6 @@ function allSql(): string {
   return runWithMockDb().execCalls.join('\n');
 }
 
-
 describe('applyMigrationV82 - structural', () => {
   it('exports applyMigrationV82 as a function', () => {
     expect(typeof applyMigrationV82).toBe('function');
@@ -43,7 +40,6 @@ describe('applyMigrationV82 - structural', () => {
     expect(__V82_INTERNAL.INDEXES).toEqual(['idx_rgtu_session_turn']);
   });
 });
-
 
 describe('applyMigrationV82 - SQL content', () => {
   const sql = allSql();
@@ -72,15 +68,11 @@ describe('applyMigrationV82 - SQL content', () => {
   it('repo_graph_runs: CHECKs de kind e status', () => {
     expect(sql).toContain("CHECK (kind IN ('build','update'))");
     expect(sql).toContain("CHECK (status IN ('running','done','error','cancelled'))");
-    expect(sql).toContain(
-      'repository_id TEXT NOT NULL REFERENCES local_repositories(id) ON DELETE CASCADE',
-    );
+    expect(sql).toContain('repository_id TEXT NOT NULL REFERENCES local_repositories(id) ON DELETE CASCADE');
   });
 
   it('session_active_repository: PK por sessao + cascade nas 2 FKs (clear de sessao remove attach, secao 14)', () => {
-    expect(sql).toContain(
-      'session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE',
-    );
+    expect(sql).toContain('session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE');
     expect(sql).toContain('graph_prompt_suppressed INTEGER NOT NULL DEFAULT 0');
   });
 
@@ -92,7 +84,6 @@ describe('applyMigrationV82 - SQL content', () => {
   });
 });
 
-
 describe('applyMigrationV82 - idempotencia e erros', () => {
   it('does not throw on a clean mock db', () => {
     expect(() => runWithMockDb()).not.toThrow();
@@ -102,7 +93,7 @@ describe('applyMigrationV82 - idempotencia e erros', () => {
     const sql = allSql();
     const creates = sql.match(/CREATE (TABLE|INDEX)/g) ?? [];
     const createsIfNotExists = sql.match(/CREATE (TABLE|INDEX) IF NOT EXISTS/g) ?? [];
-    expect(creates.length).toBe(5); // 4 tabelas + 1 indice
+    expect(creates.length).toBe(5);
     expect(createsIfNotExists.length).toBe(5);
   });
 
@@ -115,7 +106,6 @@ describe('applyMigrationV82 - idempotencia e erros', () => {
   });
 });
 
-
 const MAIN_DIR = join(__dirname, '..');
 
 function readMainSource(relPath: string): string {
@@ -126,9 +116,7 @@ describe('applyMigrationV82 - integracao no runner de db.ts (F7, guardrail estat
   const dbSrc = readMainSource('db.ts');
 
   it('db.ts importa applyMigrationV82 do arquivo da migration', () => {
-    expect(dbSrc).toContain(
-      "import { applyMigrationV82 } from './db-migrations/v82-repo-graph'",
-    );
+    expect(dbSrc).toContain("import { applyMigrationV82 } from './db-migrations/v82-repo-graph'");
   });
 
   it('runMigrations tem o bloco if (currentVersion < 82)', () => {
@@ -144,7 +132,6 @@ describe('applyMigrationV82 - integracao no runner de db.ts (F7, guardrail estat
     expect(block).toMatch(/Applied migration v82/);
   });
 });
-
 
 describe('V82 - CRUD repo-graph em db.ts (guardrail estatico)', () => {
   const dbSrc = readMainSource('db.ts');

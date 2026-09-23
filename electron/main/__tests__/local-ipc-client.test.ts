@@ -1,9 +1,7 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-
 
 const sandboxState = vi.hoisted(() => ({
   path: '/tmp/lionclaw-ipc-client-uninitialized',
@@ -101,31 +99,21 @@ vi.mock('../skills', () => ({
   },
 }));
 
-
-import {
-  startLocalIpcServer,
-  stopLocalIpcServer,
-  getCurrentEndpoint,
-} from '../local-ipc';
-import {
-  LocalIpcClient,
-  readEndpoint,
-  endpointFileExists,
-} from '../../../mcp-servers/_shared/local-ipc-client';
+import { startLocalIpcServer, stopLocalIpcServer, getCurrentEndpoint } from '../local-ipc';
+import { LocalIpcClient, readEndpoint, endpointFileExists } from '../../../mcp-servers/_shared/local-ipc-client';
 import {
   clearActiveChatTurn,
   clearChatCapabilityTurn,
   registerChatCapabilityTurn,
   setActiveChatTurn,
 } from '../chat-capability-context';
-import { cronLane, desktopLane, telegramLane } from '../sdk-lane';
-import {
-  LIONCLAW_HELPER_TOKEN_ENV,
-  mintHelperToken,
-} from '../helper-identity';
+import { cronLane, telegramLane } from '../sdk-lane';
+import { getDesktopLane } from '../desktop-lanes';
+import { LIONCLAW_HELPER_TOKEN_ENV, mintHelperToken } from '../helper-identity';
 
 const IS_POSIX = process.platform !== 'win32';
 const TEST_SESSION_ID = 'test-chat-session';
+const desktopLane = getDesktopLane(TEST_SESSION_ID);
 const TEST_TURN_ID = 'test-turn-1';
 let previousHelperToken: string | undefined;
 
@@ -149,8 +137,7 @@ beforeEach(async () => {
 afterEach(async () => {
   try {
     await stopLocalIpcServer();
-  } catch {
-  }
+  } catch {}
   for (const lane of ['desktop', 'telegram', 'cron'] as const) {
     clearActiveChatTurn({ sessionId: TEST_SESSION_ID, lane, turnId: TEST_TURN_ID });
   }
@@ -162,8 +149,7 @@ afterEach(async () => {
   else process.env[LIONCLAW_HELPER_TOKEN_ENV] = previousHelperToken;
   try {
     await fs.promises.rm(sandboxState.path, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
 });
 
 describe('local-ipc-client (SP-7.6 E2E)', () => {
@@ -318,10 +304,14 @@ describe('local-ipc-client (SP-7.6 E2E)', () => {
         context: { source: 'chat' },
         expected_output: 'resumo curto',
       };
-      const result = await client.callMethod('call_agent', params);
+      const result = await client.callMethod('call_agent', {
+        ...params,
+        sessionId: TEST_SESSION_ID,
+        turnId: TEST_TURN_ID,
+      });
 
       expect(agentDispatchMock).toHaveBeenCalledWith(
-        params,
+        expect.objectContaining(params),
         expect.objectContaining({
           dispatchContext: expect.objectContaining({
             ownerKind: 'chat',
@@ -409,7 +399,13 @@ describe('local-ipc-client (SP-7.6 E2E)', () => {
     await startLocalIpcServer();
     const client = new LocalIpcClient({ lionclawHome: sandboxState.path, callTimeoutMs: 5000 });
     try {
-      await client.callMethod('call_agent', { agent_id: 'researcher', task: 'resuma' });
+      await client.callMethod('call_agent', {
+        agent_id: 'researcher',
+        task: 'resuma',
+        lane: laneName,
+        sessionId: TEST_SESSION_ID,
+        turnId: TEST_TURN_ID,
+      });
       expect(agentDispatchMock).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
@@ -444,10 +440,14 @@ describe('local-ipc-client (SP-7.6 E2E)', () => {
     await startLocalIpcServer();
     const client = new LocalIpcClient({ lionclawHome: sandboxState.path, callTimeoutMs: 5000 });
     try {
-      await expect(client.callMethod('call_agent', {
-        agent_id: 'researcher',
-        task: 'nao deve executar',
-      })).rejects.toThrow(/sem capabilities\/roots\/permission guard/i);
+      await expect(
+        client.callMethod('call_agent', {
+          sessionId: TEST_SESSION_ID,
+          turnId: TEST_TURN_ID,
+          agent_id: 'researcher',
+          task: 'nao deve executar',
+        }),
+      ).rejects.toThrow(/sem capabilities\/roots\/permission guard/i);
       expect(agentDispatchMock).not.toHaveBeenCalled();
     } finally {
       client.close();
@@ -477,10 +477,14 @@ describe('local-ipc-client (SP-7.6 E2E)', () => {
     await startLocalIpcServer();
     const client = new LocalIpcClient({ lionclawHome: sandboxState.path, callTimeoutMs: 5000 });
     try {
-      await expect(client.callMethod('call_agent', {
-        agent_id: 'researcher',
-        task: 'nao deve executar',
-      })).rejects.toThrow(/autenticada como lionclaw-agents/i);
+      await expect(
+        client.callMethod('call_agent', {
+          sessionId: TEST_SESSION_ID,
+          turnId: TEST_TURN_ID,
+          agent_id: 'researcher',
+          task: 'nao deve executar',
+        }),
+      ).rejects.toThrow(/autenticada como lionclaw-agents/i);
       expect(agentDispatchMock).not.toHaveBeenCalled();
     } finally {
       client.close();
@@ -491,13 +495,12 @@ describe('local-ipc-client (SP-7.6 E2E)', () => {
     const { CodexAuthError } = await import('../codex-runtime/errors');
     const authError = new CodexAuthError('login Codex necessario');
     const ownerAbort = new AbortController();
-    agentDispatchMock.mockImplementationOnce(async (
-      _params: unknown,
-      deps: { dispatchContext: { abortOwner?: (reason: Error) => void } },
-    ) => {
-      deps.dispatchContext.abortOwner?.(authError);
-      throw authError;
-    });
+    agentDispatchMock.mockImplementationOnce(
+      async (_params: unknown, deps: { dispatchContext: { abortOwner?: (reason: Error) => void } }) => {
+        deps.dispatchContext.abortOwner?.(authError);
+        throw authError;
+      },
+    );
     registerChatCapabilityTurn({
       surface: 'chat',
       sessionId: TEST_SESSION_ID,
@@ -531,10 +534,14 @@ describe('local-ipc-client (SP-7.6 E2E)', () => {
     });
 
     try {
-      await expect(client.callMethod('call_agent', {
-        agent_id: 'researcher',
-        task: 'analise',
-      })).rejects.toThrow('login Codex necessario');
+      await expect(
+        client.callMethod('call_agent', {
+          sessionId: TEST_SESSION_ID,
+          turnId: TEST_TURN_ID,
+          agent_id: 'researcher',
+          task: 'analise',
+        }),
+      ).rejects.toThrow('login Codex necessario');
       expect(ownerAbort.signal.aborted).toBe(true);
       expect(ownerAbort.signal.reason).toBe(authError);
     } finally {
@@ -554,9 +561,9 @@ describe('local-ipc-client (SP-7.6 E2E)', () => {
     });
 
     try {
-      await expect(
-        client.callMethod('load_skill', { skill_name: 'does-not-exist' }),
-      ).rejects.toThrow(/Skill not found/);
+      await expect(client.callMethod('load_skill', { skill_name: 'does-not-exist' })).rejects.toThrow(
+        /Skill not found/,
+      );
     } finally {
       client.close();
     }
@@ -573,9 +580,7 @@ describe('local-ipc-client (SP-7.6 E2E)', () => {
     });
 
     try {
-      await expect(
-        client.callMethod('not_a_real_method', {}),
-      ).rejects.toThrow(/Method not found/);
+      await expect(client.callMethod('not_a_real_method', {})).rejects.toThrow(/Method not found/);
     } finally {
       client.close();
     }

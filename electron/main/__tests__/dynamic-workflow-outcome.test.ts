@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import type { DynamicWorkflowEvent } from '../dynamic-workflows/types';
 import {
@@ -47,7 +46,11 @@ function ev(
 const P1 = (where: string, problem: string) => ({ severity: 'P1', where, problem });
 const P2 = (where: string, problem: string) => ({ severity: 'P2', where, problem });
 
-function validatorCompleted(nodeId: string, findings: Array<Record<string, unknown>>, extra: Record<string, unknown> = {}) {
+function validatorCompleted(
+  nodeId: string,
+  findings: Array<Record<string, unknown>>,
+  extra: Record<string, unknown> = {},
+) {
   const p1 = findings.filter((f) => f.severity === 'P1').length;
   return ev(
     'node-completed',
@@ -95,10 +98,11 @@ function refuterCompleted(nodeId: string, verdicts: Array<{ where: string; probl
   );
 }
 
-
 describe('deriveOutcome / deriveWakeSignal (tabela D1)', () => {
   it('node-completed sem shape de validador => green, nao acorda', () => {
-    const o = deriveOutcome(ev('node-completed', { attempt: 1, agentId: 'scout', outputDigest: 'ok' }, { nodeId: 'n1' }));
+    const o = deriveOutcome(
+      ev('node-completed', { attempt: 1, agentId: 'scout', outputDigest: 'ok' }, { nodeId: 'n1' }),
+    );
     expect(o).toMatchObject({ verdict: 'green', wakes: false, nodeId: 'n1', agentId: 'scout', outputDigest: 'ok' });
     expect(deriveWakeSignal(ev('node-completed', {}))).toBeNull();
   });
@@ -111,7 +115,9 @@ describe('deriveOutcome / deriveWakeSignal (tabela D1)', () => {
   });
 
   it('node-completed de validador so com P2/P3 => green (P2/P3 NUNCA rebaixam)', () => {
-    const o = deriveOutcome(validatorCompleted('v1', [P2('a.ts:1', 'x'), { severity: 'P3', where: 'b', problem: 'y' }]));
+    const o = deriveOutcome(
+      validatorCompleted('v1', [P2('a.ts:1', 'x'), { severity: 'P3', where: 'b', problem: 'y' }]),
+    );
     expect(o!.verdict).toBe('green');
   });
 
@@ -133,13 +139,17 @@ describe('deriveOutcome / deriveWakeSignal (tabela D1)', () => {
   });
 
   it('node-retry-scheduled => pending, nao acorda', () => {
-    const o = deriveOutcome(ev('node-retry-scheduled', { failureClass: 'provider-limit', attempt: 1 }, { nodeId: 'c1' }));
+    const o = deriveOutcome(
+      ev('node-retry-scheduled', { failureClass: 'provider-limit', attempt: 1 }, { nodeId: 'c1' }),
+    );
     expect(o).toMatchObject({ verdict: 'pending', wakes: false, failureClass: 'provider-limit' });
     expect(deriveWakeSignal(ev('node-retry-scheduled', {}))).toBeNull();
   });
 
   it('green-check ok:false inconclusive:false => attention; ok:true => green; inconclusivo => attention', () => {
-    expect(deriveOutcome(ev('green-check', { ok: false, inconclusive: false, redChecks: [{ id: 'typecheck' }] }))).toMatchObject({
+    expect(
+      deriveOutcome(ev('green-check', { ok: false, inconclusive: false, redChecks: [{ id: 'typecheck' }] })),
+    ).toMatchObject({
       verdict: 'attention',
       wakes: false,
     });
@@ -150,7 +160,13 @@ describe('deriveOutcome / deriveWakeSignal (tabela D1)', () => {
   it('node-failed (qualquer classe) e sandbox-killed sao PRECURSORES: entram no digest, nunca acordam', () => {
     for (const cls of ['logic', 'schema', 'provider-limit', 'timeout']) {
       const o = deriveOutcome(ev('node-failed', { failureClass: cls, error: 'boom', attempt: 1 }, { nodeId: 'c1' }));
-      expect(o).toMatchObject({ verdict: 'attention', wakes: false, precursor: true, failureClass: cls, errorExcerpt: 'boom' });
+      expect(o).toMatchObject({
+        verdict: 'attention',
+        wakes: false,
+        precursor: true,
+        failureClass: cls,
+        errorExcerpt: 'boom',
+      });
       expect(deriveWakeSignal(ev('node-failed', { failureClass: cls }))).toBeNull();
     }
     const k = deriveOutcome(ev('sandbox-killed', { reason: 'wall-timeout' }));
@@ -159,23 +175,64 @@ describe('deriveOutcome / deriveWakeSignal (tabela D1)', () => {
   });
 
   it('run-blocked-provider => needs-decision com failureClass e nodeError reais (acorda)', () => {
-    const e = ev('run-blocked-provider', { failureClass: 'logic', retriesExhausted: false, attemptsMade: 1, nodeError: 'agentType inexistente' }, { nodeId: 'c1' });
-    expect(deriveOutcome(e)).toMatchObject({ verdict: 'needs-decision', wakes: true, failureClass: 'logic', errorExcerpt: 'agentType inexistente' });
+    const e = ev(
+      'run-blocked-provider',
+      { failureClass: 'logic', retriesExhausted: false, attemptsMade: 1, nodeError: 'agentType inexistente' },
+      { nodeId: 'c1' },
+    );
+    expect(deriveOutcome(e)).toMatchObject({
+      verdict: 'needs-decision',
+      wakes: true,
+      failureClass: 'logic',
+      errorExcerpt: 'agentType inexistente',
+    });
     expect(deriveWakeSignal(e)).toEqual({ reason: 'needs-decision', nodeId: 'c1' });
   });
 
   it('node-stalled => PRECURSOR (L1.1: o watchdog aborta so o node; a falha segue retry -> gate failure:*), nao acorda', () => {
     const e = ev('node-stalled', { stalledForMs: 180000, message: 'sem progresso ha 3min' }, { nodeId: 'c1' });
-    expect(deriveOutcome(e)).toMatchObject({ verdict: 'attention', wakes: false, precursor: true, errorExcerpt: 'sem progresso ha 3min' });
+    expect(deriveOutcome(e)).toMatchObject({
+      verdict: 'attention',
+      wakes: false,
+      precursor: true,
+      errorExcerpt: 'sem progresso ha 3min',
+    });
     expect(deriveWakeSignal(e)).toBeNull();
   });
 
   it('run-blocked-provider COM gateId (failure:<node>) => PRECURSOR do gate-blocked failure:* (nao acorda); sem gateId continua terminal', () => {
-    const withGate = ev('run-blocked-provider', { failureClass: 'logic', nodeError: 'boom', gateId: 'failure:c1' }, { nodeId: 'c1' });
-    expect(deriveOutcome(withGate)).toMatchObject({ verdict: 'attention', wakes: false, precursor: true, gateId: 'failure:c1', failureClass: 'logic' });
+    const withGate = ev(
+      'run-blocked-provider',
+      { failureClass: 'logic', nodeError: 'boom', gateId: 'failure:c1' },
+      { nodeId: 'c1' },
+    );
+    expect(deriveOutcome(withGate)).toMatchObject({
+      verdict: 'attention',
+      wakes: false,
+      precursor: true,
+      gateId: 'failure:c1',
+      failureClass: 'logic',
+    });
     expect(deriveWakeSignal(withGate)).toBeNull();
-    const gate = ev('gate-blocked', { gateId: 'failure:c1', mode: 'orchestrator', failure: true, failureClass: 'logic', error: 'boom', actions: ['retry', 'switch-agent', 'skip', 'abort'] }, { nodeId: 'c1' });
-    expect(deriveOutcome(gate)).toMatchObject({ verdict: 'blocked', wakes: true, gateId: 'failure:c1', failureClass: 'logic', errorExcerpt: 'boom' });
+    const gate = ev(
+      'gate-blocked',
+      {
+        gateId: 'failure:c1',
+        mode: 'orchestrator',
+        failure: true,
+        failureClass: 'logic',
+        error: 'boom',
+        actions: ['retry', 'switch-agent', 'skip', 'abort'],
+      },
+      { nodeId: 'c1' },
+    );
+    expect(deriveOutcome(gate)).toMatchObject({
+      verdict: 'blocked',
+      wakes: true,
+      gateId: 'failure:c1',
+      failureClass: 'logic',
+      errorExcerpt: 'boom',
+    });
     expect(deriveWakeSignal(gate)).toEqual({ reason: 'blocked', gateId: 'failure:c1' });
   });
 
@@ -206,7 +263,17 @@ describe('deriveOutcome / deriveWakeSignal (tabela D1)', () => {
   });
 
   it('nenhum outro tipo gera wake (run-delivered, run-finished, node-started, log, wake-planned...)', () => {
-    for (const t of ['run-delivered', 'run-finished', 'node-started', 'log', 'checkpoint', 'wake-planned', 'wake-completed', 'run-paused', 'node-committed']) {
+    for (const t of [
+      'run-delivered',
+      'run-finished',
+      'node-started',
+      'log',
+      'checkpoint',
+      'wake-planned',
+      'wake-completed',
+      'run-paused',
+      'node-committed',
+    ]) {
       expect(deriveWakeSignal(ev(t, {}))).toBeNull();
       expect(deriveOutcome(ev(t, {}))).toBeNull();
     }
@@ -217,7 +284,6 @@ describe('deriveOutcome / deriveWakeSignal (tabela D1)', () => {
     expect(deriveOutcome(bad)!.verdict).toBe('green');
   });
 });
-
 
 describe('janela (findWindowStartSeq / deriveOutcomesSince / computeSinceStats)', () => {
   it('reseta no ultimo wake-completed executed ou gate-approved de fronteira; discarded NAO reseta', () => {
@@ -233,9 +299,9 @@ describe('janela (findWindowStartSeq / deriveOutcomesSince / computeSinceStats)'
     expect(findWindowStartSeq(events)).toBe(3);
     const outcomes = deriveOutcomesSince(events, 3);
     expect(outcomes.map((o) => o.nodeId)).toEqual(['n2']);
-    events.push(ev('gate-approved', { gateId: 'boundary:S1' })); // 7
+    events.push(ev('gate-approved', { gateId: 'boundary:S1' }));
     expect(findWindowStartSeq(events)).toBe(7);
-    events.push(ev('gate-approved', { gateId: 'cc-delivery' })); // 8
+    events.push(ev('gate-approved', { gateId: 'cc-delivery' }));
     expect(findWindowStartSeq(events)).toBe(8);
     expect(eventsSince(events, 7).map((e) => e.seq)).toEqual([8]);
   });
@@ -259,9 +325,9 @@ describe('janela (findWindowStartSeq / deriveOutcomesSince / computeSinceStats)'
     expect(a.semaphore).toBe('SEM VEREDITO');
     expect(a.unresolvedDecisions).toHaveLength(0);
 
-    const approved = [...events, ev('gate-approved', { gateId: 'boundary:Validar' })]; // 9
+    const approved = [...events, ev('gate-approved', { gateId: 'boundary:Validar' })];
     expect(findWindowStartSeq(approved)).toBe(9);
-    const after = [...approved, ev('wake-completed', { driveTurnId: 't2', outcome: 'executed' })]; // 10
+    const after = [...approved, ev('wake-completed', { driveTurnId: 't2', outcome: 'executed' })];
     expect(findWindowStartSeq(after)).toBe(10);
   });
 
@@ -273,7 +339,7 @@ describe('janela (findWindowStartSeq / deriveOutcomesSince / computeSinceStats)'
       ev('wake-completed', { driveTurnId: 't1', outcome: 'executed' }), // 3 (ignorado)
     ];
     expect(findWindowStartSeq(events)).toBe(0);
-    events.push(ev('resume-requested', { acceptBoundary: true })); // 4
+    events.push(ev('resume-requested', { acceptBoundary: true }));
     expect(findWindowStartSeq(events)).toBe(4);
     expect(assessBoundary(eventsSince(events, 4), { history: events }).since.nodes).toBe(0);
     seq = 0;
@@ -307,7 +373,6 @@ describe('janela (findWindowStartSeq / deriveOutcomesSince / computeSinceStats)'
   });
 });
 
-
 describe('semaforo de fronteira (D1b) - FAIL-CLOSED', () => {
   it('janela vazia => VERDE (since.nodes 0; o chamador pula a fronteira)', () => {
     seq = 0;
@@ -318,7 +383,12 @@ describe('semaforo de fronteira (D1b) - FAIL-CLOSED', () => {
 
   it('so nodes verdes read-only => VERDE', () => {
     seq = 0;
-    expect(computeBoundarySemaphore([validatorCompleted('v1', []), ev('node-completed', { agentId: 'scout', access: 'read-only' }, { nodeId: 's1' })])).toBe('VERDE');
+    expect(
+      computeBoundarySemaphore([
+        validatorCompleted('v1', []),
+        ev('node-completed', { agentId: 'scout', access: 'read-only' }, { nodeId: 's1' }),
+      ]),
+    ).toBe('VERDE');
   });
 
   it('validador com P1 NUNCA produz VERDE (ATENCAO)', () => {
@@ -339,17 +409,34 @@ describe('semaforo de fronteira (D1b) - FAIL-CLOSED', () => {
 
   it('P2/P3 apenas => VERDE', () => {
     seq = 0;
-    expect(computeBoundarySemaphore([validatorCompleted('v1', [P2('a', 'b'), { severity: 'P3', where: 'c', problem: 'd' }])])).toBe('VERDE');
+    expect(
+      computeBoundarySemaphore([
+        validatorCompleted('v1', [P2('a', 'b'), { severity: 'P3', where: 'c', problem: 'd' }]),
+      ]),
+    ).toBe('VERDE');
   });
 
   it("refuter verdict 'false' (ou 'ruido') fecha o P1 => VERDE; 'real' mantem => ATENCAO", () => {
     seq = 0;
     const base = [validatorCompleted('v1', [P1('src/a.ts:10', 'faltou guard')])];
-    expect(computeBoundarySemaphore([...base, refuterCompleted('r1', [{ where: 'src/a.ts:10', problem: 'faltou guard', verdict: 'false' }])])).toBe('VERDE');
+    expect(
+      computeBoundarySemaphore([
+        ...base,
+        refuterCompleted('r1', [{ where: 'src/a.ts:10', problem: 'faltou guard', verdict: 'false' }]),
+      ]),
+    ).toBe('VERDE');
     seq = 0;
-    expect(computeBoundarySemaphore([...base, refuterCompleted('r1', [{ where: 'src/a.ts:10', problem: 'faltou guard', verdict: 'ruido' }])])).toBe('VERDE');
+    expect(
+      computeBoundarySemaphore([
+        ...base,
+        refuterCompleted('r1', [{ where: 'src/a.ts:10', problem: 'faltou guard', verdict: 'ruido' }]),
+      ]),
+    ).toBe('VERDE');
     seq = 0;
-    const real = assessBoundary([...base, refuterCompleted('r1', [{ where: 'src/a.ts:10', problem: 'faltou guard', verdict: 'real' }])]);
+    const real = assessBoundary([
+      ...base,
+      refuterCompleted('r1', [{ where: 'src/a.ts:10', problem: 'faltou guard', verdict: 'real' }]),
+    ]);
     expect(real.semaphore).toBe('ATENCAO');
     expect(real.openP1[0]!.status).toBe('open-real');
   });
@@ -363,16 +450,26 @@ describe('semaforo de fronteira (D1b) - FAIL-CLOSED', () => {
       ev('green-check', { ok: true, inconclusive: false, final: true }),
     ];
     expect(computeBoundarySemaphore(events)).toBe('ATENCAO');
-    const fixed = [...events, refuterCompleted('rr1', [{ where: 'src/a.ts:10', problem: 'faltou guard', verdict: 'fixed' }])];
+    const fixed = [
+      ...events,
+      refuterCompleted('rr1', [{ where: 'src/a.ts:10', problem: 'faltou guard', verdict: 'fixed' }]),
+    ];
     expect(computeBoundarySemaphore(fixed)).toBe('VERDE');
-    const still = [...events, refuterCompleted('rr1', [{ where: 'src/a.ts:10', problem: 'faltou guard', verdict: 'still-real' }])];
+    const still = [
+      ...events,
+      refuterCompleted('rr1', [{ where: 'src/a.ts:10', problem: 'faltou guard', verdict: 'still-real' }]),
+    ];
     expect(computeBoundarySemaphore(still)).toBe('ATENCAO');
   });
 
   it('L1.4: node-cache-hit NUNCA entra na janela do semaforo (replay de validador com P1 ou de writer => VERDE, since.nodes 0)', () => {
     seq = 0;
     const hit = ev('node-cache-hit', { access: 'read-only', p1Count: 1, findings: [P1('a', 'b')] }, { nodeId: 'v1' });
-    const writerHit = ev('node-cache-hit', { access: 'workspace-write', agentId: 'dynamic-workflow-coder' }, { nodeId: 'u1' });
+    const writerHit = ev(
+      'node-cache-hit',
+      { access: 'workspace-write', agentId: 'dynamic-workflow-coder' },
+      { nodeId: 'u1' },
+    );
     const a = assessBoundary([hit, writerHit]);
     expect(a.semaphore).toBe('VERDE');
     expect(a.since.nodes).toBe(0);
@@ -404,7 +501,12 @@ describe('semaforo de fronteira (D1b) - FAIL-CLOSED', () => {
 
   it('writer + ultimo green-check ok:false ainda aberto na fronteira => ATENCAO', () => {
     seq = 0;
-    expect(computeBoundarySemaphore([writerCompleted('u1'), ev('green-check', { ok: false, inconclusive: false, redChecks: [{ id: 'test' }] })])).toBe('ATENCAO');
+    expect(
+      computeBoundarySemaphore([
+        writerCompleted('u1'),
+        ev('green-check', { ok: false, inconclusive: false, redChecks: [{ id: 'test' }] }),
+      ]),
+    ).toBe('ATENCAO');
   });
 
   it('sequencia validador-fail(P1) -> refuter false -> writer -> green ok => VERDE', () => {
@@ -435,20 +537,29 @@ describe('semaforo de fronteira (D1b) - FAIL-CLOSED', () => {
       ev('run-blocked-provider', { failureClass: 'logic', nodeError: 'x' }, { nodeId: 'c1' }),
     ];
     expect(computeBoundarySemaphore(events)).toBe('DECISAO NECESSARIA');
-    const resumed = [...events, ev('resume-requested', {}), ev('node-completed', { access: 'read-only' }, { nodeId: 'c1' })];
+    const resumed = [
+      ...events,
+      ev('resume-requested', {}),
+      ev('node-completed', { access: 'read-only' }, { nodeId: 'c1' }),
+    ];
     expect(computeBoundarySemaphore(resumed)).toBe('VERDE');
   });
 
   it('gate-blocked orchestrator sem gate-approved => DECISAO NECESSARIA; aprovado => nao pesa', () => {
     seq = 0;
-    const events = [ev('node-completed', { access: 'read-only' }, { nodeId: 'n1' }), ev('gate-blocked', { gateId: 'gate-x', mode: 'orchestrator' })];
+    const events = [
+      ev('node-completed', { access: 'read-only' }, { nodeId: 'n1' }),
+      ev('gate-blocked', { gateId: 'gate-x', mode: 'orchestrator' }),
+    ];
     expect(computeBoundarySemaphore(events)).toBe('DECISAO NECESSARIA');
     expect(computeBoundarySemaphore([...events, ev('gate-approved', { gateId: 'gate-x' })])).toBe('VERDE');
   });
 
   it('wake-runaway na janela => DECISAO HUMANA', () => {
     seq = 0;
-    expect(computeBoundarySemaphore([ev('node-completed', {}, { nodeId: 'n1' }), ev('wake-runaway', { wakesTotal: 7 })])).toBe('DECISAO HUMANA');
+    expect(
+      computeBoundarySemaphore([ev('node-completed', {}, { nodeId: 'n1' }), ev('wake-runaway', { wakesTotal: 7 })]),
+    ).toBe('DECISAO HUMANA');
   });
 
   it('ledger: chave = sha8(where|problem); P1 de validadores distintos agregam por chave', () => {
@@ -459,26 +570,40 @@ describe('semaforo de fronteira (D1b) - FAIL-CLOSED', () => {
     ]);
     expect(ledger.get(findingKey('a.ts:1', 'x'))!.status).toBe('open');
     expect(ledger.get(findingKey('b.ts:2', 'y'))!.status).toBe('advisory');
-    expect(openP1Findings(ledger).map((f) => f.where).sort()).toEqual(['a.ts:1', 'c.ts:3']);
+    expect(
+      openP1Findings(ledger)
+        .map((f) => f.where)
+        .sort(),
+    ).toEqual(['a.ts:1', 'c.ts:3']);
     expect(findingKey('a', 'b')).toHaveLength(8);
   });
 });
 
-
 describe('summarizeParsedOutput / shapes', () => {
   it('validador: verdict + contagem por severidade', () => {
-    const s = summarizeParsedOutput({ verdict: 'fail', findings: [P1('a', 'b'), P2('c', 'd'), { severity: 'P3', where: 'e', problem: 'f' }] });
+    const s = summarizeParsedOutput({
+      verdict: 'fail',
+      findings: [P1('a', 'b'), P2('c', 'd'), { severity: 'P3', where: 'e', problem: 'f' }],
+    });
     expect(s).toBe('verdict=fail findings=3 P1=1 P2=1 P3=1');
   });
 
   it('refuter em lote (REFUTE_SCHEMA): contagem por veredito; ruido normalizado para false', () => {
-    const parsed = { refutations: [{ where: 'a', problem: 'b', verdict: 'real' }, { where: 'c', problem: 'd', verdict: 'ruido' }, { ref: 'f2', verdict: 'real' }] };
+    const parsed = {
+      refutations: [
+        { where: 'a', problem: 'b', verdict: 'real' },
+        { where: 'c', problem: 'd', verdict: 'ruido' },
+        { ref: 'f2', verdict: 'real' },
+      ],
+    };
     expect(summarizeParsedOutput(parsed)).toBe('refutations=2 real=1 false=1');
     expect(extractRefuterVerdicts(parsed)).toEqual([
       { where: 'a', problem: 'b', verdict: 'real' },
       { where: 'c', problem: 'd', verdict: 'false' },
     ]);
-    expect(extractRefuterVerdicts({ where: 'a', problem: 'b', verdict: 'fixed' })).toEqual([{ where: 'a', problem: 'b', verdict: 'fixed' }]);
+    expect(extractRefuterVerdicts({ where: 'a', problem: 'b', verdict: 'fixed' })).toEqual([
+      { where: 'a', problem: 'b', verdict: 'fixed' },
+    ]);
     expect(extractRefuterVerdicts({ verdict: 'pass', findings: [] })).toBeNull();
     expect(extractRefuterVerdicts('texto')).toBeNull();
   });
@@ -503,14 +628,20 @@ describe('summarizeParsedOutput / shapes', () => {
   });
 });
 
-
 describe('buildWakePrompt (D4)', () => {
   const since = { nodes: 3, green: 2, attention: 1, pending: 0, failed: 0, costUsd: 1.23, durationMs: 90_000 };
 
   it("VERDE: linha canonica, 'ok, seguindo', 'Nao chame tools', SEM inspect nem clausula de surpresa", () => {
     seq = 0;
     const outcomes = deriveOutcomesSince([validatorCompleted('v1', []), writerCompleted('u1')], 0);
-    const p = buildWakePrompt({ runId: 'run-9', reason: 'boundary', semaphore: 'VERDE', since, outcomes, pendingDecision: null });
+    const p = buildWakePrompt({
+      runId: 'run-9',
+      reason: 'boundary',
+      semaphore: 'VERDE',
+      since,
+      outcomes,
+      pendingDecision: null,
+    });
     expect(p).toContain('run-9');
     expect(p).toContain('SEMAFORO: VERDE');
     expect(p).toContain("responda 'ok, seguindo'. Nao chame tools.");
@@ -539,7 +670,14 @@ describe('buildWakePrompt (D4)', () => {
       const approveIdx = p.toLowerCase().indexOf('aprov');
       if (approveIdx >= 0) expect(inspectIdx).toBeLessThan(approveIdx);
     }
-    const human = buildWakePrompt({ runId: 'r', reason: 'needs-human', semaphore: 'DECISAO HUMANA', since, outcomes: [], detail: 'wakes=7' });
+    const human = buildWakePrompt({
+      runId: 'r',
+      reason: 'needs-human',
+      semaphore: 'DECISAO HUMANA',
+      since,
+      outcomes: [],
+      detail: 'wakes=7',
+    });
     expect(human).toContain('So `dynamic_workflow_inspect` esta disponivel');
     expect(human).toContain('wakes=7');
   });
@@ -547,7 +685,8 @@ describe('buildWakePrompt (D4)', () => {
   it('cap de 12 desfechos: nao-verdes primeiro, depois os ULTIMOS verdes, excedente vira contador', () => {
     seq = 0;
     const events: DynamicWorkflowEvent[] = [];
-    for (let i = 0; i < 20; i++) events.push(ev('node-completed', { access: 'read-only', agentId: `g${i}` }, { nodeId: `g${i}` }));
+    for (let i = 0; i < 20; i++)
+      events.push(ev('node-completed', { access: 'read-only', agentId: `g${i}` }, { nodeId: `g${i}` }));
     events.push(validatorCompleted('bad', [P1('a', 'b')]));
     events.push(ev('node-failed', { failureClass: 'logic' }, { nodeId: 'f1' }));
     const outcomes = deriveOutcomesSince(events, 0);
@@ -563,7 +702,6 @@ describe('buildWakePrompt (D4)', () => {
     expect(p).toContain('(+10 desfecho(s) verde(s) omitido(s))');
   });
 });
-
 
 describe('buildWakePrompt: bloco de acoes cita rerun-node (S2 implementa; o system prompt ja o cita)', () => {
   it('ATENCAO lista rerun-node {nodeId, instruction} entre as intervencoes', () => {
@@ -583,12 +721,20 @@ describe('buildWakePrompt: bloco de acoes cita rerun-node (S2 implementa; o syst
 describe('checkWakeRunaway (D6)', () => {
   it('limites default: 120 por run, 6 sem progresso; estoura so ao ULTRAPASSAR', () => {
     expect(checkWakeRunaway({ wakesTotal: 120, wakesSinceProgress: 6 })).toEqual({ runaway: false });
-    expect(checkWakeRunaway({ wakesTotal: 121, wakesSinceProgress: 1 })).toEqual({ runaway: true, reason: 'max-wakes-per-run' });
-    expect(checkWakeRunaway({ wakesTotal: 10, wakesSinceProgress: 7 })).toEqual({ runaway: true, reason: 'max-wakes-sem-progresso' });
+    expect(checkWakeRunaway({ wakesTotal: 121, wakesSinceProgress: 1 })).toEqual({
+      runaway: true,
+      reason: 'max-wakes-per-run',
+    });
+    expect(checkWakeRunaway({ wakesTotal: 10, wakesSinceProgress: 7 })).toEqual({
+      runaway: true,
+      reason: 'max-wakes-sem-progresso',
+    });
   });
 
   it('limites injetaveis', () => {
-    expect(checkWakeRunaway({ wakesTotal: 3, wakesSinceProgress: 0 }, { maxWakesPerRun: 2, maxWakesSemProgresso: 6 })).toEqual({ runaway: true, reason: 'max-wakes-per-run' });
+    expect(
+      checkWakeRunaway({ wakesTotal: 3, wakesSinceProgress: 0 }, { maxWakesPerRun: 2, maxWakesSemProgresso: 6 }),
+    ).toEqual({ runaway: true, reason: 'max-wakes-per-run' });
   });
 
   it('worstWakeReason: needs-human > blocked > needs-decision > boundary', () => {
@@ -598,7 +744,6 @@ describe('checkWakeRunaway (D6)', () => {
     expect(worstWakeReason('boundary', 'boundary')).toBe('boundary');
   });
 });
-
 
 describe('L1.4: falha AGENDADA (rerun-requested / resume-requested / decisao do gate failure:*) nao rebaixa a fronteira', () => {
   it('node-failed seguido de rerun-requested do MESMO node => nao conta como "falhou sem conclusao"', () => {
@@ -611,7 +756,10 @@ describe('L1.4: falha AGENDADA (rerun-requested / resume-requested / decisao do 
     expect(a.unresolvedFailures).toEqual([]);
     expect(a.semaphore).toBe('VERDE');
     seq = 0;
-    const other = [ev('node-failed', { failureClass: 'logic' }, { nodeId: 'u1' }), ev('rerun-requested', { nodeId: 'u9' }, { nodeId: 'u9' })];
+    const other = [
+      ev('node-failed', { failureClass: 'logic' }, { nodeId: 'u1' }),
+      ev('rerun-requested', { nodeId: 'u9' }, { nodeId: 'u9' }),
+    ];
     expect(assessBoundary(other).unresolvedFailures).toEqual(['u1']);
   });
 
@@ -660,7 +808,11 @@ describe('L1.5: regra (c) do semaforo so para writers de CODIGO', () => {
     seq = 0;
     const doc = ev(
       'node-completed',
-      { agentId: 'dynamic-workflow-doc-writer', access: 'workspace-write', touchedFiles: ['docs/PRD.md', 'docs/plan.json'] },
+      {
+        agentId: 'dynamic-workflow-doc-writer',
+        access: 'workspace-write',
+        touchedFiles: ['docs/PRD.md', 'docs/plan.json'],
+      },
       { nodeId: 'd1' },
     );
     const a = assessBoundary([doc]);
@@ -669,7 +821,12 @@ describe('L1.5: regra (c) do semaforo so para writers de CODIGO', () => {
   });
 
   it('coder sem green-check => SEM VEREDITO; fixer idem; coder-codex/glm idem', () => {
-    for (const agentId of ['dynamic-workflow-coder', 'dynamic-workflow-coder-codex', 'dynamic-workflow-coder-glm', 'dynamic-workflow-fixer']) {
+    for (const agentId of [
+      'dynamic-workflow-coder',
+      'dynamic-workflow-coder-codex',
+      'dynamic-workflow-coder-glm',
+      'dynamic-workflow-fixer',
+    ]) {
       seq = 0;
       const a = assessBoundary([writerCompleted('u1', { agentId, touchedFiles: [] })]);
       expect(a.semaphore).toBe('SEM VEREDITO');
@@ -678,10 +835,22 @@ describe('L1.5: regra (c) do semaforo so para writers de CODIGO', () => {
 
   it('writer generico que tocou CODIGO (fora de docs/, nao .md/.txt/.json) exige green-check; so docs => nao', () => {
     seq = 0;
-    const code = ev('node-completed', { agentId: 'custom-writer', access: 'workspace-write', touchedFiles: ['docs/x.md', 'src/app.ts'] }, { nodeId: 'w1' });
+    const code = ev(
+      'node-completed',
+      { agentId: 'custom-writer', access: 'workspace-write', touchedFiles: ['docs/x.md', 'src/app.ts'] },
+      { nodeId: 'w1' },
+    );
     expect(assessBoundary([code]).semaphore).toBe('SEM VEREDITO');
     seq = 0;
-    const docsOnly = ev('node-completed', { agentId: 'custom-writer', access: 'workspace-write', touchedFiles: ['README.md', 'notes.txt', 'config/x.json'] }, { nodeId: 'w1' });
+    const docsOnly = ev(
+      'node-completed',
+      {
+        agentId: 'custom-writer',
+        access: 'workspace-write',
+        touchedFiles: ['README.md', 'notes.txt', 'config/x.json'],
+      },
+      { nodeId: 'w1' },
+    );
     expect(assessBoundary([docsOnly]).semaphore).toBe('VERDE');
     expect(isCodeFilePath('src/a.ts')).toBe(true);
     expect(isCodeFilePath('docs/a.ts')).toBe(false);

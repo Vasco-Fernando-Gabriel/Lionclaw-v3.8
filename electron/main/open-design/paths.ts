@@ -3,7 +3,6 @@ import fs from 'fs';
 import { app } from 'electron';
 import { resolveOpenDesignSidecar } from '../distribution-runtime';
 
-
 let cachedRoot: string | null = null;
 let cachedDataDir: string | null = null;
 

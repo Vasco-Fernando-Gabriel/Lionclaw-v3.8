@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 interface MockServer {
@@ -36,12 +35,7 @@ vi.mock('../logger', () => ({
 
 import { buildMcpToolIndex } from '../mcp-tool-index';
 
-
-function server(
-  id: string,
-  description: string,
-  indexMode: 'tools' | 'server' = 'tools',
-): MockServer {
+function server(id: string, description: string, indexMode: 'tools' | 'server' = 'tools'): MockServer {
   return { id, name: id, description, isActive: true, indexMode };
 }
 
@@ -194,16 +188,13 @@ describe('AC-10 (estatico) — indice compacto carrega sinal de selecao por caso
     for (const c of GOLDEN_SET) {
       const section = serverSection(index, c.expectedServer);
       expect(section, `secao do server ${c.expectedServer} (caso: "${c.prompt}")`).not.toBe('');
-      const line = section
-        .split('\n')
-        .find((l) => l.startsWith(`- ${c.expectedTool}: `));
+      const line = section.split('\n').find((l) => l.startsWith(`- ${c.expectedTool}: `));
       expect(line, `linha da tool ${c.expectedTool} (caso: "${c.prompt}")`).toBeDefined();
       const haystack = line!.toLowerCase();
       for (const trigger of c.triggers) {
-        expect(
-          haystack,
-          `termo-chave "${trigger}" na linha de ${c.expectedTool} (caso: "${c.prompt}")`,
-        ).toContain(trigger.toLowerCase());
+        expect(haystack, `termo-chave "${trigger}" na linha de ${c.expectedTool} (caso: "${c.prompt}")`).toContain(
+          trigger.toLowerCase(),
+        );
       }
     }
   });
@@ -226,9 +217,7 @@ describe('AC-10 (estatico) — indice compacto carrega sinal de selecao por caso
 
   it('baseline preservado: os termos-chave vem da MESMA description que o modo full carrega', () => {
     for (const c of GOLDEN_SET) {
-      const source = REGISTRY.find(
-        (e) => e.mcpId === c.expectedServer && e.toolName === c.expectedTool,
-      );
+      const source = REGISTRY.find((e) => e.mcpId === c.expectedServer && e.toolName === c.expectedTool);
       expect(source, `registro de ${c.expectedServer}/${c.expectedTool}`).toBeDefined();
       const full = `${source!.toolName}: ${source!.description}`.toLowerCase();
       for (const trigger of c.triggers) {
@@ -239,9 +228,7 @@ describe('AC-10 (estatico) — indice compacto carrega sinal de selecao por caso
 
   it("dial index_mode='server' (higgsfield): 1 linha discriminante + rota mcp_schema, sem linhas de tool", () => {
     const index = buildMcpToolIndex(INDEX_OPTS);
-    const line = index
-      .split('\n')
-      .find((l) => l.startsWith('higgsfield: '));
+    const line = index.split('\n').find((l) => l.startsWith('higgsfield: '));
     expect(line, 'linha unica do higgsfield').toBeDefined();
     expect(line!.toLowerCase()).toContain('video');
     expect(line!).toContain('2 tools via mcp_schema');
@@ -255,7 +242,6 @@ describe('AC-10 (estatico) — indice compacto carrega sinal de selecao por caso
     expect(index).toContain('mcp_schema(server, tool)');
   });
 });
-
 
 describe('AC-C10 — golden-set na superficie codex (chatSurface codex-sdk)', () => {
   it('indice codex carrega o MESMO sinal por caso (parity com o indice claude do set)', () => {
@@ -276,10 +262,7 @@ describe('AC-C10 — golden-set na superficie codex (chatSurface codex-sdk)', ()
         visibleTo: 'claude-only',
       },
     ];
-    state.registry = [
-      ...REGISTRY,
-      entry('claude-secret', 'secret_tool', 'Tool que o codex nao pode ver'),
-    ];
+    state.registry = [...REGISTRY, entry('claude-secret', 'secret_tool', 'Tool que o codex nao pode ver')];
     const codexIndex = buildMcpToolIndex({ ...INDEX_OPTS, chatSurface: 'codex-sdk' });
     expect(codexIndex).not.toContain('claude-secret');
     expect(codexIndex).not.toContain('secret_tool');

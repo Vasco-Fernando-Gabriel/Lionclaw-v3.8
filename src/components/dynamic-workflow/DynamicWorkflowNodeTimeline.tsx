@@ -1,17 +1,5 @@
 import { useMemo } from 'react';
-import {
-  Check,
-  X,
-  Loader2,
-  Minus,
-  Clock,
-  Pencil,
-  Eye,
-  Wrench,
-  Server,
-  RotateCcw,
-  ShieldCheck,
-} from 'lucide-react';
+import { Check, X, Loader2, Minus, Clock, Pencil, Eye, Wrench, Server, RotateCcw, ShieldCheck } from 'lucide-react';
 import type {
   DynamicWorkflowManifest,
   DynamicWorkflowNode,
@@ -20,7 +8,6 @@ import type {
 } from '@/types';
 import type { CockpitNodeRun } from '@/types/dynamic-workflow-cockpit';
 import { parseRoundIndex } from './WorkflowProgressBar';
-
 
 function parseStringArray(json: string | null | undefined): string[] {
   if (!json) return [];
@@ -40,13 +27,9 @@ export interface NodeRunSummary {
   runtime: string | null;
 }
 
-export function summarizeNodeRuns(
-  nodeId: string,
-  nodeRuns: DynamicWorkflowNodeRun[],
-): NodeRunSummary {
+export function summarizeNodeRuns(nodeId: string, nodeRuns: DynamicWorkflowNodeRun[]): NodeRunSummary {
   const runs = nodeRuns.filter((nr) => nr.nodeId === nodeId);
-  if (runs.length === 0)
-    return { status: 'pending', attempts: 0, costUsd: 0, runtime: null };
+  if (runs.length === 0) return { status: 'pending', attempts: 0, costUsd: 0, runtime: null };
   let latest = runs[0];
   let maxAttempt = runs[0].attempt;
   let costUsd = 0;
@@ -63,7 +46,6 @@ export function summarizeNodeRuns(
   };
 }
 
-
 interface EnforcementInfo {
   label: string;
   title: string;
@@ -76,8 +58,7 @@ export function enforcementForRuntime(runtime: string | null): EnforcementInfo |
     case 'minimax-tp':
       return {
         label: 'canUseTool (in-process)',
-        title:
-          'Permissoes aplicadas in-process pelo guard canUseTool (Claude/Claude-compat SDK).',
+        title: 'Permissoes aplicadas in-process pelo guard canUseTool (Claude/Claude-compat SDK).',
       };
     case 'codex':
       return {
@@ -88,8 +69,7 @@ export function enforcementForRuntime(runtime: string | null): EnforcementInfo |
     case 'kimi':
       return {
         label: 'CLI sem sandbox comprovado',
-        title:
-          'O Kimi CLI dirige o loop, mas o workflow bloqueia grants que dependam de sandbox ainda nao comprovado.',
+        title: 'O Kimi CLI dirige o loop, mas o workflow bloqueia grants que dependam de sandbox ainda nao comprovado.',
       };
     case 'grok':
       return {
@@ -107,7 +87,6 @@ export function enforcementForRuntime(runtime: string | null): EnforcementInfo |
       return null;
   }
 }
-
 
 export function shortNodeId(nodeId: string): string {
   if (!nodeId.includes(':')) return nodeId;
@@ -238,7 +217,6 @@ export function deriveExecutionGroups(
   }));
 }
 
-
 function formatCost(usd: number): string {
   if (!Number.isFinite(usd) || usd <= 0) return '$0.00';
   if (usd < 0.01) return `$${(usd * 100).toFixed(2)}c`;
@@ -275,12 +253,7 @@ function StatusIcon({ status }: { status: NodeRunSummary['status'] }) {
     case 'cancelled':
       return <Minus size={12} className="text-zinc-500" />;
     default:
-      return (
-        <span
-          className="inline-block w-2.5 h-2.5 rounded-full"
-          style={{ border: '1.5px dashed #52525b' }}
-        />
-      );
+      return <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ border: '1.5px dashed #52525b' }} />;
   }
 }
 
@@ -311,9 +284,7 @@ function ExecutionNodeCard({ view, phaseName }: { view: ExecutionNodeView; phase
   const tools = parseStringArray(node?.allowedToolsJson);
   const mcp = parseStringArray(node?.allowedMcpJson);
   const isWriter =
-    node?.access === 'workspace-write' ||
-    writeSet.length > 0 ||
-    typeof view.latest.worktreeCommitSha === 'string';
+    node?.access === 'workspace-write' || writeSet.length > 0 || typeof view.latest.worktreeCommitSha === 'string';
   const roundIdx = parseRoundIndex(view.nodeId);
   const enforcement = enforcementForRuntime(view.latest.runtime);
   const failed = view.status === 'failed' || view.status === 'blocked';
@@ -329,12 +300,8 @@ function ExecutionNodeCard({ view, phaseName }: { view: ExecutionNodeView; phase
           <div className="flex items-center gap-1.5">
             <StatusIcon status={view.status} />
             {/* Nome do node (label/papel) em sans; o id completo fica no title. */}
-            <span className="truncate text-[12px] font-medium text-zinc-200">
-              {view.displayName}
-            </span>
-            <span className="shrink-0 rounded bg-zinc-800/80 px-1 py-px text-[10px] text-zinc-400">
-              {phaseName}
-            </span>
+            <span className="truncate text-[12px] font-medium text-zinc-200">{view.displayName}</span>
+            <span className="shrink-0 rounded bg-zinc-800/80 px-1 py-px text-[10px] text-zinc-400">{phaseName}</span>
             {roundIdx !== null && (
               <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-300/80">
                 <RotateCcw size={8} />r{roundIdx + 1}
@@ -344,9 +311,7 @@ function ExecutionNodeCard({ view, phaseName }: { view: ExecutionNodeView; phase
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-zinc-400">
             <span>{statusLabel(view.status)}</span>
             <span className="font-mono text-zinc-500">#{view.latest.attempt}</span>
-            {view.attempts > 1 && (
-              <span className="font-mono text-zinc-500">{view.attempts} tentativas</span>
-            )}
+            {view.attempts > 1 && <span className="font-mono text-zinc-500">{view.attempts} tentativas</span>}
             {view.latest.agentId && view.displayName !== view.latest.agentId && (
               <span className="text-zinc-500">{view.latest.agentId}</span>
             )}
@@ -432,7 +397,6 @@ function ExecutionNodeCard({ view, phaseName }: { view: ExecutionNodeView; phase
   );
 }
 
-
 export interface DynamicWorkflowNodeTimelineProps {
   manifest: DynamicWorkflowManifest | null;
   nodes: DynamicWorkflowNode[];
@@ -452,17 +416,11 @@ export function DynamicWorkflowNodeTimeline({
     return nodeRuns.filter((nr) => allow.has(nr.nodeId));
   }, [nodeRuns, filterNodeIds]);
 
-  const groups = useMemo(
-    () => deriveExecutionGroups(visibleRuns, nodes, manifest),
-    [visibleRuns, nodes, manifest],
-  );
+  const groups = useMemo(() => deriveExecutionGroups(visibleRuns, nodes, manifest), [visibleRuns, nodes, manifest]);
 
   if (nodeRuns.length === 0) {
     return (
-      <div
-        className="flex flex-1 items-center justify-center text-[12px] text-zinc-400"
-        data-testid="execution-empty"
-      >
+      <div className="flex flex-1 items-center justify-center text-[12px] text-zinc-400" data-testid="execution-empty">
         Nenhum node executou ainda
       </div>
     );
@@ -470,9 +428,7 @@ export function DynamicWorkflowNodeTimeline({
 
   if (visibleRuns.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center text-[12px] text-zinc-400">
-        Nenhum node nesta rodada.
-      </div>
+      <div className="flex flex-1 items-center justify-center text-[12px] text-zinc-400">Nenhum node nesta rodada.</div>
     );
   }
 

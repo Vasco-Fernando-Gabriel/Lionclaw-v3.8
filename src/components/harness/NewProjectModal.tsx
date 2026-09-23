@@ -69,11 +69,7 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-zinc-100">Novo Projeto Harness</h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-zinc-800 text-zinc-400"
-            title="Fechar"
-          >
+          <button onClick={onClose} className="p-1 rounded hover:bg-zinc-800 text-zinc-400" title="Fechar">
             <X size={18} />
           </button>
         </div>
@@ -90,9 +86,7 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <label className="text-xs font-medium text-zinc-400 mb-1 block">
-              Descricao (opcional)
-            </label>
+            <label className="text-xs font-medium text-zinc-400 mb-1 block">Descricao (opcional)</label>
             <input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -102,9 +96,7 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <label className="text-xs font-medium text-zinc-400 mb-1 block">
-              Caminho do Projeto
-            </label>
+            <label className="text-xs font-medium text-zinc-400 mb-1 block">Caminho do Projeto</label>
             <div className="flex gap-2">
               <input
                 value={projectPath}
@@ -127,9 +119,7 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <label className="text-xs font-medium text-zinc-400 mb-1 block">
-              Arquivo da SPEC
-            </label>
+            <label className="text-xs font-medium text-zinc-400 mb-1 block">Arquivo da SPEC</label>
             <div className="flex gap-2">
               <input
                 value={specFilePath}
@@ -155,9 +145,7 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-zinc-400 mb-1 block">
-                Planner Agent
-              </label>
+              <label className="text-xs font-medium text-zinc-400 mb-1 block">Planner Agent</label>
               <select
                 value={plannerAgentId}
                 onChange={(e) => setPlannerAgentId(e.target.value)}
@@ -172,9 +160,7 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-zinc-400 mb-1 block">
-                Evaluator Agent
-              </label>
+              <label className="text-xs font-medium text-zinc-400 mb-1 block">Evaluator Agent</label>
               <select
                 value={evaluatorAgentId}
                 onChange={(e) => setEvaluatorAgentId(e.target.value)}
@@ -192,9 +178,7 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium text-zinc-400 mb-1 block">
-                Max Rounds / Sprint
-              </label>
+              <label className="text-xs font-medium text-zinc-400 mb-1 block">Max Rounds / Sprint</label>
               <input
                 type="number"
                 value={maxRounds}
@@ -205,9 +189,7 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-zinc-400 mb-1 block">
-                Stack (virgulas)
-              </label>
+              <label className="text-xs font-medium text-zinc-400 mb-1 block">Stack (virgulas)</label>
               <input
                 value={stack}
                 onChange={(e) => setStack(e.target.value)}
@@ -258,10 +240,7 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
-            >
+            <button onClick={onClose} className="px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 transition-colors">
               Cancelar
             </button>
             <button

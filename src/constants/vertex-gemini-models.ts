@@ -1,9 +1,4 @@
-
-export type VertexModelStage =
-  | 'Public preview'
-  | 'Preview'
-  | 'Current'
-  | 'Current legacy';
+export type VertexModelStage = 'Public preview' | 'Preview' | 'Current' | 'Current legacy';
 
 export interface VertexModelEntry {
   id: string;
@@ -89,5 +84,5 @@ export const VERTEX_MODEL_CATALOG: VertexModelEntry[] = [
 export const VERTEX_DEFAULT_MODEL = 'gemini-3-flash-preview';
 
 export function findVertexModel(id: string): VertexModelEntry | undefined {
-  return VERTEX_MODEL_CATALOG.find(m => m.id === id);
+  return VERTEX_MODEL_CATALOG.find((m) => m.id === id);
 }

@@ -22,6 +22,7 @@ import {
   resolveHarnessSprintArtifactDir,
 } from '../pipeline-paths';
 import { getPipelineDriveCoordinator } from '../pipeline-drive-coordinator';
+import { buildDriveStateChangedEvent } from '../drive-state-event';
 import { emitIPC } from '../pipeline-shared/ipc-emitter';
 
 const logger = createLogger('ipc');
@@ -116,23 +117,20 @@ export function registerHarnessHandlers(ctx: IpcContext): void {
     });
   });
 
-  ipcMain.handle(
-    'harness:regenerate-sprints',
-    (_event, projectId: string, feedback: string) => {
-      const project = getHarnessProject(projectId);
-      if (!project) return { error: 'Projeto nao encontrado' };
-      if (project.status !== 'reviewing') {
-        return {
-          error: `regenerate-sprints exige o projeto em 'reviewing' (atual: ${project.status})`,
-        };
-      }
-      return withHarnessEngine(getHarnessEngine, (engine) => {
-        engine.regenerate(projectId, feedback).catch((err) => {
-          markHarnessOperationFailed(projectId, err, 'Regenerate');
-        });
+  ipcMain.handle('harness:regenerate-sprints', (_event, projectId: string, feedback: string) => {
+    const project = getHarnessProject(projectId);
+    if (!project) return { error: 'Projeto nao encontrado' };
+    if (project.status !== 'reviewing') {
+      return {
+        error: `regenerate-sprints exige o projeto em 'reviewing' (atual: ${project.status})`,
+      };
+    }
+    return withHarnessEngine(getHarnessEngine, (engine) => {
+      engine.regenerate(projectId, feedback).catch((err) => {
+        markHarnessOperationFailed(projectId, err, 'Regenerate');
       });
-    },
-  );
+    });
+  });
 
   ipcMain.handle('harness:run', (_event, projectId: string) => {
     return withHarnessEngine(getHarnessEngine, (engine) => {
@@ -166,12 +164,11 @@ export function registerHarnessHandlers(ctx: IpcContext): void {
     if (engine) {
       try {
         engine.abort(projectId);
-      } catch {
-      }
+      } catch {}
     }
     getPipelineDriveCoordinator()?.stopDrive(projectId, 'project-deleted');
     deleteHarnessProject(projectId);
-    emitIPC('drive:state-changed', { projectId, drive: null });
+    emitIPC('drive:state-changed', buildDriveStateChangedEvent(projectId, null));
     logger.info({ projectId }, 'Harness project deleted via IPC');
   });
 
@@ -191,42 +188,28 @@ export function registerHarnessHandlers(ctx: IpcContext): void {
     return getHarnessRounds(sprintId);
   });
 
-  ipcMain.handle(
-    'harness:get-evaluation',
-    (_event, projectId: string, sprintId: string) => {
-      const project = getHarnessProject(projectId);
-      if (!project) return null;
-      const evalPath = path.join(
-        resolveHarnessSprintArtifactDir(project, sprintId),
-        'evaluation.json',
-      );
-      const legacyEvalPath = path.join(
-        getLegacyHarnessSprintArtifactDir(projectId, sprintId),
-        'evaluation.json',
-      );
-      const resolvedPath = fs.existsSync(evalPath) ? evalPath : legacyEvalPath;
-      try {
-        const content = fs.readFileSync(resolvedPath, 'utf-8');
-        return JSON.parse(content);
-      } catch {
-        return null;
-      }
-    },
-  );
+  ipcMain.handle('harness:get-evaluation', (_event, projectId: string, sprintId: string) => {
+    const project = getHarnessProject(projectId);
+    if (!project) return null;
+    const evalPath = path.join(resolveHarnessSprintArtifactDir(project, sprintId), 'evaluation.json');
+    const legacyEvalPath = path.join(getLegacyHarnessSprintArtifactDir(projectId, sprintId), 'evaluation.json');
+    const resolvedPath = fs.existsSync(evalPath) ? evalPath : legacyEvalPath;
+    try {
+      const content = fs.readFileSync(resolvedPath, 'utf-8');
+      return JSON.parse(content);
+    } catch {
+      return null;
+    }
+  });
 
-  ipcMain.handle(
-    'harness:get-sprint-json',
-    (_event, projectId: string, sprintJsonId: string) => {
-      const project = getHarnessProject(projectId);
-      if (!project) return null;
-      const sprintsJson = readHarnessSprintsJson(project);
-      if (!sprintsJson) return null;
-      const sprint = sprintsJson.sprints.find(
-        (s: { id: string }) => s.id === sprintJsonId,
-      );
-      return sprint ?? null;
-    },
-  );
+  ipcMain.handle('harness:get-sprint-json', (_event, projectId: string, sprintJsonId: string) => {
+    const project = getHarnessProject(projectId);
+    if (!project) return null;
+    const sprintsJson = readHarnessSprintsJson(project);
+    if (!sprintsJson) return null;
+    const sprint = sprintsJson.sprints.find((s: { id: string }) => s.id === sprintJsonId);
+    return sprint ?? null;
+  });
 
   ipcMain.handle('harness:get-sprints-json', (_event, projectId: string) => {
     const project = getHarnessProject(projectId);
@@ -238,39 +221,27 @@ export function registerHarnessHandlers(ctx: IpcContext): void {
     return getHarnessProjectMetrics(projectId);
   });
 
-  ipcMain.handle(
-    'harness:get-stream-log',
-    (_event, projectId: string, sprintId: string) => {
-      const engine = getHarnessEngine();
-      if (!engine) return { coder: [], evaluator: [], round: 0 };
-      return engine.getLatestStreamLogs(projectId, sprintId);
-    },
-  );
+  ipcMain.handle('harness:get-stream-log', (_event, projectId: string, sprintId: string) => {
+    const engine = getHarnessEngine();
+    if (!engine) return { coder: [], evaluator: [], round: 0 };
+    return engine.getLatestStreamLogs(projectId, sprintId);
+  });
 
-  ipcMain.handle(
-    'harness:get-feedback-audit',
-    (_event, projectId: string, sprintId: string) => {
-      const project = getHarnessProject(projectId);
-      if (!project) return [];
-      const filePath = path.join(
-        resolveHarnessSprintArtifactDir(project, sprintId),
-        'feedback-audit.jsonl',
-      );
-      const legacyFilePath = path.join(
-        getLegacyHarnessSprintArtifactDir(projectId, sprintId),
-        'feedback-audit.jsonl',
-      );
-      const resolvedPath = fs.existsSync(filePath) ? filePath : legacyFilePath;
-      if (!fs.existsSync(resolvedPath)) return [];
-      try {
-        return fs
-          .readFileSync(resolvedPath, 'utf-8')
-          .split('\n')
-          .filter((line) => line.trim())
-          .map((line) => JSON.parse(line));
-      } catch {
-        return [];
-      }
-    },
-  );
+  ipcMain.handle('harness:get-feedback-audit', (_event, projectId: string, sprintId: string) => {
+    const project = getHarnessProject(projectId);
+    if (!project) return [];
+    const filePath = path.join(resolveHarnessSprintArtifactDir(project, sprintId), 'feedback-audit.jsonl');
+    const legacyFilePath = path.join(getLegacyHarnessSprintArtifactDir(projectId, sprintId), 'feedback-audit.jsonl');
+    const resolvedPath = fs.existsSync(filePath) ? filePath : legacyFilePath;
+    if (!fs.existsSync(resolvedPath)) return [];
+    try {
+      return fs
+        .readFileSync(resolvedPath, 'utf-8')
+        .split('\n')
+        .filter((line) => line.trim())
+        .map((line) => JSON.parse(line));
+    } catch {
+      return [];
+    }
+  });
 }

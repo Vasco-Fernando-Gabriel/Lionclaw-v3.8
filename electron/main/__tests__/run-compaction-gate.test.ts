@@ -1,16 +1,13 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
-
 
 // eslint-disable-next-line no-var
 var TEST_TMP_DIR: string = path.join(os.tmpdir(), `compaction-gate-test-${process.pid}`);
 
 // eslint-disable-next-line no-var
 var mockSettings: Record<string, string | undefined> = {};
-
 
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
@@ -110,22 +107,15 @@ vi.mock('../lion-sdk/adapters/google-genai', () => ({
   createGoogleGenAiAdapter: vi.fn(),
 }));
 
-
-
 const COMPACTION_RESULT_WITH_CANDIDATES = JSON.stringify({
   executive_summary: 'Sessao de implementacao do Sprint 5',
   decisions: ['Usar gate obrigatorio no compaction'],
   tasks_created: [],
   facts: ['Gate integrado no runCompaction'],
-  semantic_chunks: [
-    { topic: 'Sprint 5', content: 'Integracao do dreaming gate' },
-  ],
+  semantic_chunks: [{ topic: 'Sprint 5', content: 'Integracao do dreaming gate' }],
   user_profile_updates: [],
   working_memory_updates: {
-    add: [
-      '[2026-05-24] Sprint 5 do dreaming gate concluido',
-      '[2026-05-24] runCompaction integrado com gate',
-    ],
+    add: ['[2026-05-24] Sprint 5 do dreaming gate concluido', '[2026-05-24] runCompaction integrado com gate'],
     remove: [],
   },
 });
@@ -136,15 +126,12 @@ const COMPACTION_WITH_USER_UPDATES = JSON.stringify({
   tasks_created: [],
   facts: [],
   semantic_chunks: [],
-  user_profile_updates: [
-    { action: 'add', section: 'Stack tecnologico', fact: 'TypeScript strict mode' },
-  ],
+  user_profile_updates: [{ action: 'add', section: 'Stack tecnologico', fact: 'TypeScript strict mode' }],
   working_memory_updates: {
     add: ['[2026-05-24] Candidato para quarentena'],
     remove: [],
   },
 });
-
 
 const mockRunDreamingGate = vi.fn();
 const mockSaveDreamingReport = vi.fn();
@@ -169,10 +156,8 @@ vi.mock('../lion-sdk/adapters/lmstudio', async () => ({
   })),
 }));
 
-
 import { runCompaction } from '../memory-pipeline';
-import { insertChunkPlainWithFTS, setLastGateRunAt } from '../db';
-
+import { insertChunkWithEmbedding, setLastGateRunAt } from '../db';
 
 function memPath(): string {
   return path.join(TEST_TMP_DIR, 'MEMORY.md');
@@ -189,13 +174,8 @@ function reportDir(): string {
 function createSkillMd(): void {
   const skillDir = path.join(TEST_TMP_DIR, 'skills', 'dreaming');
   fs.mkdirSync(skillDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(skillDir, 'SKILL.md'),
-    '# Dreaming\n## Regras de Auto-Apply\n- ADD com secao\n',
-    'utf-8',
-  );
+  fs.writeFileSync(path.join(skillDir, 'SKILL.md'), '# Dreaming\n## Regras de Auto-Apply\n- ADD com secao\n', 'utf-8');
 }
-
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -217,9 +197,7 @@ beforeEach(() => {
     yield { type: 'done' as const };
   });
 
-  mockSaveDreamingReport.mockResolvedValue(
-    path.join(reportDir(), '2026-05-24_120000_compaction-dreaming-report.md'),
-  );
+  mockSaveDreamingReport.mockResolvedValue(path.join(reportDir(), '2026-05-24_120000_compaction-dreaming-report.md'));
 });
 
 afterEach(() => {
@@ -227,7 +205,6 @@ afterEach(() => {
     fs.rmSync(TEST_TMP_DIR, { recursive: true, force: true });
   }
 });
-
 
 describe('Cenario 1: Sucesso completo do gate', () => {
   it('MEMORY.md e atualizado section-aware quando gate aprova candidatos', async () => {
@@ -248,11 +225,7 @@ describe('Cenario 1: Sucesso completo do gate', () => {
     };
     mockRunDreamingGate.mockResolvedValue(gateApplyResult);
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
     expect(mockRunDreamingGate).toHaveBeenCalledTimes(1);
 
@@ -269,10 +242,10 @@ describe('Cenario 1: Sucesso completo do gate', () => {
     expect(memContent).toContain('[2026-05-24] runCompaction integrado com gate');
 
     const lines = memContent.split('\n');
-    const idxDecisoes = lines.findIndex(l => l === '## Decisoes ativas');
-    const idxEstado = lines.findIndex(l => l === '## Estado de projetos');
-    const idxDecisaoEntry = lines.findIndex(l => l.includes('Sprint 5 do dreaming gate'));
-    const idxEstadoEntry = lines.findIndex(l => l.includes('runCompaction integrado'));
+    const idxDecisoes = lines.findIndex((l) => l === '## Decisoes ativas');
+    const idxEstado = lines.findIndex((l) => l === '## Estado de projetos');
+    const idxDecisaoEntry = lines.findIndex((l) => l.includes('Sprint 5 do dreaming gate'));
+    const idxEstadoEntry = lines.findIndex((l) => l.includes('runCompaction integrado'));
 
     expect(idxDecisaoEntry).toBeGreaterThan(idxDecisoes);
     expect(idxDecisaoEntry).toBeLessThan(idxEstado);
@@ -291,15 +264,11 @@ describe('Cenario 1: Sucesso completo do gate', () => {
     };
     mockRunDreamingGate.mockResolvedValue(gateApplyResult);
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
-    expect(insertChunkPlainWithFTS).toHaveBeenCalledTimes(1);
+    expect(insertChunkWithEmbedding).not.toHaveBeenCalled();
 
-    const dbMock = (await vi.importMock('../db') as { getDb: ReturnType<typeof vi.fn> }).getDb;
+    const dbMock = ((await vi.importMock('../db')) as { getDb: ReturnType<typeof vi.fn> }).getDb;
     const dbInstance = dbMock.mock.results[0]?.value as { prepare: ReturnType<typeof vi.fn> } | undefined;
     if (dbInstance) {
       expect(dbInstance.prepare).toHaveBeenCalled();
@@ -318,11 +287,7 @@ describe('Cenario 1: Sucesso completo do gate', () => {
     };
     mockRunDreamingGate.mockResolvedValue(gateApplyResult);
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
     expect(mockRunDreamingGate).toHaveBeenCalledTimes(1);
     const callInput = mockRunDreamingGate.mock.calls[0][0] as { conversationExcerpt: string };
@@ -341,11 +306,7 @@ describe('Cenario 1: Sucesso completo do gate', () => {
     };
     mockRunDreamingGate.mockResolvedValue(gateApplyResult);
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
     const callInput = mockRunDreamingGate.mock.calls[0][0] as {
       candidates: Array<{ kind: string; text: string }>;
@@ -359,21 +320,21 @@ describe('Cenario 1: Sucesso completo do gate', () => {
   });
 });
 
-
 describe('Cenario 2: Fail-safe do gate', () => {
   it('MEMORY.md NAO e tocado quando gate retorna failSafeTriggered=true', async () => {
     createSkillMd();
 
-    const originalMemContent = [
-      '## Decisoes ativas',
-      '- [2026-05-23] Decisao anterior',
-      '',
-      '## Workarounds e bugs conhecidos',
-      '',
-      '## Estado de projetos',
-      '',
-      '## Referencias externas',
-    ].join('\n') + '\n';
+    const originalMemContent =
+      [
+        '## Decisoes ativas',
+        '- [2026-05-23] Decisao anterior',
+        '',
+        '## Workarounds e bugs conhecidos',
+        '',
+        '## Estado de projetos',
+        '',
+        '## Referencias externas',
+      ].join('\n') + '\n';
     fs.writeFileSync(memPath(), originalMemContent, 'utf-8');
 
     const failSafeResult = {
@@ -389,11 +350,7 @@ describe('Cenario 2: Fail-safe do gate', () => {
     };
     mockRunDreamingGate.mockResolvedValue(failSafeResult);
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
     const finalMemContent = readMemory();
     expect(finalMemContent).toBe(originalMemContent);
@@ -417,11 +374,7 @@ describe('Cenario 2: Fail-safe do gate', () => {
     };
     mockRunDreamingGate.mockResolvedValue(failSafeResult);
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
     expect(mockSaveDreamingReport).toHaveBeenCalledTimes(1);
     expect(mockSaveDreamingReport).toHaveBeenCalledWith(
@@ -442,13 +395,9 @@ describe('Cenario 2: Fail-safe do gate', () => {
     };
     mockRunDreamingGate.mockResolvedValue(failSafeResult);
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
-    expect(insertChunkPlainWithFTS).toHaveBeenCalledTimes(1);
+    expect(insertChunkWithEmbedding).not.toHaveBeenCalled();
   });
 
   it('USER.md fica INTOCADO em fail-safe do gate (SPEC 12.2 / AC-48: passo direto morreu)', async () => {
@@ -476,11 +425,7 @@ describe('Cenario 2: Fail-safe do gate', () => {
     const originalUserMd = '# Sobre o Usuario\n';
     fs.writeFileSync(userPath, originalUserMd, 'utf-8');
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
     const userContent = fs.readFileSync(userPath, 'utf-8');
     expect(userContent).toBe(originalUserMd);
@@ -506,11 +451,7 @@ describe('Cenario 2: Fail-safe do gate', () => {
     };
     mockRunDreamingGate.mockResolvedValue(failSafeResult);
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
     const convDir = path.join(TEST_TMP_DIR, 'conversations');
     expect(fs.existsSync(convDir)).toBe(true);
@@ -542,18 +483,13 @@ describe('Cenario 2: Fail-safe do gate', () => {
       return '/tmp/report.md';
     });
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
     expect(callOrder.indexOf('gate')).toBeLessThan(callOrder.indexOf('save'));
     expect(callOrder).toContain('gate');
     expect(callOrder).toContain('save');
   });
 });
-
 
 describe('Cenario 3: Ordem e isolamento', () => {
   it('runDreamingGate e chamado dentro do lock (antes de saveDreamingReport)', async () => {
@@ -568,11 +504,7 @@ describe('Cenario 3: Ordem e isolamento', () => {
     };
     mockRunDreamingGate.mockResolvedValue(gateResult);
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
     expect(mockRunDreamingGate).toHaveBeenCalledTimes(1);
     expect(mockSaveDreamingReport).toHaveBeenCalledTimes(1);
@@ -593,11 +525,7 @@ describe('Cenario 3: Ordem e isolamento', () => {
     };
     mockRunDreamingGate.mockResolvedValue(specificGateResult);
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
     expect(mockSaveDreamingReport).toHaveBeenCalledWith(specificGateResult);
   });
@@ -605,7 +533,8 @@ describe('Cenario 3: Ordem e isolamento', () => {
   it('currentMemoryMd passado para gate reflete o MEMORY.md no disco', async () => {
     createSkillMd();
 
-    const preExistingContent = '## Decisoes ativas\n- [2026-05-23] Conteudo pre-existente\n\n## Workarounds e bugs conhecidos\n\n## Estado de projetos\n\n## Referencias externas\n';
+    const preExistingContent =
+      '## Decisoes ativas\n- [2026-05-23] Conteudo pre-existente\n\n## Workarounds e bugs conhecidos\n\n## Estado de projetos\n\n## Referencias externas\n';
     fs.writeFileSync(memPath(), preExistingContent, 'utf-8');
 
     const gateResult = {
@@ -617,17 +546,12 @@ describe('Cenario 3: Ordem e isolamento', () => {
     };
     mockRunDreamingGate.mockResolvedValue(gateResult);
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
     const callInput = mockRunDreamingGate.mock.calls[0][0] as { currentMemoryMd: string };
     expect(callInput.currentMemoryMd).toBe(preExistingContent);
   });
 });
-
 
 describe('Cenario 4: setLastGateRunAt chamado apos gate', () => {
   it('setLastGateRunAt e chamado com timestamp recente apos runCompaction bem-sucedido', async () => {
@@ -643,11 +567,7 @@ describe('Cenario 4: setLastGateRunAt chamado apos gate', () => {
     mockRunDreamingGate.mockResolvedValue(gateResult);
 
     const before = Date.now();
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
     const after = Date.now();
 
     expect(setLastGateRunAt).toHaveBeenCalledTimes(1);
@@ -669,16 +589,11 @@ describe('Cenario 4: setLastGateRunAt chamado apos gate', () => {
     };
     mockRunDreamingGate.mockResolvedValue(failSafeResult);
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
     expect(setLastGateRunAt).toHaveBeenCalledTimes(1);
   });
 });
-
 
 describe('Cenario 5: USER.md governado pelo gate (SPEC 12.2)', () => {
   function todayTag(): string {
@@ -734,11 +649,7 @@ describe('Cenario 5: USER.md governado pelo gate (SPEC 12.2)', () => {
       'utf-8',
     );
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
     const callInput = mockRunDreamingGate.mock.calls[0][0] as {
       userCandidates?: Array<{ action: string; section: string; fact: string }>;
@@ -772,11 +683,7 @@ describe('Cenario 5: USER.md governado pelo gate (SPEC 12.2)', () => {
     };
     mockRunDreamingGate.mockResolvedValue(gateResult);
 
-    await runCompaction(
-      new Date('2026-05-24T00:00:00.000Z'),
-      new Date('2026-05-24T12:00:00.000Z'),
-      'session-sprint5',
-    );
+    await runCompaction(new Date('2026-05-24T00:00:00.000Z'), new Date('2026-05-24T12:00:00.000Z'), 'session-sprint5');
 
     const callInput = mockRunDreamingGate.mock.calls[0][0] as Record<string, unknown>;
     expect('userCandidates' in callInput).toBe(false);

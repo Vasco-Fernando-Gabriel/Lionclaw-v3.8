@@ -54,12 +54,7 @@ interface KanbanState {
 
   createCard: (input: KanbanCardCreateInput) => Promise<boolean>;
   updateCard: (board: string, localId: number, patch: KanbanCardPatch) => Promise<boolean>;
-  moveCard: (
-    board: string,
-    localId: number,
-    toColumn: string,
-    reason?: string | null,
-  ) => Promise<boolean>;
+  moveCard: (board: string, localId: number, toColumn: string, reason?: string | null) => Promise<boolean>;
   deliverCard: (board: string, localId: number, commit: string) => Promise<boolean>;
   archiveCard: (board: string, localId: number) => Promise<boolean>;
   unarchiveCard: (board: string, localId: number) => Promise<boolean>;
@@ -183,8 +178,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
     set({ showArchived: v });
     void get().loadCards();
   },
-  clearFilters: () =>
-    set({ search: '', filterType: '', filterPriority: '', filterSeverity: '' }),
+  clearFilters: () => set({ search: '', filterType: '', filterPriority: '', filterSeverity: '' }),
 
   openCard: async (board, localId) => {
     const result = await window.lionclaw.kanban.getCard(board, localId);
@@ -200,10 +194,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
   refreshOpenCard: async () => {
     const detail = get().openCardDetail;
     if (!detail) return;
-    const result = await window.lionclaw.kanban.getCard(
-      detail.card.boardPrefix,
-      detail.card.localId,
-    );
+    const result = await window.lionclaw.kanban.getCard(detail.card.boardPrefix, detail.card.localId);
     if ('error' in result) {
       set({ openCardDetail: null });
       return;
@@ -232,11 +223,7 @@ export const useKanbanStore = create<KanbanState>((set, get) => ({
 
   deliverCard: async (board, localId, commit) => {
     const result = await window.lionclaw.kanban.deliverCard(board, localId, commit, null);
-    return surfaceWrite(
-      get,
-      result,
-      'Entrega registrada: commit preenchido, card em Testes aguardando validacao',
-    );
+    return surfaceWrite(get, result, 'Entrega registrada: commit preenchido, card em Testes aguardando validacao');
   },
 
   archiveCard: async (board, localId) => {

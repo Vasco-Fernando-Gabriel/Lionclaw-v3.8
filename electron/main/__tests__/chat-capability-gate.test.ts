@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const hoisted = vi.hoisted(() => {
@@ -51,10 +50,7 @@ import {
   __resetChatCapabilityContextForTests,
   type ChatCapabilityTurnContextInput,
 } from '../chat-capability-context';
-import {
-  createInternalCapabilityLease,
-  __resetInternalCapabilityLeasesForTests,
-} from '../chat-capability-lease';
+import { createInternalCapabilityLease, __resetInternalCapabilityLeasesForTests } from '../chat-capability-lease';
 
 const PIPELINE_SERVER = 'lionclaw-pipeline-control';
 const WORKFLOWS_SERVER = 'lionclaw-dynamic-workflows';
@@ -72,9 +68,7 @@ function setMode(mode: 'shadow' | 'enforce' | undefined): void {
   }
 }
 
-function seedTurn(
-  overrides?: Partial<ChatCapabilityTurnContextInput>,
-): { sessionId: string; turnId: string } {
+function seedTurn(overrides?: Partial<ChatCapabilityTurnContextInput>): { sessionId: string; turnId: string } {
   const sessionId = overrides?.sessionId ?? 'sess-1';
   const turnId = overrides?.turnId ?? 'turn-1';
   registerChatCapabilityTurn({
@@ -102,7 +96,6 @@ beforeEach(() => {
   __resetInternalCapabilityLeasesForTests();
 });
 
-
 describe('getChatCapabilityGateMode', () => {
   it('setting ausente -> shadow (DEFAULT)', () => {
     expect(getChatCapabilityGateMode()).toBe('shadow');
@@ -123,19 +116,15 @@ describe('getChatCapabilityGateMode', () => {
   });
 });
 
-
 describe('getChatCapabilityForServer', () => {
   it('mapeia os 2 helpers gated (com alias e case-insensitive) e nada mais', () => {
     expect(getChatCapabilityForServer(PIPELINE_SERVER)).toBe('pipelineControl');
     expect(getChatCapabilityForServer(WORKFLOWS_SERVER)).toBe('dynamicWorkflows');
     expect(getChatCapabilityForServer('pipeline-control')).toBe('pipelineControl');
-    expect(getChatCapabilityForServer(' LIONCLAW-PIPELINE-CONTROL ')).toBe(
-      'pipelineControl',
-    );
+    expect(getChatCapabilityForServer(' LIONCLAW-PIPELINE-CONTROL ')).toBe('pipelineControl');
     expect(getChatCapabilityForServer('google-gmail')).toBeUndefined();
   });
 });
-
 
 describe('server nao-gated', () => {
   it('ok em qualquer surface/modo, sem log de negaria', () => {
@@ -144,13 +133,12 @@ describe('server nao-gated', () => {
       assertChatCapability({
         serverId: 'google-gmail',
         toolName: 'send_email',
-        context: { surface: 'chat' },
+        context: { surface: 'chat', sessionId: 'sess-1', turnId: 'turn-1' },
       }),
     ).toEqual({ ok: true });
     expect(negariaLogs()).toHaveLength(0);
   });
 });
-
 
 describe('surface pipeline/harness/enrich', () => {
   it('ok mesmo com helper gated + enforce + sem turn-context', () => {
@@ -168,21 +156,18 @@ describe('surface pipeline/harness/enrich', () => {
   });
 });
 
-
 describe('surface chat', () => {
   it('capability OFF + shadow (DEFAULT) -> ok MAS loga "negaria {capability} em {server}.{tool}"', () => {
-    seedTurn(); // off/off
+    seedTurn();
     const result = assertChatCapability({
       serverId: PIPELINE_SERVER,
       toolName: 'pipeline_create',
-      context: { surface: 'chat' },
+      context: { surface: 'chat', sessionId: 'sess-1', turnId: 'turn-1' },
     });
     expect(result).toEqual({ ok: true });
     const logs = negariaLogs();
     expect(logs).toHaveLength(1);
-    expect(logs[0].msg).toContain(
-      'negaria pipelineControl em lionclaw-pipeline-control.pipeline_create',
-    );
+    expect(logs[0].msg).toContain('negaria pipelineControl em lionclaw-pipeline-control.pipeline_create');
     expect(logs[0].data['shadow']).toBe(true);
     expect(logs[0].data['code']).toBe('chat_capability_pipeline_disabled');
   });
@@ -193,7 +178,7 @@ describe('surface chat', () => {
     const result = assertChatCapability({
       serverId: PIPELINE_SERVER,
       toolName: 'pipeline_reply',
-      context: { surface: 'chat' },
+      context: { surface: 'chat', sessionId: 'sess-1', turnId: 'turn-1' },
     });
     expect(result).toEqual({
       ok: false,
@@ -209,7 +194,7 @@ describe('surface chat', () => {
     const result = assertChatCapability({
       serverId: WORKFLOWS_SERVER,
       toolName: 'dynamic_workflow_start',
-      context: { surface: 'chat' },
+      context: { surface: 'chat', sessionId: 'sess-1', turnId: 'turn-1' },
     });
     expect(result).toEqual({
       ok: false,
@@ -225,7 +210,7 @@ describe('surface chat', () => {
     const result = assertChatCapability({
       serverId: 'pipeline-control',
       toolName: 'pipeline_drive',
-      context: { surface: 'chat' },
+      context: { surface: 'chat', sessionId: 'sess-1', turnId: 'turn-1' },
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe('chat_capability_pipeline_disabled');
@@ -237,7 +222,7 @@ describe('surface chat', () => {
       assertChatCapability({
         serverId: PIPELINE_SERVER,
         toolName: 'pipeline_drive',
-        context: { surface: 'chat' },
+        context: { surface: 'chat', sessionId: 'sess-1', turnId: 'turn-1' },
       }),
     ).toEqual({ ok: true });
     setMode('enforce');
@@ -245,7 +230,7 @@ describe('surface chat', () => {
       assertChatCapability({
         serverId: WORKFLOWS_SERVER,
         toolName: 'dynamic_workflow_inspect',
-        context: { surface: 'chat' },
+        context: { surface: 'chat', sessionId: 'sess-1', turnId: 'turn-1' },
       }),
     ).toEqual({ ok: true });
     expect(negariaLogs()).toHaveLength(0);
@@ -273,7 +258,7 @@ describe('surface chat', () => {
     const result = assertChatCapability({
       serverId: PIPELINE_SERVER,
       toolName: 'pipeline_drive',
-      context: { surface: 'chat' },
+      context: { surface: 'chat', sessionId: 'sess-1', turnId: 'turn-1' },
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -287,7 +272,7 @@ describe('surface chat', () => {
     const result = assertChatCapability({
       serverId: WORKFLOWS_SERVER,
       toolName: 'dynamic_workflow_generate',
-      context: { surface: 'chat' },
+      context: { surface: 'chat', sessionId: 'sess-1', turnId: 'turn-1' },
     });
     expect(result).toEqual({ ok: true });
     const logs = negariaLogs();
@@ -310,17 +295,16 @@ describe('surface chat', () => {
       internalLeaseToken: token,
       driveProjectId: 'proj-1',
       driveTurnId: 'dt-1',
-    }); // toggles off/off
+    });
     expect(
       assertChatCapability({
         serverId: PIPELINE_SERVER,
         toolName: 'pipeline_reply',
-        context: { surface: 'chat' },
+        context: { surface: 'chat', sessionId: 'sess-1', turnId: 'turn-1' },
       }),
     ).toEqual({ ok: true });
   });
 });
-
 
 describe('surface system-event', () => {
   function leasedTurn(): { token: string } {
@@ -348,7 +332,7 @@ describe('surface system-event', () => {
       assertChatCapability({
         serverId: PIPELINE_SERVER,
         toolName: 'pipeline_approve',
-        context: { surface: 'system-event' },
+        context: { surface: 'system-event', sessionId: 'sess-1', turnId: 'turn-1' },
       }),
     ).toEqual({ ok: true });
   });
@@ -379,11 +363,11 @@ describe('surface system-event', () => {
 
   it('sem lease + enforce -> negado (AC-A19: origin sozinho NAO basta)', () => {
     setMode('enforce');
-    seedTurn({ origin: 'system-event' }); // sem token/driveIds
+    seedTurn({ origin: 'system-event' });
     const result = assertChatCapability({
       serverId: PIPELINE_SERVER,
       toolName: 'pipeline_drive',
-      context: { surface: 'system-event' },
+      context: { surface: 'system-event', sessionId: 'sess-1', turnId: 'turn-1' },
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe('chat_capability_lease_invalid');
@@ -400,16 +384,16 @@ describe('surface system-event', () => {
     const denied = assertChatCapability({
       serverId: PIPELINE_SERVER,
       toolName: 'pipeline_drive',
-      context: { surface: 'system-event' },
+      context: { surface: 'system-event', sessionId: 'sess-1', turnId: 'turn-1' },
     });
     expect(denied.ok).toBe(false);
 
-    setMode(undefined); // volta ao default shadow
+    setMode(undefined);
     hoisted.logEntries.length = 0;
     const shadowed = assertChatCapability({
       serverId: PIPELINE_SERVER,
       toolName: 'pipeline_drive',
-      context: { surface: 'system-event' },
+      context: { surface: 'system-event', sessionId: 'sess-1', turnId: 'turn-1' },
     });
     expect(shadowed).toEqual({ ok: true });
     expect(negariaLogs()).toHaveLength(1);
@@ -421,7 +405,7 @@ describe('surface system-event', () => {
     const result = assertChatCapability({
       serverId: PIPELINE_SERVER,
       toolName: 'dynamic_workflow_start', // lease so autoriza pipeline_*
-      context: { surface: 'system-event' },
+      context: { surface: 'system-event', sessionId: 'sess-1', turnId: 'turn-1' },
     });
     expect(result.ok).toBe(false);
   });
@@ -432,18 +416,17 @@ describe('surface system-event', () => {
     assertChatCapability({
       serverId: PIPELINE_SERVER,
       toolName: 'pipeline_reply',
-      context: { surface: 'system-event' },
+      context: { surface: 'system-event', sessionId: 'sess-1', turnId: 'turn-1' },
     });
     assertChatCapability({
       serverId: PIPELINE_SERVER,
       toolName: 'nao_autorizada',
-      context: { surface: 'system-event' },
+      context: { surface: 'system-event', sessionId: 'sess-1', turnId: 'turn-1' },
     });
     const serialized = JSON.stringify(hoisted.logEntries);
     expect(serialized).not.toContain(token);
   });
 });
-
 
 describe('S6b: shadow observa com dryRun (nao esgota a lease); enforce consome', () => {
   function leasedSystemEventTurn(maxUses: number): { token: string } {
@@ -468,14 +451,14 @@ describe('S6b: shadow observa com dryRun (nao esgota a lease); enforce consome',
   }
 
   it('shadow: N observacoes would-allow NAO consomem o unico uso; o enforce posterior ainda passa e consome', () => {
-    leasedSystemEventTurn(1); // um UNICO uso na lease
+    leasedSystemEventTurn(1);
 
     for (let i = 0; i < 5; i++) {
       expect(
         assertChatCapability({
           serverId: PIPELINE_SERVER,
           toolName: 'pipeline_reply',
-          context: { surface: 'system-event' },
+          context: { surface: 'system-event', sessionId: 'sess-1', turnId: 'turn-1' },
         }),
       ).toEqual({ ok: true });
     }
@@ -485,14 +468,14 @@ describe('S6b: shadow observa com dryRun (nao esgota a lease); enforce consome',
       assertChatCapability({
         serverId: PIPELINE_SERVER,
         toolName: 'pipeline_reply',
-        context: { surface: 'system-event' },
+        context: { surface: 'system-event', sessionId: 'sess-1', turnId: 'turn-1' },
       }),
     ).toEqual({ ok: true });
 
     const denied = assertChatCapability({
       serverId: PIPELINE_SERVER,
       toolName: 'pipeline_reply',
-      context: { surface: 'system-event' },
+      context: { surface: 'system-event', sessionId: 'sess-1', turnId: 'turn-1' },
     });
     expect(denied.ok).toBe(false);
     if (!denied.ok) expect(denied.code).toBe('chat_capability_lease_invalid');
@@ -506,7 +489,7 @@ describe('S6b: shadow observa com dryRun (nao esgota a lease); enforce consome',
         assertChatCapability({
           serverId: PIPELINE_SERVER,
           toolName: 'pipeline_drive',
-          context: { surface: 'chat' },
+          context: { surface: 'chat', sessionId: 'sess-1', turnId: 'turn-1' },
         }),
       ).toEqual({ ok: true });
     }
@@ -517,7 +500,7 @@ describe('S6b: shadow observa com dryRun (nao esgota a lease); enforce consome',
       assertChatCapability({
         serverId: PIPELINE_SERVER,
         toolName: 'pipeline_drive',
-        context: { surface: 'chat' },
+        context: { surface: 'chat', sessionId: 'sess-1', turnId: 'turn-1' },
       }),
     ).toEqual({ ok: true });
   });
@@ -530,25 +513,24 @@ describe('S6b: shadow observa com dryRun (nao esgota a lease); enforce consome',
       assertChatCapability({
         serverId: PIPELINE_SERVER,
         toolName: 'pipeline_reply',
-        context: { surface: 'system-event' },
+        context: { surface: 'system-event', sessionId: 'sess-1', turnId: 'turn-1' },
       }),
     ).toEqual({ ok: true });
     expect(
       assertChatCapability({
         serverId: PIPELINE_SERVER,
         toolName: 'pipeline_approve',
-        context: { surface: 'system-event' },
+        context: { surface: 'system-event', sessionId: 'sess-1', turnId: 'turn-1' },
       }),
     ).toEqual({ ok: true });
     const denied = assertChatCapability({
       serverId: PIPELINE_SERVER,
       toolName: 'pipeline_reply',
-      context: { surface: 'system-event' },
+      context: { surface: 'system-event', sessionId: 'sess-1', turnId: 'turn-1' },
     });
     expect(denied.ok).toBe(false);
   });
 });
-
 
 describe('OBS-1: iteracao da enum (lease via context, sem coordinator gravado)', () => {
   it('lease valida do ULTIMO coordinator da enum -> ok SEM warn "lease interna NEGADA" por tentativa (intermediarias em debug)', () => {
@@ -576,9 +558,7 @@ describe('OBS-1: iteracao da enum (lease via context, sem coordinator gravado)',
       }),
     ).toEqual({ ok: true });
 
-    const negadaWarns = hoisted.logEntries.filter(
-      (e) => e.level === 'warn' && e.msg.includes('lease interna NEGADA'),
-    );
+    const negadaWarns = hoisted.logEntries.filter((e) => e.level === 'warn' && e.msg.includes('lease interna NEGADA'));
     expect(negadaWarns).toHaveLength(0);
     const negadaDebugs = hoisted.logEntries.filter(
       (e) => e.level === 'debug' && e.msg.includes('lease interna NEGADA'),
@@ -602,14 +582,11 @@ describe('OBS-1: iteracao da enum (lease via context, sem coordinator gravado)',
     });
     expect(result.ok).toBe(false);
 
-    const negadaWarns = hoisted.logEntries.filter(
-      (e) => e.level === 'warn' && e.msg.includes('lease interna NEGADA'),
-    );
+    const negadaWarns = hoisted.logEntries.filter((e) => e.level === 'warn' && e.msg.includes('lease interna NEGADA'));
     expect(negadaWarns).toHaveLength(1);
     expect(negadaWarns[0].msg).toContain('nenhum coordinator da enum fechada validou');
   });
 });
-
 
 describe('failClosedChatCapability', () => {
   it('enforce -> nega com no-turn-context; shadow -> ok + loga; nao-gated -> ok', () => {

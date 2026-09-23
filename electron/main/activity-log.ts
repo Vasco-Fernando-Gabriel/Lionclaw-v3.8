@@ -1,4 +1,4 @@
-import { upsertActivityLog, getActiveChatSession } from './db';
+import { upsertActivityLog } from './db';
 import { createLogger } from './logger';
 import {
   deriveMcpGatewayDisplayName,
@@ -23,10 +23,7 @@ function fallbackStatusForPhase(phase: LiveActivityPhase): LiveActivityStatus {
 function normalizeActivityEvent(ev: LiveActivityEvent): LiveActivityEvent {
   const phase = ev.phase ?? 'update';
   const kind = ev.kind ?? ('tool' satisfies LiveActivityKind);
-  let label =
-    ev.label ??
-    ev.toolName ??
-    (typeof ev.agentId === 'string' && ev.agentId ? ev.agentId : ev.id);
+  let label = ev.label ?? ev.toolName ?? (typeof ev.agentId === 'string' && ev.agentId ? ev.agentId : ev.id);
 
   if (
     (ev.toolName === GATEWAY_INVOKE_TOOL_NAME || ev.toolName === GATEWAY_SCHEMA_TOOL_NAME) &&
@@ -71,13 +68,19 @@ export function recordSystemActivity(input: {
   description: string;
   model?: string;
   status?: LiveActivityStatus;
+  sessionId?: string;
 }): void {
   try {
-    const active = getActiveChatSession();
-    if (!active) {
+    const activeId = input.sessionId;
+    if (!activeId) {
       logger.info(
-        { activityId: input.id, label: input.label, description: input.description },
-        'recordSystemActivity: sem sessao de chat ativa; skip registrado so no log',
+        {
+          activityId: input.id,
+          label: input.label,
+          description: input.description,
+          status: input.status ?? 'done',
+        },
+        'recordSystemActivity: atividade global (sem sessao); registrada so no log',
       );
       return;
     }
@@ -91,16 +94,13 @@ export function recordSystemActivity(input: {
       turnIndex: 0,
       ...(input.model ? { model: input.model } : {}),
     };
-    upsertActivityLog(active.id, 0, normalizeActivityEvent(ev));
+    upsertActivityLog(activeId, 0, normalizeActivityEvent(ev));
     logger.info(
-      { sessionId: active.id, activityId: input.id, label: input.label },
+      { sessionId: activeId, activityId: input.id, label: input.label },
       'recordSystemActivity: skip registrado no Activity Log',
     );
   } catch (error) {
-    logger.warn(
-      { error, activityId: input.id },
-      'recordSystemActivity falhou (skip so no log; nada bloqueado)',
-    );
+    logger.warn({ error, activityId: input.id }, 'recordSystemActivity falhou (skip so no log; nada bloqueado)');
   }
 }
 

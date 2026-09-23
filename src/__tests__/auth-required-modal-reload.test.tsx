@@ -3,10 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HarnessProject } from '@/types';
-import {
-  authRequiredPayloadFromProject,
-  CodexAuthRequiredModal,
-} from '@/components/pipeline/CodexAuthRequiredModal';
+import { authRequiredPayloadFromProject, CodexAuthRequiredModal } from '@/components/pipeline/CodexAuthRequiredModal';
 import { SprintList } from '@/components/harness/SprintList';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -85,16 +82,18 @@ beforeEach(() => {
       listProjects,
       resumeAfterAuth,
       abort: vi.fn(),
-      getSprints: vi.fn(async () => [{
-        id: 'sprint-1',
-        projectId: 'project-reloaded',
-        sprintIndex: 0,
-        sprintJsonId: 'sprint-json-1',
-        name: 'Sprint 1',
-        status: 'interrupted',
-        roundsUsed: 1,
-        maxRounds: 2,
-      }]),
+      getSprints: vi.fn(async () => [
+        {
+          id: 'sprint-1',
+          projectId: 'project-reloaded',
+          sprintIndex: 0,
+          sprintJsonId: 'sprint-json-1',
+          name: 'Sprint 1',
+          status: 'interrupted',
+          roundsUsed: 1,
+          maxRounds: 2,
+        },
+      ]),
       onSprintUpdate: vi.fn(() => vi.fn()),
       onPlanningDone: vi.fn(() => vi.fn()),
     },
@@ -148,13 +147,13 @@ describe('CodexAuthRequiredModal apos reload', () => {
     expect(container.textContent).toContain('Kimi desconectado');
     expect(container.textContent).toContain('checkpoint salvo');
 
-    const verify = [...container.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Verificar autenticacao');
+    const verify = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Verificar autenticacao',
+    );
     if (!verify) throw new Error('botao Verificar autenticacao nao encontrado');
     await act(async () => verify.click());
 
-    const resume = [...container.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Retomar harness');
+    const resume = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Retomar harness');
     if (!resume) throw new Error('botao Retomar harness nao encontrado');
     await act(async () => resume.click());
 
@@ -174,8 +173,9 @@ describe('CodexAuthRequiredModal apos reload', () => {
       );
     });
 
-    const resume = [...container.querySelectorAll('button')]
-      .find((button) => button.textContent === 'Retomar com Grok Build');
+    const resume = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Retomar com Grok Build',
+    );
     if (!resume) throw new Error('acao provider-aware de recovery nao encontrada');
     await act(async () => resume.click());
 

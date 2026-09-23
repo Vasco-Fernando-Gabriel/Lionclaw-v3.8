@@ -1,6 +1,4 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-
 
 const h = vi.hoisted(() => {
   type ExecutorMock = (...args: unknown[]) => Promise<undefined>;
@@ -32,7 +30,6 @@ const h = vi.hoisted(() => {
 });
 
 const InvalidOrchestratorSelectionError = h.InvalidOrchestratorSelectionError;
-
 
 vi.mock('../logger', () => ({
   createLogger: () => ({
@@ -89,6 +86,8 @@ vi.mock('../lion-sdk', () => ({
 }));
 
 vi.mock('../db', () => ({
+  threadIdOf: (s: { id: string; sdkSessionId?: string | null }) => s.sdkSessionId ?? s.id,
+  getSessionOrchestrator: () => null,
   getAllAgents: () => [],
   getAgent: () => undefined,
   insertMessage: vi.fn(() => 1),
@@ -172,7 +171,6 @@ vi.mock('../prompt-builder-repo-graph', () => ({
   buildRepoGraphSubagentSection: () => '',
 }));
 
-
 import {
   submitMessage,
   executeTelegramLaneQuery,
@@ -190,8 +188,7 @@ function makeCapturingGetWindow() {
 
 function okQueryResult() {
   return {
-    async *[Symbol.asyncIterator]() {
-    },
+    async *[Symbol.asyncIterator]() {},
     toggleMcpServer: async () => {},
   };
 }
@@ -212,7 +209,6 @@ beforeEach(() => {
   resetCronSessionState();
 });
 
-
 describe('processQueue: erro tipado do resolver emite chunk e a fila segue (SPEC 2.2)', () => {
   it('desktop: mensagem 1 falha com orchestrator_unconfigured (chunk emitido), mensagem 2 despacha', async () => {
     h.resolveMock
@@ -226,8 +222,8 @@ describe('processQueue: erro tipado do resolver emite chunk e a fila segue (SPEC
       .mockResolvedValue(claudeSelection);
 
     const getWindow = makeCapturingGetWindow();
-    submitMessage('primeira (vai falhar)', {}, getWindow);
-    submitMessage('segunda (deve rodar)', {}, getWindow);
+    submitMessage('primeira (vai falhar)', { sessionId: 'd-s2' }, getWindow);
+    submitMessage('segunda (deve rodar)', { sessionId: 'd-s2' }, getWindow);
 
     await vi.waitFor(() => expect(h.queryMock).toHaveBeenCalledTimes(1));
 
@@ -245,7 +241,6 @@ describe('processQueue: erro tipado do resolver emite chunk e a fila segue (SPEC
   });
 });
 
-
 describe('despacho por lane (S3): lane nao-desktop despacha qualquer runtime', () => {
   it('telegram + runtime codex-sdk DESPACHA ao executor do codex com a telegram lane', async () => {
     h.resolveMock.mockResolvedValue({
@@ -256,11 +251,7 @@ describe('despacho por lane (S3): lane nao-desktop despacha qualquer runtime', (
     });
 
     const getWindow = makeCapturingGetWindow();
-    await executeTelegramLaneQuery(
-      'oi do telegram',
-      { sessionId: 't-gate', silent: true },
-      getWindow,
-    );
+    await executeTelegramLaneQuery('oi do telegram', { sessionId: 't-gate', silent: true }, getWindow);
 
     expect(h.codexExecMock).toHaveBeenCalledTimes(1);
     const call = h.codexExecMock.mock.calls[0]!;
@@ -282,11 +273,7 @@ describe('despacho por lane (S3): lane nao-desktop despacha qualquer runtime', (
     });
 
     const getWindow = makeCapturingGetWindow();
-    await executeTelegramLaneQuery(
-      'oi do telegram',
-      { sessionId: 't-compat', silent: true },
-      getWindow,
-    );
+    await executeTelegramLaneQuery('oi do telegram', { sessionId: 't-compat', silent: true }, getWindow);
 
     expect(h.compatExecMock).toHaveBeenCalledTimes(1);
     const call = h.compatExecMock.mock.calls[0]!;
@@ -300,11 +287,7 @@ describe('despacho por lane (S3): lane nao-desktop despacha qualquer runtime', (
     h.resolveMock.mockResolvedValue(claudeSelection);
 
     const getWindow = makeCapturingGetWindow();
-    await executeTelegramLaneQuery(
-      'oi do telegram',
-      { sessionId: 't-ok', silent: true },
-      getWindow,
-    );
+    await executeTelegramLaneQuery('oi do telegram', { sessionId: 't-ok', silent: true }, getWindow);
 
     expect(h.queryMock).toHaveBeenCalledTimes(1);
     expect(h.codexExecMock).not.toHaveBeenCalled();

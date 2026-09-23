@@ -4,7 +4,6 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { google, gmail_v1 } from 'googleapis';
 
-
 let gmailApi: gmail_v1.Gmail;
 
 function initGmail(): void {
@@ -29,7 +28,6 @@ function initGmail(): void {
   gmailApi = google.gmail({ version: 'v1', auth: oauth2Client });
 }
 
-
 function extractBody(payload: gmail_v1.Schema$MessagePart): string {
   if (payload.body?.data) {
     return Buffer.from(payload.body.data, 'base64url').toString('utf-8');
@@ -51,13 +49,8 @@ function extractBody(payload: gmail_v1.Schema$MessagePart): string {
   return '';
 }
 
-function getHeader(
-  headers: gmail_v1.Schema$MessagePartHeader[] | undefined,
-  name: string,
-): string {
-  return (
-    headers?.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || ''
-  );
+function getHeader(headers: gmail_v1.Schema$MessagePartHeader[] | undefined, name: string): string {
+  return headers?.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
 }
 
 function createRawEmail(opts: {
@@ -80,12 +73,7 @@ function createRawEmail(opts: {
     `Subject: ${opts.subject}`,
     'MIME-Version: 1.0',
     `Content-Type: ${contentType}; charset=utf-8`,
-    ...(opts.inReplyTo
-      ? [
-          `In-Reply-To: ${opts.inReplyTo}`,
-          `References: ${opts.references || opts.inReplyTo}`,
-        ]
-      : []),
+    ...(opts.inReplyTo ? [`In-Reply-To: ${opts.inReplyTo}`, `References: ${opts.references || opts.inReplyTo}`] : []),
     '',
     opts.body,
   ];
@@ -106,12 +94,7 @@ function formatMessageSummary(msg: gmail_v1.Schema$Message): object {
   };
 }
 
-
-const server = new Server(
-  { name: 'google-gmail', version: '1.0.0' },
-  { capabilities: { tools: {} } },
-);
-
+const server = new Server({ name: 'google-gmail', version: '1.0.0' }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
@@ -134,16 +117,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           label_ids: {
             type: 'array',
             items: { type: 'string' },
-            description:
-              'Lista de IDs de labels para filtrar (ex: ["INBOX", "UNREAD"]). Padrao: apenas INBOX.',
+            description: 'Lista de IDs de labels para filtrar (ex: ["INBOX", "UNREAD"]). Padrao: apenas INBOX.',
           },
         },
       },
     },
     {
       name: 'get_message',
-      description:
-        'Le o conteudo completo de um email pelo seu ID, incluindo corpo, cabecalhos e metadata.',
+      description: 'Le o conteudo completo de um email pelo seu ID, incluindo corpo, cabecalhos e metadata.',
       inputSchema: {
         type: 'object' as const,
         required: ['message_id'],
@@ -240,8 +221,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           reply_all: {
             type: 'boolean',
-            description:
-              'Se true, responde para todos os destinatarios originais (Reply All). Padrao: false.',
+            description: 'Se true, responde para todos os destinatarios originais (Reply All). Padrao: false.',
           },
         },
       },
@@ -336,8 +316,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'trash_message',
-      description:
-        'Move uma mensagem para a lixeira. A mensagem pode ser recuperada dentro de 30 dias.',
+      description: 'Move uma mensagem para a lixeira. A mensagem pode ser recuperada dentro de 30 dias.',
       inputSchema: {
         type: 'object' as const,
         required: ['message_id'],
@@ -391,7 +370,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
   ],
 }));
-
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (!gmailApi) {
@@ -469,11 +447,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [
               {
                 type: 'text' as const,
-                text: JSON.stringify(
-                  { id: msg.id, threadId: msg.threadId, labelIds: msg.labelIds },
-                  null,
-                  2,
-                ),
+                text: JSON.stringify({ id: msg.id, threadId: msg.threadId, labelIds: msg.labelIds }, null, 2),
               },
             ],
           };
@@ -549,11 +523,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [
             {
               type: 'text' as const,
-              text: JSON.stringify(
-                { query, total: summaries.length, messages: summaries },
-                null,
-                2,
-              ),
+              text: JSON.stringify({ query, total: summaries.length, messages: summaries }, null, 2),
             },
           ],
         };
@@ -620,9 +590,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const originalMessageId = getHeader(originalHeaders, 'message-id');
         const originalReferences = getHeader(originalHeaders, 'references');
 
-        const replySubject = originalSubject.startsWith('Re:')
-          ? originalSubject
-          : `Re: ${originalSubject}`;
+        const replySubject = originalSubject.startsWith('Re:') ? originalSubject : `Re: ${originalSubject}`;
 
         const profileRes = await gmailApi.users.getProfile({ userId: 'me' });
         const ownEmail = profileRes.data.emailAddress ?? '';
@@ -640,9 +608,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           cc = allRecipients.join(', ') || undefined;
         }
 
-        const references = originalReferences
-          ? `${originalReferences} ${originalMessageId}`
-          : originalMessageId;
+        const references = originalReferences ? `${originalReferences} ${originalMessageId}` : originalMessageId;
 
         const raw = createRawEmail({
           to,
@@ -700,9 +666,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const originalTo = getHeader(originalHeaders, 'to');
         const originalBody = original.payload ? extractBody(original.payload) : '';
 
-        const fwdSubject = originalSubject.startsWith('Fwd:')
-          ? originalSubject
-          : `Fwd: ${originalSubject}`;
+        const fwdSubject = originalSubject.startsWith('Fwd:') ? originalSubject : `Fwd: ${originalSubject}`;
 
         const forwardedBlock = [
           '',
@@ -820,11 +784,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [
             {
               type: 'text' as const,
-              text: JSON.stringify(
-                { success: true, markedRead: messageIds.length, messageIds },
-                null,
-                2,
-              ),
+              text: JSON.stringify({ success: true, markedRead: messageIds.length, messageIds }, null, 2),
             },
           ],
         };
@@ -847,11 +807,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [
             {
               type: 'text' as const,
-              text: JSON.stringify(
-                { success: true, markedUnread: messageIds.length, messageIds },
-                null,
-                2,
-              ),
+              text: JSON.stringify({ success: true, markedUnread: messageIds.length, messageIds }, null, 2),
             },
           ],
         };
@@ -959,9 +915,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       default:
         return {
-          content: [
-            { type: 'text' as const, text: `Erro Gmail: tool desconhecida "${name}"` },
-          ],
+          content: [{ type: 'text' as const, text: `Erro Gmail: tool desconhecida "${name}"` }],
           isError: true,
         };
     }
@@ -973,7 +927,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   }
 });
-
 
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();

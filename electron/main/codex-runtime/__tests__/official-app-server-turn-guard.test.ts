@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../logger', () => ({
@@ -13,9 +12,7 @@ const bridge = vi.hoisted(() => ({
     appServerSupported: true,
     binaryPath: '/usr/local/bin/codex',
   }),
-  isCodexAvailable: vi
-    .fn()
-    .mockResolvedValue({ installed: true, version: '0.140.0', authenticated: true }),
+  isCodexAvailable: vi.fn().mockResolvedValue({ installed: true, version: '0.140.0', authenticated: true }),
   CodexUnavailableError: class CodexUnavailableError extends Error {
     constructor(m: string) {
       super(m);
@@ -181,9 +178,7 @@ describe('BUG 4 - guard one-in-flight do handle (send/reply)', () => {
     const pA = handle.reply('turno A', { onText });
 
     const onTextB = vi.fn();
-    await expect(handle.reply('turno B', { onText: onTextB })).rejects.toBeInstanceOf(
-      CodexTurnInFlightError,
-    );
+    await expect(handle.reply('turno B', { onText: onTextB })).rejects.toBeInstanceOf(CodexTurnInFlightError);
     expect(onTextB).not.toHaveBeenCalled();
 
     t.emit({ method: 'item/agentMessage/delta', params: { delta: 'Ent' } });
@@ -249,6 +244,9 @@ describe('BUG 4 - guard one-in-flight do handle (send/reply)', () => {
     const pA = handle.send('longo', {}, ac.signal);
     await new Promise((r) => setTimeout(r, 0));
     ac.abort();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(guardHeld(handle)).toBe(true);
+    t.emit({ method: 'turn/completed', params: { turn: { status: 'interrupted' } } });
     await pA;
     expect(guardHeld(handle)).toBe(false);
 

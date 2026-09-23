@@ -1,4 +1,3 @@
-
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
 vi.mock('../../logger', () => ({
@@ -75,26 +74,22 @@ describe('Ollama adapter - S5.1 usage emission', () => {
 
   it('emits usage with zero counts when prompt_eval_count and eval_count are absent from done line', async () => {
     globalThis.fetch = vi.fn(async () =>
-      makeNdjsonResponse([
-        JSON.stringify({ message: { content: 'x' } }),
-        JSON.stringify({ done: true }),
-      ]),
+      makeNdjsonResponse([JSON.stringify({ message: { content: 'x' } }), JSON.stringify({ done: true })]),
     ) as unknown as typeof globalThis.fetch;
 
     const adapter = createOllamaAdapter({ baseUrl: 'http://localhost:11434' });
     const events = await collect(adapter);
 
     const u = events.find((e) => e.type === 'usage') as
-      | { type: 'usage'; usage: { inputTokens: number; outputTokens: number } }
-      | undefined;
+      { type: 'usage'; usage: { inputTokens: number; outputTokens: number } } | undefined;
     expect(u).toBeDefined();
     expect(u!.usage.inputTokens).toBe(0);
     expect(u!.usage.outputTokens).toBe(0);
   });
 
   it('does not emit usage when stream errors before done line', async () => {
-    globalThis.fetch = vi.fn(async () =>
-      new Response('internal error', { status: 500 }),
+    globalThis.fetch = vi.fn(
+      async () => new Response('internal error', { status: 500 }),
     ) as unknown as typeof globalThis.fetch;
 
     const adapter = createOllamaAdapter({ baseUrl: 'http://localhost:11434' });

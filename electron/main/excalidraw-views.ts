@@ -1,4 +1,3 @@
-
 interface ExcalidrawViewData {
   elements: unknown[];
   appState: Record<string, unknown>;

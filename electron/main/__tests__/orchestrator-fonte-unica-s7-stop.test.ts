@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
@@ -100,13 +99,16 @@ vi.mock('../agent-runtime/codex-session-factory', () => ({
   })),
 }));
 vi.mock('../codex-sdk/stream-translator', () => ({
-  createCodexStreamTranslator: () => ({ callbacks: {}, finalize: vi.fn(), fail: vi.fn() }),
+  createCodexStreamTranslator: () => ({ callbacks: {}, finalize: vi.fn(), fail: vi.fn(), timelineEvents: () => [] }),
 }));
 
 import { isClaudeCompatQueryActive } from '../claude-compat-sdk';
 import { executeCodexSdkQuery, isCodexSdkQueryActive } from '../codex-sdk';
 import { stopCurrentQuery } from '../orchestrator';
-import { telegramLane, desktopLane, type SdkLane } from '../sdk-lane';
+import { telegramLane, type SdkLane } from '../sdk-lane';
+import { getDesktopLane } from '../desktop-lanes';
+
+const desktopLane = getDesktopLane('d-codex');
 import type { OrchestratorSelection } from '../orchestrator-selection';
 import { CodexAuthError } from '../codex-runtime/errors';
 
@@ -125,17 +127,17 @@ beforeEach(() => {
   codexSendImpl = async () => ({ status: 'completed', threadId: 'thread-1', content: 'ok', usage: { totalTokens: 1 } });
 });
 
-
 describe('AC-7/AC-15: stopCurrentQuery (desktop) nao mata turno em voo do telegram', () => {
   it('Codex owner converte auth propagada no motivo do abort em erro tipado de chat', async () => {
     codexSendImpl = (_prompt, _callbacks, signal) =>
       new Promise((resolve) => {
-        const cancelled = () => resolve({
-          status: 'cancelled',
-          threadId: 'thread-auth',
-          content: '',
-          usage: { totalTokens: 0 },
-        });
+        const cancelled = () =>
+          resolve({
+            status: 'cancelled',
+            threadId: 'thread-auth',
+            content: '',
+            usage: { totalTokens: 0 },
+          });
         if (signal.aborted) return cancelled();
         signal.addEventListener('abort', cancelled, { once: true });
       });
@@ -156,12 +158,14 @@ describe('AC-7/AC-15: stopCurrentQuery (desktop) nao mata turno em voo do telegr
     telegramLane.currentAbortController?.abort(new CodexAuthError('login Codex necessario'));
     await run;
 
-    expect(chunks).toContainEqual(expect.objectContaining({
-      type: 'error',
-      code: 'SUBAGENT_AUTH_REQUIRED',
-      authProvider: 'codex',
-      error: 'login Codex necessario',
-    }));
+    expect(chunks).toContainEqual(
+      expect.objectContaining({
+        type: 'error',
+        code: 'SUBAGENT_AUTH_REQUIRED',
+        authProvider: 'codex',
+        error: 'login Codex necessario',
+      }),
+    );
   });
 
   it('codex: turno em voo na telegram lane sobrevive ao stopCurrentQuery do desktop', async () => {
@@ -207,23 +211,81 @@ describe('AC-7/AC-15: stopCurrentQuery (desktop) nao mata turno em voo do telegr
         if (signal.aborted) return reject(new Error('aborted'));
         signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
       });
+    const liveDesktopLane = getDesktopLane('d-codex');
     const desktopRun = executeCodexSdkQuery(
       'turno desktop',
       { sessionId: 'd-codex', silent: true },
       noopGetWindow,
-      desktopLane,
+      liveDesktopLane,
       codexSelection(),
     ).catch(() => undefined);
     await new Promise((r) => setImmediate(r));
-    expect(isCodexSdkQueryActive(desktopLane)).toBe(true);
+    expect(isCodexSdkQueryActive(liveDesktopLane)).toBe(true);
 
     const telegram: SdkLane = telegramLane;
     telegram.currentAbortController = new AbortController();
     telegram.currentAbortController.abort();
-    expect(isCodexSdkQueryActive(desktopLane)).toBe(true);
+    expect(isCodexSdkQueryActive(liveDesktopLane)).toBe(true);
 
     stopCurrentQuery();
     await desktopRun;
-    expect(isCodexSdkQueryActive(desktopLane)).toBe(false);
+    expect(isCodexSdkQueryActive(liveDesktopLane)).toBe(false);
+  });
+});
+
+describe('RM9/V4 (codex): duas lanes desktop em voo com threads e cache por sessao', () => {
+  it('stop de A aborta so A; B segue; closeCachedChatCodexSession fecha so a thread daquela sessao', async () => {
+    const { resolveCodexSessionForRun } = await import('../agent-runtime/codex-session-factory');
+    const { closeCachedChatCodexSession } = await import('../codex-sdk');
+    const factory = vi.mocked(resolveCodexSessionForRun);
+    factory.mockClear();
+    const laneA = getDesktopLane('d-codex-a');
+    const laneB = getDesktopLane('d-codex-b');
+    const releases: Array<() => void> = [];
+    codexSendImpl = (_prompt, _cb, signal) =>
+      new Promise((resolve, reject) => {
+        releases.push(() =>
+          resolve({ status: 'completed', threadId: 'thread-x', content: 'ok', usage: { totalTokens: 1 } }),
+        );
+        signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      });
+
+    const runA = executeCodexSdkQuery(
+      'turno A',
+      { sessionId: 'd-codex-a', silent: true },
+      noopGetWindow,
+      laneA,
+      codexSelection(),
+    ).catch(() => undefined);
+    const runB = executeCodexSdkQuery(
+      'turno B',
+      { sessionId: 'd-codex-b', silent: true },
+      noopGetWindow,
+      laneB,
+      codexSelection(),
+    ).catch(() => undefined);
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    expect(isCodexSdkQueryActive(laneA)).toBe(true);
+    expect(isCodexSdkQueryActive(laneB)).toBe(true);
+    expect(factory).toHaveBeenCalledTimes(2);
+
+    stopCurrentQuery('d-codex-a');
+    await runA;
+    expect(isCodexSdkQueryActive(laneA)).toBe(false);
+    expect(isCodexSdkQueryActive(laneB)).toBe(true);
+
+    releases[1]!();
+    await runB;
+    expect(isCodexSdkQueryActive(laneB)).toBe(false);
+
+    const sessions = await Promise.all(
+      factory.mock.results.map((r) => r.value as Promise<{ close: ReturnType<typeof vi.fn> }>),
+    );
+    expect(sessions).toHaveLength(2);
+    closeCachedChatCodexSession('d-codex-a', 'teste');
+    expect(sessions[0]!.close).toHaveBeenCalledTimes(1);
+    expect(sessions[1]!.close).not.toHaveBeenCalled();
+    closeCachedChatCodexSession('d-codex-b', 'teste');
+    expect(sessions[1]!.close).toHaveBeenCalledTimes(1);
   });
 });

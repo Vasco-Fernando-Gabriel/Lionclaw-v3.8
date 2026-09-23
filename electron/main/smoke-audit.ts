@@ -1,4 +1,3 @@
-
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
@@ -42,8 +41,6 @@ export function smokeAudit(event: string, data: Record<string, unknown>): void {
       parts.push(`${key}=${serializeValue(value)}`);
     }
     const line = `${parts.join(' | ')}\n`;
-    fs.appendFile(AUDIT_FILE, line, () => {
-    });
-  } catch {
-  }
+    fs.appendFile(AUDIT_FILE, line, () => {});
+  } catch {}
 }

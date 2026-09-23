@@ -1,4 +1,3 @@
-
 import net from 'net';
 import fs from 'fs';
 import path from 'path';
@@ -20,8 +19,7 @@ export async function ensureRuntimeDir(): Promise<string> {
   await fs.promises.mkdir(dir, { recursive: true });
   try {
     await fs.promises.chmod(dir, 0o700);
-  } catch {
-  }
+  } catch {}
   return dir;
 }
 
@@ -34,9 +32,7 @@ export function resolveSocketRuntimeDir(runtimeDir: string, platform: NodeJS.Pla
   return targetPath.join('/tmp', `lc-ipc-${identity}`);
 }
 
-export async function listenUnix(
-  connectionHandler: (socket: net.Socket) => void,
-): Promise<UnixListenResult> {
+export async function listenUnix(connectionHandler: (socket: net.Socket) => void): Promise<UnixListenResult> {
   const homeRuntimeDir = await ensureRuntimeDir();
   const runtimeDir = resolveSocketRuntimeDir(homeRuntimeDir);
   if (runtimeDir !== homeRuntimeDir) {
@@ -48,8 +44,7 @@ export async function listenUnix(
 
   try {
     await fs.promises.unlink(socketPath);
-  } catch {
-  }
+  } catch {}
 
   const server = net.createServer(connectionHandler);
 
@@ -75,12 +70,10 @@ export async function listenUnix(
 export async function cleanupUnix(socketPath: string): Promise<void> {
   try {
     await fs.promises.unlink(socketPath);
-  } catch {
-  }
+  } catch {}
   if (path.basename(path.dirname(socketPath)).startsWith('lc-ipc-')) {
     try {
       await fs.promises.rmdir(path.dirname(socketPath));
-    } catch {
-    }
+    } catch {}
   }
 }

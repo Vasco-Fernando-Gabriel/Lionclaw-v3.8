@@ -24,11 +24,7 @@ describe('artifact-detector image paths', () => {
   it('creates an image artifact from markdown local image paths', () => {
     const imagePath = writeTempImage('codex-feliz.png');
 
-    const artifact = captureToolResult(
-      'tool-1',
-      `Funcionou:\n![Codex feliz](${imagePath})`,
-      false,
-    );
+    const artifact = captureToolResult('tool-1', `Funcionou:\n![Codex feliz](${imagePath})`, false);
 
     expect(artifact?.type).toBe('image');
     expect(artifact?.title).toContain('Codex feliz');
@@ -40,11 +36,7 @@ describe('artifact-detector image paths', () => {
   it('creates an image artifact from labelled file paths', () => {
     const imagePath = writeTempImage('saida.webp');
 
-    const artifact = captureToolResult(
-      'tool-2',
-      `Arquivo: ${imagePath}\nPrompt: codex feliz`,
-      false,
-    );
+    const artifact = captureToolResult('tool-2', `Arquivo: ${imagePath}\nPrompt: codex feliz`, false);
 
     expect(artifact?.type).toBe('image');
     expect(artifact?.data.filePath).toBe(imagePath);
@@ -124,7 +116,6 @@ describe('artifact-detector MCP apps', () => {
   });
 });
 
-
 function writeTempFile(name: string, content: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lionclaw-artifact-'));
   createdDirs.push(dir);
@@ -185,11 +176,7 @@ describe('artifact-detector ENVIAR_ARQUIVO (document)', () => {
   it('vídeo gerado fora da Knowledge continua detectado como artifact MP4', () => {
     const filePath = writeTempFile('higgsfield-output.mp4', 'fake video bytes');
 
-    const artifact = captureToolResult(
-      'tool-video-1',
-      `ENVIAR_ARQUIVO: ${filePath}`,
-      false,
-    );
+    const artifact = captureToolResult('tool-video-1', `ENVIAR_ARQUIVO: ${filePath}`, false);
 
     expect(artifact?.type).toBe('document');
     expect(artifact?.data.fileName).toBe('higgsfield-output.mp4');

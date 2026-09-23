@@ -3,7 +3,6 @@ import { setSetting } from '../db';
 import { getOpenDesignConfig, setOpenDesignConfig } from './config';
 import type { OpenDesignSessionConfig } from '../../../src/types/open-design';
 
-
 const logger = createLogger('open-design-session-config');
 
 export const LAST_SESSION_CONFIG_SETTINGS_KEY = 'openDesign.lastSessionConfig';

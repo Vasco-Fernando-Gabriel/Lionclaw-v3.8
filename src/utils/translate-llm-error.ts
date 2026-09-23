@@ -1,4 +1,3 @@
-
 export interface TranslatedLlmError {
   code: string;
   title: string;
@@ -56,6 +55,12 @@ const TRANSLATION_TABLE: Record<string, TranslationEntry> = {
     title: 'Sem resposta',
     body: 'O agente terminou sem resposta.',
     action: 'Tente de novo; se persistir, troque de modelo ou verifique o provider.',
+    persist: false,
+  },
+  stream_session_missing: {
+    title: 'Evento do chat sem lane',
+    body: 'Um evento de stream chegou sem sessionId e foi descartado; nenhuma lane foi alterada.',
+    action: 'Se a resposta nao aparecer na lane, reporte o log do main (chunk sem sessionId).',
     persist: false,
   },
   'LLM-NET': {
@@ -227,15 +232,7 @@ const MESSAGE_HINTS: Array<{ code: string; hints: string[] }> = [
   },
   {
     code: 'LLM-AUTH-401',
-    hints: [
-      'unauthorized',
-      'invalid api key',
-      'invalid_api_key',
-      'authentication',
-      'forbidden',
-      'credential',
-      '401',
-    ],
+    hints: ['unauthorized', 'invalid api key', 'invalid_api_key', 'authentication', 'forbidden', 'credential', '401'],
   },
   { code: 'LLM-RATE-429', hints: ['rate limit', 'rate_limit', 'rate-limit', 'too many requests', '429'] },
   {
@@ -254,9 +251,10 @@ const MESSAGE_HINTS: Array<{ code: string; hints: string[] }> = [
   { code: 'LLM-EMPTY', hints: ['empty response', 'resposta vazia', 'terminou sem resposta'] },
 ];
 
-function normalizeInput(
-  input: TranslateLlmErrorInput | string | Error | null | undefined,
-): { code?: string; message?: string } {
+function normalizeInput(input: TranslateLlmErrorInput | string | Error | null | undefined): {
+  code?: string;
+  message?: string;
+} {
   if (input == null) return {};
   if (typeof input === 'string') return { message: input };
   if (input instanceof Error) return { message: input.message };

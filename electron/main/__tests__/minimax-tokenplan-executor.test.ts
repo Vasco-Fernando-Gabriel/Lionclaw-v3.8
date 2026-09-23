@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 const mockStreamResult = {
   output: 'Hello from MiniMax',
@@ -17,7 +15,6 @@ const mockStreamResult = {
 };
 
 const capturedQueryOptions: Array<Record<string, unknown>> = [];
-
 
 vi.mock('../logger', () => ({
   createLogger: () => ({
@@ -76,9 +73,7 @@ vi.mock('../claude-compat-sdk/provider-presets', () => ({
     displayName: 'Minimax TokenPlan',
     baseUrl: 'https://api.minimax.io/anthropic',
     apiKeyVaultRef: 'orchestratorMinimaxApiKeyRef',
-    models: [
-      { id: 'MiniMax-M2.7', displayName: 'MiniMax M2.7', supportTier: 'official' },
-    ],
+    models: [{ id: 'MiniMax-M2.7', displayName: 'MiniMax M2.7', supportTier: 'official' }],
   }),
 }));
 
@@ -89,13 +84,15 @@ vi.mock('fs', () => ({
   existsSync: vi.fn().mockReturnValue(true),
 }));
 
-
-import { buildMinimaxTpEnv, buildMinimaxTpQueryOptions, minimaxTokenplanExecutor } from '../agent-runtime/minimax-tokenplan-executor';
+import {
+  buildMinimaxTpEnv,
+  buildMinimaxTpQueryOptions,
+  minimaxTokenplanExecutor,
+} from '../agent-runtime/minimax-tokenplan-executor';
 import { PERM_BYPASS_NO_GUARD } from '../agent-runtime/permission-profiles';
 import type { AgentExecutionRequest } from '../agent-runtime/types';
 import type { AgentQueryConfig } from '../agent-config-resolver';
 import { processAgentStream } from '../stream-processor';
-
 
 function makeReq(overrides: Partial<AgentExecutionRequest> = {}): AgentExecutionRequest {
   return {
@@ -123,7 +120,6 @@ function makeConfig(overrides: Partial<AgentQueryConfig> = {}): AgentQueryConfig
   };
 }
 
-
 beforeEach(() => {
   capturedQueryOptions.length = 0;
   vi.clearAllMocks();
@@ -135,21 +131,16 @@ beforeEach(() => {
 
 describe('buildMinimaxTpEnv', () => {
   it('strips ANTHROPIC_* env vars and replaces them with MiniMax values', () => {
-    const env = buildMinimaxTpEnv(
-      'sk-minimax',
-      'MiniMax-M2.7',
-      'https://api.minimax.io/anthropic',
-      {
-        PATH: '/bin:/usr/bin',
-        HOME: '/home/me',
-        ANTHROPIC_API_KEY: 'sk-anthropic-old',
-        ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
-        ANTHROPIC_AUTH_TOKEN: 'old-token',
-        ANTHROPIC_MODEL: 'claude-old',
-        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '0',
-        API_TIMEOUT_MS: '1000',
-      },
-    );
+    const env = buildMinimaxTpEnv('sk-minimax', 'MiniMax-M2.7', 'https://api.minimax.io/anthropic', {
+      PATH: '/bin:/usr/bin',
+      HOME: '/home/me',
+      ANTHROPIC_API_KEY: 'sk-anthropic-old',
+      ANTHROPIC_BASE_URL: 'https://api.anthropic.com',
+      ANTHROPIC_AUTH_TOKEN: 'old-token',
+      ANTHROPIC_MODEL: 'claude-old',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '0',
+      API_TIMEOUT_MS: '1000',
+    });
 
     expect(env.PATH).toBe('/bin:/usr/bin');
     expect(env.HOME).toBe('/home/me');
@@ -275,35 +266,33 @@ describe('minimaxTokenplanExecutor.run — error paths', () => {
   it('throws "MiniMax TokenPlan nao esta conectado" when setting is absent', async () => {
     mockGetSettingValue = undefined;
 
-    await expect(
-      minimaxTokenplanExecutor.run(makeReq(), makeConfig()),
-    ).rejects.toThrow('MiniMax TokenPlan nao esta conectado');
+    await expect(minimaxTokenplanExecutor.run(makeReq(), makeConfig())).rejects.toThrow(
+      'MiniMax TokenPlan nao esta conectado',
+    );
   });
 
   it('throws "MiniMax TokenPlan nao esta conectado" when setting is empty string', async () => {
     mockGetSettingValue = '';
 
-    await expect(
-      minimaxTokenplanExecutor.run(makeReq(), makeConfig()),
-    ).rejects.toThrow('MiniMax TokenPlan nao esta conectado');
+    await expect(minimaxTokenplanExecutor.run(makeReq(), makeConfig())).rejects.toThrow(
+      'MiniMax TokenPlan nao esta conectado',
+    );
   });
 
   it('throws "Chave MiniMax foi removida do Vault" when secret is null', async () => {
     mockGetSettingValue = 'minimax-key-ref';
     mockGetSecretValue = null;
 
-    await expect(
-      minimaxTokenplanExecutor.run(makeReq(), makeConfig()),
-    ).rejects.toThrow('Chave MiniMax foi removida do Vault');
+    await expect(minimaxTokenplanExecutor.run(makeReq(), makeConfig())).rejects.toThrow(
+      'Chave MiniMax foi removida do Vault',
+    );
   });
 
   it('error message for missing secret includes the vault ref', async () => {
     mockGetSettingValue = 'my-vault-ref-123';
     mockGetSecretValue = null;
 
-    await expect(
-      minimaxTokenplanExecutor.run(makeReq(), makeConfig()),
-    ).rejects.toThrow('ref=my-vault-ref-123');
+    await expect(minimaxTokenplanExecutor.run(makeReq(), makeConfig())).rejects.toThrow('ref=my-vault-ref-123');
   });
 });
 

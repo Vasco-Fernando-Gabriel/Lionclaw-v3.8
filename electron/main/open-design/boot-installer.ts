@@ -6,12 +6,8 @@ import { createLogger } from '../logger';
 import { ensurePnpm, spawnPnpm } from './pnpm-runner';
 import { resolveOpenDesignRoot, resolveInstallSentinelPath } from './paths';
 import { buildSidecarBaseEnv } from './manager';
-import type {
-  BootInstallStatus,
-  BootInstallStreamEvent,
-} from '../../../src/types/open-design';
+import type { BootInstallStatus, BootInstallStreamEvent } from '../../../src/types/open-design';
 import { resolveOpenDesignSidecar } from '../distribution-runtime';
-
 
 const logger = createLogger('open-design-boot-installer');
 
@@ -120,14 +116,11 @@ async function runInstall(): Promise<BootInstallStatus> {
   return new Promise<BootInstallStatus>((resolve) => {
     let finished = false;
 
-    const proc = spawnPnpm(
-      ['install', '--frozen-lockfile'],
-      {
-        cwd: resolveOpenDesignRoot(),
-        env: buildSidecarBaseEnv(),
-        stdio: ['ignore', 'pipe', 'pipe'],
-      },
-    );
+    const proc = spawnPnpm(['install', '--frozen-lockfile'], {
+      cwd: resolveOpenDesignRoot(),
+      env: buildSidecarBaseEnv(),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
 
     proc.stdout?.setEncoding('utf-8');
     proc.stderr?.setEncoding('utf-8');

@@ -1,18 +1,9 @@
-
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  KimiBridgeRegistry,
-  MAX_LIVE_BRIDGES,
-  getKimiBridgeRegistry,
-} from '../mcp-bridge-registry';
+import { KimiBridgeRegistry, MAX_LIVE_BRIDGES, getKimiBridgeRegistry } from '../mcp-bridge-registry';
 import type { KimiMcpBridge } from '../mcp-http-bridge';
 import type { KimiAcpMcpServerEntry } from '../types';
 
-
-function fakeBridge(
-  bridgeId: string,
-  stop: () => Promise<void> = async () => undefined,
-): KimiMcpBridge {
+function fakeBridge(bridgeId: string, stop: () => Promise<void> = async () => undefined): KimiMcpBridge {
   const url = 'http://127.0.0.1:54000/mcp';
   const token = 'tok-' + bridgeId;
   const mcpServerEntry: KimiAcpMcpServerEntry = {
@@ -25,7 +16,6 @@ function fakeBridge(
   };
   return { url, token, mcpServerEntry, bridgeId, stop };
 }
-
 
 describe('KimiBridgeRegistry (B3)', () => {
   afterEach(() => {

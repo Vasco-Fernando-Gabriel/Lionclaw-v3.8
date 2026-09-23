@@ -1,4 +1,3 @@
-
 import { resolveContextWindow, formatContextWindow } from '@/lib/agent-helpers';
 import type { AgentConfig } from '@/types';
 
@@ -13,9 +12,7 @@ export function ContextWindowDisplay({ agent }: ContextWindowDisplayProps) {
 
   if (cw === null) {
     return (
-      <div className="text-xs text-amber-500/80 mt-1">
-        Contexto desconhecido. Informe abaixo o limite do modelo.
-      </div>
+      <div className="text-xs text-amber-500/80 mt-1">Contexto desconhecido. Informe abaixo o limite do modelo.</div>
     );
   }
 

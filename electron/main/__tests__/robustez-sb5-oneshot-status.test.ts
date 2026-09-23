@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
@@ -247,9 +246,7 @@ describe('SB-5 — one-shots checam status/is_error ANTES de stripFence', () => 
   it('AC-B13 (kimi): status max_steps_reached vira throw explicito (nao texto parcial), e o handle e fechado', async () => {
     state.kimiResponse = { content: 'parcial truncado', status: 'max_steps_reached' };
 
-    await expect(runSubscriptionPrompt(KIMI_SEL, 'resuma')).rejects.toThrow(
-      /status max_steps_reached/,
-    );
+    await expect(runSubscriptionPrompt(KIMI_SEL, 'resuma')).rejects.toThrow(/status max_steps_reached/);
     expect(state.kimiClosed).toBe(1);
   });
 
@@ -285,9 +282,7 @@ describe('SB-5 — one-shots checam status/is_error ANTES de stripFence', () => 
     releaseSends();
     await Promise.all([first, second]);
 
-    const runIds = state.kimiCreateRun.mock.calls.map(
-      ([opts]) => (opts as { runId: string }).runId,
-    );
+    const runIds = state.kimiCreateRun.mock.calls.map(([opts]) => (opts as { runId: string }).runId);
     expect(runIds).toHaveLength(2);
     expect(runIds[0]).toMatch(/^kimi-oneshot-[0-9a-f-]{36}$/);
     expect(runIds[1]).toMatch(/^kimi-oneshot-[0-9a-f-]{36}$/);
@@ -318,14 +313,16 @@ describe('SB-5 — one-shots checam status/is_error ANTES de stripFence', () => 
     state.grokResponse = { content: '```json\n{"g":4}\n```', status: 'finished' };
 
     await expect(runSubscriptionPrompt(GROK_SEL, 'resuma')).resolves.toBe('{"g":4}');
-    expect(state.grokCreateRun).toHaveBeenCalledWith(expect.objectContaining({
-      profile: 'one-shot',
-      surface: 'oneshot',
-      ownerKind: 'oneshot',
-      sandbox: 'strict',
-      nativeToolArgs: ['--tools', '', '--disable-web-search'],
-      mcpServers: [],
-    }));
+    expect(state.grokCreateRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profile: 'one-shot',
+        surface: 'oneshot',
+        ownerKind: 'oneshot',
+        sandbox: 'strict',
+        nativeToolArgs: ['--tools', '', '--disable-web-search'],
+        mcpServers: [],
+      }),
+    );
     expect(state.grokClosed).toBe(1);
     expect(state.grokReleased).toBe(1);
   });
@@ -344,9 +341,7 @@ describe('SB-5 — one-shots checam status/is_error ANTES de stripFence', () => 
       reason: 'cached_token authentication failed',
     });
 
-    await expect(runSubscriptionPrompt(GROK_SEL, 'resuma')).rejects.toThrow(
-      /cached_token authentication failed/,
-    );
+    await expect(runSubscriptionPrompt(GROK_SEL, 'resuma')).rejects.toThrow(/cached_token authentication failed/);
     expect(state.grokCreateRun).not.toHaveBeenCalled();
     expect(state.grokClosed).toBe(0);
     expect(state.grokReleased).toBe(0);

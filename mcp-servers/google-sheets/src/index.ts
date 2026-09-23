@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { google } from 'googleapis';
 import { sheets_v4 } from 'googleapis';
 
@@ -26,10 +23,7 @@ function initSheets(): void {
   sheetsApi = google.sheets({ version: 'v4', auth: oauth2Client });
 }
 
-const server = new Server(
-  { name: 'google-sheets', version: '1.0.0' },
-  { capabilities: { tools: {} } },
-);
+const server = new Server({ name: 'google-sheets', version: '1.0.0' }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
@@ -184,7 +178,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const res = await sheetsApi.spreadsheets.values.get({
           spreadsheetId: spreadsheet_id,
           range,
-          valueRenderOption: (value_render || 'FORMATTED_VALUE') as sheets_v4.Params$Resource$Spreadsheets$Values$Get['valueRenderOption'],
+          valueRenderOption: (value_render ||
+            'FORMATTED_VALUE') as sheets_v4.Params$Resource$Spreadsheets$Values$Get['valueRenderOption'],
         });
         const rows = res.data.values || [];
         const truncated = rows.length > MAX_ROWS_PER_READ;
@@ -215,9 +210,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           fields: 'sheets.properties',
         });
         const sheets = meta.data.sheets || [];
-        const targetSheet = sheet_name
-          ? sheets.find((s) => s.properties?.title === sheet_name)
-          : sheets[0];
+        const targetSheet = sheet_name ? sheets.find((s) => s.properties?.title === sheet_name) : sheets[0];
 
         if (!targetSheet) {
           return { content: [{ type: 'text', text: `Aba "${sheet_name}" nao encontrada.` }], isError: true };
@@ -244,10 +237,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({ sheet_name: sheetTitle, headers, preview, total_rows: totalRows }, null, 2),
-          }],
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ sheet_name: sheetTitle, headers, preview, total_rows: totalRows }, null, 2),
+            },
+          ],
         };
       }
 
@@ -265,14 +260,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           requestBody: { values },
         });
         return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({
-              updated_range: res.data.updatedRange,
-              updated_rows: res.data.updatedRows,
-              updated_cols: res.data.updatedColumns,
-            }, null, 2),
-          }],
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  updated_range: res.data.updatedRange,
+                  updated_rows: res.data.updatedRows,
+                  updated_cols: res.data.updatedColumns,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
         };
       }
 
@@ -290,13 +291,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           requestBody: { values: rows },
         });
         return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({
-              updated_range: res.data.updates?.updatedRange,
-              appended_rows: res.data.updates?.updatedRows,
-            }, null, 2),
-          }],
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  updated_range: res.data.updates?.updatedRange,
+                  appended_rows: res.data.updates?.updatedRows,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
         };
       }
 
@@ -319,12 +326,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           },
         });
         return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({
-              total_updated_cells: res.data.totalUpdatedCells,
-            }, null, 2),
-          }],
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  total_updated_cells: res.data.totalUpdatedCells,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
         };
       }
 
@@ -339,10 +352,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           requestBody: {},
         });
         return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({ cleared_range: res.data.clearedRange }, null, 2),
-          }],
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ cleared_range: res.data.clearedRange }, null, 2),
+            },
+          ],
         };
       }
 

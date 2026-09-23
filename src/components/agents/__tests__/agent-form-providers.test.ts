@@ -1,20 +1,17 @@
-
 import { describe, it, expect } from 'vitest';
 import { PROVIDER_PRESETS, MODEL_CATALOG } from '@/lib/provider-presets';
 import type { ExternalProvider } from '@/types/index';
 
-
 const EXTERNAL_PROVIDERS: Array<{ value: ExternalProvider; label: string }> = [
-  { value: 'openrouter',            label: 'OpenRouter' },
-  { value: 'openai',                label: 'OpenAI' },
-  { value: 'kimi',                  label: 'Kimi (Moonshot)' },
-  { value: 'deepseek',              label: 'DeepSeek' },
-  { value: 'qwen',                  label: 'Qwen (DashScope)' },
-  { value: 'minimax-payg',          label: 'MiniMax (Pay-as-you-go)' },
+  { value: 'openrouter', label: 'OpenRouter' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'kimi', label: 'Kimi (Moonshot)' },
+  { value: 'deepseek', label: 'DeepSeek' },
+  { value: 'qwen', label: 'Qwen (DashScope)' },
+  { value: 'minimax-payg', label: 'MiniMax (Pay-as-you-go)' },
   { value: 'gemini-agent-platform', label: 'Gemini Agent Platform' },
-  { value: 'openai-compatible',     label: 'Custom (OpenAI Compatible)' },
+  { value: 'openai-compatible', label: 'Custom (OpenAI Compatible)' },
 ];
-
 
 interface ExternalConfigBuilt {
   provider: ExternalProvider;
@@ -61,9 +58,7 @@ function buildExternalConfig(opts: {
     maxTokens: opts.maxTokens ? parseInt(opts.maxTokens, 10) : undefined,
     extraHeaders: parsedHeaders,
     contextWindow:
-      opts.provider === 'openai-compatible' && opts.contextWindow
-        ? parseInt(opts.contextWindow, 10)
-        : undefined,
+      opts.provider === 'openai-compatible' && opts.contextWindow ? parseInt(opts.contextWindow, 10) : undefined,
   };
 }
 
@@ -89,7 +84,10 @@ function simulateProviderChange(provider: ExternalProvider): {
 
 function resolveVaultKey(provider: ExternalProvider, extApiKeyRef: string, customSlug: string): string {
   if (provider === 'openai-compatible') {
-    const slug = customSlug.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_');
+    const slug = customSlug
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '_');
     return slug ? `HARNESS_CUSTOM_${slug}_KEY` : '';
   }
   return extApiKeyRef || PROVIDER_PRESETS[provider]?.vaultKey || '';
@@ -103,18 +101,12 @@ function modelSupportsReasoning(provider: ExternalProvider, model: string): bool
     if (model.startsWith('openai/gpt-5')) return true;
     if (model.startsWith('qwen/qwen3.6')) return true;
   }
-  if (
-    provider === 'kimi' ||
-    provider === 'deepseek' ||
-    provider === 'qwen' ||
-    provider === 'minimax-payg'
-  ) {
+  if (provider === 'kimi' || provider === 'deepseek' || provider === 'qwen' || provider === 'minimax-payg') {
     const catalogEntry = MODEL_CATALOG[provider]?.find((m) => m.id === model);
     if (catalogEntry?.reasoning && catalogEntry.reasoning.kind !== 'none') return true;
   }
   return false;
 }
-
 
 describe('EXTERNAL_PROVIDERS array (Sprint 4: 8 providers)', () => {
   it('tem exatamente 8 providers', () => {
@@ -234,7 +226,6 @@ describe('handleProviderChange: pre-populacao de campos', () => {
 });
 
 describe('buildExternalConfig: shape correto por provider', () => {
-
   it('openrouter: protocol = "openai-compatible"', () => {
     const config = buildExternalConfig({
       provider: 'openrouter',
@@ -255,7 +246,6 @@ describe('buildExternalConfig: shape correto por provider', () => {
     expect(config.baseUrl).toBe('https://openrouter.ai/api/v1');
   });
 
-
   it('kimi: protocol = "openai-compatible"', () => {
     const config = buildExternalConfig({
       provider: 'kimi',
@@ -267,7 +257,6 @@ describe('buildExternalConfig: shape correto por provider', () => {
     expect(config.baseUrl).toBe('https://api.moonshot.ai/v1');
   });
 
-
   it('deepseek: protocol = "openai-compatible", baseUrl presente', () => {
     const config = buildExternalConfig({
       provider: 'deepseek',
@@ -278,7 +267,6 @@ describe('buildExternalConfig: shape correto por provider', () => {
     expect(config.protocol).toBe('openai-compatible');
     expect(config.baseUrl).toBe('https://api.deepseek.com/v1');
   });
-
 
   it('gemini-agent-platform: protocol = "google-genai"', () => {
     const config = buildExternalConfig({
@@ -319,7 +307,6 @@ describe('buildExternalConfig: shape correto por provider', () => {
     });
     expect(config.provider).toBe('gemini-agent-platform');
   });
-
 
   it('openai-compatible: protocol = "openai-compatible"', () => {
     const config = buildExternalConfig({
@@ -423,13 +410,9 @@ describe('modelSupportsReasoning', () => {
   });
 
   it('kimi + modelo com reasoning no catalog: suporta reasoning', () => {
-    const hasThinkingModel = MODEL_CATALOG['kimi']?.some(
-      (m) => m.reasoning && m.reasoning.kind !== 'none',
-    );
+    const hasThinkingModel = MODEL_CATALOG['kimi']?.some((m) => m.reasoning && m.reasoning.kind !== 'none');
     if (hasThinkingModel) {
-      const thinkingModel = MODEL_CATALOG['kimi'].find(
-        (m) => m.reasoning && m.reasoning.kind !== 'none',
-      );
+      const thinkingModel = MODEL_CATALOG['kimi'].find((m) => m.reasoning && m.reasoning.kind !== 'none');
       if (thinkingModel) {
         expect(modelSupportsReasoning('kimi', thinkingModel.id)).toBe(true);
       }

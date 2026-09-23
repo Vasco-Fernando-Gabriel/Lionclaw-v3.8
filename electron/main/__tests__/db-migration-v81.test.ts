@@ -1,10 +1,8 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { applyMigrationV81, __V81_INTERNAL } from '../db-migrations/v81-activity-log-project-id';
-
 
 interface MockRun {
   execCalls: string[];
@@ -24,7 +22,6 @@ function runWithMockDb(execImpl?: (sql: string) => void): MockRun {
   return { execCalls };
 }
 
-
 describe('applyMigrationV81 - structural', () => {
   it('exports applyMigrationV81 as a function', () => {
     expect(typeof applyMigrationV81).toBe('function');
@@ -35,7 +32,6 @@ describe('applyMigrationV81 - structural', () => {
     expect(__V81_INTERNAL.COLUMN_NAME).toBe('project_id');
   });
 });
-
 
 describe('applyMigrationV81 - SQL content', () => {
   it('executes exactly one ALTER TABLE adding project_id TEXT to activity_log', () => {
@@ -50,7 +46,6 @@ describe('applyMigrationV81 - SQL content', () => {
     expect(execCalls[0]).not.toMatch(/DEFAULT/i);
   });
 });
-
 
 describe('applyMigrationV81 - idempotencia e erros', () => {
   it('does not throw on a clean mock db', () => {
@@ -74,7 +69,6 @@ describe('applyMigrationV81 - idempotencia e erros', () => {
   });
 });
 
-
 const MAIN_DIR = join(__dirname, '..');
 
 function readMainSource(relPath: string): string {
@@ -85,9 +79,7 @@ describe('applyMigrationV81 - integracao no runner de db.ts (W7, guardrail estat
   const dbSrc = readMainSource('db.ts');
 
   it('db.ts importa applyMigrationV81 do arquivo da migration', () => {
-    expect(dbSrc).toContain(
-      "import { applyMigrationV81 } from './db-migrations/v81-activity-log-project-id'",
-    );
+    expect(dbSrc).toContain("import { applyMigrationV81 } from './db-migrations/v81-activity-log-project-id'");
   });
 
   it('runMigrations tem o bloco if (currentVersion < 81)', () => {
@@ -103,7 +95,6 @@ describe('applyMigrationV81 - integracao no runner de db.ts (W7, guardrail estat
     expect(block).toMatch(/Applied migration v81/);
   });
 });
-
 
 describe('I2 - cadeia projectId em db.ts (guardrail estatico)', () => {
   const dbSrc = readMainSource('db.ts');

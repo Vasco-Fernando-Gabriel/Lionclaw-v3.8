@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ChatFeatureToggles } from '../../../../src/types';
 
@@ -105,10 +104,7 @@ describe('TB-36 — o prompt ENTREGUE ao Codex carrega o bloco do Bug Pipe', () 
     const v5Index = buildCodexSdkSystemPromptV5(undefined, naming);
     const stripped = prompt
       .split('\n')
-      .filter(
-        (line) =>
-          !line.startsWith('- Bug Pipe (') && !line.startsWith('- Phase 3 of the bug pipeline'),
-      )
+      .filter((line) => !line.startsWith('- Bug Pipe (') && !line.startsWith('- Phase 3 of the bug pipeline'))
       .join('\n');
     expect(stripped).toEqual(v5Index);
   });

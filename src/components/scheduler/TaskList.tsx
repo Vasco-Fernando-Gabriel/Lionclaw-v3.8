@@ -1,5 +1,17 @@
 import { useState } from 'react';
-import { Clock, Plus, Pause, Play, Trash2, History, Pencil, Eye, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import {
+  Clock,
+  Plus,
+  Pause,
+  Play,
+  Trash2,
+  History,
+  Pencil,
+  Eye,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+} from 'lucide-react';
 import type { ScheduledTask, TaskRun, TaskInput } from '@/types';
 import { TaskFormModal } from './TaskFormModal';
 import { RejectNoteModal } from './RejectNoteModal';
@@ -94,12 +106,13 @@ export function TaskList({ tasks, isLoading, pendingCount, onReload, onViewSessi
                 </span>
               )}
             </div>
-            <p className="text-sm text-zinc-500 mt-1">
-              Tarefas agendadas por cron, intervalo ou execucao unica
-            </p>
+            <p className="text-sm text-zinc-500 mt-1">Tarefas agendadas por cron, intervalo ou execucao unica</p>
           </div>
           <button
-            onClick={() => { setEditingTask(undefined); setShowModal(true); }}
+            onClick={() => {
+              setEditingTask(undefined);
+              setShowModal(true);
+            }}
             className="flex items-center gap-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
           >
             <Plus size={16} />
@@ -118,7 +131,7 @@ export function TaskList({ tasks, isLoading, pendingCount, onReload, onViewSessi
           </div>
         ) : (
           <div className="space-y-3">
-            {tasks.map(task => (
+            {tasks.map((task) => (
               <div key={task.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
                 <div className="p-4 flex items-center gap-3">
                   <div
@@ -126,8 +139,8 @@ export function TaskList({ tasks, isLoading, pendingCount, onReload, onViewSessi
                       task.status === 'active'
                         ? 'bg-green-400'
                         : task.status === 'paused'
-                        ? 'bg-amber-400'
-                        : 'bg-zinc-600'
+                          ? 'bg-amber-400'
+                          : 'bg-zinc-600'
                     }`}
                   />
                   <div className="flex-1 min-w-0">
@@ -135,7 +148,7 @@ export function TaskList({ tasks, isLoading, pendingCount, onReload, onViewSessi
                       <h3 className="text-sm font-semibold text-zinc-200">{task.name}</h3>
                       {task.tags && task.tags.length > 0 && (
                         <div className="flex gap-1">
-                          {task.tags.map(tag => (
+                          {task.tags.map((tag) => (
                             <span key={tag} className="px-1.5 py-0.5 text-[9px] bg-zinc-800 text-zinc-500 rounded">
                               {tag}
                             </span>
@@ -144,7 +157,9 @@ export function TaskList({ tasks, isLoading, pendingCount, onReload, onViewSessi
                       )}
                     </div>
                     <div className="flex gap-3 text-[11px] text-zinc-500 mt-0.5">
-                      <span className="font-mono">{task.scheduleType}: {task.scheduleValue}</span>
+                      <span className="font-mono">
+                        {task.scheduleType}: {task.scheduleValue}
+                      </span>
                       <span>Runs: {task.runCount}</span>
                       <span>Proximo: {formatDate(task.nextRun)}</span>
                     </div>
@@ -167,7 +182,10 @@ export function TaskList({ tasks, isLoading, pendingCount, onReload, onViewSessi
                       <History size={14} />
                     </button>
                     <button
-                      onClick={() => { setEditingTask(task); setShowModal(true); }}
+                      onClick={() => {
+                        setEditingTask(task);
+                        setShowModal(true);
+                      }}
                       className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300"
                       title="Editar"
                     >
@@ -207,7 +225,7 @@ export function TaskList({ tasks, isLoading, pendingCount, onReload, onViewSessi
                       <p className="text-xs text-zinc-600">Nenhuma execucao registrada</p>
                     ) : (
                       <div className="space-y-1.5">
-                        {runs.slice(0, 10).map(run => (
+                        {runs.slice(0, 10).map((run) => (
                           <div key={run.id} className="flex items-center gap-3 text-[11px]">
                             <span className="text-zinc-500 shrink-0">{formatDate(run.startedAt)}</span>
                             <span
@@ -215,8 +233,8 @@ export function TaskList({ tasks, isLoading, pendingCount, onReload, onViewSessi
                                 run.status === 'success'
                                   ? 'text-green-400'
                                   : run.status === 'error'
-                                  ? 'text-red-400'
-                                  : 'text-amber-400'
+                                    ? 'text-red-400'
+                                    : 'text-amber-400'
                               }
                             >
                               {run.status}
@@ -233,7 +251,9 @@ export function TaskList({ tasks, isLoading, pendingCount, onReload, onViewSessi
                               <span className="text-red-400 text-[10px]">rejeitado</span>
                             )}
                             {run.error && (
-                              <span title={run.error} className="text-red-400 truncate">{run.error}</span>
+                              <span title={run.error} className="text-red-400 truncate">
+                                {run.error}
+                              </span>
                             )}
                             <div className="flex-1" />
                             <div className="flex items-center gap-1 shrink-0">
@@ -282,7 +302,10 @@ export function TaskList({ tasks, isLoading, pendingCount, onReload, onViewSessi
           mode={editingTask ? 'edit' : 'create'}
           task={editingTask}
           onSave={editingTask ? handleUpdate : handleCreate}
-          onClose={() => { setShowModal(false); setEditingTask(undefined); }}
+          onClose={() => {
+            setShowModal(false);
+            setEditingTask(undefined);
+          }}
         />
       )}
 

@@ -29,11 +29,13 @@ describe('harness round cost quality', () => {
   });
 
   it('mantem round conhecido de assinatura com til', () => {
-    expect(formatHarnessRoundCost({
-      coderCostUsd: 0.25,
-      evaluatorCostUsd: 0,
-      costStatus: 'known',
-      subscriptionEquivalentCost: 0.25,
-    })).toBe('~$0.250');
+    expect(
+      formatHarnessRoundCost({
+        coderCostUsd: 0.25,
+        evaluatorCostUsd: 0,
+        costStatus: 'known',
+        subscriptionEquivalentCost: 0.25,
+      }),
+    ).toBe('~$0.250');
   });
 });

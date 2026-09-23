@@ -22,9 +22,7 @@ export function applyMigrationV88(db: Database.Database): void {
   );
 
   for (const seed of seeds) {
-    const maxOrder = db
-      .prepare('SELECT COALESCE(MAX(sort_order), 0) AS m FROM agents')
-      .get() as { m: number };
+    const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), 0) AS m FROM agents').get() as { m: number };
 
     insert.run(
       seed.id,

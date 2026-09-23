@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
 
 const settings = new Map<string, string>();
 const getSettingSpy = vi.fn((key: string) => settings.get(key));
@@ -14,19 +12,13 @@ vi.mock('../../logger', () => ({
 }));
 
 vi.mock('@moonshot-ai/kimi-agent-sdk', () => ({
-  createExternalTool: (def: {
-    name: string;
-    description: string;
-    parameters: unknown;
-    handler: unknown;
-  }) => ({
+  createExternalTool: (def: { name: string; description: string; parameters: unknown; handler: unknown }) => ({
     name: def.name,
     description: def.description,
     parameters: def.parameters,
     handler: def.handler,
   }),
 }));
-
 
 const KIMI_SURFACE_CONFIG: Record<string, { command: string; args: string[] }> = {
   'google-drive': { command: 'node', args: ['drive.js'] },
@@ -133,26 +125,19 @@ const teardownMCPsForSession = vi.fn(async () => {});
 const callMCPTool = vi.fn(async () => ({ content: [{ type: 'text', text: 'drive ok' }] }));
 
 vi.mock('../../mcp-tool-bridge', () => ({
-  setupMCPsForSession: (...a: unknown[]) =>
-    setupMCPsForSession(...(a as [Record<string, unknown>])),
+  setupMCPsForSession: (...a: unknown[]) => setupMCPsForSession(...(a as [Record<string, unknown>])),
   teardownMCPsForSession: (...a: unknown[]) => teardownMCPsForSession(...(a as [])),
   callMCPTool: (...a: unknown[]) => callMCPTool(...(a as [])),
 }));
 
-const guardDecision = vi.fn(
-  async (): Promise<{ behavior: 'allow' } | { behavior: 'deny'; message: string }> => ({
-    behavior: 'allow',
-  }),
-);
+const guardDecision = vi.fn(async (): Promise<{ behavior: 'allow' } | { behavior: 'deny'; message: string }> => ({
+  behavior: 'allow',
+}));
 vi.mock('../../permission-guard', () => ({
   createPermissionGuard: vi.fn(() => guardDecision),
 }));
 
-
-import {
-  buildKimiSessionTools,
-  stripUnmaterializedToolInstructions,
-} from '../kimi-session-config';
+import { buildKimiSessionTools, stripUnmaterializedToolInstructions } from '../kimi-session-config';
 import {
   KIMI_SUBAGENT_TOOL_NAME,
   KIMI_USER_QUESTION_TOOL_NAME,
@@ -163,7 +148,6 @@ import {
 import { buildMcpToolIndex } from '../../mcp-tool-index';
 import { initMcpInvoke, _resetMcpInvokeForTesting } from '../../mcp-invoke';
 import type { AgentQueryConfig } from '../../agent-config-resolver';
-
 
 const SWARM_BASE =
   'Runtime: a ferramenta nativa de paralelismo do Kimi (AgentSwarm) NAO esta disponivel aqui e sera recusada; nao tente usa-la.';
@@ -240,7 +224,6 @@ beforeEach(() => {
 afterEach(() => {
   _resetMcpInvokeForTesting();
 });
-
 
 describe('S5 — composicao das externalTools por modo', () => {
   it("modo 'index': meta-tools + SOMENTE helpers DIRECT (nenhuma tool de server de negocio)", async () => {
@@ -360,15 +343,7 @@ describe('S5 — indice no systemPrompt', () => {
 describe('S5 — AC-14: indice e helpers sobrevivem ao strip REAL', () => {
   it('unit: stripUnmaterializedToolInstructions preserva indice INTEIRO + blocos dos helpers', () => {
     const index = expectedIndex();
-    const prompt = [
-      'Voce e o orquestrador.',
-      '',
-      HELPER_BLOCKS,
-      '',
-      `${INDEX_HEADER}`,
-      '',
-      index,
-    ].join('\n');
+    const prompt = ['Voce e o orquestrador.', '', HELPER_BLOCKS, '', `${INDEX_HEADER}`, '', index].join('\n');
     const materialized = new Set([
       KIMI_MCP_INVOKE_TOOL_NAME,
       KIMI_MCP_SCHEMA_TOOL_NAME,
@@ -426,9 +401,7 @@ describe('S5 — handler mcp_invoke via wrapper central (mcp-invoke REAL)', () =
     const invoke = await getInvokeTool();
     const r = await invoke.handler({ server: 'nao-permitido', tool: 'x', args: {} });
     expect(r.output).toContain('fora do escopo desta sessao');
-    expect(r.output).toContain(
-      'google-drive, shopify, lionclaw-pipeline-control, lionclaw-dynamic-workflows',
-    );
+    expect(r.output).toContain('google-drive, shopify, lionclaw-pipeline-control, lionclaw-dynamic-workflows');
     expect(r.message).toBe('mcp__nao-permitido__x failed');
     expect(setupMCPsForSession).not.toHaveBeenCalled();
     expect(callMCPTool).not.toHaveBeenCalled();

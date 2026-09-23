@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 const { mockWarn, mockInfo } = vi.hoisted(() => ({
   mockWarn: vi.fn(),
@@ -16,20 +14,13 @@ vi.mock('../logger', () => ({
   }),
 }));
 
-
-import {
-  warnMcpToolsDroppedOnce,
-  warnOncePerAgent,
-  __resetWarnedAgentsForTests,
-} from '../agent-runtime/mcp-warning';
-
+import { warnMcpToolsDroppedOnce, warnOncePerAgent, __resetWarnedAgentsForTests } from '../agent-runtime/mcp-warning';
 
 beforeEach(() => {
   __resetWarnedAgentsForTests();
   mockWarn.mockClear();
   mockInfo.mockClear();
 });
-
 
 describe('warnMcpToolsDroppedOnce', () => {
   it('does nothing when allowedTools has no mcp__ tools', () => {
@@ -98,7 +89,6 @@ describe('warnMcpToolsDroppedOnce', () => {
   });
 });
 
-
 describe('warnOncePerAgent', () => {
   it('emits warn on first call', () => {
     warnOncePerAgent('agent-1', 'no-usage-reported', { foo: 'bar' });
@@ -125,7 +115,6 @@ describe('warnOncePerAgent', () => {
     expect(mockWarn).toHaveBeenCalledTimes(2);
   });
 });
-
 
 describe('__resetWarnedAgentsForTests', () => {
   it('clears state so warnings can fire again after reset', () => {

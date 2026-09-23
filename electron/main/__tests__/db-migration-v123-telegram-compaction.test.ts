@@ -1,10 +1,8 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { applyMigrationV123, __V123_INTERNAL } from '../db-migrations/v123-telegram-compaction-columns';
-
 
 function runWithMockDb(execImpl?: (sql: string) => void): string[] {
   const execs: string[] = [];
@@ -73,7 +71,6 @@ describe('applyMigrationV123 - idempotencia', () => {
   });
 });
 
-
 const dbSource = readFileSync(join(__dirname, '..', 'db.ts'), 'utf-8');
 
 function functionBody(name: string): string {
@@ -111,7 +108,14 @@ describe('AC-21 - contadores (estatico em db.ts)', () => {
   it('setSessionActiveContextTokens e setter ABSOLUTO restrito a active_context_tokens_est', () => {
     const body = functionBody('setSessionActiveContextTokens');
     expect(body).toContain('active_context_tokens_est = ?');
-    for (const col of ['input_tokens', 'output_tokens', 'cost_usd', 'pending_seed', 'rolling_summary', 'compacted_up_to_message_id']) {
+    for (const col of [
+      'input_tokens',
+      'output_tokens',
+      'cost_usd',
+      'pending_seed',
+      'rolling_summary',
+      'compacted_up_to_message_id',
+    ]) {
       expect(body, `setSessionActiveContextTokens nao pode tocar ${col}`).not.toContain(col);
     }
   });

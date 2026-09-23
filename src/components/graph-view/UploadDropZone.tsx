@@ -8,24 +8,32 @@ import {
   validateKnowledgeUploadFile,
 } from '@/constants/knowledge-ingest-files';
 
-
 export interface FilePreview {
   file: File;
   path: string;
   typeLabel: string;
 }
 
-
 const EXT_LABEL: Record<string, string> = {
-  '.pdf': 'PDF', '.docx': 'Word', '.xlsx': 'Excel', '.csv': 'CSV',
-  '.md': 'Markdown', '.txt': 'Texto', '.png': 'Imagem', '.jpg': 'Imagem',
-  '.jpeg': 'Imagem', '.webp': 'Imagem', '.mp3': 'Áudio', '.m4a': 'Áudio',
-  '.wav': 'Áudio', '.ogg': 'Áudio', '.flac': 'Áudio',
+  '.pdf': 'PDF',
+  '.docx': 'Word',
+  '.xlsx': 'Excel',
+  '.csv': 'CSV',
+  '.md': 'Markdown',
+  '.txt': 'Texto',
+  '.png': 'Imagem',
+  '.jpg': 'Imagem',
+  '.jpeg': 'Imagem',
+  '.webp': 'Imagem',
+  '.mp3': 'Áudio',
+  '.m4a': 'Áudio',
+  '.wav': 'Áudio',
+  '.ogg': 'Áudio',
+  '.flac': 'Áudio',
 };
 
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 const AUDIO_EXTS = new Set<string>(KNOWLEDGE_AUDIO_EXTENSIONS);
-
 
 function getFileExt(name: string): string {
   return knowledgeIngestExtension(name);
@@ -43,10 +51,7 @@ function getFileIcon(ext: string): typeof FileText {
   return FileText;
 }
 
-function validateFile(
-  file: File,
-  maxBytes: number,
-): { ok: true; typeLabel: string } | { ok: false; reason: string } {
+function validateFile(file: File, maxBytes: number): { ok: true; typeLabel: string } | { ok: false; reason: string } {
   const result = validateKnowledgeUploadFile(file, maxBytes);
   if (!result.ok) return result;
   return {
@@ -54,7 +59,6 @@ function validateFile(
     typeLabel: EXT_LABEL[result.extension] || result.extension,
   };
 }
-
 
 interface UploadDropZoneProps {
   maxFileSizeMb: number;
@@ -166,10 +170,7 @@ export function UploadDropZone({ maxFileSizeMb, onNewFilesAdded }: UploadDropZon
           {previews.map((p, i) => {
             const FileIcon = getFileIcon(getFileExt(p.file.name));
             return (
-              <div
-                key={i}
-                className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg"
-              >
+              <div key={i} className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg">
                 <FileIcon size={14} className="text-zinc-400 shrink-0" />
                 <span className="flex-1 text-xs text-zinc-300 truncate">{p.file.name}</span>
                 <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded-full shrink-0">

@@ -1,9 +1,7 @@
-
 import { useRef, useEffect } from 'react';
 import { X, FileText, FileCode, Package } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-
 
 type PreviewType = 'markdown' | 'json' | 'html' | 'zip' | 'unknown';
 
@@ -12,7 +10,6 @@ interface DocumentPreviewProps {
   content: string;
   onClose: () => void;
 }
-
 
 function getFileName(filePath: string): string {
   const parts = filePath.replace(/\\/g, '/').split('/');
@@ -35,7 +32,6 @@ function formatJson(raw: string): string {
     return raw;
   }
 }
-
 
 function MarkdownRenderer({ content }: { content: string }) {
   return (
@@ -92,7 +88,6 @@ function ZipRenderer({ filePath }: { filePath: string }) {
   );
 }
 
-
 export function DocumentPreview({ path: filePath, content, onClose }: DocumentPreviewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const previewType = detectPreviewType(filePath);
@@ -146,9 +141,7 @@ export function DocumentPreview({ path: filePath, content, onClose }: DocumentPr
 
       {/* Body */}
       {isFullHeight ? (
-        <div className="flex-1 overflow-hidden">
-          {renderBody()}
-        </div>
+        <div className="flex-1 overflow-hidden">{renderBody()}</div>
       ) : (
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
           {renderBody()}

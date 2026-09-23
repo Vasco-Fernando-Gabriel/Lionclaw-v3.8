@@ -2,11 +2,7 @@ import { ipcMain } from 'electron';
 import crypto from 'crypto';
 import { createLogger } from '../logger';
 import type { IpcContext } from './context';
-import {
-  ingestDocument,
-  reprocessDocument,
-  hybridKnowledgeSearch,
-} from '../knowledge-engine';
+import { ingestDocument, reprocessDocument, hybridKnowledgeSearch } from '../knowledge-engine';
 import { runBenchmarkPipeline } from '../knowledge-benchmark';
 import {
   getKnowledgeSources,
@@ -40,11 +36,7 @@ export function registerKnowledgeHandlers(ctx: IpcContext): void {
       },
     ) => {
       const win = getMainWindow();
-      const emitProgress = (data: {
-        sourceId: string;
-        stage: string;
-        progress: number;
-      }) => {
+      const emitProgress = (data: { sourceId: string; stage: string; progress: number }) => {
         win?.webContents.send('knowledge:ingestion:progress', data);
       };
       return ingestDocument(
@@ -52,13 +44,7 @@ export function registerKnowledgeHandlers(ctx: IpcContext): void {
           ...payload,
           config: {
             ...payload.config,
-            strategy: payload.config.strategy as
-              | 'recursive'
-              | 'semantic'
-              | 'page'
-              | 'markdown'
-              | 'csv'
-              | 'agentic',
+            strategy: payload.config.strategy as 'recursive' | 'semantic' | 'page' | 'markdown' | 'csv' | 'agentic',
           },
         },
         emitProgress,
@@ -78,22 +64,12 @@ export function registerKnowledgeHandlers(ctx: IpcContext): void {
       },
     ) => {
       const win = getMainWindow();
-      const emitProgress = (data: {
-        sourceId: string;
-        stage: string;
-        progress: number;
-      }) => {
+      const emitProgress = (data: { sourceId: string; stage: string; progress: number }) => {
         win?.webContents.send('knowledge:ingestion:progress', data);
       };
       await reprocessDocument(
         payload.sourceId,
-        payload.strategy as
-          | 'recursive'
-          | 'semantic'
-          | 'page'
-          | 'markdown'
-          | 'csv'
-          | 'agentic',
+        payload.strategy as 'recursive' | 'semantic' | 'page' | 'markdown' | 'csv' | 'agentic',
         payload.chunkSize,
         payload.chunkOverlap,
         emitProgress,
@@ -102,27 +78,18 @@ export function registerKnowledgeHandlers(ctx: IpcContext): void {
     },
   );
 
-  ipcMain.handle(
-    'knowledge:delete',
-    async (_event, payload: { sourceId: string }) => {
-      deleteKnowledgeSource(payload.sourceId);
-      return { success: true };
-    },
-  );
+  ipcMain.handle('knowledge:delete', async (_event, payload: { sourceId: string }) => {
+    deleteKnowledgeSource(payload.sourceId);
+    return { success: true };
+  });
 
-  ipcMain.handle(
-    'knowledge:list',
-    async (_event, payload: { agentId: string }) => {
-      return getKnowledgeSources(payload.agentId);
-    },
-  );
+  ipcMain.handle('knowledge:list', async (_event, payload: { agentId: string }) => {
+    return getKnowledgeSources(payload.agentId);
+  });
 
-  ipcMain.handle(
-    'knowledge:search',
-    async (_event, payload: { agentId: string; query: string }) => {
-      return hybridKnowledgeSearch(payload.agentId, payload.query);
-    },
-  );
+  ipcMain.handle('knowledge:search', async (_event, payload: { agentId: string; query: string }) => {
+    return hybridKnowledgeSearch(payload.agentId, payload.query);
+  });
 
   ipcMain.handle(
     'knowledge:benchmark:start',
@@ -170,41 +137,33 @@ export function registerKnowledgeHandlers(ctx: IpcContext): void {
     },
   );
 
-  ipcMain.handle(
-    'knowledge:benchmark:status',
-    async (_event, payload: { benchmarkId: string }) => {
-      const benchmark = getKnowledgeBenchmark(payload.benchmarkId);
-      if (!benchmark)
-        return { status: 'failed', progress: 0, currentStage: 'not_found' };
-      return {
-        status: benchmark.status,
-        progress: benchmark.status === 'completed' ? 100 : 0,
-        currentStage: benchmark.status,
-        result:
-          benchmark.status === 'completed' ? benchmark.results : undefined,
-      };
-    },
-  );
+  ipcMain.handle('knowledge:benchmark:status', async (_event, payload: { benchmarkId: string }) => {
+    const benchmark = getKnowledgeBenchmark(payload.benchmarkId);
+    if (!benchmark) return { status: 'failed', progress: 0, currentStage: 'not_found' };
+    return {
+      status: benchmark.status,
+      progress: benchmark.status === 'completed' ? 100 : 0,
+      currentStage: benchmark.status,
+      result: benchmark.status === 'completed' ? benchmark.results : undefined,
+    };
+  });
 
-  ipcMain.handle(
-    'knowledge:config:get',
-    async (_event, payload: { agentId: string }) => {
-      const config = getKnowledgeAgentConfig(payload.agentId);
-      if (!config) {
-        return {
-          agentId: payload.agentId,
-          hydeEnabled: true,
-          hydeThreshold: 0.5,
-          minScore: 0.4,
-          defaultStrategy: 'recursive',
-          rerankEnabled: true,
-          rerankTopK: 3,
-          searchTopK: 20,
-        };
-      }
-      return config;
-    },
-  );
+  ipcMain.handle('knowledge:config:get', async (_event, payload: { agentId: string }) => {
+    const config = getKnowledgeAgentConfig(payload.agentId);
+    if (!config) {
+      return {
+        agentId: payload.agentId,
+        hydeEnabled: true,
+        hydeThreshold: 0.5,
+        minScore: 0.4,
+        defaultStrategy: 'recursive',
+        rerankEnabled: true,
+        rerankTopK: 3,
+        searchTopK: 20,
+      };
+    }
+    return config;
+  });
 
   ipcMain.handle(
     'knowledge:config:update',

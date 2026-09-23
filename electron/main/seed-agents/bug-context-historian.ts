@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { PT_BR_BLOCK } from './_shared/language-pt-br';
 import { GIT_RESTRICTIONS_BLOCK } from './_shared/git-restrictions';
@@ -11,7 +10,7 @@ export const bugContextHistorian: Omit<AgentConfig, 'sortOrder'> = {
   name: 'Bug Context Historian',
   description:
     'Fase 2 do pipeline bug, lente historica: parte da mudanca (git log/blame, migrations, dependencias, divida declarada) para achar quando e por que o comportamento mudou. Produz analise em MD; nao escreve arquivo.',
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'enabled' as const,
   thinkingBudget: 10000,

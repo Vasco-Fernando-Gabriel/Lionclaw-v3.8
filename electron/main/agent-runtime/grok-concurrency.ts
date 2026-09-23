@@ -25,13 +25,15 @@ export function isGrokQuotaFailure(error: unknown): boolean {
     if (status === 429 || status === '429') return true;
   }
   const text = (error instanceof Error ? `${error.name} ${error.message}` : String(error)).toLowerCase();
-  return text.includes('429')
-    || text.includes('rate limit')
-    || text.includes('rate_limit')
-    || text.includes('too many requests')
-    || text.includes('quota')
-    || text.includes('weekly limit')
-    || text.includes('extra usage');
+  return (
+    text.includes('429') ||
+    text.includes('rate limit') ||
+    text.includes('rate_limit') ||
+    text.includes('too many requests') ||
+    text.includes('quota') ||
+    text.includes('weekly limit') ||
+    text.includes('extra usage')
+  );
 }
 
 export let GROK_MAX_CONCURRENCY = 3;
@@ -89,17 +91,19 @@ function canAdmit(state: LeaseState): boolean {
 function saturatedByOwnAncestry(state: LeaseState): boolean {
   const executionDepth = state.executionDepth;
   if (
-    state.role !== 'child'
-    || state.rootExecutionId === undefined
-    || executionDepth === undefined
-    || active.size < GROK_MAX_CONCURRENCY
-  ) return false;
-  return [...active].some((lease) => (
-    lease.rootExecutionId === state.rootExecutionId
-    && lease.executionDepth !== undefined
-    && lease.executionDepth < executionDepth
-    && lease.toolBearing
-  ));
+    state.role !== 'child' ||
+    state.rootExecutionId === undefined ||
+    executionDepth === undefined ||
+    active.size < GROK_MAX_CONCURRENCY
+  )
+    return false;
+  return [...active].some(
+    (lease) =>
+      lease.rootExecutionId === state.rootExecutionId &&
+      lease.executionDepth !== undefined &&
+      lease.executionDepth < executionDepth &&
+      lease.toolBearing,
+  );
 }
 
 function makeLease(state: LeaseState): () => void {
@@ -137,10 +141,10 @@ function drainQueue(): void {
 }
 
 export function acquireGrokSlot(request: GrokSlotRequest | AbortSignal = {}): Promise<() => void> {
-  const options: GrokSlotRequest = typeof (request as AbortSignal).aborted === 'boolean'
-    && !('signal' in (request as GrokSlotRequest))
-    ? { signal: request as AbortSignal }
-    : request as GrokSlotRequest;
+  const options: GrokSlotRequest =
+    typeof (request as AbortSignal).aborted === 'boolean' && !('signal' in (request as GrokSlotRequest))
+      ? { signal: request as AbortSignal }
+      : (request as GrokSlotRequest);
   const signal = options.signal;
   const state: LeaseState = {
     role: options.role ?? 'standalone',
@@ -150,9 +154,11 @@ export function acquireGrokSlot(request: GrokSlotRequest | AbortSignal = {}): Pr
   };
   if (signal?.aborted) return Promise.reject(new GrokConcurrencyError('Grok slot acquisition aborted'));
   if (saturatedByOwnAncestry(state)) {
-    return Promise.reject(new GrokConcurrencyError(
-      'Grok nested subagent cannot acquire a slot while its own tool-bearing ancestry saturates the pool.',
-    ));
+    return Promise.reject(
+      new GrokConcurrencyError(
+        'Grok nested subagent cannot acquire a slot while its own tool-bearing ancestry saturates the pool.',
+      ),
+    );
   }
   if (canAdmit(state)) return Promise.resolve(makeLease(state));
   return new Promise((resolve, reject) => {

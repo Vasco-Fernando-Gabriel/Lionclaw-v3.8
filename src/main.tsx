@@ -2,7 +2,6 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import './index.css';
-// Fonte da interface (LionLabs Grotesk por padrão; alternável em Settings > Geral)
 import './assets/fonts/lionlabs-grotesk/font-switch.css';
 try {
   document.documentElement.dataset.uifont = localStorage.getItem('lionlabs:uifont') || 'lionlabs';

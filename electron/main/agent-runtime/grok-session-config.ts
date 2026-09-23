@@ -3,6 +3,7 @@ import type { AgentQueryConfig } from '../agent-config-resolver';
 import type { ChatFeatureToggles, OrchestratorRuntime } from '../../../src/types';
 import type { SubagentDispatchContext } from './types';
 import type { BrowserWindow } from 'electron';
+import { chatInvocationContext, type McpInvocationTurnBinding } from '../mcp-invocation-context';
 
 export type GrokToolProfile = 'chat' | 'remote-chat' | 'pipeline' | 'agent-scoped' | 'one-shot' | 'workflow';
 
@@ -30,6 +31,8 @@ export interface BuildGrokSessionToolsArgs {
   dispatchContext?: SubagentDispatchContext;
   allowUserQuestion?: boolean;
   getWindow?: () => BrowserWindow | null;
+  sessionId?: string;
+  turnBinding?: McpInvocationTurnBinding;
 }
 
 export interface GrokSessionTools {
@@ -88,6 +91,7 @@ function runtimeSurface(): OrchestratorRuntime {
 interface GrokMcpInvocationScope {
   sessionId: string;
   turnId: string;
+  binding?: McpInvocationTurnBinding;
 }
 
 interface GrokMcpCatalogTool {
@@ -152,15 +156,16 @@ async function buildSubagentTool(args: BuildGrokSessionToolsArgs): Promise<GrokE
               parentAbortSignal: AbortSignal.any([host.parentAbortSignal, callContext.signal]),
             }
           : host;
-        const result = await dispatchLionSubagent({
-          agentId,
-          prompt,
-          ...(context ? { context } : {}),
-          ...(callContext?.toolUseId ? { toolUseId: callContext.toolUseId } : {}),
-          ...(callContext?.transportCorrelation
-            ? { transportCorrelation: callContext.transportCorrelation }
-            : {}),
-        }, callHost);
+        const result = await dispatchLionSubagent(
+          {
+            agentId,
+            prompt,
+            ...(context ? { context } : {}),
+            ...(callContext?.toolUseId ? { toolUseId: callContext.toolUseId } : {}),
+            ...(callContext?.transportCorrelation ? { transportCorrelation: callContext.transportCorrelation } : {}),
+          },
+          callHost,
+        );
         if (!result.ok) throw new Error(result.error ?? `Subagent ${agentId} falhou.`);
         return { output: result.output ?? '', message: `subagent ${agentId} concluido` };
       } catch (error) {
@@ -174,6 +179,7 @@ async function buildSubagentTool(args: BuildGrokSessionToolsArgs): Promise<GrokE
 async function buildAskUserTool(
   getWindow: () => BrowserWindow | null,
   abortSignal: AbortSignal,
+  sessionId: string | undefined,
 ): Promise<GrokExternalTool> {
   return externalTool(
     'lion_ask_user_question',
@@ -192,9 +198,9 @@ async function buildAskUserTool(
         const response = await sendAskQuestion(
           getWindow,
           [{ question, header: 'Pergunta', options: [] }],
-          callContext?.signal
-            ? AbortSignal.any([abortSignal, callContext.signal])
-            : abortSignal,
+          callContext?.signal ? AbortSignal.any([abortSignal, callContext.signal]) : abortSignal,
+          undefined,
+          sessionId ? { sessionId } : undefined,
         );
         const answer = response.answers?.[question];
         return {
@@ -216,10 +222,11 @@ async function readChatCatalog(capabilities?: ChatFeatureToggles): Promise<{
   tools: GrokMcpCatalogTool[];
 }> {
   const { getMCPConfigForAgent, getMcpToolRegistryEntries } = await import('../mcp-manager');
-  const specs = await getMCPConfigForAgent(undefined, {
-    surface: runtimeSurface(),
-    ...(capabilities ? { capabilities } : {}),
-  }) ?? {};
+  const specs =
+    (await getMCPConfigForAgent(undefined, {
+      surface: runtimeSurface(),
+      ...(capabilities ? { capabilities } : {}),
+    })) ?? {};
   const allowedServers = new Set(Object.keys(specs));
   const tools = getMcpToolRegistryEntries()
     .filter((entry) => allowedServers.has(entry.mcpId))
@@ -276,7 +283,7 @@ async function buildIndexTools(
           sessionId: scope.sessionId,
           turnId: scope.turnId,
           allowedServerIds,
-          ...(chatSurface ? { context: { surface: 'chat' as const } } : {}),
+          ...(chatSurface ? { context: chatInvocationContext(scope.binding) } : {}),
           ...(callContext?.signal ? { signal: callContext.signal } : {}),
         });
         if (result.isError) throw new Error(result.content);
@@ -308,23 +315,23 @@ async function buildIndexTools(
       return { output: result.content, message: 'mcp_schema ok' };
     },
   );
-  const index = allowedServerIds.length === 0
-    ? 'Nenhum servidor MCP esta materializado neste turno.'
-    : allowedServerIds.map((server) => {
-      const tools = catalog.filter((tool) => tool.serverId === server);
-      return `- ${server}: ${tools.map((tool) => tool.toolName).join(', ') || '(sem tools descobertas)'}`;
-    }).join('\n');
+  const index =
+    allowedServerIds.length === 0
+      ? 'Nenhum servidor MCP esta materializado neste turno.'
+      : allowedServerIds
+          .map((server) => {
+            const tools = catalog.filter((tool) => tool.serverId === server);
+            return `- ${server}: ${tools.map((tool) => tool.toolName).join(', ') || '(sem tools descobertas)'}`;
+          })
+          .join('\n');
   return { tools: [invoke, schema], index };
 }
 
 function record(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return value !== null && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
-export function stripUnmaterializedGrokTools(
-  prompt: string,
-  materializedNames: ReadonlySet<string>,
-): string {
+export function stripUnmaterializedGrokTools(prompt: string, materializedNames: ReadonlySet<string>): string {
   return prompt
     .split('\n')
     .filter((line) => {
@@ -336,18 +343,22 @@ export function stripUnmaterializedGrokTools(
     .trim();
 }
 
-export async function buildGrokSessionTools(
-  args: BuildGrokSessionToolsArgs,
-): Promise<GrokSessionTools> {
+export async function buildGrokSessionTools(args: BuildGrokSessionToolsArgs): Promise<GrokSessionTools> {
   let tools: GrokExternalTool[] = [];
   let index = '';
-  const mcpScope = { sessionId: randomUUID(), turnId: randomUUID() };
+  const mcpScope: GrokMcpInvocationScope = args.turnBinding
+    ? {
+        sessionId: args.turnBinding.sessionId,
+        turnId: args.turnBinding.turnId,
+        binding: args.turnBinding,
+      }
+    : { sessionId: randomUUID(), turnId: randomUUID() };
   switch (args.profile) {
     case 'chat': {
       const [subagent, askUser] = await Promise.all([
         args.dispatchContext ? buildSubagentTool(args) : Promise.resolve(null),
         args.allowUserQuestion === true && args.getWindow
-          ? buildAskUserTool(args.getWindow, args.abortController.signal)
+          ? buildAskUserTool(args.getWindow, args.abortController.signal, args.sessionId)
           : Promise.resolve(null),
       ]);
       const hostTools = [subagent, askUser].filter((tool): tool is GrokExternalTool => tool !== null);
@@ -365,9 +376,8 @@ export async function buildGrokSessionTools(
     case 'agent-scoped':
     case 'workflow':
     case 'pipeline': {
-      const subagent = args.dispatchContext && args.config.allowedTools.includes('Agent')
-        ? await buildSubagentTool(args)
-        : null;
+      const subagent =
+        args.dispatchContext && args.config.allowedTools.includes('Agent') ? await buildSubagentTool(args) : null;
       const mcpTools = await readAllowedMcpTools(args.config.allowedTools);
       if (mcpTools.length > 0) {
         const indexed = await buildIndexTools(mcpScope, mcpTools, false);

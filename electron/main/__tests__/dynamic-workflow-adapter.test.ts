@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   runNodeAgent,
@@ -37,9 +36,7 @@ function fakeResolved(over: Partial<AgentQueryConfig>): AgentQueryConfig {
   };
 }
 
-function fakeClaudeBackend(
-  capture?: (args: Parameters<ClaudeCompatBackend>[0]) => void,
-): ClaudeCompatBackend {
+function fakeClaudeBackend(capture?: (args: Parameters<ClaudeCompatBackend>[0]) => void): ClaudeCompatBackend {
   return async (input) => {
     capture?.(input);
     return {
@@ -83,7 +80,7 @@ describe('workflow-agent-adapter: drift vs AgentConfig[runtime] (risco 19)', () 
     expect(dispatchFamilyOf('local')).toBe('local-family');
     expect(dispatchFamilyOf('external')).toBe('local-family');
     expect(dispatchFamilyOf('lion-sdk')).toBeNull();
-    expect(dispatchFamilyOf('google-genai')).toBeNull(); // nao e AgentConfig[runtime]
+    expect(dispatchFamilyOf('google-genai')).toBeNull();
   });
 });
 
@@ -135,10 +132,9 @@ describe('workflow-agent-adapter: canUseTool composto (AC-4 cloud, 8.3)', () => 
   it('writer: Bash negado sem allowBash; permitido so para comando da allowlist', () => {
     const noBash = policyFor('workspace-write', false);
     const guard = new WorkflowPathGuard({ workspaceRoot: ROOT });
-    expect(
-      createComposedCanUseTool(noBash, guard)({ toolName: 'Bash', input: { command: 'npm test' } })
-        .behavior,
-    ).toBe('deny');
+    expect(createComposedCanUseTool(noBash, guard)({ toolName: 'Bash', input: { command: 'npm test' } }).behavior).toBe(
+      'deny',
+    );
 
     const withBash = policyFor('workspace-write', true);
     const canUse = createComposedCanUseTool(withBash, guard);
@@ -283,8 +279,7 @@ describe('workflow-agent-adapter: runNodeAgent (AC-3/AC-6/AC-7)', () => {
   it('AC-4 cloud: o backend recebe allowedTools SEM guard-gated + canUseTool composto', async () => {
     let captured: Parameters<ClaudeCompatBackend>[0] | undefined;
     const deps: WorkflowAdapterDeps = {
-      resolveConfig: async () =>
-        fakeResolved({ runtime: 'cloud', allowedTools: ['Read', 'Write', 'Bash'] }),
+      resolveConfig: async () => fakeResolved({ runtime: 'cloud', allowedTools: ['Read', 'Write', 'Bash'] }),
       claudeCompat: fakeClaudeBackend((a) => (captured = a)),
     };
     await runNodeAgent(baseInput, deps);
@@ -455,11 +450,10 @@ describe('workflow-agent-adapter: runNodeAgent (AC-3/AC-6/AC-7)', () => {
       },
       deps,
     );
-    expect(res.ok).toBe(false); // local nao tem allowlist nem sandbox -> sem contencao
+    expect(res.ok).toBe(false);
     expect(res.errorMessage).toContain('Bash');
   });
 });
-
 
 describe('workflow-agent-adapter: F3 override de modelo por dispatch path', () => {
   const baseInput = {
@@ -611,9 +605,7 @@ describe('workflow-agent-adapter: runtime cursor (SPEC cursor-runtime E6)', () =
     expect(captured!.model).toBe('composer-2.5');
     expect(captured!.allowedTools).not.toContain('Write');
     expect(captured!.allowedTools).not.toContain('Bash');
-    expect(
-      captured!.canUseTool({ toolName: 'Write', input: { file_path: `${ROOT}/x` } }).behavior,
-    ).toBe('deny');
+    expect(captured!.canUseTool({ toolName: 'Write', input: { file_path: `${ROOT}/x` } }).behavior).toBe('deny');
   });
 
   it('model override VALIDA POR CATALOGO, nunca por prefixo: claude-* do catalogo Cursor aplica', async () => {
@@ -806,17 +798,13 @@ describe('workflow-agent-adapter: forced structured output (SPEC-010 sec 3/5.1, 
         outputTokens: 5,
       }),
     };
-    const res = await runNodeAgent(
-      { ...baseInput, outputSchema: SCHEMA, maxSchemaAttempts: 2 },
-      deps,
-    );
+    const res = await runNodeAgent({ ...baseInput, outputSchema: SCHEMA, maxSchemaAttempts: 2 }, deps);
     expect(res.ok).toBe(false);
     expect(res.failureClass).toBe('schema');
     expect(res.structuredOutput).toBeUndefined();
     expect(res.errorMessage).toContain('sprints');
   });
 });
-
 
 describe('workflow-agent-adapter: S4 override de effort por dispatch path', () => {
   const baseInput = {
@@ -926,10 +914,13 @@ describe('workflow-agent-adapter: S4 override de effort por dispatch path', () =
 
   it('kimi reconhece override de effort antes do preflight de sandbox', async () => {
     expect(runtimeSupportsEffortOverride('kimi')).toBe(true);
-    const res = await runNodeAgent({ ...baseInput, effectiveEffort: 'high' }, {
-      resolveConfig: async () => fakeResolved({ runtime: 'kimi', allowedTools: ['Read'] }),
-      kimiBackend: async () => ({ output: 'nao deve rodar', model: 'kimi-code/kimi-for-coding' }),
-    });
+    const res = await runNodeAgent(
+      { ...baseInput, effectiveEffort: 'high' },
+      {
+        resolveConfig: async () => fakeResolved({ runtime: 'kimi', allowedTools: ['Read'] }),
+        kimiBackend: async () => ({ output: 'nao deve rodar', model: 'kimi-code/kimi-for-coding' }),
+      },
+    );
     expect(res.ok).toBe(false);
     expect(res.errorMessage).toContain('read-only real');
     expect(res.errorMessage).not.toContain('effort-unsupported-runtime');
@@ -1022,7 +1013,6 @@ describe('workflow-agent-adapter: S4 model-cross-family (fail-closed por prefixo
   });
 });
 
-
 describe('S5 codex costStatus honesto (unknown-pricing)', () => {
   const baseInput = {
     runId: 'run-1',
@@ -1058,8 +1048,7 @@ describe('S5 codex costStatus honesto (unknown-pricing)', () => {
 
   it('model codex FORA da tabela de pricing -> costStatus unknown + unknown-pricing (nao $0 known)', async () => {
     const deps: WorkflowAdapterDeps = {
-      resolveConfig: async () =>
-        fakeResolved({ runtime: 'codex', allowedTools: [], model: 'gpt-99-experimental' }),
+      resolveConfig: async () => fakeResolved({ runtime: 'codex', allowedTools: [], model: 'gpt-99-experimental' }),
       createCodexSession: fakeCreate,
       hasKnownPricing: () => false,
     };
@@ -1084,8 +1073,7 @@ describe('S5 codex costStatus honesto (unknown-pricing)', () => {
 
   it('pricing REAL: model desconhecido de verdade tambem vira unknown (sem injecao)', async () => {
     const deps: WorkflowAdapterDeps = {
-      resolveConfig: async () =>
-        fakeResolved({ runtime: 'codex', allowedTools: [], model: 'modelo-inexistente-xyz' }),
+      resolveConfig: async () => fakeResolved({ runtime: 'codex', allowedTools: [], model: 'modelo-inexistente-xyz' }),
       createCodexSession: fakeCreate,
     };
     const res = await runNodeAgent(baseInput, deps);

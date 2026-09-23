@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../logger', () => ({
@@ -13,9 +12,7 @@ const bridge = vi.hoisted(() => ({
     appServerSupported: true,
     binaryPath: '/usr/local/bin/codex',
   }),
-  isCodexAvailable: vi
-    .fn()
-    .mockResolvedValue({ installed: true, version: '0.140.0', authenticated: true }),
+  isCodexAvailable: vi.fn().mockResolvedValue({ installed: true, version: '0.140.0', authenticated: true }),
   CodexUnavailableError: class CodexUnavailableError extends Error {
     constructor(m: string) {
       super(m);
@@ -55,13 +52,13 @@ import {
   createAccumulator,
   finalizeResponse,
   extractCodexErrorCode,
+  extractCodexErrorDetail,
   type AppServerEvent,
 } from '../official-event-translator';
 import { codexTurnFailureError, TypedProviderError } from '../../agent-runtime/llm-error';
 import type { CodexRunOptions, CodexRunSessionKey } from '../types';
 
 const { CodexAuthError } = bridge;
-
 
 class FakeTransport implements AppServerTransport {
   public readonly requests: Array<{ method: string; params?: unknown }> = [];
@@ -150,12 +147,11 @@ function driverWith(transport: FakeTransport): OfficialAppServerDriver {
   return new OfficialAppServerDriver(factory);
 }
 
-
 describe('SB-4 extractCodexErrorCode', () => {
   it('AC-B11: ErrorNotification com error string retorna a string', () => {
-    expect(
-      extractCodexErrorCode({ method: 'error', params: { error: 'usageLimitExceeded' } }),
-    ).toBe('usageLimitExceeded');
+    expect(extractCodexErrorCode({ method: 'error', params: { error: 'usageLimitExceeded' } })).toBe(
+      'usageLimitExceeded',
+    );
   });
 
   it('AC-B11: ErrorNotification com enum-variant serde retorna a chave', () => {
@@ -189,7 +185,6 @@ describe('SB-4 extractCodexErrorCode', () => {
     expect(extractCodexErrorCode({ method: 'error' })).toBeUndefined();
   });
 });
-
 
 describe('SB-4 finalizeResponse errorCode gating (AC-B11 [INV])', () => {
   it('AC-B11: status completed e byte-identico — a chave errorCode NAO existe', () => {
@@ -249,7 +244,6 @@ describe('SB-4 finalizeResponse errorCode gating (AC-B11 [INV])', () => {
     expect(res.errorCode).toBe('serverOverloaded');
   });
 });
-
 
 describe('SB-4 driver errorCode wiring (AC-B11/AC-B12)', () => {
   beforeEach(() => {
@@ -322,7 +316,6 @@ describe('SB-4 driver errorCode wiring (AC-B11/AC-B12)', () => {
   });
 });
 
-
 describe('SB-4 codexTurnFailureError (AC-B12)', () => {
   it('AC-B12: usageLimitExceeded classifica LLM-QUOTA acionavel', () => {
     const err = codexTurnFailureError({
@@ -349,5 +342,63 @@ describe('SB-4 codexTurnFailureError (AC-B12)', () => {
   it('AC-B11: failed sem sinal algum cai em LLM-UNKNOWN (nunca chuta categoria)', () => {
     const err = codexTurnFailureError({ status: 'failed' });
     expect(err.code).toBe('LLM-UNKNOWN');
+  });
+});
+
+describe('erro embrulhado em tagged union do app-server', () => {
+  const WRAPPED: AppServerEvent = {
+    method: 'turn/completed',
+    params: {
+      turn: {
+        status: 'failed',
+        error: {
+          codexErrorInfo: {
+            message: 'You have hit your usage limit for this model.',
+            details: 'resets at 14:00',
+          },
+        },
+      },
+    },
+  };
+
+  it('o code desce na tag e nao para no embrulho', () => {
+    expect(extractCodexErrorCode(WRAPPED)).toBe('codexErrorInfo');
+  });
+
+  it('o detalhe humano e extraido de dentro do embrulho', () => {
+    const detail = extractCodexErrorDetail(WRAPPED);
+    expect(detail).toContain('usage limit');
+    expect(detail).toContain('resets at 14:00');
+  });
+
+  it('code aninhado vira caminho pontuado', () => {
+    expect(
+      extractCodexErrorCode({
+        method: 'error',
+        params: { error: { codexErrorInfo: { code: 'rateLimited' } } },
+      }),
+    ).toBe('codexErrorInfo.rateLimited');
+  });
+
+  it('payload sem message nenhuma cai no JSON cru em vez de sumir', () => {
+    const detail = extractCodexErrorDetail({
+      method: 'error',
+      params: { error: { weirdShape: { a: 1 } } },
+    });
+    expect(detail).toBe('{"weirdShape":{"a":1}}');
+  });
+
+  it('evento sem erro nao inventa detalhe', () => {
+    expect(extractCodexErrorDetail({ method: 'error' })).toBeUndefined();
+  });
+
+  it('finalizeResponse propaga errorDetail so em falha', () => {
+    const acc = createAccumulator('t1');
+    acc.errorDetail = 'boom';
+    acc.failed = true;
+    expect(finalizeResponse(acc, 'failed').errorDetail).toBe('boom');
+    const ok = createAccumulator('t1');
+    ok.errorDetail = 'boom';
+    expect(finalizeResponse(ok, 'completed').errorDetail).toBeUndefined();
   });
 });

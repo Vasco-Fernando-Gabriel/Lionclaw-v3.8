@@ -54,10 +54,19 @@ describe('Grok ACP translator', () => {
     const onText = vi.fn();
     const onThinking = vi.fn();
     const onToolUseIO = vi.fn();
-    translateGrokSessionUpdate({ sessionUpdate: 'agent_thought_chunk', content: { text: 'pensando' } }, acc, { onThinking });
+    translateGrokSessionUpdate({ sessionUpdate: 'agent_thought_chunk', content: { text: 'pensando' } }, acc, {
+      onThinking,
+    });
     translateGrokSessionUpdate({ sessionUpdate: 'agent_message_chunk', content: { text: 'feito' } }, acc, { onText });
-    translateGrokSessionUpdate({ sessionUpdate: 'tool_call', toolCallId: 't1', title: 'Write', rawInput: { file_path: 'a' } }, acc);
-    translateGrokSessionUpdate({ sessionUpdate: 'tool_call_update', toolCallId: 't1', status: 'completed', rawOutput: 'ok' }, acc, { onToolUseIO });
+    translateGrokSessionUpdate(
+      { sessionUpdate: 'tool_call', toolCallId: 't1', title: 'Write', rawInput: { file_path: 'a' } },
+      acc,
+    );
+    translateGrokSessionUpdate(
+      { sessionUpdate: 'tool_call_update', toolCallId: 't1', status: 'completed', rawOutput: 'ok' },
+      acc,
+      { onToolUseIO },
+    );
     expect(acc.content).toBe('feito');
     expect(acc.toolUses).toBe(1);
     expect(onText).toHaveBeenCalledWith('feito');
@@ -110,9 +119,11 @@ describe('Grok ACP translator', () => {
   });
 
   it('aceita zero legitimo somente com atestado explicito de completude', () => {
-    expect(parseGrokUsage({
-      _meta: { usage: { reported: true, inputTokens: 10, outputTokens: 0 } },
-    }).reported).toBe(true);
+    expect(
+      parseGrokUsage({
+        _meta: { usage: { reported: true, inputTokens: 10, outputTokens: 0 } },
+      }).reported,
+    ).toBe(true);
   });
 
   it('trata reported:false explicito como veto mesmo com dimensoes positivas', () => {
@@ -171,8 +182,9 @@ describe('Grok ACP translator', () => {
       cacheReadTokens: 0,
       cacheCreationTokens: 0,
     });
-    expect(finalizeGrokResponse(createGrokAccumulator(), 'completed', terminal).metadata)
-      .not.toHaveProperty('costUsdTicks');
+    expect(finalizeGrokResponse(createGrokAccumulator(), 'completed', terminal).metadata).not.toHaveProperty(
+      'costUsdTicks',
+    );
   });
 
   it.each([
@@ -223,15 +235,14 @@ describe('Grok ACP translator', () => {
     };
 
     expect(parseGrokUsage(terminal).reported).toBe(false);
-    expect(finalizeGrokResponse(createGrokAccumulator(), 'completed', terminal).metadata)
-      .toEqual({
-        rawUsage: {
-          inputTokens: 10,
-          outputTokens: 2,
-          cacheReadTokens: 11,
-          costUsdTicks: 270_800_000,
-        },
-      });
+    expect(finalizeGrokResponse(createGrokAccumulator(), 'completed', terminal).metadata).toEqual({
+      rawUsage: {
+        inputTokens: 10,
+        outputTokens: 2,
+        cacheReadTokens: 11,
+        costUsdTicks: 270_800_000,
+      },
+    });
   });
 
   it('aceita safe integer no boundary inclusivo de cache igual ao input', () => {
@@ -259,15 +270,17 @@ describe('Grok ACP translator', () => {
   });
 
   it('rejeita modelUsage incompleto em vez de fabricar zeros', () => {
-    expect(parseGrokUsage({
-      _meta: {
-        usage: {
-          inputTokens: 10,
-          modelCalls: 1,
-          modelUsage: { 'grok-4.5': { modelCalls: 1 } },
+    expect(
+      parseGrokUsage({
+        _meta: {
+          usage: {
+            inputTokens: 10,
+            modelCalls: 1,
+            modelUsage: { 'grok-4.5': { modelCalls: 1 } },
+          },
         },
-      },
-    }).modelUsage).toBeUndefined();
+      }).modelUsage,
+    ).toBeUndefined();
   });
 
   it('falha fechado para stopReason desconhecido', () => {

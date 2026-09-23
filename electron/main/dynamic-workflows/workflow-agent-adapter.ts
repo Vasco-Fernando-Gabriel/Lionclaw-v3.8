@@ -1,20 +1,11 @@
-
 import { createLogger } from '../logger';
 import { resolveAgentQueryConfig } from '../agent-config-resolver';
 import { resolveCodexSessionForRun } from '../agent-runtime/codex-session-factory';
-import {
-  codexEffortToClaude,
-} from '../agent-runtime/chat-effort-inheritance';
+import { codexEffortToClaude } from '../agent-runtime/chat-effort-inheritance';
 import { getAgent } from '../db';
 import { hasKnownPricing, MODEL_PRICING } from '../pricing';
-import {
-  clampGrokEffortForModel,
-  type GrokReasoningEffort,
-} from '../../../src/constants/grok-models';
-import {
-  clampCursorEffortForModel,
-  getCursorModel,
-} from '../../../src/constants/cursor-models';
+import { clampGrokEffortForModel, type GrokReasoningEffort } from '../../../src/constants/grok-models';
+import { clampCursorEffortForModel, getCursorModel } from '../../../src/constants/cursor-models';
 import { isCursorCatalogModel } from '../agent-runtime/cursor-sidecar/model-catalog';
 import type { AgentConfig, CodexChatReasoningEffort } from '../../../src/types';
 import type { AgentQueryConfig } from '../agent-config-resolver';
@@ -29,65 +20,37 @@ import {
 import { preflightNode, type PreflightResult } from './workflow-preflight';
 import { WorkflowPathGuard } from './workflow-path-guard';
 import { normalizeCost, type NormalizedCost, mergeCostStatusReasons } from './workflow-cost';
-import {
-  classifyFailure,
-  type WorkflowFailureRuntime,
-} from './workflow-failure';
-import {
-  runLocalDispatcher,
-  type LocalModelRound,
-  type LocalToolExecutor,
-} from './workflow-local-dispatcher';
+import { classifyFailure, type WorkflowFailureRuntime } from './workflow-failure';
+import { runLocalDispatcher, type LocalModelRound, type LocalToolExecutor } from './workflow-local-dispatcher';
 import {
   resolveStructuredOutput,
   type SchemaAttemptFn,
   type SchemaValidator,
   type WorkflowOutputSchema,
 } from './workflow-schema';
-import type {
-  DynamicWorkflowFailureClass,
-  WorkflowNodeExecutionPolicy,
-} from '../../../src/types/dynamic-workflow';
+import type { DynamicWorkflowFailureClass, WorkflowNodeExecutionPolicy } from '../../../src/types/dynamic-workflow';
 
 export type AdapterRuntime =
-  | 'cloud'
-  | 'local'
-  | 'external'
-  | 'codex'
-  | 'kimi'
-  | 'grok'
-  | 'zai'
-  | 'minimax-tp'
-  | 'cursor';
+  'cloud' | 'local' | 'external' | 'codex' | 'kimi' | 'grok' | 'zai' | 'minimax-tp' | 'cursor';
 
 const logger = createLogger('dynamic-workflow-agent-adapter');
 
-export type AdapterDispatchFamily =
-  | 'claude-compatible'
-  | 'codex'
-  | 'grok'
-  | 'cursor'
-  | 'local-family';
+export type AdapterDispatchFamily = 'claude-compatible' | 'codex' | 'grok' | 'cursor' | 'local-family';
 
-export const ADAPTER_RUNTIME_CASES: Record<AdapterRuntime, AdapterDispatchFamily> =
-  {
-    cloud: 'claude-compatible',
-    zai: 'claude-compatible',
-    'minimax-tp': 'claude-compatible',
-    codex: 'codex',
-    kimi: 'codex',
-    grok: 'grok',
-    cursor: 'cursor',
-    local: 'local-family',
-    external: 'local-family',
-  };
+export const ADAPTER_RUNTIME_CASES: Record<AdapterRuntime, AdapterDispatchFamily> = {
+  cloud: 'claude-compatible',
+  zai: 'claude-compatible',
+  'minimax-tp': 'claude-compatible',
+  codex: 'codex',
+  kimi: 'codex',
+  grok: 'grok',
+  cursor: 'cursor',
+  local: 'local-family',
+  external: 'local-family',
+};
 
-export function dispatchFamilyOf(
-  runtime: string,
-): AdapterDispatchFamily | null {
-  return runtime in ADAPTER_RUNTIME_CASES
-    ? ADAPTER_RUNTIME_CASES[runtime as AdapterRuntime]
-    : null;
+export function dispatchFamilyOf(runtime: string): AdapterDispatchFamily | null {
+  return runtime in ADAPTER_RUNTIME_CASES ? ADAPTER_RUNTIME_CASES[runtime as AdapterRuntime] : null;
 }
 
 export function runtimeSupportsModelOverride(runtime: AdapterRuntime): boolean {
@@ -124,7 +87,6 @@ export function defaultCursorCatalogHasModel(model: string): boolean {
   return getCursorModel(model) !== undefined || isCursorCatalogModel(model);
 }
 
-
 export interface ComposedToolInput {
   toolName: string;
   input: Record<string, unknown>;
@@ -146,10 +108,7 @@ export function createComposedCanUseTool(
   const isReadOnly = policy.access === 'read-only';
   const allowedCommands = policy.allowedCommands;
   const guardGated = new Set<string>(GUARD_GATED_TOOL_NAMES);
-  const mcpToolSubset =
-    policy.allowedMcpTools.length > 0
-      ? new Set<string>(policy.allowedMcpTools)
-      : null;
+  const mcpToolSubset = policy.allowedMcpTools.length > 0 ? new Set<string>(policy.allowedMcpTools) : null;
 
   return ({ toolName, input }): ToolDecision => {
     if (isSideRouteTool(toolName)) {
@@ -186,9 +145,7 @@ export function createComposedCanUseTool(
         };
       }
       const verdict = pathGuard.checkWrite(fp);
-      return verdict.ok
-        ? { behavior: 'allow' }
-        : { behavior: 'deny', message: verdict.message };
+      return verdict.ok ? { behavior: 'allow' } : { behavior: 'deny', message: verdict.message };
     }
 
     if (toolName === 'Bash') {
@@ -219,10 +176,7 @@ export function isMcpToolName(toolName: string): boolean {
   return /^mcp__[^_]+(?:_[^_]+)*__.+/.test(toolName);
 }
 
-export function isCommandAllowed(
-  command: string,
-  allowedCommands: string[],
-): boolean {
+export function isCommandAllowed(command: string, allowedCommands: string[]): boolean {
   if (allowedCommands.length === 0) return false;
   const normalized = command.trim();
   if (!normalized) return false;
@@ -235,7 +189,6 @@ export function isCommandAllowed(
   });
 }
 
-
 export function partitionSdkTools(policy: WorkflowNodeExecutionPolicy): {
   autoApproved: string[];
   guardRouted: string[];
@@ -244,7 +197,7 @@ export function partitionSdkTools(policy: WorkflowNodeExecutionPolicy): {
   const autoApproved: string[] = [];
   const guardRouted: string[] = [];
   for (const tool of policy.effectiveTools) {
-    if (isSideRouteTool(tool)) continue; // nunca (defensivo).
+    if (isSideRouteTool(tool)) continue;
     if (guardGated.has(tool)) {
       guardRouted.push(tool);
     } else {
@@ -253,7 +206,6 @@ export function partitionSdkTools(policy: WorkflowNodeExecutionPolicy): {
   }
   return { autoApproved, guardRouted };
 }
-
 
 export interface NodeRunResult {
   ok: boolean;
@@ -303,7 +255,6 @@ export function readPartialUsageFromError(error: unknown): SdkPartialUsage | nul
 
 export type NodeRunResultSink = (result: NodeRunResult) => void;
 
-
 export interface ClaudeCompatRunInput {
   agentId: string;
   runtime: AdapterRuntime;
@@ -342,25 +293,15 @@ export interface BackendRawResult {
   structured?: unknown;
 }
 
-export type ClaudeCompatBackend = (
-  input: ClaudeCompatRunInput,
-) => Promise<BackendRawResult>;
+export type ClaudeCompatBackend = (input: ClaudeCompatRunInput) => Promise<BackendRawResult>;
 
-export type CreateCodexSessionFn = (
-  opts: CodexSessionOptions,
-) => Promise<CodexSession>;
+export type CreateCodexSessionFn = (opts: CodexSessionOptions) => Promise<CodexSession>;
 
-export type KimiBackend = (
-  input: ClaudeCompatRunInput,
-) => Promise<BackendRawResult>;
+export type KimiBackend = (input: ClaudeCompatRunInput) => Promise<BackendRawResult>;
 
-export type GrokBackend = (
-  input: ClaudeCompatRunInput,
-) => Promise<BackendRawResult>;
+export type GrokBackend = (input: ClaudeCompatRunInput) => Promise<BackendRawResult>;
 
-export type CursorBackend = (
-  input: ClaudeCompatRunInput,
-) => Promise<BackendRawResult>;
+export type CursorBackend = (input: ClaudeCompatRunInput) => Promise<BackendRawResult>;
 
 export type ResolveConfigFn = (agentId: string) => Promise<AgentQueryConfig>;
 
@@ -378,7 +319,6 @@ export interface WorkflowAdapterDeps {
   localToolExecutor?: LocalToolExecutor;
   onNodeRunResult?: NodeRunResultSink;
 }
-
 
 export interface RunNodeAgentInput {
   runId: string;
@@ -440,10 +380,7 @@ function preflightBlockToResult(
   };
 }
 
-export async function runNodeAgent(
-  input: RunNodeAgentInput,
-  deps: WorkflowAdapterDeps = {},
-): Promise<NodeRunResult> {
+export async function runNodeAgent(input: RunNodeAgentInput, deps: WorkflowAdapterDeps = {}): Promise<NodeRunResult> {
   const startedAt = Date.now();
   const resolveConfig = deps.resolveConfig ?? resolveAgentQueryConfig;
 
@@ -556,10 +493,7 @@ export async function runNodeAgent(
   }
 
   if (input.effectiveEffort && runtime === 'cursor') {
-    const clamped = clampCursorEffortForModel(
-      input.effectiveEffort,
-      input.effectiveModel ?? resolved.model,
-    );
+    const clamped = clampCursorEffortForModel(input.effectiveEffort, input.effectiveModel ?? resolved.model);
     if (clamped === null) {
       const result: NodeRunResult = {
         ok: false,
@@ -636,10 +570,7 @@ export async function runNodeAgent(
   }
 
   const dispatchOnce = (extraPrompt: string): Promise<BackendRawResult> => {
-    const attemptInput =
-      extraPrompt.length > 0
-        ? { ...input, prompt: `${input.prompt}\n\n${extraPrompt}` }
-        : input;
+    const attemptInput = extraPrompt.length > 0 ? { ...input, prompt: `${input.prompt}\n\n${extraPrompt}` } : input;
     if (family === 'claude-compatible') {
       return dispatchClaudeCompat(attemptInput, resolved, policy, runtime, abortSignal, deps);
     }
@@ -659,8 +590,7 @@ export async function runNodeAgent(
   };
 
   let raw: BackendRawResult;
-  let failure: { failureClass: DynamicWorkflowFailureClass; message: string } | null =
-    null;
+  let failure: { failureClass: DynamicWorkflowFailureClass; message: string } | null = null;
   let structuredOutput: unknown = undefined;
 
   try {
@@ -793,20 +723,15 @@ export async function runNodeAgent(
   return result;
 }
 
-
-function buildSchemaFeedbackPrompt(
-  schema: WorkflowOutputSchema | undefined,
-  feedback: string[],
-): string {
+function buildSchemaFeedbackPrompt(schema: WorkflowOutputSchema | undefined, feedback: string[]): string {
   const name = schema?.name ? ` "${schema.name}"` : '';
   if (feedback.length === 0) {
     return `Retorne SOMENTE o objeto JSON que satisfaz o schema${name}. Nada de prosa ou markdown fora do JSON.`;
   }
   const lines = feedback.map((f) => `- ${f}`).join('\n');
-  return [
-    `A saida anterior NAO bateu o schema${name}. Corrija e retorne SOMENTE o objeto JSON valido:`,
-    lines,
-  ].join('\n');
+  return [`A saida anterior NAO bateu o schema${name}. Corrija e retorne SOMENTE o objeto JSON valido:`, lines].join(
+    '\n',
+  );
 }
 
 export function createCostAccumulator(fallbackModel: string): {
@@ -865,16 +790,13 @@ export function createCostAccumulator(fallbackModel: string): {
         toolUses,
         ...(anyCost ? { costUsd } : {}),
         ...(costStatus !== undefined ? { costStatus } : {}),
-        ...(costStatusReasons.length > 0
-          ? { costStatusReasons: mergeCostStatusReasons(costStatusReasons) }
-          : {}),
+        ...(costStatusReasons.length > 0 ? { costStatusReasons: mergeCostStatusReasons(costStatusReasons) } : {}),
         ...(tokenStatus !== undefined ? { tokenStatus } : {}),
         ...(costUnknownReason !== undefined ? { costUnknownReason } : {}),
       };
     },
   };
 }
-
 
 async function dispatchClaudeCompat(
   input: RunNodeAgentInput,
@@ -886,10 +808,7 @@ async function dispatchClaudeCompat(
 ): Promise<BackendRawResult> {
   const backend = deps.claudeCompat ?? defaultClaudeCompatBackend;
   const effectiveModel = input.effectiveModel ?? resolved.model;
-  const effectiveEffort =
-    input.effectiveEffort !== undefined
-      ? codexEffortToClaude(input.effectiveEffort)
-      : undefined;
+  const effectiveEffort = input.effectiveEffort !== undefined ? codexEffortToClaude(input.effectiveEffort) : undefined;
   const pathGuard = new WorkflowPathGuard({
     workspaceRoot: policy.workspaceRoot,
     writeSet: input.writeSet,
@@ -989,8 +908,7 @@ async function dispatchCodex(
 
   const effectiveModel = input.effectiveModel ?? resolved.model;
 
-  const nodeEffort: CodexChatReasoningEffort | undefined =
-    input.effectiveEffort ?? agentEffort;
+  const nodeEffort: CodexChatReasoningEffort | undefined = input.effectiveEffort ?? agentEffort;
 
   const create =
     deps.createCodexSession ??
@@ -1002,8 +920,7 @@ async function dispatchCodex(
         disableGlobalMcp: true, // A2b
         reasoningEffortOverride: nodeEffort,
       }));
-  const sandbox: CodexSessionOptions['sandbox'] =
-    policy.access === 'workspace-write' ? 'workspace-write' : 'read-only';
+  const sandbox: CodexSessionOptions['sandbox'] = policy.access === 'workspace-write' ? 'workspace-write' : 'read-only';
 
   const reasoningEffort: CodexSessionOptions['reasoningEffort'] = nodeEffort;
 
@@ -1033,10 +950,7 @@ async function dispatchCodex(
     const partialReasons: string[] = [];
     if (pricingKnown && pricingEntry) {
       if (pricingEntry.cacheCreation > 0) partialReasons.push('cache-write-not-reported');
-      if (
-        pricingEntry.longContext &&
-        response.usage.inputTokens > pricingEntry.longContext.thresholdTokens
-      ) {
+      if (pricingEntry.longContext && response.usage.inputTokens > pricingEntry.longContext.thresholdTokens) {
         partialReasons.push('long-context-unpriced');
       }
     }
@@ -1047,11 +961,7 @@ async function dispatchCodex(
       outputTokens: response.usage.outputTokens,
       cacheReadTokens: response.usage.cachedInputTokens,
       cacheCreationTokens: 0,
-      costStatus: pricingKnown
-        ? partialReasons.length > 0
-          ? 'estimated-partial'
-          : 'known'
-        : 'unknown',
+      costStatus: pricingKnown ? (partialReasons.length > 0 ? 'estimated-partial' : 'known') : 'unknown',
       ...(pricingKnown ? {} : { costUnknownReason: 'unknown-pricing' }),
       ...(partialReasons.length > 0 ? { costStatusReasons: partialReasons } : {}),
       apiRequests: 1,
@@ -1076,9 +986,12 @@ async function dispatchKimi(
     runtime: 'kimi',
     model: resolved.model,
     ...(input.effectiveEffort
-      ? { effort: input.effectiveEffort === 'xhigh' || input.effectiveEffort === 'ultra'
-          ? 'max'
-          : input.effectiveEffort as AgentQueryConfig['effort'] }
+      ? {
+          effort:
+            input.effectiveEffort === 'xhigh' || input.effectiveEffort === 'ultra'
+              ? 'max'
+              : (input.effectiveEffort as AgentQueryConfig['effort']),
+        }
       : {}),
     systemPrompt: resolved.systemPrompt,
     prompt: input.prompt,
@@ -1162,16 +1075,12 @@ async function dispatchCursor(
   const allowedMcp = filterMcpServersByPolicy(resolved.mcpServers, policy);
   const effectiveModel = input.effectiveModel ?? resolved.model;
   const clampedEffort =
-    input.effectiveEffort !== undefined
-      ? clampCursorEffortForModel(input.effectiveEffort, effectiveModel)
-      : null;
+    input.effectiveEffort !== undefined ? clampCursorEffortForModel(input.effectiveEffort, effectiveModel) : null;
   return backend({
     agentId: input.agentId,
     runtime: 'cursor',
     model: effectiveModel,
-    ...(clampedEffort !== null
-      ? { effort: clampedEffort === 'xhigh' ? ('max' as const) : clampedEffort }
-      : {}),
+    ...(clampedEffort !== null ? { effort: clampedEffort === 'xhigh' ? ('max' as const) : clampedEffort } : {}),
     systemPrompt: resolved.systemPrompt,
     prompt: input.prompt,
     cwd: policy.cwd,
@@ -1199,9 +1108,7 @@ async function dispatchLocalFamily(
   deps: WorkflowAdapterDeps,
 ): Promise<BackendRawResult> {
   if (!deps.localModelRound) {
-    throw new Error(
-      'local-family: localModelRound nao fornecido (o runner deve injetar o round do modelo)',
-    );
+    throw new Error('local-family: localModelRound nao fornecido (o runner deve injetar o round do modelo)');
   }
   const pathGuard = new WorkflowPathGuard({
     workspaceRoot: policy.workspaceRoot,
@@ -1223,15 +1130,12 @@ async function dispatchLocalFamily(
   };
 }
 
-
 export function filterMcpServersByPolicy(
   entries: AgentQueryConfig['mcpServers'],
   policy: WorkflowNodeExecutionPolicy,
 ): AgentQueryConfig['mcpServers'] {
   const allowed = new Set(policy.effectiveMcpServers);
-  return entries.filter((entry) =>
-    Object.keys(entry).some((serverId) => allowed.has(serverId)),
-  );
+  return entries.filter((entry) => Object.keys(entry).some((serverId) => allowed.has(serverId)));
 }
 
 const defaultClaudeCompatBackend: ClaudeCompatBackend = async () => {
@@ -1247,9 +1151,7 @@ const defaultKimiBackend: KimiBackend = async () => {
 };
 
 const defaultGrokBackend: GrokBackend = async () => {
-  throw new Error(
-    'grokBackend nao injetado: o runner deve fornecer o executor Grok ACP com model/effort efetivos',
-  );
+  throw new Error('grokBackend nao injetado: o runner deve fornecer o executor Grok ACP com model/effort efetivos');
 };
 
 const defaultCursorBackend: CursorBackend = async () => {

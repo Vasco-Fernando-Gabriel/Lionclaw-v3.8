@@ -10,12 +10,11 @@ import {
 } from '@/components/dynamic-workflow/BackgroundWorkflowIndicator';
 import { ActivityPanel } from '@/components/chat/ActivityPanel';
 import { useDynamicWorkflowStore } from '@/stores/dynamic-workflow-store';
-import { useChatStore } from '@/stores/chat-store';
+import { createThreadState, useChatStore } from '@/stores/chat-store';
 import { useAppStore } from '@/stores/app-store';
 import type { DynamicWorkflowRun, LiveActivity } from '@/types';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
 
 function makeRun(patch?: Partial<DynamicWorkflowRun>): DynamicWorkflowRun {
   return {
@@ -106,7 +105,6 @@ function makeWorkflowNode(): WorkflowActivityNode {
   };
 }
 
-
 let container: HTMLDivElement;
 let root: Root | null = null;
 
@@ -136,6 +134,10 @@ beforeEach(() => {
   }
 
   (window as unknown as Record<string, unknown>).lionclaw = {
+    swarm: {
+      listRuns: vi.fn().mockResolvedValue({ runs: [], nextCursor: null }),
+      onStream: vi.fn().mockReturnValue(() => {}),
+    },
     dynamicWorkflow: {
       listRuns: vi.fn().mockResolvedValue([]),
       getRun: vi.fn().mockResolvedValue(null),
@@ -153,7 +155,7 @@ beforeEach(() => {
     selectedRun: null,
     selectedRunId: null,
   });
-  useChatStore.setState({ currentSessionId: 'sess-1' });
+  useChatStore.setState({ currentSessionId: 'sess-1', threads: {} });
   useAppStore.setState({ currentPage: 'chat' });
 });
 
@@ -162,7 +164,6 @@ afterEach(() => {
   container.remove();
   vi.restoreAllMocks();
 });
-
 
 describe('WorkflowRunRow (S16, bloco kind workflow)', () => {
   it('renderiza o header, os filhos node-agente e o grupo paralelo como sub-lista', () => {
@@ -202,7 +203,6 @@ describe('WorkflowRunRow (S16, bloco kind workflow)', () => {
   });
 });
 
-
 describe('WorkflowRunRow: status VIVO sobrepoe o node congelado pelo turno', () => {
   it('node "stopped" (turno do orquestrador encerrou) mas run VIVO running -> mostra "Executando", nao "Parado"', () => {
     useDynamicWorkflowStore.setState({ runs: [makeRun({ status: 'running' })] });
@@ -228,7 +228,6 @@ describe('WorkflowRunRow: status VIVO sobrepoe o node congelado pelo turno', () 
   });
 });
 
-
 describe('WorkflowRunRow sem seletor de autonomia (modo unico automatico)', () => {
   it('NAO renderiza o seletor de autonomia (semi/full/auto-drive removidos)', () => {
     useDynamicWorkflowStore.setState({ runs: [makeRun({ inputJson: '{"autonomy":"auto"}' })] });
@@ -251,20 +250,16 @@ describe('WorkflowRunRow sem seletor de autonomia (modo unico automatico)', () =
   });
 });
 
-
 describe('ActivityPanel rows existentes inalterados (S16)', () => {
   function setActivities(activities: LiveActivity[]): void {
     useChatStore.setState({
-      activities,
-      messages: [],
-      activitiesPanelOpen: true,
+      currentSessionId: 'sess-1',
+      threads: { 'sess-1': createThreadState({ activities, messages: [], activitiesPanelOpen: true }) },
     });
   }
 
   it('um root kind pipeline ainda renderiza como bloco de pipeline (nao intercepta workflow)', () => {
-    setActivities([
-      activity({ id: 'p1', kind: 'pipeline', label: 'Fase 1', status: 'running', projectId: 'proj-1' }),
-    ]);
+    setActivities([activity({ id: 'p1', kind: 'pipeline', label: 'Fase 1', status: 'running', projectId: 'proj-1' })]);
     mount(<ActivityPanel />);
     const text = container.textContent ?? '';
     expect(text).toContain('Fase 1');
@@ -336,7 +331,6 @@ describe('ActivityPanel rows existentes inalterados (S16)', () => {
   });
 });
 
-
 describe('WorkflowChatStrip (S16, 4.3)', () => {
   it('renderiza repo/fase/node/custo/status com run fake chat-bound ativo', () => {
     useDynamicWorkflowStore.setState({ runs: [makeRun()] });
@@ -346,11 +340,11 @@ describe('WorkflowChatStrip (S16, 4.3)', () => {
     const strip = container.querySelector('[data-testid="workflow-chat-strip"]');
     expect(strip).not.toBeNull();
     const text = strip?.textContent ?? '';
-    expect(text).toContain('meu-repo'); // repo ativo
-    expect(text).toContain('implement'); // fase
-    expect(text).toContain('coder'); // node
-    expect(text).toMatch(/\$0\.012/); // custo
-    expect(text).toContain('executando'); // status
+    expect(text).toContain('meu-repo');
+    expect(text).toContain('implement');
+    expect(text).toContain('coder');
+    expect(text).toMatch(/\$0\.012/);
+    expect(text).toContain('executando');
   });
 
   it('some quando nao ha run chat-bound ativo na conversa', () => {
@@ -367,7 +361,6 @@ describe('WorkflowChatStrip (S16, 4.3)', () => {
     expect(container.querySelector('[data-testid="workflow-chat-strip"]')).toBeNull();
   });
 });
-
 
 describe('selectChatBoundActiveRuns (S16, AC-13)', () => {
   it('filtra por sessao + status ativo e ordena por startedAt desc', () => {

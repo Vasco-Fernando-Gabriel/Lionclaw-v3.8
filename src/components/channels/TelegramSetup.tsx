@@ -95,9 +95,29 @@ export function TelegramSetup({ onClose, onSaved, existingConfig }: TelegramSetu
 
         <div className="px-5 py-4 space-y-4">
           <div className="text-sm text-zinc-400 space-y-1">
-            <p>1. Crie um bot no <a href="https://t.me/BotFather" target="_blank" rel="noreferrer" className="text-amber-500 hover:underline inline-flex items-center gap-1">@BotFather <ExternalLink size={12} /></a></p>
+            <p>
+              1. Crie um bot no{' '}
+              <a
+                href="https://t.me/BotFather"
+                target="_blank"
+                rel="noreferrer"
+                className="text-amber-500 hover:underline inline-flex items-center gap-1"
+              >
+                @BotFather <ExternalLink size={12} />
+              </a>
+            </p>
             <p>2. Copie o token gerado</p>
-            <p>3. Obtenha seu User ID via <a href="https://t.me/userinfobot" target="_blank" rel="noreferrer" className="text-amber-500 hover:underline inline-flex items-center gap-1">@userinfobot <ExternalLink size={12} /></a></p>
+            <p>
+              3. Obtenha seu User ID via{' '}
+              <a
+                href="https://t.me/userinfobot"
+                target="_blank"
+                rel="noreferrer"
+                className="text-amber-500 hover:underline inline-flex items-center gap-1"
+              >
+                @userinfobot <ExternalLink size={12} />
+              </a>
+            </p>
           </div>
 
           <div>
@@ -150,12 +170,12 @@ export function TelegramSetup({ onClose, onSaved, existingConfig }: TelegramSetu
               onChange={(e) => setNotifyDriveHandoff(e.target.checked)}
               className="rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-amber-500/50"
             />
-            <span className="text-sm text-zinc-300">Avisar no Telegram quando o drive ceder a voce (aguardando humano)</span>
+            <span className="text-sm text-zinc-300">
+              Avisar no Telegram quando o drive ceder a voce (aguardando humano)
+            </span>
           </label>
 
-          {error && (
-            <p className="text-sm text-red-400">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-400">{error}</p>}
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-zinc-800">

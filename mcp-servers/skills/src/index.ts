@@ -5,12 +5,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-// ---- Configuração de diretório ----
-
 const LIONCLAW_HOME = process.env.LIONCLAW_HOME ?? path.join(os.homedir(), '.lionclaw');
 const SKILLS_DIR = path.join(LIONCLAW_HOME, 'skills');
-
-// ---- Tipos ----
 
 interface SkillFrontmatter {
   name: string;
@@ -30,12 +26,9 @@ interface SkillData extends SkillFrontmatter {
   hasAuxFiles: boolean;
 }
 
-// ---- Parser de frontmatter ----
-
 function parseFrontmatter(raw: string): { frontmatter: SkillFrontmatter; content: string } {
   const lines = raw.replace(/\r\n/g, '\n').split('\n');
 
-  // Verifica se começa com ---
   if (lines[0].trim() !== '---') {
     return {
       frontmatter: {
@@ -53,7 +46,6 @@ function parseFrontmatter(raw: string): { frontmatter: SkillFrontmatter; content
     };
   }
 
-  // Encontra o segundo ---
   let endIdx = -1;
   for (let i = 1; i < lines.length; i++) {
     if (lines[i].trim() === '---') {
@@ -80,7 +72,10 @@ function parseFrontmatter(raw: string): { frontmatter: SkillFrontmatter; content
   }
 
   const frontmatterLines = lines.slice(1, endIdx);
-  const content = lines.slice(endIdx + 1).join('\n').trim();
+  const content = lines
+    .slice(endIdx + 1)
+    .join('\n')
+    .trim();
 
   const fm: Record<string, string> = {};
   for (const line of frontmatterLines) {
@@ -91,20 +86,23 @@ function parseFrontmatter(raw: string): { frontmatter: SkillFrontmatter; content
     fm[key] = value;
   }
 
-  // Parse allowed-tools: pode ser formato inline [Bash, Read, Write] ou string simples
   let allowedTools: string[] = [];
   if (fm['allowed-tools']) {
     const raw = fm['allowed-tools'].trim();
     if (raw.startsWith('[') && raw.endsWith(']')) {
-      // Formato inline YAML: [Bash, Read, Write]
       const inner = raw.slice(1, -1);
-      allowedTools = inner.split(',').map((s) => s.trim()).filter(Boolean);
+      allowedTools = inner
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
     } else if (raw) {
-      allowedTools = raw.split(',').map((s) => s.trim()).filter(Boolean);
+      allowedTools = raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
     }
   }
 
-  // Parse booleanos
   const parseBoolean = (val: string | undefined): boolean => {
     if (!val) return false;
     return val.trim().toLowerCase() === 'true';
@@ -126,8 +124,6 @@ function parseFrontmatter(raw: string): { frontmatter: SkillFrontmatter; content
   };
 }
 
-// ---- Carregamento de skills ----
-
 function loadSkill(name: string): SkillData | null {
   const skillDir = path.join(SKILLS_DIR, name);
   const skillFile = path.join(skillDir, 'SKILL.md');
@@ -140,7 +136,6 @@ function loadSkill(name: string): SkillData | null {
     const rawContent = fs.readFileSync(skillFile, 'utf-8');
     const { frontmatter, content } = parseFrontmatter(rawContent);
 
-    // Detecta arquivos auxiliares (além de SKILL.md)
     let hasAuxFiles = false;
     try {
       const entries = fs.readdirSync(skillDir);
@@ -151,7 +146,6 @@ function loadSkill(name: string): SkillData | null {
 
     return {
       ...frontmatter,
-      // Usa o nome da pasta se frontmatter não tiver nome
       name: frontmatter.name || name,
       content,
       rawContent,
@@ -193,8 +187,6 @@ function loadAllSkills(): SkillData[] {
   return skills;
 }
 
-// ---- MCP Server ----
-
 const server = new McpServer({
   name: 'skills',
   version: '1.0.0',
@@ -210,10 +202,8 @@ server.tool(
     try {
       const allSkills = loadAllSkills();
 
-      // Filtra skills com disableModelInvocation: true
       let filtered = allSkills.filter((s) => !s.disableModelInvocation);
 
-      // Aplica filtro por categoria se fornecido
       if (category) {
         filtered = filtered.filter((s) => s.category === category);
       }

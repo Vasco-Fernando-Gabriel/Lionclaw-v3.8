@@ -1,9 +1,7 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { HarnessProject } from '../../../src/types';
 import type { HarnessEngine } from '../harness-engine';
 import type { IpcContext } from '../ipc/context';
-
 
 const ipcRegistry = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, ...args: unknown[]) => unknown>(),
@@ -11,10 +9,7 @@ const ipcRegistry = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   ipcMain: {
-    handle: (
-      channel: string,
-      fn: (event: unknown, ...args: unknown[]) => unknown,
-    ) => {
+    handle: (channel: string, fn: (event: unknown, ...args: unknown[]) => unknown) => {
       ipcRegistry.handlers.set(channel, fn);
     },
   },
@@ -55,13 +50,11 @@ vi.mock('../pipeline-paths', () => ({
   resolveHarnessSprintArtifactDir: vi.fn(() => '/tmp/sprint'),
 }));
 
-
 import { registerHarnessHandlers } from '../ipc/harness';
 import { getHarnessProject, listHarnessProjects } from '../db';
 
 const mockedGetHarnessProject = vi.mocked(getHarnessProject);
 const mockedListHarnessProjects = vi.mocked(listHarnessProjects);
-
 
 const CHANNEL = 'harness:regenerate-sprints';
 
@@ -107,14 +100,12 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-
 describe('harness:regenerate-sprints - registro', () => {
   it('registerHarnessHandlers registra o canal harness:regenerate-sprints', () => {
     setupHandlers();
     expect(ipcRegistry.handlers.has(CHANNEL)).toBe(true);
   });
 });
-
 
 describe('harness:regenerate-sprints - guard de status (N1/AC-9)', () => {
   it('projeto inexistente: retorna { error } e NAO chama engine.regenerate', async () => {
@@ -184,7 +175,7 @@ describe('harness:regenerate-sprints - guard de status (N1/AC-9)', () => {
     await expect(invoke('proj-1', 'feedback')).resolves.toSatisfy(isErrorResult);
   });
 
-  it("guard passou mas engine nao inicializado: { error } de withHarnessEngine", async () => {
+  it('guard passou mas engine nao inicializado: { error } de withHarnessEngine', async () => {
     const { regenerate, invoke } = setupHandlers({ engineAvailable: false });
     mockedGetHarnessProject.mockReturnValue(makeProject('reviewing'));
 
@@ -258,7 +249,7 @@ describe('harness:list-projects - checkpoint apos reload', () => {
     const resume = vi.fn();
     registerHarnessHandlers({
       getMainWindow: () => null,
-      getHarnessEngine: () => ({ resume } as unknown as HarnessEngine),
+      getHarnessEngine: () => ({ resume }) as unknown as HarnessEngine,
       getPipelineEngine: () => null,
     });
 

@@ -57,15 +57,9 @@ describe('getPipelineDocsContext', () => {
   it('resolveDocPath suffixes baseName before extension', () => {
     const id = '20260430_120000';
     const ctx = getPipelineDocsContext(tmp, id);
-    expect(ctx!.resolveDocPath('PRD.md')).toBe(
-      path.join(tmp, 'docs', `Docs${id}`, `PRD${id}.md`),
-    );
-    expect(ctx!.resolveDocPath('sprints.json')).toBe(
-      path.join(tmp, 'docs', `Docs${id}`, `sprints${id}.json`),
-    );
-    expect(ctx!.resolveDocPath('a.b.json')).toBe(
-      path.join(tmp, 'docs', `Docs${id}`, `a.b${id}.json`),
-    );
+    expect(ctx!.resolveDocPath('PRD.md')).toBe(path.join(tmp, 'docs', `Docs${id}`, `PRD${id}.md`));
+    expect(ctx!.resolveDocPath('sprints.json')).toBe(path.join(tmp, 'docs', `Docs${id}`, `sprints${id}.json`));
+    expect(ctx!.resolveDocPath('a.b.json')).toBe(path.join(tmp, 'docs', `Docs${id}`, `a.b${id}.json`));
   });
 });
 
@@ -154,9 +148,7 @@ describe('harness sprint path resolution', () => {
       pipelineDocsId: docsId,
     };
 
-    expect(resolveHarnessSprintsPath(project)).toBe(
-      path.join(tmp, 'docs', `Docs${docsId}`, `sprints${docsId}.json`),
-    );
+    expect(resolveHarnessSprintsPath(project)).toBe(path.join(tmp, 'docs', `Docs${docsId}`, `sprints${docsId}.json`));
   });
 
   it('resolves sprint artifacts inside the project docs directory', () => {
@@ -276,15 +268,9 @@ describe('findPipelineDocReadPath', () => {
     fs.mkdirSync(path.dirname(persistedPath), { recursive: true });
     fs.writeFileSync(persistedPath, 'persisted stories', 'utf-8');
 
-    expect(
-      findPipelineDocReadPath(
-        tmp,
-        docsId,
-        'stories-requisitos.md',
-        'stories-requisitos.md',
-        persistedPath,
-      ),
-    ).toBe(canonicalPath);
+    expect(findPipelineDocReadPath(tmp, docsId, 'stories-requisitos.md', 'stories-requisitos.md', persistedPath)).toBe(
+      canonicalPath,
+    );
   });
 
   it('falls back to an existing persisted document path when Docs<id> document is missing', () => {
@@ -293,13 +279,7 @@ describe('findPipelineDocReadPath', () => {
     fs.writeFileSync(persistedPath, 'persisted stories', 'utf-8');
 
     expect(
-      findPipelineDocReadPath(
-        tmp,
-        '20260430_120000',
-        'stories-requisitos.md',
-        'stories-requisitos.md',
-        persistedPath,
-      ),
+      findPipelineDocReadPath(tmp, '20260430_120000', 'stories-requisitos.md', 'stories-requisitos.md', persistedPath),
     ).toBe(persistedPath);
   });
 });

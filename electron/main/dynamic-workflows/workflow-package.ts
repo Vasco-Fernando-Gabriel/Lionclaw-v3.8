@@ -1,4 +1,3 @@
-
 import { mkdirSync, realpathSync, writeFileSync, existsSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { sha256Hex } from './workflow-context-bundle';
@@ -41,26 +40,16 @@ export interface RunBuilderResult {
 function resolveWithinRunDir(runDir: string, fileName: string): string {
   const canonicalRoot = existsSync(runDir) ? realpathSync(runDir) : resolve(runDir);
   const absoluteTarget = resolve(canonicalRoot, fileName);
-  const canonicalTarget = existsSync(absoluteTarget)
-    ? realpathSync(absoluteTarget)
-    : absoluteTarget;
+  const canonicalTarget = existsSync(absoluteTarget) ? realpathSync(absoluteTarget) : absoluteTarget;
   const rel = relative(canonicalRoot, canonicalTarget);
-  const within =
-    canonicalTarget === canonicalRoot ||
-    (rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel));
+  const within = canonicalTarget === canonicalRoot || (rel.length > 0 && !rel.startsWith('..') && !isAbsolute(rel));
   if (!within) {
-    throw new Error(
-      `artefato do builder fora do run dir (runDir=${canonicalRoot}, alvo=${fileName})`,
-    );
+    throw new Error(`artefato do builder fora do run dir (runDir=${canonicalRoot}, alvo=${fileName})`);
   }
   return canonicalTarget;
 }
 
-function writeFileWithinRunDir(
-  runDir: string,
-  fileName: string,
-  content: string,
-): string {
+function writeFileWithinRunDir(runDir: string, fileName: string, content: string): string {
   const abs = resolveWithinRunDir(runDir, fileName);
   const parentDir = abs.slice(0, abs.lastIndexOf(sep)) || sep;
   mkdirSync(parentDir, { recursive: true });
@@ -74,35 +63,19 @@ export function materializeBuilderPackage(
   builderModel: string,
   costUsd: number,
 ): RunBuilderResult {
-  const workflowJsPath = writeFileWithinRunDir(
-    runDir,
-    WORKFLOW_JS_FILE,
-    pkg.workflowJs,
-  );
+  const workflowJsPath = writeFileWithinRunDir(runDir, WORKFLOW_JS_FILE, pkg.workflowJs);
 
   const manifestJson = JSON.stringify(pkg.manifest, null, 2);
-  const manifestPath = writeFileWithinRunDir(
-    runDir,
-    WORKFLOW_MANIFEST_FILE,
-    manifestJson,
-  );
+  const manifestPath = writeFileWithinRunDir(runDir, WORKFLOW_MANIFEST_FILE, manifestJson);
 
   let builderReportPath: string | null = null;
   if (typeof pkg.builderReport === 'string' && pkg.builderReport.length > 0) {
-    builderReportPath = writeFileWithinRunDir(
-      runDir,
-      BUILDER_REPORT_FILE,
-      pkg.builderReport,
-    );
+    builderReportPath = writeFileWithinRunDir(runDir, BUILDER_REPORT_FILE, pkg.builderReport);
   }
 
   let costEstimatePath: string | null = null;
   if (pkg.costEstimate !== undefined) {
-    costEstimatePath = writeFileWithinRunDir(
-      runDir,
-      COST_ESTIMATE_FILE,
-      JSON.stringify(pkg.costEstimate, null, 2),
-    );
+    costEstimatePath = writeFileWithinRunDir(runDir, COST_ESTIMATE_FILE, JSON.stringify(pkg.costEstimate, null, 2));
   }
 
   const schemaPaths: string[] = [];
@@ -122,9 +95,7 @@ export function materializeBuilderPackage(
       schemaPaths.push(abs);
       continue;
     }
-    schemaPaths.push(
-      writeFileWithinRunDir(runDir, rel, JSON.stringify(schema, null, 2)),
-    );
+    schemaPaths.push(writeFileWithinRunDir(runDir, rel, JSON.stringify(schema, null, 2)));
   }
 
   return {

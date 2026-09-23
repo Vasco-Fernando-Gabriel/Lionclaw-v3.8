@@ -1,12 +1,6 @@
-
 import { Loader2 } from 'lucide-react';
 
-export type ApiKeyStatus =
-  | 'unconfigured'  // nenhuma key salva no Vault
-  | 'saved'         // key salva, conexao nao verificada
-  | 'testing'       // teste de conexao em andamento
-  | 'ok'            // key salva e testada com sucesso
-  | 'error';        // key salva, teste retornou erro
+export type ApiKeyStatus = 'unconfigured' | 'saved' | 'testing' | 'ok' | 'error';
 
 interface ApiKeyStatusIndicatorProps {
   status: ApiKeyStatus;
@@ -14,12 +8,15 @@ interface ApiKeyStatusIndicatorProps {
   className?: string;
 }
 
-const STATUS_CONFIG: Record<ApiKeyStatus, {
-  label: string;
-  color: string;
-  bgColor: string;
-  borderColor: string;
-}> = {
+const STATUS_CONFIG: Record<
+  ApiKeyStatus,
+  {
+    label: string;
+    color: string;
+    bgColor: string;
+    borderColor: string;
+  }
+> = {
   unconfigured: {
     label: 'Nao configurada',
     color: '#9CA3AF',
@@ -64,41 +61,22 @@ export function ApiKeyStatusIndicator({ status, errorMessage, className = '' }: 
         {status === 'testing' ? (
           <Loader2 size={10} className="animate-spin" />
         ) : status === 'unconfigured' ? (
-          <span
-            className="inline-block w-2 h-2 rounded-full border"
-            style={{ borderColor: cfg.color }}
-          />
+          <span className="inline-block w-2 h-2 rounded-full border" style={{ borderColor: cfg.color }} />
         ) : status === 'saved' ? (
-          <span
-            className="inline-block w-2 h-2 rounded-full"
-            style={{ backgroundColor: cfg.color }}
-          />
+          <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: cfg.color }} />
         ) : status === 'ok' ? (
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path
-              d="M2 5L4 7L8 3"
-              stroke={cfg.color}
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            <path d="M2 5L4 7L8 3" stroke={cfg.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         ) : (
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path
-              d="M3 3L7 7M7 3L3 7"
-              stroke={cfg.color}
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
+            <path d="M3 3L7 7M7 3L3 7" stroke={cfg.color} strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         )}
         {cfg.label}
       </div>
 
-      {status === 'error' && errorMessage && (
-        <p className="text-xs text-red-400 pl-1">{errorMessage}</p>
-      )}
+      {status === 'error' && errorMessage && <p className="text-xs text-red-400 pl-1">{errorMessage}</p>}
     </div>
   );
 }

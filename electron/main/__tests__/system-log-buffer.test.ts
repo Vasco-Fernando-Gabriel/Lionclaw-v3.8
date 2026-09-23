@@ -1,11 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  systemLogStream,
-  getSystemLogEntries,
-  getSystemLogModules,
-  subscribeSystemLog,
-} from '../system-log-buffer';
-
+import { systemLogStream, getSystemLogEntries, getSystemLogModules, subscribeSystemLog } from '../system-log-buffer';
 
 function line(fields: Record<string, unknown>): string {
   return `${JSON.stringify(fields)}\n`;
@@ -14,7 +8,15 @@ function line(fields: Record<string, unknown>): string {
 describe('system-log-buffer', () => {
   it('parseia NDJSON do pino em SystemLogEntry (level label, module, msg, extra)', () => {
     systemLogStream.write(
-      line({ level: 40, time: 1700000000000, module: 't1-mcp', msg: 'servidor caiu', attempt: 2, pid: 1, hostname: 'x' }),
+      line({
+        level: 40,
+        time: 1700000000000,
+        module: 't1-mcp',
+        msg: 'servidor caiu',
+        attempt: 2,
+        pid: 1,
+        hostname: 'x',
+      }),
     );
     const [entry] = getSystemLogEntries({ module: 't1-mcp' });
     expect(entry.level).toBe(40);
@@ -80,9 +82,7 @@ describe('system-log-buffer', () => {
     const unsubGood = subscribeSystemLog((e) => {
       if (e.module === 't7-safe') seen.push(e.msg ?? '');
     });
-    expect(() =>
-      systemLogStream.write(line({ level: 30, time: 1, module: 't7-safe', msg: 'ok' })),
-    ).not.toThrow();
+    expect(() => systemLogStream.write(line({ level: 30, time: 1, module: 't7-safe', msg: 'ok' }))).not.toThrow();
     expect(seen).toEqual(['ok']);
     unsubBad();
     unsubGood();

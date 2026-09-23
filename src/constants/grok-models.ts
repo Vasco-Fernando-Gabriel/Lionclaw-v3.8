@@ -32,10 +32,7 @@ export function grokEffortsForModel(model: string): readonly GrokReasoningEffort
   return GROK_MODELS.find((entry) => entry.slug === model)?.efforts ?? [];
 }
 
-export function clampGrokEffortForModel(
-  effort: GrokReasoningEffort,
-  model: string,
-): GrokReasoningEffort {
+export function clampGrokEffortForModel(effort: GrokReasoningEffort, model: string): GrokReasoningEffort {
   const supported = grokEffortsForModel(model);
   return supported.includes(effort) ? effort : GROK_DEFAULT_EFFORT;
 }

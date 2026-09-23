@@ -1,7 +1,5 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { AgentConfig, ExternalConfig } from '../../../src/types';
-
 
 interface MockPart {
   text?: string;
@@ -27,7 +25,6 @@ interface MockChunk {
   };
 }
 
-
 let capturedStreamCalls: Array<{
   model: string;
   contents: unknown[];
@@ -44,11 +41,7 @@ function makeStreamGenerator(chunks: MockChunk[]): AsyncGenerator<MockChunk> {
   })();
 }
 
-const mockGenerateContentStream = vi.fn(async (params: {
-  model: string;
-  contents: unknown[];
-  config: unknown;
-}) => {
+const mockGenerateContentStream = vi.fn(async (params: { model: string; contents: unknown[]; config: unknown }) => {
   capturedStreamCalls.push({ model: params.model, contents: [...params.contents], config: params.config });
   const chunks = streamQueue.shift() ?? [];
   return makeStreamGenerator(chunks);
@@ -88,7 +81,6 @@ vi.mock('@google/genai', () => {
   };
 });
 
-
 vi.mock('../logger', () => ({
   createLogger: () => ({
     info: vi.fn(),
@@ -98,13 +90,11 @@ vi.mock('../logger', () => ({
   }),
 }));
 
-
 let mockSecretValue: string | null = 'test-api-key-123';
 
 vi.mock('../vault-registry', () => ({
   getSecret: vi.fn(async (_ref: string) => mockSecretValue),
 }));
-
 
 const defaultExternalConfig: ExternalConfig = {
   provider: 'gemini-agent-platform',
@@ -134,16 +124,12 @@ const defaultAgent: AgentConfig = {
 
 vi.mock('../db', () => ({
   getAgent: vi.fn(() => ({ ...defaultAgent, externalConfig: { ...defaultExternalConfig } })),
-  getSetting: vi.fn((key: string) => (
-    key === 'orchestrator_vertex_api_key_ref' ? 'ORCHESTRATOR_VERTEX_API_KEY' : ''
-  )),
+  getSetting: vi.fn((key: string) => (key === 'orchestrator_vertex_api_key_ref' ? 'ORCHESTRATOR_VERTEX_API_KEY' : '')),
 }));
-
 
 vi.mock('../pricing', () => ({
   calculateCost: vi.fn(() => 0.01),
 }));
-
 
 const mockExecuteLocalTool = vi.fn(async (_name: string, _args: Record<string, unknown>, _cwd: string) => ({
   result: 'tool-result',
@@ -154,7 +140,6 @@ vi.mock('../local-tool-executor', () => ({
   executeLocalTool: (...args: Parameters<typeof mockExecuteLocalTool>) => mockExecuteLocalTool(...args),
 }));
 
-
 import { googleGenAiExecutor, toGeminiContents, buildGeminiTools } from '../agent-runtime/google-genai-executor';
 import { getAgent } from '../db';
 import { getSecret } from '../vault-registry';
@@ -162,7 +147,6 @@ import { calculateCost } from '../pricing';
 import { __resetWarnedAgentsForTests } from '../agent-runtime/mcp-warning';
 import type { AgentExecutionRequest } from '../agent-runtime/types';
 import type { AgentQueryConfig } from '../agent-config-resolver';
-
 
 function makeReq(overrides?: Partial<AgentExecutionRequest>): AgentExecutionRequest {
   return {
@@ -216,7 +200,6 @@ function setAgent(overrides: Partial<ExternalConfig>) {
   });
 }
 
-
 beforeEach(() => {
   capturedStreamCalls = [];
   streamQueue = [];
@@ -234,13 +217,9 @@ beforeEach(() => {
   vi.mocked(getSecret).mockResolvedValue('test-api-key-123');
 });
 
-
 describe('toGeminiContents', () => {
   it('converts system prompt into systemInstruction', () => {
-    const { systemInstruction, contents } = toGeminiContents(
-      'You are a helpful assistant.',
-      'Hello',
-    );
+    const { systemInstruction, contents } = toGeminiContents('You are a helpful assistant.', 'Hello');
     expect(systemInstruction).toBeDefined();
     expect(systemInstruction?.parts?.[0]?.text).toBe('You are a helpful assistant.');
     expect(contents).toHaveLength(1);
@@ -293,7 +272,6 @@ describe('toGeminiContents', () => {
   });
 });
 
-
 describe('buildGeminiTools', () => {
   it('returns undefined for empty allowedTools', () => {
     expect(buildGeminiTools([])).toBeUndefined();
@@ -306,7 +284,7 @@ describe('buildGeminiTools', () => {
   it('filters out MCP tools and returns only builtin', () => {
     const result = buildGeminiTools(['Read', 'mcp__foo__bar']);
     expect(result).toBeDefined();
-    expect(result).toHaveLength(1); // One Tool object
+    expect(result).toHaveLength(1);
     const decls = result![0].functionDeclarations ?? [];
     expect(decls).toHaveLength(1);
     expect(decls[0].name).toBe('Read');
@@ -338,7 +316,6 @@ describe('buildGeminiTools', () => {
   });
 });
 
-
 describe('tool loop: 3-turn cardinality', () => {
   it('executes tool, appends functionResponse with 1:1 cardinality, then gets final text', async () => {
     streamQueue = [
@@ -346,10 +323,7 @@ describe('tool loop: 3-turn cardinality', () => {
         fcChunk('Read', { file_path: '/tmp/test/file.txt' }),
         usageChunk({ promptTokenCount: 10, candidatesTokenCount: 5 }),
       ],
-      [
-        textChunk('The file contains: hello world'),
-        usageChunk({ promptTokenCount: 20, candidatesTokenCount: 15 }),
-      ],
+      [textChunk('The file contains: hello world'), usageChunk({ promptTokenCount: 20, candidatesTokenCount: 15 })],
     ];
 
     const result = await googleGenAiExecutor.run(makeReq(), makeConfig());
@@ -384,16 +358,21 @@ describe('tool loop: 3-turn cardinality', () => {
   it('handles 2 function calls in one turn with 1:1 cardinality (2 responses)', async () => {
     streamQueue = [
       [
-        { candidates: [{ content: { parts: [
-          { functionCall: { name: 'Read', args: { file_path: '/a' } } },
-          { functionCall: { name: 'Bash', args: { command: 'ls' } } },
-        ] } }] },
+        {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  { functionCall: { name: 'Read', args: { file_path: '/a' } } },
+                  { functionCall: { name: 'Bash', args: { command: 'ls' } } },
+                ],
+              },
+            },
+          ],
+        },
         usageChunk({ promptTokenCount: 10, candidatesTokenCount: 5 }),
       ],
-      [
-        textChunk('Done'),
-        usageChunk({ promptTokenCount: 30, candidatesTokenCount: 10 }),
-      ],
+      [textChunk('Done'), usageChunk({ promptTokenCount: 30, candidatesTokenCount: 10 })],
     ];
 
     const result = await googleGenAiExecutor.run(makeReq(), makeConfig());
@@ -431,27 +410,25 @@ describe('tool loop: 3-turn cardinality', () => {
   });
 });
 
-
 describe('thoughtSignature', () => {
   it('positive: thoughtSignature from turn 1 is propagated into the functionCall part of turn 2', async () => {
     streamQueue = [
       [
         {
-          candidates: [{
-            content: {
-              parts: [
-                { thoughtSignature: 'sig-abc-xyz' },
-                { functionCall: { name: 'Read', args: { file_path: '/f' } } },
-              ],
+          candidates: [
+            {
+              content: {
+                parts: [
+                  { thoughtSignature: 'sig-abc-xyz' },
+                  { functionCall: { name: 'Read', args: { file_path: '/f' } } },
+                ],
+              },
             },
-          }],
+          ],
           usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 },
         },
       ],
-      [
-        textChunk('done'),
-        usageChunk({ promptTokenCount: 20, candidatesTokenCount: 10 }),
-      ],
+      [textChunk('done'), usageChunk({ promptTokenCount: 20, candidatesTokenCount: 10 })],
     ];
 
     await googleGenAiExecutor.run(makeReq(), makeConfig());
@@ -470,14 +447,8 @@ describe('thoughtSignature', () => {
 
   it('negative: model without thinking — thoughtSignature absent, no error, no warning, contents clean', async () => {
     streamQueue = [
-      [
-        fcChunk('Bash', { command: 'ls' }),
-        usageChunk({ promptTokenCount: 5, candidatesTokenCount: 2 }),
-      ],
-      [
-        textChunk('files listed'),
-        usageChunk({ promptTokenCount: 15, candidatesTokenCount: 8 }),
-      ],
+      [fcChunk('Bash', { command: 'ls' }), usageChunk({ promptTokenCount: 5, candidatesTokenCount: 2 })],
+      [textChunk('files listed'), usageChunk({ promptTokenCount: 15, candidatesTokenCount: 8 })],
     ];
 
     const result = await googleGenAiExecutor.run(makeReq(), makeConfig());
@@ -492,7 +463,6 @@ describe('thoughtSignature', () => {
     expect(anyPartWithSig).toBeFalsy();
   });
 });
-
 
 describe('safety blocks', () => {
   const fatalReasons = [
@@ -509,13 +479,11 @@ describe('safety blocks', () => {
 
   for (const reason of fatalReasons) {
     it(`throws for finishReason: ${reason}`, async () => {
-      streamQueue = [
-        [finishChunk(reason)],
-      ];
+      streamQueue = [[finishChunk(reason)]];
 
-      await expect(
-        googleGenAiExecutor.run(makeReq(), makeConfig()),
-      ).rejects.toThrow(`Gemini retornou finishReason fatal: ${reason}`);
+      await expect(googleGenAiExecutor.run(makeReq(), makeConfig())).rejects.toThrow(
+        `Gemini retornou finishReason fatal: ${reason}`,
+      );
     });
   }
 
@@ -546,7 +514,6 @@ describe('safety blocks', () => {
   });
 });
 
-
 describe('usage mapping', () => {
   it('maps usage with exact formula: input=prompt+toolUsePrompt, output=candidates+thoughts', async () => {
     streamQueue = [
@@ -572,16 +539,11 @@ describe('usage mapping', () => {
   });
 
   it('handles partial usage (only promptTokenCount present)', async () => {
-    streamQueue = [
-      [
-        textChunk('answer'),
-        usageChunk({ promptTokenCount: 50 }),
-      ],
-    ];
+    streamQueue = [[textChunk('answer'), usageChunk({ promptTokenCount: 50 })]];
 
     const result = await googleGenAiExecutor.run(makeReq(), makeConfig());
     expect(result.metrics.inputTokens).toBe(50);
-    expect(result.metrics.outputTokens).toBe(0); // candidatesTokenCount missing -> 0
+    expect(result.metrics.outputTokens).toBe(0);
   });
 
   it('handles all-zero usage (e.g. full cache hit) — still considered reported', async () => {
@@ -604,12 +566,9 @@ describe('usage mapping', () => {
   });
 });
 
-
 describe('pricing combos', () => {
   it('Combo A: no usage reported -> tokenStatus=not_reported, costStatus=unknown, reason=no-usage-reported', async () => {
-    streamQueue = [
-      [textChunk('hello')],
-    ];
+    streamQueue = [[textChunk('hello')]];
 
     const result = await googleGenAiExecutor.run(makeReq(), makeConfig());
     expect(result.metrics.tokenStatus).toBe('not_reported');
@@ -622,12 +581,7 @@ describe('pricing combos', () => {
   it('Combo B: usage reported + pricing unknown -> tokenStatus=reported, costStatus=unknown, reason=unknown-pricing', async () => {
     setAgent({ model: 'gemini-unknown-model' });
 
-    streamQueue = [
-      [
-        textChunk('hello'),
-        usageChunk({ promptTokenCount: 50, candidatesTokenCount: 20 }),
-      ],
-    ];
+    streamQueue = [[textChunk('hello'), usageChunk({ promptTokenCount: 50, candidatesTokenCount: 20 })]];
 
     const result = await googleGenAiExecutor.run(makeReq(), makeConfig());
     expect(result.metrics.tokenStatus).toBe('reported');
@@ -647,12 +601,7 @@ describe('pricing combos', () => {
 
     vi.mocked(calculateCost).mockReturnValue(0.025);
 
-    streamQueue = [
-      [
-        textChunk('hello'),
-        usageChunk({ promptTokenCount: 100, candidatesTokenCount: 50 }),
-      ],
-    ];
+    streamQueue = [[textChunk('hello'), usageChunk({ promptTokenCount: 100, candidatesTokenCount: 50 })]];
 
     try {
       const result = await googleGenAiExecutor.run(makeReq(), makeConfig());
@@ -663,19 +612,14 @@ describe('pricing combos', () => {
       expect(vi.mocked(calculateCost)).toHaveBeenCalled();
     } finally {
       spyResolve.mockRestore();
-      void originalResolve; // suppress unused var warning
+      void originalResolve;
     }
   });
 });
 
-
 describe('no-usage: response without usageMetadata in any chunk', () => {
   it('returns tokenStatus=not_reported, costStatus=unknown, costUnknownReason=no-usage-reported', async () => {
-    streamQueue = [
-      [
-        textChunk('answer without usage'),
-      ],
-    ];
+    streamQueue = [[textChunk('answer without usage')]];
 
     const result = await googleGenAiExecutor.run(makeReq(), makeConfig());
     expect(result.metrics.tokenStatus).toBe('not_reported');
@@ -699,18 +643,11 @@ describe('no-usage: response without usageMetadata in any chunk', () => {
   });
 });
 
-
 describe('watchdog: onActivity called per tool loop iteration', () => {
   it('calls onActivity once per API call (including initial call)', async () => {
     streamQueue = [
-      [
-        fcChunk('Read', { file_path: '/f' }),
-        usageChunk({ promptTokenCount: 5, candidatesTokenCount: 2 }),
-      ],
-      [
-        textChunk('done'),
-        usageChunk({ promptTokenCount: 15, candidatesTokenCount: 8 }),
-      ],
+      [fcChunk('Read', { file_path: '/f' }), usageChunk({ promptTokenCount: 5, candidatesTokenCount: 2 })],
+      [textChunk('done'), usageChunk({ promptTokenCount: 15, candidatesTokenCount: 8 })],
     ];
 
     const onActivity = vi.fn();
@@ -732,10 +669,7 @@ describe('watchdog: onActivity called per tool loop iteration', () => {
         fcChunk('Bash', { command: 'ls' }),
         usageChunk({ promptTokenCount: 10, candidatesTokenCount: 3 }),
       ],
-      [
-        textChunk('result'),
-        usageChunk({ promptTokenCount: 20, candidatesTokenCount: 8 }),
-      ],
+      [textChunk('result'), usageChunk({ promptTokenCount: 20, candidatesTokenCount: 8 })],
     ];
 
     const onActivity = vi.fn();
@@ -745,39 +679,30 @@ describe('watchdog: onActivity called per tool loop iteration', () => {
   });
 });
 
-
 describe('credential errors', () => {
   it('throws informative error when apiKeyRef is absent', async () => {
     setAgent({ apiKeyRef: '' });
 
-    await expect(
-      googleGenAiExecutor.run(makeReq(), makeConfig()),
-    ).rejects.toThrow(/sem apiKeyRef configurado/);
+    await expect(googleGenAiExecutor.run(makeReq(), makeConfig())).rejects.toThrow(/sem apiKeyRef configurado/);
   });
 
   it('throws informative error when apiKeyRef is whitespace-only', async () => {
     setAgent({ apiKeyRef: '   ' });
 
-    await expect(
-      googleGenAiExecutor.run(makeReq(), makeConfig()),
-    ).rejects.toThrow(/sem apiKeyRef configurado/);
+    await expect(googleGenAiExecutor.run(makeReq(), makeConfig())).rejects.toThrow(/sem apiKeyRef configurado/);
   });
 
   it('throws informative error when secret was removed from Vault', async () => {
     mockSecretValue = null;
     vi.mocked(getSecret).mockResolvedValue(null);
 
-    await expect(
-      googleGenAiExecutor.run(makeReq(), makeConfig()),
-    ).rejects.toThrow(/foi removido do Vault/);
+    await expect(googleGenAiExecutor.run(makeReq(), makeConfig())).rejects.toThrow(/foi removido do Vault/);
   });
 
   it('ref absent error message mentions agentId and provider', async () => {
     setAgent({ apiKeyRef: '' });
 
-    const err: unknown = await googleGenAiExecutor
-      .run(makeReq(), makeConfig())
-      .catch((e: unknown) => e);
+    const err: unknown = await googleGenAiExecutor.run(makeReq(), makeConfig()).catch((e: unknown) => e);
     if (!(err instanceof Error)) throw new Error('Expected missing-ref error');
     expect(err.message).toContain('gemini-agent');
     expect(err.message).toContain('gemini-agent-platform');
@@ -787,20 +712,15 @@ describe('credential errors', () => {
     mockSecretValue = null;
     vi.mocked(getSecret).mockResolvedValue(null);
 
-    const err: unknown = await googleGenAiExecutor
-      .run(makeReq(), makeConfig())
-      .catch((e: unknown) => e);
+    const err: unknown = await googleGenAiExecutor.run(makeReq(), makeConfig()).catch((e: unknown) => e);
     if (!(err instanceof Error)) throw new Error('Expected removed-secret error');
     expect(err.message).toContain('orchestrator_vertex_api_key_ref');
   });
 });
 
-
 describe('MCP tools warning', () => {
   it('executor proceeds when MCP tools are in allowedTools (they are dropped silently)', async () => {
-    streamQueue = [
-      [textChunk('ok'), usageChunk({ promptTokenCount: 10, candidatesTokenCount: 5 })],
-    ];
+    streamQueue = [[textChunk('ok'), usageChunk({ promptTokenCount: 10, candidatesTokenCount: 5 })]];
 
     const result = await googleGenAiExecutor.run(
       makeReq(),
@@ -813,12 +733,9 @@ describe('MCP tools warning', () => {
   });
 });
 
-
 describe('result shape', () => {
   it('returns correct runtime and provider fields', async () => {
-    streamQueue = [
-      [textChunk('hi'), usageChunk({ promptTokenCount: 5, candidatesTokenCount: 3 })],
-    ];
+    streamQueue = [[textChunk('hi'), usageChunk({ promptTokenCount: 5, candidatesTokenCount: 3 })]];
 
     const result = await googleGenAiExecutor.run(makeReq(), makeConfig());
     expect(result.runtime).toBe('external');
@@ -827,9 +744,7 @@ describe('result shape', () => {
   });
 
   it('returns correct cacheReadTokens and cacheCreationTokens (always 0)', async () => {
-    streamQueue = [
-      [textChunk('hi'), usageChunk({ promptTokenCount: 100, candidatesTokenCount: 50 })],
-    ];
+    streamQueue = [[textChunk('hi'), usageChunk({ promptTokenCount: 100, candidatesTokenCount: 50 })]];
 
     const result = await googleGenAiExecutor.run(makeReq(), makeConfig());
     expect(result.metrics.cacheReadTokens).toBe(0);
@@ -837,14 +752,11 @@ describe('result shape', () => {
   });
 });
 
-
 describe('external-executor: google-genai protocol dispatch', () => {
   it('dispatches to google-genai-executor when protocol=google-genai', async () => {
     const { externalExecutor } = await import('../agent-runtime/external-executor');
 
-    streamQueue = [
-      [textChunk('gemini response'), usageChunk({ promptTokenCount: 20, candidatesTokenCount: 10 })],
-    ];
+    streamQueue = [[textChunk('gemini response'), usageChunk({ promptTokenCount: 20, candidatesTokenCount: 10 })]];
 
     vi.mocked(getAgent).mockReturnValue({
       ...defaultAgent,

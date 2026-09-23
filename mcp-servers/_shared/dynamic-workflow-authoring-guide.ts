@@ -1,4 +1,3 @@
-
 export const AUTHORING_GUIDE_EXAMPLE_START = '// --- INICIO workflow.js de referencia ---';
 export const AUTHORING_GUIDE_EXAMPLE_END = '// --- FIM workflow.js de referencia ---';
 
@@ -19,7 +18,8 @@ export const AUTHORING_ALLOWED_AGENT_TYPES = [
   'dynamic-workflow-plan-validator-topology',
 ] as const;
 
-export const AUTHORING_GUIDE_TEXT = String.raw`# Guia de autoria de workflow dinamico (modelo canonico)
+export const AUTHORING_GUIDE_TEXT =
+  String.raw`# Guia de autoria de workflow dinamico (modelo canonico)
 
 Chame este guia ANTES de todo dynamic_workflow_author. O .js E o workflow: meta literal + corpo top-level. Nao leia ~/.lionclaw/workflow-templates (copia morta, nao compila, usa gate()). O que esta aqui e a unica referencia.
 
@@ -73,8 +73,8 @@ gate() (gate-not-in-manifest, fatal), materializeSprintPlan()/validateSprintPlan
 1 documentos (scout com schema inline -> doc-writer -> sprint-planner com schema PLAN) | 2 unidades de 1 AC (coder 30 min, maxTurns 150 + greenCheck({ final: false }); vermelho => UM fixer so com gc.findings; ultima unidade roda npm run build) | 3 fim: greenCheck({ final: true }) + UMA rodada de 3 validadores em parallel, escopo fechado nos ARQUIVOS TOCADOS (via textOf) | 4 refuter SO POR P1 (effort low, le so o where); P2/P3 direto para advisory | 5 real = P1 confirmado | 6 UM fixer + greenCheck({ final: true }) + re-refute por P1 (recheck-) | 7 reporter scout + artifact | 8 auditoria DoD (scout) | 9 cc-delivery (host).
 
 ` +
-'// --- INICIO workflow.js de referencia ---\n' +
-String.raw`export const meta = {
+  '// --- INICIO workflow.js de referencia ---\n' +
+  String.raw`export const meta = {
   name: "feature-curta",
   description: "1 feature em sprints curtas: sprint-planner, unidades de 1 AC com maxTurns, greenCheck por unidade, build na ultima unidade, 1 rodada de validacao, refuter P1-only",
   phases: ["Documentos", "Sprint", "Auditoria"]
@@ -326,8 +326,8 @@ const dod = await agent(
 // dod pode ser null (skip do orquestrador): nunca lance; null = nao auditado.
 return { ok: dod?.ok === true, pendencias: dod?.pendencias ?? ["auditoria DoD nao concluida"] };
 ` +
-'// --- FIM workflow.js de referencia ---\n' +
-String.raw`
+  '// --- FIM workflow.js de referencia ---\n' +
+  String.raw`
 ## Model e effort por node (DINAMISMO POR NODE)
 Cada agent() aceita model e effort proprios. effort: "low" | "medium" | "high" | "xhigh" | "max" | "ultra". Na familia Claude, "xhigh"/"max"/"ultra" viram "max". REGRA INTRA-FAMILIA: o provider vem do agentType e nunca muda; o model tem que ser da mesma familia do runtime (claude-* em cloud, glm-* em zai, minimax-* em minimax-tp, gpt-*/codex-* em codex, grok-* em grok, kimi-code/* em kimi); cruzar familia e fatal model-cross-family. Override de model transportado em cloud/zai/minimax-tp/codex/grok; Kimi aceita apenas effort por node (model override e fatal) e so os tiers anunciados pelo modelo (K3: low/high/max; K2.7 rejeita effort explicito). Grok suporta model/effort (low/medium/high). Em local/external, model/effort por node e erro fatal. "ultra" so executa em node CODEX com modelo gpt-5.6 que o anuncie, custa 2-3x: NUNCA escolha "ultra" por conta propria, so quando o humano pediu. Roster sugerido: validadores e refuters effort "low"; coder/fixer "high"; planner opus.
 `;

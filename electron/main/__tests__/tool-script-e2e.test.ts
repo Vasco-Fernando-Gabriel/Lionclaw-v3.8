@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -33,17 +32,10 @@ vi.mock('../mcp-tool-bridge', () => ({
 import { createToolScriptDispatcher } from '../tool-script/tool-script-dispatch';
 import { runToolScript } from '../tool-script/tool-script-engine';
 import { buildToolScriptEnv } from '../tool-script/tool-script-env';
-import {
-  registerChatCapabilityTurn,
-  __resetChatCapabilityContextForTests,
-} from '../chat-capability-context';
+import { registerChatCapabilityTurn, __resetChatCapabilityContextForTests } from '../chat-capability-context';
 
 function resolveTestPython(): string | undefined {
-  for (const candidate of [
-    '/opt/homebrew/bin/python3',
-    '/usr/local/bin/python3',
-    '/usr/bin/python3',
-  ]) {
+  for (const candidate of ['/opt/homebrew/bin/python3', '/usr/local/bin/python3', '/usr/bin/python3']) {
     if (fs.existsSync(candidate)) return candidate;
   }
   return undefined;

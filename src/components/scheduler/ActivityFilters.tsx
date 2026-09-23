@@ -37,7 +37,10 @@ export function ActivityFiltersBar({ filters, onChange, availableTags }: Props) 
   const [agents, setAgents] = useState<AgentConfig[]>([]);
 
   useEffect(() => {
-    window.lionclaw.agents.list().then(setAgents).catch(() => {});
+    window.lionclaw.agents
+      .list()
+      .then(setAgents)
+      .catch(() => {});
   }, []);
 
   const today = getTodayRange();
@@ -50,9 +53,7 @@ export function ActivityFiltersBar({ filters, onChange, availableTags }: Props) 
 
   const chipClass = (active: boolean) =>
     `px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-      active
-        ? 'bg-amber-600 text-white'
-        : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700'
+      active ? 'bg-amber-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-700'
     }`;
 
   return (
@@ -93,16 +94,16 @@ export function ActivityFiltersBar({ filters, onChange, availableTags }: Props) 
         className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 outline-none focus:border-amber-600"
       >
         <option value="">Todos agentes</option>
-        {agents.map(a => (
-          <option key={a.id} value={a.id}>{a.name}</option>
+        {agents.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.name}
+          </option>
         ))}
       </select>
 
       <select
         value={filters.status || ''}
-        onChange={(e) =>
-          onChange({ ...filters, status: (e.target.value || undefined) as FiltersType['status'] })
-        }
+        onChange={(e) => onChange({ ...filters, status: (e.target.value || undefined) as FiltersType['status'] })}
         className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-300 outline-none focus:border-amber-600"
       >
         <option value="">Todos status</option>
@@ -116,16 +117,14 @@ export function ActivityFiltersBar({ filters, onChange, availableTags }: Props) 
         <>
           <div className="w-px h-5 bg-zinc-700" />
           <div className="flex gap-1 flex-wrap">
-            {availableTags.map(tag => {
+            {availableTags.map((tag) => {
               const isSelected = filters.tags?.includes(tag);
               return (
                 <button
                   key={tag}
                   onClick={() => {
                     const current = filters.tags || [];
-                    const next = isSelected
-                      ? current.filter(t => t !== tag)
-                      : [...current, tag];
+                    const next = isSelected ? current.filter((t) => t !== tag) : [...current, tag];
                     onChange({ ...filters, tags: next.length > 0 ? next : undefined });
                   }}
                   className={`px-2 py-0.5 rounded text-[10px] transition-colors ${

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -26,9 +25,7 @@ function makePlan(): DynamicWorkflowSprintPlan {
         stack: ['ts', 'sqlite'],
         coderAgentId: 'harness-coder',
         validatorAgentIds: ['v1', 'v2'],
-        features: [
-          { id: 'f1', name: 'tabela X', acceptanceCriteria: ['existe a tabela', 'tem indice'] },
-        ],
+        features: [{ id: 'f1', name: 'tabela X', acceptanceCriteria: ['existe a tabela', 'tem indice'] }],
         writeSetHint: ['db.ts'],
         dependencies: [],
         maxRounds: 3,
@@ -91,10 +88,10 @@ describe('renderPlanMarkdown (plan.md legivel)', () => {
     expect(md).toContain('## s0 - Fundacao');
     expect(md).toContain('coder: harness-coder');
     expect(md).toContain('validadores: v1, v2');
-    expect(md).toContain('depende de: s0'); // s1 depende de s0
+    expect(md).toContain('depende de: s0');
     expect(md).toContain('f1: tabela X');
     expect(md).toContain('[ ] existe a tabela');
-    expect(md).toContain('sequencial'); // sem batch paralelo
+    expect(md).toContain('sequencial');
   });
 
   it('mostra batches paralelos quando ha grupo com mais de 1 sprint', () => {

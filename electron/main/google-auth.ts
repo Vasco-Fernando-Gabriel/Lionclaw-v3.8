@@ -35,7 +35,9 @@ export async function runOAuthFlow(): Promise<{ success: boolean; error?: string
 
         if (error) {
           res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end('<html><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>Autenticacao cancelada</h2><p>Voce pode fechar esta aba.</p></body></html>');
+          res.end(
+            '<html><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>Autenticacao cancelada</h2><p>Voce pode fechar esta aba.</p></body></html>',
+          );
           server.close();
           resolve({ success: false, error: `Google retornou erro: ${error}` });
           return;
@@ -44,13 +46,13 @@ export async function runOAuthFlow(): Promise<{ success: boolean; error?: string
         if (code) {
           const port = (server.address() as { port: number }).port;
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end('<html><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>Autenticacao concluida!</h2><p>Pode fechar esta aba e voltar ao LionClaw.</p></body></html>');
+          res.end(
+            '<html><body style="font-family:sans-serif;text-align:center;padding:60px"><h2>Autenticacao concluida!</h2><p>Pode fechar esta aba e voltar ao LionClaw.</p></body></html>',
+          );
           server.close();
 
           try {
-            const oauth2Client = new google.auth.OAuth2(
-              clientId, clientSecret, `http://localhost:${port}`,
-            );
+            const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, `http://localhost:${port}`);
             const { tokens } = await oauth2Client.getToken(code);
 
             if (tokens.refresh_token) {
@@ -76,9 +78,7 @@ export async function runOAuthFlow(): Promise<{ success: boolean; error?: string
 
     server.listen(0, () => {
       const port = (server.address() as { port: number }).port;
-      const oauth2Client = new google.auth.OAuth2(
-        clientId, clientSecret, `http://localhost:${port}`,
-      );
+      const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, `http://localhost:${port}`);
       const authUrl = oauth2Client.generateAuthUrl({
         access_type: 'offline',
         scope: ALL_SCOPES,
@@ -135,10 +135,7 @@ export async function revokeGoogleAuth(): Promise<GoogleRevokeResult> {
         );
       }
     } catch (error) {
-      logger.warn(
-        { error, code: 'REVOKE-UNCONFIRMED' },
-        'Google OAuth: revogacao remota falhou',
-      );
+      logger.warn({ error, code: 'REVOKE-UNCONFIRMED' }, 'Google OAuth: revogacao remota falhou');
     }
   }
 

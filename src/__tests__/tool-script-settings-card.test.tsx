@@ -41,9 +41,7 @@ function render(settings: AppSettings, onPatch: (p: Partial<AppSettings>) => voi
 }
 
 function toggleButton(): HTMLButtonElement {
-  const btn = container.querySelector<HTMLButtonElement>(
-    'button[aria-label="Alternar Tool Script"]',
-  );
+  const btn = container.querySelector<HTMLButtonElement>('button[aria-label="Alternar Tool Script"]');
   if (!btn) throw new Error('toggle do Tool Script nao renderizado');
   return btn;
 }

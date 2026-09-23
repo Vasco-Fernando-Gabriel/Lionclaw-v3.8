@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 vi.mock('../secrets-vault', () => ({
   getSecret: vi.fn().mockResolvedValue(null),
@@ -19,7 +17,6 @@ vi.mock('../logger', () => ({
   }),
 }));
 
-
 import {
   registerVaultEntry,
   registerExternalProviderVaultEntries,
@@ -29,7 +26,6 @@ import {
 } from '../vault-registry';
 
 import type { VaultEntry } from '../vault-registry';
-
 
 describe('vault-registry: registerExternalProviderVaultEntries', () => {
   beforeEach(() => {
@@ -131,9 +127,7 @@ describe('vault-registry: registerVaultEntry', () => {
 
 describe('vault-registry: setVaultSecret', () => {
   it('lanca erro para chave nao registrada', async () => {
-    await expect(setVaultSecret('UNKNOWN_KEY_XYZ_NOT_IN_REGISTRY', 'my-secret')).rejects.toThrow(
-      'Chave desconhecida',
-    );
+    await expect(setVaultSecret('UNKNOWN_KEY_XYZ_NOT_IN_REGISTRY', 'my-secret')).rejects.toThrow('Chave desconhecida');
   });
 
   it('aceita chave valida registrada sem lancar erro', async () => {

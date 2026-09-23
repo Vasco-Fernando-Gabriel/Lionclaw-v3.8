@@ -16,11 +16,19 @@ beforeAll(() => {
   const memoryStore = new Map<string, string>();
   const localStorageMock = {
     getItem: (key: string) => memoryStore.get(key) ?? null,
-    setItem: (key: string, value: string) => { memoryStore.set(key, value); },
-    removeItem: (key: string) => { memoryStore.delete(key); },
-    clear: () => { memoryStore.clear(); },
+    setItem: (key: string, value: string) => {
+      memoryStore.set(key, value);
+    },
+    removeItem: (key: string) => {
+      memoryStore.delete(key);
+    },
+    clear: () => {
+      memoryStore.clear();
+    },
     key: (i: number) => Array.from(memoryStore.keys())[i] ?? null,
-    get length() { return memoryStore.size; },
+    get length() {
+      return memoryStore.size;
+    },
   };
   (global as unknown as Record<string, unknown>).localStorage = localStorageMock;
   (global as unknown as Record<string, unknown>).window = {
@@ -265,9 +273,7 @@ describe('openProject rehydrate', () => {
       updatedAt: '2026-05-25T00:00:00.000Z',
       sprints: [],
     });
-    pipelineApi.getPhaseMessages = async () => [
-      { role: 'assistant', content: 'Relatorio pronto para aprovacao.' },
-    ];
+    pipelineApi.getPhaseMessages = async () => [{ role: 'assistant', content: 'Relatorio pronto para aprovacao.' }];
 
     const store = usePipelineStore.getState();
     store._setProjectState('stale-project', {

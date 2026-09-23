@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -33,14 +32,7 @@ describe('TB-35 — paridade de PIPELINE_TYPES entre o core e o subprocesso MCP'
   });
 
   it('nenhum dos dois perdeu um tipo existente', () => {
-    const expected = [
-      'development',
-      'development-v2',
-      'security',
-      'feature',
-      'architecture-review',
-      'bug',
-    ].sort();
+    const expected = ['development', 'development-v2', 'security', 'feature', 'architecture-review', 'bug'].sort();
     expect(readPipelineTypes(CORE_FILE).sort()).toEqual(expected);
     expect(readPipelineTypes(MCP_FILE).sort()).toEqual(expected);
   });

@@ -1,4 +1,3 @@
-
 import {
   GoogleGenAI,
   FunctionCallingConfigMode,
@@ -43,7 +42,6 @@ const FATAL_FINISH_REASONS = new Set<string>([
   'IMAGE_SAFETY',
   'UNEXPECTED_TOOL_CALL',
 ]);
-
 
 const BUILTIN_GEMINI_SCHEMAS: Record<string, FunctionDeclaration> = {
   Read: {
@@ -181,7 +179,6 @@ const BUILTIN_GEMINI_SCHEMAS: Record<string, FunctionDeclaration> = {
   },
 };
 
-
 export function buildGeminiTools(allowedTools: string[]): Tool[] | undefined {
   const builtinNames = allowedTools.filter((t) => !t.startsWith('mcp__'));
   if (builtinNames.length === 0) return undefined;
@@ -195,7 +192,6 @@ export function buildGeminiTools(allowedTools: string[]): Tool[] | undefined {
   return [{ functionDeclarations }];
 }
 
-
 export function toGeminiContents(
   systemPrompt: string | undefined,
   userPrompt: string,
@@ -204,9 +200,8 @@ export function toGeminiContents(
   systemInstruction: Content | undefined;
   contents: Content[];
 } {
-  const systemInstruction: Content | undefined = systemPrompt && systemPrompt.trim().length > 0
-    ? { parts: [{ text: systemPrompt }] }
-    : undefined;
+  const systemInstruction: Content | undefined =
+    systemPrompt && systemPrompt.trim().length > 0 ? { parts: [{ text: systemPrompt }] } : undefined;
 
   const contents: Content[] = [];
 
@@ -231,12 +226,8 @@ export function toGeminiContents(
   return { systemInstruction, contents };
 }
 
-
-async function run(
-  req: AgentExecutionRequest,
-  config: AgentQueryConfig,
-): Promise<AgentExecutionResult> {
-  const agent = getAgent(req.agentId);
+async function run(req: AgentExecutionRequest, config: AgentQueryConfig): Promise<AgentExecutionResult> {
+  const agent = req.executionAgent ?? getAgent(req.agentId);
   if (!agent?.externalConfig) {
     throw new Error(`Agent ${req.agentId} has runtime=external but no externalConfig`);
   }
@@ -244,8 +235,7 @@ async function run(
 
   if (extCfg.protocol !== 'google-genai') {
     throw new Error(
-      `google-genai-executor invocado com protocol incorreto: "${extCfg.protocol}". ` +
-      `Esperado: "google-genai".`,
+      `google-genai-executor invocado com protocol incorreto: "${extCfg.protocol}". ` + `Esperado: "google-genai".`,
     );
   }
 
@@ -259,29 +249,26 @@ async function run(
   if (!extCfg.apiKeyRef || extCfg.apiKeyRef.trim().length === 0) {
     throw new Error(
       `Agent ${req.agentId} (provider ${extCfg.provider}) sem apiKeyRef configurado. ` +
-      `Edite o agente em Settings > SubAgents e selecione uma chave do Vault.`,
+        `Edite o agente em Settings > SubAgents e selecione uma chave do Vault.`,
     );
   }
 
   const resolvedApiKeyRef = resolveGeminiApiKeyRef(extCfg.apiKeyRef);
   const apiKey = await getSecret(resolvedApiKeyRef);
   if (!apiKey) {
-    const refLabel = resolvedApiKeyRef === extCfg.apiKeyRef
-      ? `"${extCfg.apiKeyRef}"`
-      : `"${extCfg.apiKeyRef}" (resolvido para "${resolvedApiKeyRef}")`;
+    const refLabel =
+      resolvedApiKeyRef === extCfg.apiKeyRef
+        ? `"${extCfg.apiKeyRef}"`
+        : `"${extCfg.apiKeyRef}" (resolvido para "${resolvedApiKeyRef}")`;
     throw new Error(
       `Agent ${req.agentId}: secret apontado por apiKeyRef ${refLabel} foi removido do Vault. ` +
-      `Reconfigure a credencial em Settings > Vault ou no card de provider correspondente.`,
+        `Reconfigure a credencial em Settings > Vault ou no card de provider correspondente.`,
     );
   }
 
   const ai = new GoogleGenAI({ vertexai: true, apiKey });
 
-  const { systemInstruction, contents } = toGeminiContents(
-    config.systemPrompt,
-    req.prompt,
-    req.priorMessages,
-  );
+  const { systemInstruction, contents } = toGeminiContents(config.systemPrompt, req.prompt, req.priorMessages);
 
   const tools = buildGeminiTools(config.allowedTools);
   const toolConfig: ToolConfig | undefined = tools
@@ -300,7 +287,8 @@ async function run(
   const startedAt = Date.now();
 
   for (let round = 0; round < maxRounds; round++) {
-    req.onActivity?.();
+    if (!req.swarmLifecycle) req.onActivity?.();
+    req.abortController.signal.throwIfAborted();
     apiRequests += 1;
 
     const stream = await ai.models.generateContentStream({
@@ -323,6 +311,8 @@ async function run(
     let turnThoughtSignature: string | undefined;
 
     for await (const chunk of stream as AsyncGenerator<GenerateContentResponse>) {
+      req.onActivity?.();
+      req.abortController.signal.throwIfAborted();
       for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
         if (part.text) {
           roundText += part.text;
@@ -379,7 +369,11 @@ async function run(
 
     const responseParts: Part[] = [];
     for (const fc of pendingFunctionCalls) {
-      const toolResult = await executeLocalTool(fc.name, fc.args, req.cwd);
+      req.abortController.signal.throwIfAborted();
+      const toolResult = req.swarmToolDispatch
+        ? await req.swarmToolDispatch(fc.name, fc.args)
+        : await executeLocalTool(fc.name, fc.args, req.cwd);
+      req.abortController.signal.throwIfAborted();
 
       req.onToolUseComplete?.(fc.name, fc.args);
 

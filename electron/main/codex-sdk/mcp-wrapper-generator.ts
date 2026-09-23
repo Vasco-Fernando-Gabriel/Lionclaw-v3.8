@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import { LIONCLAW_HELPER_TOKEN_ENV } from '../helper-identity';
@@ -209,26 +208,20 @@ main();
 `;
 }
 
-export async function writeWrapper(
-  serverId: string,
-  sourceContent: string,
-  lionclawHome: string,
-): Promise<string> {
+export async function writeWrapper(serverId: string, sourceContent: string, lionclawHome: string): Promise<string> {
   const dir = path.join(lionclawHome, 'mcp-wrappers');
   await fs.promises.mkdir(dir, { recursive: true });
   if (process.platform !== 'win32') {
     try {
       await fs.promises.chmod(dir, 0o700);
-    } catch {
-    }
+    } catch {}
   }
   const file = path.join(dir, `${serverId}.js`);
   await fs.promises.writeFile(file, sourceContent, { encoding: 'utf8' });
   if (process.platform !== 'win32') {
     try {
       await fs.promises.chmod(file, 0o700);
-    } catch {
-    }
+    } catch {}
   }
   return file;
 }

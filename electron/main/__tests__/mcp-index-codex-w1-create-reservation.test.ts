@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
 const dbRun = vi.hoisted(() => vi.fn());
@@ -35,9 +34,7 @@ const base = {
 
 describe('createMCPServer reserva o id do gateway codex (P4)', () => {
   it('lanca para id lionclaw-gateway e NAO insere no DB', () => {
-    expect(() => createMCPServer({ ...base, id: CODEX_GATEWAY_SERVER_ID })).toThrow(
-      /lionclaw-gateway/,
-    );
+    expect(() => createMCPServer({ ...base, id: CODEX_GATEWAY_SERVER_ID })).toThrow(/lionclaw-gateway/);
     expect(dbRun).not.toHaveBeenCalled();
   });
 

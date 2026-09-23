@@ -5,10 +5,7 @@ import path from 'path';
 import which from 'which';
 import { getSetting } from '../db';
 import { getLionClawHome } from '../paths';
-import {
-  defaultGrokAcpTransportFactory,
-  type GrokAcpTransportFactory,
-} from '../grok-acp/acp-transport';
+import { defaultGrokAcpTransportFactory, type GrokAcpTransportFactory } from '../grok-acp/acp-transport';
 import {
   GrokAuthError,
   GrokBackendError,
@@ -25,10 +22,7 @@ import {
   type GrokManagedCatalogExtras,
   type GrokWorkspaceGrant,
 } from '../grok-sdk/workspace';
-import {
-  buildGrokNativeToolPolicy,
-  GROK_0_2_103_NATIVE_TOOL_IDS,
-} from './grok-session-config';
+import { buildGrokNativeToolPolicy, GROK_0_2_103_NATIVE_TOOL_IDS } from './grok-session-config';
 import { GROK_DEFAULT_MODEL } from '../../../src/constants/grok-models';
 
 export {
@@ -72,9 +66,7 @@ export function getGrokManagedCatalogExtras(): GrokManagedCatalogExtras {
   };
 }
 
-export function registerGrokManagedCatalogExtras(
-  extra: GrokManagedCatalogExtras,
-): GrokManagedCatalogExtras {
+export function registerGrokManagedCatalogExtras(extra: GrokManagedCatalogExtras): GrokManagedCatalogExtras {
   managedCatalogExtras = {
     disabledSkills: [...new Set([...managedCatalogExtras.disabledSkills, ...extra.disabledSkills])].sort(),
     disabledPlugins: [...new Set([...managedCatalogExtras.disabledPlugins, ...extra.disabledPlugins])].sort(),
@@ -120,11 +112,9 @@ function buildManagedPolicy(extras: GrokManagedCatalogExtras): string {
     `disabled = [${skillNames.map((name) => JSON.stringify(name)).join(', ')}]`,
     `ignore = [${ignorePaths.map((item) => JSON.stringify(item)).join(', ')}]`,
     '',
-    ...(extras.disabledPlugins.length > 0 ? [
-      '[plugins]',
-      `disabled = [${extras.disabledPlugins.map((name) => JSON.stringify(name)).join(', ')}]`,
-      '',
-    ] : []),
+    ...(extras.disabledPlugins.length > 0
+      ? ['[plugins]', `disabled = [${extras.disabledPlugins.map((name) => JSON.stringify(name)).join(', ')}]`, '']
+      : []),
     '[compat.cursor]',
     'skills = false',
     'rules = false',
@@ -150,6 +140,9 @@ const MANAGED_CONFIG = [
   '[cli]',
   'auto_update = false',
   'use_leader = false',
+  '',
+  '[memory]',
+  'enabled = false',
   '',
 ].join('\n');
 const GROK_MINIMUM_ACP_VERSION = [0, 2, 103] as const;
@@ -179,15 +172,16 @@ export function ensureGrokHome(home = resolveGrokHome()): void {
   try {
     fs.chmodSync(managedPolicyPath, 0o600);
     fs.chmodSync(configPath, 0o600);
-  } catch { /* Windows ACLs are validated separately. */ }
+  } catch {
+    /* Windows ACLs are validated separately. */
+  }
 }
 
 export function isGrokHomeIsolated(home = resolveGrokHome()): boolean {
   try {
     const managedPolicy = fs.readFileSync(path.join(home, 'managed_config.toml'), 'utf8');
     const config = fs.readFileSync(path.join(home, 'config.toml'), 'utf8');
-    return config === MANAGED_CONFIG
-      && managedPolicy === buildManagedPolicy(managedCatalogExtras);
+    return config === MANAGED_CONFIG && managedPolicy === buildManagedPolicy(managedCatalogExtras);
   } catch {
     return false;
   }
@@ -198,9 +192,10 @@ export function buildGrokChildEnv(
   parent: NodeJS.ProcessEnv = process.env,
 ): Record<string, string> {
   const env: Record<string, string> = { GROK_HOME: home, HOME: home };
-  const allowedExact = process.platform === 'win32'
-    ? ['PATH', 'Path', 'PATHEXT', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP']
-    : ['PATH', 'TMPDIR'];
+  const allowedExact =
+    process.platform === 'win32'
+      ? ['PATH', 'Path', 'PATHEXT', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP']
+      : ['PATH', 'TMPDIR'];
   if (process.platform === 'win32') env['USERPROFILE'] = home;
   for (const key of allowedExact) {
     const value = parent[key];
@@ -311,29 +306,36 @@ export async function resolveGrokBinary(): Promise<string | null> {
 }
 
 export async function resolveGrokVersion(binary: string): Promise<string | null> {
-  const probe = async (args: string[]): Promise<string | null> => new Promise((resolve) => {
-    const proc = spawn(binary, args, {
-      env: buildGrokChildEnv(),
-      shell: process.platform === 'win32' && binary.toLowerCase().endsWith('.cmd'),
-      stdio: ['ignore', 'pipe', 'ignore'],
+  const probe = async (args: string[]): Promise<string | null> =>
+    new Promise((resolve) => {
+      const proc = spawn(binary, args, {
+        env: buildGrokChildEnv(),
+        shell: process.platform === 'win32' && binary.toLowerCase().endsWith('.cmd'),
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      let stdout = '';
+      let settled = false;
+      const finish = (value: string | null): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      };
+      const timer = setTimeout(() => {
+        try {
+          proc.kill();
+        } catch {
+          /* best effort */
+        }
+        finish(null);
+      }, 5_000);
+      timer.unref?.();
+      proc.stdout?.on('data', (chunk: Buffer) => {
+        stdout += chunk.toString('utf8');
+      });
+      proc.once('error', () => finish(null));
+      proc.once('close', (code) => finish(code === 0 ? stdout.trim() || null : null));
     });
-    let stdout = '';
-    let settled = false;
-    const finish = (value: string | null): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(value);
-    };
-    const timer = setTimeout(() => {
-      try { proc.kill(); } catch { /* best effort */ }
-      finish(null);
-    }, 5_000);
-    timer.unref?.();
-    proc.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString('utf8'); });
-    proc.once('error', () => finish(null));
-    proc.once('close', (code) => finish(code === 0 ? stdout.trim() || null : null));
-  });
   return (await probe(['--version'])) ?? probe(['version']);
 }
 
@@ -361,32 +363,28 @@ export function getGrokToolPolicyAttestation(): {
   reason?: string;
 } {
   const pending: string[] = [];
-  const catalogPolicy = buildGrokNativeToolPolicy(
-    'agent-scoped',
-    Object.keys(GROK_0_2_103_NATIVE_TOOL_IDS),
-  );
+  const catalogPolicy = buildGrokNativeToolPolicy('agent-scoped', Object.keys(GROK_0_2_103_NATIVE_TOOL_IDS));
   const expectedTools = new Set(Object.values(GROK_0_2_103_NATIVE_TOOL_IDS).flat());
   const actualTools = new Set(catalogPolicy.effectiveTools);
-  if (
-    expectedTools.size !== actualTools.size
-    || [...expectedTools].some((tool) => !actualTools.has(tool))
-  ) {
+  if (expectedTools.size !== actualTools.size || [...expectedTools].some((tool) => !actualTools.has(tool))) {
     pending.push('native-tool-catalog');
   }
 
   const oneShotPolicy = buildGrokNativeToolPolicy('one-shot', Object.keys(GROK_0_2_103_NATIVE_TOOL_IDS));
   if (
-    oneShotPolicy.effectiveTools.length !== 0
-    || oneShotPolicy.argv.join('\0') !== ['--tools', '', '--disable-web-search'].join('\0')
+    oneShotPolicy.effectiveTools.length !== 0 ||
+    oneShotPolicy.argv.join('\0') !== ['--tools', '', '--disable-web-search'].join('\0')
   ) {
     pending.push('one-shot-empty-catalog');
   }
   return {
     verified: pending.length === 0,
     pending,
-    ...(pending.length > 0 ? {
-      reason: `Politica local de tools Grok inconsistente: ${pending.join(', ')}`,
-    } : {}),
+    ...(pending.length > 0
+      ? {
+          reason: `Politica local de tools Grok inconsistente: ${pending.join(', ')}`,
+        }
+      : {}),
   };
 }
 
@@ -395,9 +393,7 @@ export function isGrokRuntimeUsable(input: {
   subscriptionRouteVerified: boolean;
   toolPolicyVerified: boolean;
 }): boolean {
-  return input.supportedVersion
-    && input.subscriptionRouteVerified
-    && input.toolPolicyVerified;
+  return input.supportedVersion && input.subscriptionRouteVerified && input.toolPolicyVerified;
 }
 
 export function isSuccessfulGrokAuthResponse(value: unknown): boolean {
@@ -416,21 +412,22 @@ export function inspectGrokSessionModelAttestation(value: unknown): {
   model: string | null;
   conflicting: boolean;
 } {
-  const session = value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-  const models = session['models'] !== null && typeof session['models'] === 'object'
-    && !Array.isArray(session['models'])
-    ? session['models'] as Record<string, unknown>
-    : {};
-  const meta = session['_meta'] !== null && typeof session['_meta'] === 'object'
-    && !Array.isArray(session['_meta'])
-    ? session['_meta'] as Record<string, unknown>
-    : {};
-  const config = meta['x.ai/sessionConfig'] !== null && typeof meta['x.ai/sessionConfig'] === 'object'
-    && !Array.isArray(meta['x.ai/sessionConfig'])
-    ? meta['x.ai/sessionConfig'] as Record<string, unknown>
-    : {};
+  const session =
+    value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  const models =
+    session['models'] !== null && typeof session['models'] === 'object' && !Array.isArray(session['models'])
+      ? (session['models'] as Record<string, unknown>)
+      : {};
+  const meta =
+    session['_meta'] !== null && typeof session['_meta'] === 'object' && !Array.isArray(session['_meta'])
+      ? (session['_meta'] as Record<string, unknown>)
+      : {};
+  const config =
+    meta['x.ai/sessionConfig'] !== null &&
+    typeof meta['x.ai/sessionConfig'] === 'object' &&
+    !Array.isArray(meta['x.ai/sessionConfig'])
+      ? (meta['x.ai/sessionConfig'] as Record<string, unknown>)
+      : {};
   const values = [
     session['modelId'],
     session['model'],
@@ -486,12 +483,16 @@ export async function probeGrokSubscription(
   };
   let cachedTokenAdvertised = false;
   try {
-    const initialized = await transport.request('initialize', {
-      protocolVersion: 1,
-      clientCapabilities: {},
-    }, requestOptions) as Record<string, unknown>;
+    const initialized = (await transport.request(
+      'initialize',
+      {
+        protocolVersion: 1,
+        clientCapabilities: {},
+      },
+      requestOptions,
+    )) as Record<string, unknown>;
     const methods = Array.isArray(initialized?.['authMethods'])
-      ? initialized['authMethods'] as Array<Record<string, unknown>>
+      ? (initialized['authMethods'] as Array<Record<string, unknown>>)
       : [];
     cachedTokenAdvertised = methods.some((method) => method['id'] === 'cached_token');
     if (!cachedTokenAdvertised) {
@@ -501,10 +502,14 @@ export async function probeGrokSubscription(
         modelAvailable: false,
       };
     }
-    const auth = await transport.request('authenticate', {
-      methodId: 'cached_token',
-      _meta: { headless: true },
-    }, requestOptions) as Record<string, unknown>;
+    const auth = (await transport.request(
+      'authenticate',
+      {
+        methodId: 'cached_token',
+        _meta: { headless: true },
+      },
+      requestOptions,
+    )) as Record<string, unknown>;
     if (!isSuccessfulGrokAuthResponse(auth)) {
       return {
         authenticated: false,
@@ -514,10 +519,14 @@ export async function probeGrokSubscription(
     }
     let session: Record<string, unknown>;
     try {
-      session = await transport.request('session/new', {
-        cwd: resolveGrokHome(),
-        mcpServers: [],
-      }, requestOptions) as Record<string, unknown>;
+      session = (await transport.request(
+        'session/new',
+        {
+          cwd: resolveGrokHome(),
+          mcpServers: [],
+        },
+        requestOptions,
+      )) as Record<string, unknown>;
     } catch {
       return {
         authenticated: true,
@@ -590,16 +599,18 @@ export async function isGrokAvailable(): Promise<GrokAvailability> {
     toolPolicyVerified: toolPolicyAttestation.verified,
     modelAvailable: probe.modelAvailable,
     usable,
-    ...(!usable ? {
-      reason: !supported
-        ? 'Grok Build 0.2.103 ou superior e necessario para o ACP do LionClaw'
-        : !probe.authenticated
-            ? 'cached_token authentication failed'
-            : !probe.modelAvailable
+    ...(!usable
+      ? {
+          reason: !supported
+            ? 'Grok Build 0.2.103 ou superior e necessario para o ACP do LionClaw'
+            : !probe.authenticated
+              ? 'cached_token authentication failed'
+              : !probe.modelAvailable
                 ? `${GROK_DEFAULT_MODEL} is not available in the authenticated subscription`
                 : !isolationVerified
                   ? 'Ambiente gerenciado do Grok nao foi preparado'
-                  : toolPolicyAttestation.reason ?? 'Politica local de tools Grok nao foi validada',
-    } : {}),
+                  : (toolPolicyAttestation.reason ?? 'Politica local de tools Grok nao foi validada'),
+        }
+      : {}),
   };
 }

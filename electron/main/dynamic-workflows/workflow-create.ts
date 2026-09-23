@@ -1,4 +1,3 @@
-
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, isAbsolute, join } from 'node:path';
@@ -16,16 +15,10 @@ import type {
   DynamicWorkflowRunCreateInput,
   DynamicWorkflowValidationReport,
 } from './types';
-import {
-  materializeBuilderPackage,
-  type RunBuilderResult,
-} from './workflow-package';
+import { materializeBuilderPackage, type RunBuilderResult } from './workflow-package';
 import { validateWorkflowPackage } from './workflow-validator';
 import { compileWorkflowJs } from './workflow-js-compiler';
-import {
-  validateAuthoredAgentTypes,
-  type AuthoredAgentLookup,
-} from './authored-agent-validation';
+import { validateAuthoredAgentTypes, type AuthoredAgentLookup } from './authored-agent-validation';
 
 const logger = createLogger('dynamic-workflow-create');
 
@@ -43,9 +36,7 @@ export const CLAUDE_CODE_DEFAULT_MAX_CONCURRENT_AGENTS = 8;
 export const CLAUDE_CODE_DEFAULT_MAX_USD = 30;
 
 export interface CreateWorkflowDeps {
-  createDefinition: (
-    input: DynamicWorkflowDefinitionCreateInput,
-  ) => DynamicWorkflowDefinition;
+  createDefinition: (input: DynamicWorkflowDefinitionCreateInput) => DynamicWorkflowDefinition;
   createRun: (input: DynamicWorkflowRunCreateInput) => DynamicWorkflowRun;
   loadAgentCatalog: () => DynamicWorkflowAgentSummary[];
   getAgent?: AuthoredAgentLookup;
@@ -83,10 +74,7 @@ export interface CreateWorkflowFailure {
   report?: DynamicWorkflowValidationReport;
 }
 
-export type CreateWorkflowResult =
-  | CreateWorkflowSuccess
-  | CreateWorkflowFailure;
-
+export type CreateWorkflowResult = CreateWorkflowSuccess | CreateWorkflowFailure;
 
 function defaultNow(): string {
   return new Date().toISOString();
@@ -112,7 +100,6 @@ function defaultReadTextFile(path: string): string {
 export function runDirFor(projectPath: string, runId: string): string {
   return join(projectPath, WORKFLOWS_SUBDIR, runId);
 }
-
 
 export function manifestNodeToCreateInput(
   node: DynamicWorkflowManifestNode,
@@ -140,9 +127,7 @@ export function manifestNodeToCreateInput(
   }
 
   const retryPolicy: DynamicWorkflowRetryPolicy | Record<string, unknown> =
-    extra.retryPolicy && typeof extra.retryPolicy === 'object'
-      ? extra.retryPolicy
-      : DEFAULT_RETRY_POLICY;
+    extra.retryPolicy && typeof extra.retryPolicy === 'object' ? extra.retryPolicy : DEFAULT_RETRY_POLICY;
 
   return {
     id: nodeRowId,
@@ -172,7 +157,6 @@ export function manifestNodeToCreateInput(
     consumes: node.consumes ?? [],
   };
 }
-
 
 function fail(error: string, report?: DynamicWorkflowValidationReport): CreateWorkflowFailure {
   return { ok: false, error, ...(report ? { report } : {}) };
@@ -213,15 +197,9 @@ export async function createWorkflow(
   }
 
   let workflowJs: string;
-  if (
-    typeof input.workflowSource === 'string' &&
-    input.workflowSource.length > 0
-  ) {
+  if (typeof input.workflowSource === 'string' && input.workflowSource.length > 0) {
     workflowJs = input.workflowSource;
-  } else if (
-    typeof input.workflowPath === 'string' &&
-    input.workflowPath.length > 0
-  ) {
+  } else if (typeof input.workflowPath === 'string' && input.workflowPath.length > 0) {
     if (!isAbsolute(input.workflowPath)) {
       return fail(`workflowPath deve ser absoluto: ${input.workflowPath}`);
     }
@@ -234,9 +212,7 @@ export async function createWorkflow(
       return fail(`falha ao ler workflowPath: ${(err as Error).message}`);
     }
   } else {
-    return fail(
-      'workflow.js obrigatorio no modo claude-code: forneca workflowSource ou workflowPath',
-    );
+    return fail('workflow.js obrigatorio no modo claude-code: forneca workflowSource ou workflowPath');
   }
 
   if (deps.getAgent) {
@@ -259,21 +235,13 @@ export async function createWorkflow(
 
   const manifest = deriveClaudeCodeManifest({
     name: input.name ?? compiled.meta.name,
-    description:
-      typeof compiled.meta.description === 'string'
-        ? compiled.meta.description
-        : undefined,
+    description: typeof compiled.meta.description === 'string' ? compiled.meta.description : undefined,
     phases: compiled.meta.phases,
   });
 
   let pkg: RunBuilderResult;
   try {
-    pkg = materializeBuilderPackage(
-      runDir,
-      { workflowJs, manifest },
-      'claude-code',
-      0,
-    );
+    pkg = materializeBuilderPackage(runDir, { workflowJs, manifest }, 'claude-code', 0);
   } catch (err) {
     return fail(`falha ao materializar o pacote claude-code: ${(err as Error).message}`);
   }
@@ -294,9 +262,7 @@ export async function createWorkflow(
     now,
   );
   if (!report.ok) {
-    const reasons = report.issues
-      .filter((i) => i.severity === 'error')
-      .map((i) => i.message);
+    const reasons = report.issues.filter((i) => i.severity === 'error').map((i) => i.message);
     const detail = reasons.length > 0 ? `: ${reasons.join('; ')}` : '';
     return fail(`pacote do workflow invalido (secao 15)${detail}`, report);
   }

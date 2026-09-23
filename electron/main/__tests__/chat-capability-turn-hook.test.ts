@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: () => {
@@ -17,6 +15,8 @@ vi.mock('../logger', () => ({
 const getActiveChatSessionMock = vi.fn((): { id: string } | null => null);
 
 vi.mock('../db', () => ({
+  threadIdOf: (s: { id: string; sdkSessionId?: string | null }) => s.sdkSessionId ?? s.id,
+  getSessionOrchestrator: () => null,
   getAllAgents: vi.fn(() => [] as unknown[]),
   getAgent: vi.fn(() => undefined),
   insertMessage: vi.fn(() => 1),
@@ -141,9 +141,13 @@ vi.mock('../lion-sdk', () => ({
 }));
 
 import { executeQuery, type QueryOptions } from '../orchestrator';
-import { desktopLane, telegramLane, cronLane } from '../sdk-lane';
+import { telegramLane, cronLane } from '../sdk-lane';
+import { getDesktopLane } from '../desktop-lanes';
+
+const desktopLane = getDesktopLane('sess-int');
 import {
   getActiveChatTurnByLane,
+  listActiveDesktopTurns,
   getChatCapabilityTurn,
   __resetChatCapabilityContextForTests,
   type ChatCapabilityTurnContext,
@@ -160,7 +164,7 @@ let captured: CapturedTurnState | undefined;
 
 function captureLane(lane: 'desktop' | 'telegram' | 'cron'): void {
   compatExec.mockImplementation(async () => {
-    const laneTurn = getActiveChatTurnByLane(lane);
+    const laneTurn = lane === 'desktop' ? listActiveDesktopTurns()[0] : getActiveChatTurnByLane(lane);
     captured = {
       laneTurn,
       ctx: laneTurn !== undefined ? getChatCapabilityTurn(laneTurn) : undefined,
@@ -191,9 +195,7 @@ describe('S3a: identidade do turno viva DURANTE o despacho, limpa no finally', (
 
     expect(compatExec).toHaveBeenCalledTimes(1);
     expect(captured?.laneTurn?.sessionId).toBe('sess-int');
-    expect(captured?.laneTurn?.turnId).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-    );
+    expect(captured?.laneTurn?.turnId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     expect(captured?.ctx).toBeDefined();
     expect(captured?.ctx?.surface).toBe('chat');
     expect(captured?.ctx?.origin).toBe('user');
@@ -212,7 +214,7 @@ describe('S3a: identidade do turno viva DURANTE o despacho, limpa no finally', (
     expect(captured?.ctx?.readRoots).toEqual(['/tmp']);
     expect(captured?.ctx?.writeRoots).toEqual([]);
 
-    expect(getActiveChatTurnByLane('desktop')).toBeUndefined();
+    expect(listActiveDesktopTurns()).toEqual([]);
     expect(
       getChatCapabilityTurn({
         sessionId: 'sess-int',
@@ -226,6 +228,7 @@ describe('S3a: identidade do turno viva DURANTE o despacho, limpa no finally', (
     expect(captured?.ctx?.capabilities).toEqual({
       pipelineControl: false,
       dynamicWorkflows: false,
+      swarm: false,
     });
   });
 
@@ -276,7 +279,7 @@ describe('S3a: identidade do turno viva DURANTE o despacho, limpa no finally', (
   it('cada turno cunha um turnId NOVO', async () => {
     const turnIds: string[] = [];
     compatExec.mockImplementation(async () => {
-      turnIds.push(getActiveChatTurnByLane('desktop')!.turnId);
+      turnIds.push(listActiveDesktopTurns()[0]!.turnId);
     });
 
     await executeQuery('turno 1', options(), noopGetWindow, desktopLane);
@@ -289,29 +292,32 @@ describe('S3a: identidade do turno viva DURANTE o despacho, limpa no finally', (
   it('clear roda no finally mesmo quando o executor LANCA', async () => {
     compatExec.mockRejectedValueOnce(new Error('boom do executor'));
 
-    await expect(
-      executeQuery('turno', options(), noopGetWindow, desktopLane),
-    ).rejects.toThrow('boom do executor');
+    await expect(executeQuery('turno', options(), noopGetWindow, desktopLane)).rejects.toThrow('boom do executor');
 
-    expect(getActiveChatTurnByLane('desktop')).toBeUndefined();
+    expect(listActiveDesktopTurns()).toEqual([]);
   });
 
-  it('miss TOLERADO: sem sessionId resolvido (options vazio + sem sessao ativa) NAO registra', async () => {
-    await executeQuery('turno', { silent: true }, noopGetWindow, desktopLane);
+  it('sem sessionId (RM7): executeQuery recusa session_required antes de despachar e nada e registrado', async () => {
+    await expect(executeQuery('turno', { silent: true }, noopGetWindow, desktopLane)).rejects.toThrow(
+      /session_required/,
+    );
 
-    expect(compatExec).toHaveBeenCalledTimes(1);
+    expect(compatExec).not.toHaveBeenCalled();
     expect(captured?.laneTurn).toBeUndefined();
     expect(captured?.ctx).toBeUndefined();
   });
 
-  it('fallback getActiveChatSession: sem options.sessionId mas com sessao ativa, registra nela', async () => {
+  it('sem options.sessionId no desktop: NUNCA cai na heuristica global (RM2), nada registrado', async () => {
     getActiveChatSessionMock.mockReturnValue({ id: 'sess-ativa' });
 
-    await executeQuery('turno', { silent: true }, noopGetWindow, desktopLane);
+    await expect(executeQuery('turno', { silent: true }, noopGetWindow, desktopLane)).rejects.toThrow(
+      /session_required/,
+    );
 
-    expect(captured?.laneTurn?.sessionId).toBe('sess-ativa');
-    expect(captured?.ctx).toBeDefined();
-    expect(getActiveChatTurnByLane('desktop')).toBeUndefined(); // limpo no finally
+    expect(getActiveChatSessionMock).not.toHaveBeenCalled();
+    expect(captured?.laneTurn).toBeUndefined();
+    expect(captured?.ctx).toBeUndefined();
+    expect(listActiveDesktopTurns()).toEqual([]);
   });
 
   it('lane telegram registra sob a lane telegram (chave por lane, 0.7 item 1)', async () => {
@@ -321,10 +327,9 @@ describe('S3a: identidade do turno viva DURANTE o despacho, limpa no finally', (
 
     expect(captured?.laneTurn?.sessionId).toBe('sess-tg');
     expect(captured?.ctx).toBeDefined();
-    expect(getActiveChatTurnByLane('telegram')).toBeUndefined(); // finally
+    expect(getActiveChatTurnByLane('telegram')).toBeUndefined();
   });
 });
-
 
 describe('A.16: telegram/cron false/false sem herdar desktop', () => {
   it('telegram sem featureToggles -> capabilities default OFF', async () => {
@@ -333,6 +338,7 @@ describe('A.16: telegram/cron false/false sem herdar desktop', () => {
     expect(captured?.ctx?.capabilities).toEqual({
       pipelineControl: false,
       dynamicWorkflows: false,
+      swarm: false,
     });
     expect(captured?.ctx?.origin).toBe('user');
   });
@@ -343,6 +349,7 @@ describe('A.16: telegram/cron false/false sem herdar desktop', () => {
     expect(captured?.ctx?.capabilities).toEqual({
       pipelineControl: false,
       dynamicWorkflows: false,
+      swarm: false,
     });
   });
 
@@ -364,6 +371,7 @@ describe('A.16: telegram/cron false/false sem herdar desktop', () => {
     expect(captured?.ctx?.capabilities).toEqual({
       pipelineControl: false,
       dynamicWorkflows: false,
+      swarm: false,
     });
 
     captureLane('cron');
@@ -371,6 +379,7 @@ describe('A.16: telegram/cron false/false sem herdar desktop', () => {
     expect(captured?.ctx?.capabilities).toEqual({
       pipelineControl: false,
       dynamicWorkflows: false,
+      swarm: false,
     });
   });
 });

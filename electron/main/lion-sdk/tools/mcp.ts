@@ -1,7 +1,7 @@
-
 import { callMCPTool, type McpSessionClient } from '../../mcp-tool-bridge';
 import { createLogger } from '../../logger';
 import type { McpInvokeResult } from '../../mcp-invoke';
+import { chatInvocationContext, type McpInvocationTurnBinding } from '../../mcp-invocation-context';
 
 const logger = createLogger('lion-sdk-mcp');
 
@@ -15,12 +15,10 @@ export interface McpCallWrapperContext {
   sessionId: string;
   turnId: string;
   allowedServerIds: string[];
+  binding?: McpInvocationTurnBinding;
 }
 
-export async function lionMcpCallViaWrapper(
-  input: McpCallInput,
-  ctx: McpCallWrapperContext,
-): Promise<McpInvokeResult> {
+export async function lionMcpCallViaWrapper(input: McpCallInput, ctx: McpCallWrapperContext): Promise<McpInvokeResult> {
   if (!input || typeof input.server_id !== 'string' || input.server_id.length === 0) {
     return { content: 'mcp_call: server_id obrigatorio.', isError: true, displayName: 'mcp_call' };
   }
@@ -36,7 +34,7 @@ export async function lionMcpCallViaWrapper(
     sessionId: ctx.sessionId,
     turnId: ctx.turnId,
     allowedServerIds: ctx.allowedServerIds,
-    context: { surface: 'chat' },
+    context: chatInvocationContext(ctx.binding),
   });
 }
 
@@ -66,9 +64,7 @@ function stringifyContent(value: unknown): string {
   try {
     const v = value as { content?: Array<{ type?: string; text?: string }> } & Record<string, unknown>;
     if (Array.isArray(v.content)) {
-      const parts = v.content
-        .map((c) => (c && typeof c.text === 'string' ? c.text : ''))
-        .filter((s) => s.length > 0);
+      const parts = v.content.map((c) => (c && typeof c.text === 'string' ? c.text : '')).filter((s) => s.length > 0);
       if (parts.length > 0) return parts.join('\n');
     }
     return JSON.stringify(value);
@@ -80,6 +76,7 @@ function stringifyContent(value: unknown): string {
 export async function lionMcpCall(
   client: McpSessionClient,
   input: McpCallInput,
+  binding?: McpInvocationTurnBinding,
 ): Promise<McpCallResult> {
   if (!input || typeof input.server_id !== 'string' || input.server_id.length === 0) {
     return { ok: false, error: 'mcp_call: server_id obrigatorio.' };
@@ -93,7 +90,7 @@ export async function lionMcpCall(
   const gate = assertChatCapability({
     serverId: input.server_id,
     toolName: input.tool,
-    context: { surface: 'chat' },
+    context: chatInvocationContext(binding),
   });
   if (!gate.ok) {
     return { ok: false, prefixedName, error: gate.message };

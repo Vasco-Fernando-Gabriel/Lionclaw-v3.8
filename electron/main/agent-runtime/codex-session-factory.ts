@@ -1,11 +1,5 @@
-
-import type {
-  CodexSessionOptions,
-  CodexSession,
-} from '../codex-runtime/types';
-import {
-  type OfficialAppServerDriver,
-} from '../codex-runtime/official-app-server-driver';
+import type { CodexSessionOptions, CodexSession } from '../codex-runtime/types';
+import { type OfficialAppServerDriver } from '../codex-runtime/official-app-server-driver';
 import { createCodexDriver } from '../codex-runtime/factory';
 import type {
   CodexMcpProfile,
@@ -18,10 +12,7 @@ import type {
 import { createLogger } from '../logger';
 import { getOfficialPhaseCodexSpawnExtraArgs } from '../codex-pipeline-config';
 import type { CodexChatReasoningEffort } from '../../../src/types';
-import {
-  isKnownStaticCodexModel,
-  staticEffortsFor,
-} from '../../../src/constants/codex-models';
+import { isKnownStaticCodexModel, staticEffortsFor } from '../../../src/constants/codex-models';
 import { CodexCapabilityUnsupportedError } from '../codex-runtime/errors';
 import {
   getCodexModelCapabilities,
@@ -59,9 +50,7 @@ export function hasActiveOfficialRun(scope: Partial<CodexRunSessionKey>): boolea
 }
 
 export async function closeAllOfficialRuns(reason: string): Promise<void> {
-  await Promise.allSettled(
-    [...officialDriverCache.values()].map((driver) => driver.closeAll(reason)),
-  );
+  await Promise.allSettled([...officialDriverCache.values()].map((driver) => driver.closeAll(reason)));
 }
 
 export async function shutdownOfficialCodexDrivers(reason: string): Promise<void> {
@@ -78,6 +67,8 @@ export interface ResolveCodexSessionArgs {
   disableGlobalMcp?: boolean;
   reasoningEffortOverride?: CodexChatReasoningEffort;
   extraArgs?: string[];
+  swarmFindingsMcpArgs?: string[];
+  swarmFindingsMcpEnv?: Record<string, string>;
 }
 
 function freshRunId(): string {
@@ -89,8 +80,7 @@ function toLifecycleSurface(surface: CodexSelectableSurface): CodexSurface {
 }
 
 function buildRunKey(args: ResolveCodexSessionArgs): CodexRunSessionKey {
-  const ownerKind: CodexOwnerKind =
-    args.sessionOptions.ownerKind === 'chat' ? 'chat' : 'pipeline';
+  const ownerKind: CodexOwnerKind = args.sessionOptions.ownerKind === 'chat' ? 'chat' : 'pipeline';
   return {
     surface: toLifecycleSurface(args.surface),
     projectId: args.sessionOptions.projectId,
@@ -101,10 +91,7 @@ function buildRunKey(args: ResolveCodexSessionArgs): CodexRunSessionKey {
   };
 }
 
-function buildRunOptions(
-  args: ResolveCodexSessionArgs,
-  effectiveEffort?: CodexChatReasoningEffort,
-): CodexRunOptions {
+function buildRunOptions(args: ResolveCodexSessionArgs, effectiveEffort?: CodexChatReasoningEffort): CodexRunOptions {
   const b = args.sessionOptions;
   return {
     key: buildRunKey(args),
@@ -116,6 +103,9 @@ function buildRunOptions(
     reasoningEffort: effectiveEffort ?? b.reasoningEffort,
     timeoutMs: b.timeoutMs,
     idleTimeoutMs: b.idleTimeoutMs,
+    turnSettleMs: b.turnSettleMs,
+    externallyManagedWatchdog: b.externallyManagedWatchdog,
+    swarmOwnerDirectory: b.swarmOwnerDirectory,
     disableGlobalMcp: args.disableGlobalMcp,
     extraArgs: args.extraArgs,
   };
@@ -125,9 +115,7 @@ function hasStructuralExtraArgs(args: ResolveCodexSessionArgs): boolean {
   return args.extraArgs !== undefined && args.extraArgs.length > 0;
 }
 
-export async function resolveCodexSessionForRun(
-  args: ResolveCodexSessionArgs,
-): Promise<CodexSession> {
+export async function resolveCodexSessionForRun(args: ResolveCodexSessionArgs): Promise<CodexSession> {
   const requestedEffort = args.reasoningEffortOverride ?? args.sessionOptions.reasoningEffort;
 
   const discovered = await getCodexModelCapabilities();
@@ -143,16 +131,13 @@ export async function resolveCodexSessionForRun(
     }
     if (!cap) {
       throw new CodexCapabilityUnsupportedError(
-        `O modelo "${model}" nao e anunciado pelo Codex CLI instalado. ` +
+        `O modelo "${model}" nao e anunciado pelo Codex CLI instalado (provavelmente desatualizado). ` +
+          `Atualize com "npm i -g @openai/codex@latest" e reinicie o LionClaw, ou escolha outro modelo. ` +
           `Modelos anunciados: ${(discovered ?? []).map((c) => c.id).join(', ')}.`,
       );
     }
     const req = requestedEffort as CodexChatReasoningEffort | undefined;
-    if (
-      req !== undefined &&
-      staticEffortsFor(model).includes(req) &&
-      !cap.supportedEfforts.includes(req)
-    ) {
+    if (req !== undefined && staticEffortsFor(model).includes(req) && !cap.supportedEfforts.includes(req)) {
       throw new CodexCapabilityUnsupportedError(
         `O effort "${req}" nao e anunciado pelo Codex CLI para "${model}" ` +
           `(anuncia: ${cap.supportedEfforts.join(', ')}).`,
@@ -166,10 +151,7 @@ export async function resolveCodexSessionForRun(
 
   const effectiveEffort =
     requestedEffort !== undefined
-      ? clampCodexEffortForModelDiscovered(
-          requestedEffort as CodexChatReasoningEffort,
-          args.sessionOptions.model,
-        )
+      ? clampCodexEffortForModelDiscovered(requestedEffort as CodexChatReasoningEffort, args.sessionOptions.model)
       : undefined;
 
   const runOptions = buildRunOptions(args, effectiveEffort);
@@ -188,6 +170,24 @@ export async function resolveCodexSessionForRun(
     }
   }
 
+  if (args.swarmFindingsMcpArgs) {
+    const parts = args.swarmFindingsMcpArgs;
+    if (
+      !args.disableGlobalMcp ||
+      args.sessionOptions.sandbox !== 'read-only' ||
+      parts.length !== 2 ||
+      parts[0] !== '-c' ||
+      !parts[1].startsWith('mcp_servers.swarm-worker=')
+    ) {
+      throw new Error('Invalid isolated Swarm findings MCP configuration');
+    }
+    runOptions.extraArgs = [...parts];
+    if (args.swarmFindingsMcpEnv) {
+      if (Object.keys(args.swarmFindingsMcpEnv).some((key) => key !== 'LIONCLAW_HELPER_TOKEN'))
+        throw new Error('Invalid Swarm MCP environment');
+      runOptions.swarmSpawnEnv = { ...args.swarmFindingsMcpEnv };
+    }
+  }
   const driver = getOfficialCodexDriver();
   const handle = await driver.createRun(runOptions);
   const officialSession = driver.toSyncCodexSession(handle) as CodexSession;

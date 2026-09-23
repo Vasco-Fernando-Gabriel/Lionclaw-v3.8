@@ -48,9 +48,7 @@ export function SdkChoiceStep({ value, onChange }: SdkChoiceStepProps) {
             onClick={() => onChange(option.id)}
             className={[
               'w-full text-left px-4 py-3 rounded-xl border transition-colors',
-              isSelected
-                ? 'bg-amber-600/10 border-amber-500/60'
-                : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700',
+              isSelected ? 'bg-amber-600/10 border-amber-500/60' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700',
             ].join(' ')}
           >
             <div className="flex items-center justify-between">
@@ -58,21 +56,14 @@ export function SdkChoiceStep({ value, onChange }: SdkChoiceStepProps) {
                 <span
                   className={[
                     'w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5',
-                    isSelected
-                      ? 'border-amber-500 bg-amber-500'
-                      : 'border-zinc-600',
+                    isSelected ? 'border-amber-500 bg-amber-500' : 'border-zinc-600',
                   ].join(' ')}
                 />
                 <div>
-                  <p className={[
-                    'text-sm font-medium',
-                    isSelected ? 'text-amber-400' : 'text-zinc-200',
-                  ].join(' ')}>
+                  <p className={['text-sm font-medium', isSelected ? 'text-amber-400' : 'text-zinc-200'].join(' ')}>
                     {option.label}
                   </p>
-                  <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
-                    {option.subtitle}
-                  </p>
+                  <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{option.subtitle}</p>
                 </div>
               </div>
               {option.recommended && (

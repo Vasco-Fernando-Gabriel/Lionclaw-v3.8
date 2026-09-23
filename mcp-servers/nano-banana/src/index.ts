@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { GoogleGenAI } from '@google/genai';
 import fs from 'fs';
 import path from 'path';
@@ -40,16 +37,14 @@ function extractImage(
   return { base64: imageBase64, mimeType, text };
 }
 
-const server = new Server(
-  { name: 'nano-banana', version: '1.0.0' },
-  { capabilities: { tools: {} } },
-);
+const server = new Server({ name: 'nano-banana', version: '1.0.0' }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: 'generate_image',
-      description: 'Gerar uma imagem a partir de um prompt de texto usando Gemini 2.5 Flash Image (Nano Banana). Retorna o caminho do arquivo PNG gerado. Gratuito, 500 imagens/dia.',
+      description:
+        'Gerar uma imagem a partir de um prompt de texto usando Gemini 2.5 Flash Image (Nano Banana). Retorna o caminho do arquivo PNG gerado. Gratuito, 500 imagens/dia.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -68,7 +63,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'edit_image',
-      description: 'Editar uma imagem existente com instrucoes em texto. Passa a imagem original e um prompt descrevendo as alteracoes desejadas.',
+      description:
+        'Editar uma imagem existente com instrucoes em texto. Passa a imagem original e um prompt descrevendo as alteracoes desejadas.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -119,13 +115,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           return { content: [{ type: 'text' as const, text: 'Erro: resposta vazia da API Gemini.' }], isError: true };
         }
 
-        const image = extractImage(
-          parts as Array<{ inlineData?: { data: string; mimeType: string }; text?: string }>,
-        );
+        const image = extractImage(parts as Array<{ inlineData?: { data: string; mimeType: string }; text?: string }>);
         if (!image) {
-          const textOnly = parts.map((p) => 'text' in p ? (p as { text?: string }).text : undefined).filter(Boolean).join('\n');
+          const textOnly = parts
+            .map((p) => ('text' in p ? (p as { text?: string }).text : undefined))
+            .filter(Boolean)
+            .join('\n');
           return {
-            content: [{ type: 'text' as const, text: `Nao foi possivel gerar a imagem.${textOnly ? ` Resposta: ${textOnly}` : ''}` }],
+            content: [
+              {
+                type: 'text' as const,
+                text: `Nao foi possivel gerar a imagem.${textOnly ? ` Resposta: ${textOnly}` : ''}`,
+              },
+            ],
             isError: true,
           };
         }
@@ -135,10 +137,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         fs.writeFileSync(tmpPath, Buffer.from(image.base64, 'base64'));
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: `Imagem gerada com sucesso.\nARQUIVO_IMAGEM: ${tmpPath}\nPrompt: ${prompt}${image.text ? `\nDescricao: ${image.text}` : ''}`,
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: `Imagem gerada com sucesso.\nARQUIVO_IMAGEM: ${tmpPath}\nPrompt: ${prompt}${image.text ? `\nDescricao: ${image.text}` : ''}`,
+            },
+          ],
         };
       }
 
@@ -155,7 +159,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const imageBuffer = fs.readFileSync(imagePath);
         const imageBase64 = imageBuffer.toString('base64');
         const ext = path.extname(imagePath).toLowerCase();
-        const mimeMap: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
+        const mimeMap: Record<string, string> = {
+          '.png': 'image/png',
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.webp': 'image/webp',
+        };
         const mimeType = mimeMap[ext] || 'image/png';
 
         const response = await ai.models.generateContent({
@@ -179,12 +188,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         const parts = response.candidates?.[0]?.content?.parts;
         if (!parts) {
-          return { content: [{ type: 'text' as const, text: 'Erro: resposta vazia ao editar imagem.' }], isError: true };
+          return {
+            content: [{ type: 'text' as const, text: 'Erro: resposta vazia ao editar imagem.' }],
+            isError: true,
+          };
         }
 
-        const image = extractImage(
-          parts as Array<{ inlineData?: { data: string; mimeType: string }; text?: string }>,
-        );
+        const image = extractImage(parts as Array<{ inlineData?: { data: string; mimeType: string }; text?: string }>);
         if (!image) {
           return { content: [{ type: 'text' as const, text: 'Nao foi possivel editar a imagem.' }], isError: true };
         }
@@ -194,10 +204,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         fs.writeFileSync(tmpPath, Buffer.from(image.base64, 'base64'));
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: `Imagem editada com sucesso.\nARQUIVO_IMAGEM: ${tmpPath}\nPrompt: ${prompt}`,
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: `Imagem editada com sucesso.\nARQUIVO_IMAGEM: ${tmpPath}\nPrompt: ${prompt}`,
+            },
+          ],
         };
       }
 
@@ -208,12 +220,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const message = (err as Error).message;
     const isRateLimit = message.includes('429') || message.toLowerCase().includes('rate');
     return {
-      content: [{
-        type: 'text' as const,
-        text: isRateLimit
-          ? 'Limite de taxa atingido (2 imagens/minuto no free tier). Aguarde um momento e tente novamente.'
-          : `Erro Nano Banana: ${message}`,
-      }],
+      content: [
+        {
+          type: 'text' as const,
+          text: isRateLimit
+            ? 'Limite de taxa atingido (2 imagens/minuto no free tier). Aguarde um momento e tente novamente.'
+            : `Erro Nano Banana: ${message}`,
+        },
+      ],
       isError: true,
     };
   }

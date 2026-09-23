@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi } from 'vitest';
-
 
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
@@ -73,13 +71,11 @@ vi.mock('../dreaming-gate', () => ({
   })),
 }));
 
-
 import { withMemoryGateLock } from '../memory-pipeline';
 
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
 
 describe('withMemoryGateLock', () => {
   it('serializa 2 chamadas concorrentes (tempo total >= soma dos individuais)', async () => {
@@ -151,9 +147,15 @@ describe('withMemoryGateLock', () => {
   it('chamadas sequenciais completam sem interferencia', async () => {
     const results: number[] = [];
 
-    await withMemoryGateLock(async () => { results.push(1); });
-    await withMemoryGateLock(async () => { results.push(2); });
-    await withMemoryGateLock(async () => { results.push(3); });
+    await withMemoryGateLock(async () => {
+      results.push(1);
+    });
+    await withMemoryGateLock(async () => {
+      results.push(2);
+    });
+    await withMemoryGateLock(async () => {
+      results.push(3);
+    });
 
     expect(results).toEqual([1, 2, 3]);
   });

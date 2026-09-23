@@ -52,10 +52,7 @@ export class GrokJsonRpcError extends GrokProcessError {
   readonly data: unknown;
   readonly method: string;
 
-  constructor(
-    message: string,
-    options: { method: string; code?: string | number; data?: unknown; cause?: unknown },
-  ) {
+  constructor(message: string, options: { method: string; code?: string | number; data?: unknown; cause?: unknown }) {
     super(message, options);
     this.name = 'GrokJsonRpcError';
     this.method = options.method;

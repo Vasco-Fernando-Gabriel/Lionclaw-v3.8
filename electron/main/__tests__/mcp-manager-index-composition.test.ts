@@ -1,7 +1,5 @@
-
 import { isAbsolute } from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 
 interface ServerRow {
   id: string;
@@ -15,10 +13,7 @@ interface ServerRow {
   index_mode: 'tools' | 'server';
 }
 
-function serverRow(
-  id: string,
-  visibleTo: 'all' | 'codex-lion-only' = 'all',
-): ServerRow {
+function serverRow(id: string, visibleTo: 'all' | 'codex-lion-only' = 'all'): ServerRow {
   return {
     id,
     name: `Server ${id}`,
@@ -58,7 +53,10 @@ vi.mock('../db', () => ({
       },
       run: () => undefined,
     }),
-    transaction: (fn: (...a: unknown[]) => unknown) => (...a: unknown[]) => fn(...a),
+    transaction:
+      (fn: (...a: unknown[]) => unknown) =>
+      (...a: unknown[]) =>
+        fn(...a),
   }),
   getSetting: (key: string) => state.settings.get(key),
 }));
@@ -78,7 +76,7 @@ vi.mock('../app-version', () => ({
 import { getMCPConfigForAgent, getAllMCPServers } from '../mcp-manager';
 import { DIRECT_MCP_HELPERS } from '../mcp-risk-patterns';
 import { MCP_GATEWAY_SERVER_ID } from '../mcp-display';
-import { isValidHelperToken } from '../helper-identity';
+import { isValidHelperToken, resolveHelperTokenOwner } from '../helper-identity';
 
 const GATEWAY_DIST_SUFFIX = 'gateway/dist/gateway/src/index.js';
 
@@ -110,16 +108,11 @@ beforeEach(() => {
   ] as unknown as Array<Record<string, unknown>>;
 });
 
-
 describe('modo index — claude-sdk / claude-compat-sdk', () => {
   it('claude-sdk: gateway + helpers DIRECT visiveis, ZERO server de negocio', async () => {
     const config = await getMCPConfigForAgent(undefined, { surface: 'claude-sdk' });
     expect(config).toBeDefined();
-    expect(Object.keys(config!)).toEqual([
-      MCP_GATEWAY_SERVER_ID,
-      'lionclaw-pipeline-control',
-      'repo-graph',
-    ]);
+    expect(Object.keys(config!)).toEqual([MCP_GATEWAY_SERVER_ID, 'lionclaw-pipeline-control', 'repo-graph']);
     expect(config!['google-gmail']).toBeUndefined();
     expect(config!['shopify']).toBeUndefined();
     expect(config!['lionclaw-user-question']).toBeUndefined();
@@ -131,28 +124,27 @@ describe('modo index — claude-sdk / claude-compat-sdk', () => {
     expect(isAbsolute(gw.command)).toBe(true);
     expect(gw.args).toHaveLength(1);
     expect(gw.args[0].endsWith(GATEWAY_DIST_SUFFIX)).toBe(true);
-    expect(gw.env).toEqual(expect.objectContaining({
-      LIONCLAW_MCP_SURFACE: 'claude-sdk',
-      LIONCLAW_HELPER_TOKEN: expect.any(String),
-      PATH: expect.any(String),
-    }));
+    expect(gw.env).toEqual(
+      expect.objectContaining({
+        LIONCLAW_MCP_SURFACE: 'claude-sdk',
+        LIONCLAW_HELPER_TOKEN: expect.any(String),
+        PATH: expect.any(String),
+      }),
+    );
     expect(isValidHelperToken(gw.env!['LIONCLAW_HELPER_TOKEN'])).toBe(true);
   });
 
   it('claude-compat-sdk: mesma composicao, env com o surface compat', async () => {
     const config = await getMCPConfigForAgent(undefined, { surface: 'claude-compat-sdk' });
-    expect(Object.keys(config!)).toEqual([
-      MCP_GATEWAY_SERVER_ID,
-      'lionclaw-pipeline-control',
-      'repo-graph',
-    ]);
-    expect(config![MCP_GATEWAY_SERVER_ID].env).toEqual(expect.objectContaining({
-      LIONCLAW_MCP_SURFACE: 'claude-compat-sdk',
-      LIONCLAW_HELPER_TOKEN: expect.any(String),
-      PATH: expect.any(String),
-    }));
+    expect(Object.keys(config!)).toEqual([MCP_GATEWAY_SERVER_ID, 'lionclaw-pipeline-control', 'repo-graph']);
+    expect(config![MCP_GATEWAY_SERVER_ID].env).toEqual(
+      expect.objectContaining({
+        LIONCLAW_MCP_SURFACE: 'claude-compat-sdk',
+        LIONCLAW_HELPER_TOKEN: expect.any(String),
+        PATH: expect.any(String),
+      }),
+    );
   });
-
 
   it('S3a: helper GATED (pipeline-control) recebe LIONCLAW_HELPER_TOKEN valido no env', async () => {
     const config = await getMCPConfigForAgent(undefined, { surface: 'claude-sdk' });
@@ -193,7 +185,6 @@ describe('modo index — claude-sdk / claude-compat-sdk', () => {
   });
 });
 
-
 function stripGatedHelperTokens(
   config: Record<string, { command: string; args: string[]; env?: Record<string, string> }>,
 ): Record<string, { command: string; args: string[]; env?: Record<string, string> }> {
@@ -201,10 +192,7 @@ function stripGatedHelperTokens(
   for (const [id, entry] of Object.entries(config)) {
     if (entry.env && 'LIONCLAW_HELPER_TOKEN' in entry.env) {
       const { LIONCLAW_HELPER_TOKEN: _token, ...rest } = entry.env;
-      out[id] =
-        Object.keys(rest).length > 0
-          ? { ...entry, env: rest }
-          : { command: entry.command, args: entry.args };
+      out[id] = Object.keys(rest).length > 0 ? { ...entry, env: rest } : { command: entry.command, args: entry.args };
     } else {
       out[id] = entry;
     }
@@ -219,9 +207,7 @@ describe('modo full — legado byte-identico EXCETO token nos gated (claude-sdk,
     const token = config!['lionclaw-pipeline-control'].env?.['LIONCLAW_HELPER_TOKEN'];
     expect(typeof token).toBe('string');
     expect(isValidHelperToken(token!)).toBe(true);
-    expect(JSON.stringify(stripGatedHelperTokens(config!))).toBe(
-      JSON.stringify(legacyClaudeExpected()),
-    );
+    expect(JSON.stringify(stripGatedHelperTokens(config!))).toBe(JSON.stringify(legacyClaudeExpected()));
   });
 
   it('S4b: AMBOS os gated recebem token no full; nao-gated e negocio ficam SEM', async () => {
@@ -253,7 +239,6 @@ describe('modo full — legado byte-identico EXCETO token nos gated (claude-sdk,
   });
 });
 
-
 describe('surfaces kimi-sdk / lion-sdk / codex-sdk / default — intocados', () => {
   const expectedCodexLion = [
     'google-gmail',
@@ -282,7 +267,6 @@ describe('surfaces kimi-sdk / lion-sdk / codex-sdk / default — intocados', () 
     expect(config![MCP_GATEWAY_SERVER_ID]).toBeUndefined();
   });
 });
-
 
 describe('P5 — config MCP explicita do agente', () => {
   it('agente com subset explicito: servers DIRETOS, sem gateway, em modo index', async () => {
@@ -318,14 +302,16 @@ describe('P5 — config MCP explicita do agente', () => {
   });
 });
 
-
 describe('anti-bug do sprint — wrapper central ve a composicao LEGADA em modo index', () => {
   it('fullCatalog: true + claude-sdk + modo index -> servers de NEGOCIO presentes, sem gateway', async () => {
     const config = await getMCPConfigForAgent(undefined, {
       surface: 'claude-sdk',
       fullCatalog: true,
     });
-    expect(JSON.stringify(config)).toBe(JSON.stringify(legacyClaudeExpected()));
+    expect(resolveHelperTokenOwner(config!['lionclaw-pipeline-control'].env!['LIONCLAW_HELPER_TOKEN'])).toBe(
+      'lionclaw-pipeline-control',
+    );
+    expect(JSON.stringify(stripGatedHelperTokens(config!))).toBe(JSON.stringify(legacyClaudeExpected()));
     expect(config!['google-gmail']).toBeDefined();
     expect(config![MCP_GATEWAY_SERVER_ID]).toBeUndefined();
   });
@@ -339,13 +325,15 @@ describe('anti-bug do sprint — wrapper central ve a composicao LEGADA em modo 
     expect(config![MCP_GATEWAY_SERVER_ID]).toBeUndefined();
   });
 
-  it('fullCatalog: true nao muda o retorno dos surfaces kimi/lion', async () => {
+  it('fullCatalog: true preserva config kimi/lion e adiciona identidade válida ao pool', async () => {
     const kimi = await getMCPConfigForAgent(undefined, { surface: 'kimi-sdk', fullCatalog: true });
     const kimiPlain = await getMCPConfigForAgent(undefined, { surface: 'kimi-sdk' });
-    expect(JSON.stringify(kimi)).toBe(JSON.stringify(kimiPlain));
+    expect(resolveHelperTokenOwner(kimi!['lionclaw-pipeline-control'].env!['LIONCLAW_HELPER_TOKEN'])).toBe(
+      'lionclaw-pipeline-control',
+    );
+    expect(JSON.stringify(stripGatedHelperTokens(kimi!))).toBe(JSON.stringify(stripGatedHelperTokens(kimiPlain!)));
   });
 });
-
 
 describe('AC-7 — troca de mcp_prompt_mode entre 2 montagens', () => {
   it('segunda montagem reflete o modo novo; objeto da primeira permanece intacto', async () => {

@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useCallback } from 'react';
 import type { CodexChatReasoningEffort } from '@/types';
 import { CODEX_CHAT_EFFORT_BY_MODEL } from '@/constants/codex-models';
@@ -28,8 +27,7 @@ export function useCodexModelCapabilities(): {
           setCapabilities(res.capabilities as DiscoveredCodexModel[]);
         }
       })
-      .catch(() => {
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };

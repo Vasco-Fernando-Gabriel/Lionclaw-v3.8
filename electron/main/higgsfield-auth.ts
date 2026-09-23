@@ -42,14 +42,16 @@ export interface HiggsfieldAuthStatus {
   lastCapturedAt?: string;
 }
 
-export type HiggsfieldConnectResult = {
-  ok: true;
-  status: HiggsfieldAuthStatus;
-} | {
-  ok: false;
-  error: string;
-  status: HiggsfieldAuthStatus;
-};
+export type HiggsfieldConnectResult =
+  | {
+      ok: true;
+      status: HiggsfieldAuthStatus;
+    }
+  | {
+      ok: false;
+      error: string;
+      status: HiggsfieldAuthStatus;
+    };
 
 function getHiggsfieldRuntimeRoot(): string {
   return path.join(getLionClawHome(), 'runtime', 'higgsfield');
@@ -78,8 +80,7 @@ async function ensurePrivateDir(dir: string): Promise<void> {
   if (process.platform !== 'win32') {
     try {
       await fs.promises.chmod(dir, 0o700);
-    } catch {
-    }
+    } catch {}
   }
 }
 
@@ -180,8 +181,7 @@ async function writeSnapshotToAuthDir(snapshot: HiggsfieldSessionSnapshot, authD
     if (process.platform !== 'win32') {
       try {
         await fs.promises.chmod(target, 0o600);
-      } catch {
-      }
+      } catch {}
     }
   }
 }
@@ -199,11 +199,18 @@ async function readSnapshotFromVault(nonInteractive = false): Promise<Higgsfield
   }
 }
 
+let localSessionSeen = false;
+
+export function _resetHiggsfieldSessionStateForTests(): void {
+  localSessionSeen = false;
+}
+
 export async function restoreHiggsfieldSessionFromVault(
   options: { nonInteractive?: boolean; force?: boolean } = {},
 ): Promise<boolean> {
   const authDir = getHiggsfieldAuthDir();
   if (options.force !== true && (await hasTokenFile(authDir))) {
+    localSessionSeen = true;
     logger.info('Higgsfield MCP session ja presente no disco; restore do Vault ignorado');
     void captureHiggsfieldSessionToVault().catch(() => undefined);
     return false;
@@ -211,8 +218,23 @@ export async function restoreHiggsfieldSessionFromVault(
   const snapshot = await readSnapshotFromVault(options.nonInteractive === true);
   if (!snapshot) return false;
   await writeSnapshotToAuthDir(snapshot, authDir);
+  localSessionSeen = true;
   logger.info('Higgsfield MCP session restored from Vault');
   return true;
+}
+
+export async function reconcileHiggsfieldSession(): Promise<'saved' | 'invalidated' | 'noop'> {
+  const authDir = getHiggsfieldAuthDir();
+  if (await hasTokenFile(authDir)) {
+    return (await captureHiggsfieldSessionToVault()) ? 'saved' : 'noop';
+  }
+  if (!localSessionSeen) return 'noop';
+  localSessionSeen = false;
+  await deleteSecret(HIGGSFIELD_SESSION_SECRET_KEY);
+  logger.warn(
+    'Higgsfield MCP session invalidada pelo servidor; snapshot do Vault removido. Conecte de novo em Vault > Higgsfield',
+  );
+  return 'invalidated';
 }
 
 let sessionWatcher: fs.FSWatcher | null = null;
@@ -227,7 +249,7 @@ export function watchHiggsfieldSession(): void {
       if (filename && !String(filename).includes('_tokens.json')) return;
       if (sessionWatchTimer) clearTimeout(sessionWatchTimer);
       sessionWatchTimer = setTimeout(() => {
-        void captureHiggsfieldSessionToVault().catch((error) => {
+        void reconcileHiggsfieldSession().catch((error) => {
           logger.warn({ error }, 'Falha ao salvar a sessao Higgsfield no Vault');
         });
       }, 2000);
@@ -242,8 +264,14 @@ export function watchHiggsfieldSession(): void {
 }
 
 export function stopWatchingHiggsfieldSession(): void {
-  if (sessionWatchTimer) { clearTimeout(sessionWatchTimer); sessionWatchTimer = null; }
-  if (sessionWatcher) { sessionWatcher.close(); sessionWatcher = null; }
+  if (sessionWatchTimer) {
+    clearTimeout(sessionWatchTimer);
+    sessionWatchTimer = null;
+  }
+  if (sessionWatcher) {
+    sessionWatcher.close();
+    sessionWatcher = null;
+  }
 }
 
 export async function captureHiggsfieldSessionToVault(): Promise<boolean> {
@@ -251,6 +279,7 @@ export async function captureHiggsfieldSessionToVault(): Promise<boolean> {
   const snapshot = await readSnapshotFromAuthDir(authDir);
   if (!snapshot) return false;
   await setSecret(HIGGSFIELD_SESSION_SECRET_KEY, JSON.stringify(snapshot));
+  localSessionSeen = true;
   logger.info({ files: snapshot.files.length }, 'Higgsfield MCP session saved to Vault');
   return true;
 }

@@ -1,17 +1,11 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type Database from 'better-sqlite3';
 
-import {
-  getChatFeatureToggles,
-  setChatFeatureToggles,
-  ensureChatFeatureToggles,
-} from '../db';
+import { getChatFeatureToggles, setChatFeatureToggles, ensureChatFeatureToggles } from '../db';
 import { applyMigrationV127 } from '../db-migrations/v127-chat-feature-toggles';
-
 
 interface Harness {
   sqlite: DatabaseSync;
@@ -32,18 +26,12 @@ function makeDb(): Harness {
   `);
   const db = sqlite as unknown as Database.Database;
   applyMigrationV127(db);
+  sqlite.exec('ALTER TABLE chat_session_features ADD COLUMN swarm_enabled INTEGER NOT NULL DEFAULT 0');
   return { sqlite, db };
 }
 
-function addSession(
-  sqlite: DatabaseSync,
-  id: string,
-  type: string | null,
-  status: string,
-): void {
-  sqlite
-    .prepare('INSERT INTO sessions (id, type, status) VALUES (?, ?, ?)')
-    .run(id, type, status);
+function addSession(sqlite: DatabaseSync, id: string, type: string | null, status: string): void {
+  sqlite.prepare('INSERT INTO sessions (id, type, status) VALUES (?, ?, ?)').run(id, type, status);
 }
 
 interface FeatureRow {
@@ -60,7 +48,6 @@ function featureRow(sqlite: DatabaseSync, sessionId: string): FeatureRow | undef
     .get(sessionId) as FeatureRow | undefined;
 }
 
-
 describe('getChatFeatureToggles', () => {
   it('linha presente -> mapeia 0/1 para booleans', () => {
     const { sqlite, db } = makeDb();
@@ -76,6 +63,7 @@ describe('getChatFeatureToggles', () => {
     expect(getChatFeatureToggles('s1', db)).toEqual({
       pipelineControl: true,
       dynamicWorkflows: false,
+      swarm: false,
     });
   });
 
@@ -84,7 +72,6 @@ describe('getChatFeatureToggles', () => {
     expect(getChatFeatureToggles('nao-existe', db)).toBeNull();
   });
 });
-
 
 describe('ensureChatFeatureToggles', () => {
   it('chat -> linha 0/0 (sessao desktop nova nasce OFF, decisao A.1-2)', () => {
@@ -100,6 +87,7 @@ describe('ensureChatFeatureToggles', () => {
     expect(getChatFeatureToggles('s-chat', db)).toEqual({
       pipelineControl: false,
       dynamicWorkflows: false,
+      swarm: false,
     });
   });
 
@@ -149,7 +137,6 @@ describe('ensureChatFeatureToggles', () => {
   });
 });
 
-
 describe('setChatFeatureToggles - caminho feliz', () => {
   it('patch parcial faz MERGE sobre o persistido e retorna { ok:true, toggles }', () => {
     const { sqlite, db } = makeDb();
@@ -159,13 +146,13 @@ describe('setChatFeatureToggles - caminho feliz', () => {
     const first = setChatFeatureToggles('s1', { pipelineControl: true }, db);
     expect(first).toEqual({
       ok: true,
-      toggles: { pipelineControl: true, dynamicWorkflows: false },
+      toggles: { pipelineControl: true, dynamicWorkflows: false, swarm: false },
     });
 
-    const second = setChatFeatureToggles('s1', { dynamicWorkflows: true }, db);
+    const second = setChatFeatureToggles('s1', { dynamicWorkflows: true, swarm: false }, db);
     expect(second).toEqual({
       ok: true,
-      toggles: { pipelineControl: true, dynamicWorkflows: true },
+      toggles: { pipelineControl: true, dynamicWorkflows: true, swarm: false },
     });
 
     expect(featureRow(sqlite, 's1')).toEqual({
@@ -187,7 +174,7 @@ describe('setChatFeatureToggles - caminho feliz', () => {
 
     expect(setChatFeatureToggles('s1', {}, db)).toEqual({
       ok: true,
-      toggles: { pipelineControl: true, dynamicWorkflows: false },
+      toggles: { pipelineControl: true, dynamicWorkflows: false, swarm: false },
     });
   });
 
@@ -195,10 +182,10 @@ describe('setChatFeatureToggles - caminho feliz', () => {
     const { sqlite, db } = makeDb();
     addSession(sqlite, 's-orfa', 'manual', 'active');
 
-    const result = setChatFeatureToggles('s-orfa', { dynamicWorkflows: true }, db);
+    const result = setChatFeatureToggles('s-orfa', { dynamicWorkflows: true, swarm: false }, db);
     expect(result).toEqual({
       ok: true,
-      toggles: { pipelineControl: false, dynamicWorkflows: true },
+      toggles: { pipelineControl: false, dynamicWorkflows: true, swarm: false },
     });
     expect(featureRow(sqlite, 's-orfa')).toEqual({
       pipeline_control_enabled: 0,
@@ -250,7 +237,6 @@ describe('setChatFeatureToggles - validacoes (erro estruturado, sem throw)', () 
     expect(featureRow(sqlite, 's-tg')).toBeUndefined();
   });
 });
-
 
 describe('guardrail estatico - createSession chama ensureChatFeatureToggles', () => {
   const dbSource = readFileSync(join(__dirname, '..', 'db.ts'), 'utf-8');

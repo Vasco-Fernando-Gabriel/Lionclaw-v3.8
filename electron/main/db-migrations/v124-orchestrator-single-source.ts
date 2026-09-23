@@ -8,7 +8,6 @@ import type { OrchestratorProvider, OrchestratorRuntime } from '../../../src/typ
 
 type V124OrchestratorRuntime = Exclude<OrchestratorRuntime, 'grok-sdk' | 'cursor-sdk'>;
 
-
 const MODEL_ALIAS_TO_SLUG: Readonly<Record<string, string>> = {
   opus: 'claude-opus-4-7',
   sonnet: 'claude-sonnet-4-6',
@@ -71,9 +70,7 @@ function isNonEmpty(value: string | undefined): value is string {
 
 export function applyMigrationV124(db: Database.Database): void {
   const readSetting = (key: string): string | undefined => {
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as
-      | { value: string }
-      | undefined;
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
     return row?.value;
   };
 

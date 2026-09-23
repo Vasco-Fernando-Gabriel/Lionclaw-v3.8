@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const TECH_SECURITY_ID = 'tech-security';
@@ -6,8 +5,7 @@ export const TECH_SECURITY_ID = 'tech-security';
 export const techSecurity: Omit<AgentConfig, 'sortOrder'> = {
   id: TECH_SECURITY_ID,
   name: 'Tech Security',
-  description:
-    'Agente responsavel pelas decisoes tecnicas de Seguranca, auth e permissoes do projeto.',
+  description: 'Agente responsavel pelas decisoes tecnicas de Seguranca, auth e permissoes do projeto.',
   model: 'claude-sonnet-4-6',
   effort: 'high' as const,
   thinking: 'enabled' as const,

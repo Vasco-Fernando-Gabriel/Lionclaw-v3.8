@@ -55,8 +55,7 @@ function prepare(
     existingDatabase: true,
     latestSchemaVersion: LATEST_SCHEMA_VERSION,
     requiresSchemaRepair: false,
-    openReadonlyDatabase: (candidate) =>
-      new Database(candidate, { readonly: true, fileMustExist: true }),
+    openReadonlyDatabase: (candidate) => new Database(candidate, { readonly: true, fileMustExist: true }),
     now: () => new Date('2026-07-11T12:34:56.789Z'),
     randomId: () => 'fixed-id',
     ...overrides,
@@ -90,9 +89,7 @@ describe('preflight de integridade e versao', () => {
     const fake = {
       pragma: () => [{ integrity_check: 'row 7 missing from index' }],
     } as unknown as Database.Database;
-    expect(() => assertDatabaseIntegrity(fake, '/tmp/broken.db')).toThrow(
-      DatabaseIntegrityError,
-    );
+    expect(() => assertDatabaseIntegrity(fake, '/tmp/broken.db')).toThrow(DatabaseIntegrityError);
   });
 
   it('downgrade do app falha DB-VERSION antes de backup', () => {
@@ -104,7 +101,9 @@ describe('preflight de integridade e versao', () => {
 
   it('schema_version invalida falha DB-VERSION', () => {
     const { db, dbPath } = tempDatabase();
-    db.exec('DROP TABLE schema_version; CREATE TABLE schema_version(version TEXT); INSERT INTO schema_version VALUES (\'NaN\')');
+    db.exec(
+      "DROP TABLE schema_version; CREATE TABLE schema_version(version TEXT); INSERT INTO schema_version VALUES ('NaN')",
+    );
     expect(() => prepare(db, dbPath)).toThrow(DatabaseVersionError);
     db.close();
   });
@@ -130,9 +129,7 @@ describe('decisao e consistencia do snapshot', () => {
     db.exec("CREATE TABLE legacy(value TEXT); INSERT INTO legacy VALUES ('preservar')");
     const result = prepare(db, dbPath);
     expect(result.currentVersion).toBe(0);
-    expect(result.backupPath).toContain(
-      `lionclaw-v0-to-v${LATEST_SCHEMA_VERSION}-20260711T123456789Z-fixed-id.db`,
-    );
+    expect(result.backupPath).toContain(`lionclaw-v0-to-v${LATEST_SCHEMA_VERSION}-20260711T123456789Z-fixed-id.db`);
     db.close();
   });
 
@@ -207,7 +204,13 @@ describe('falhas de backup e marker duravel', () => {
     const cause = Object.assign(new Error(message), { code });
     let error: unknown;
     try {
-      prepare(db, dbPath, { deps: { vacuumInto: () => { throw cause; } } });
+      prepare(db, dbPath, {
+        deps: {
+          vacuumInto: () => {
+            throw cause;
+          },
+        },
+      });
     } catch (caught) {
       error = caught;
     }
@@ -235,7 +238,11 @@ describe('falhas de backup e marker duravel', () => {
     const { db, dbPath, dir } = tempDatabase(LATEST_SCHEMA_VERSION - 1);
     expect(() =>
       prepare(db, dbPath, {
-        deps: { renameSync: () => { throw Object.assign(new Error('rename denied'), { code: 'EACCES' }); } },
+        deps: {
+          renameSync: () => {
+            throw Object.assign(new Error('rename denied'), { code: 'EACCES' });
+          },
+        },
       }),
     ).toThrow(DatabaseBackupError);
     const backups = fs.readdirSync(path.join(dir, 'backups'));
@@ -248,17 +255,12 @@ describe('falhas de backup e marker duravel', () => {
     const { db, dbPath, dir } = tempDatabase(LATEST_SCHEMA_VERSION - 1);
     const first = prepare(db, dbPath);
     expect(first.backupPath).not.toBeNull();
-    expect(() => prepare(db, dbPath, { randomId: () => 'second-id' })).toThrow(
-      DatabaseRecoveryRequiredError,
-    );
-    const backups = fs
-      .readdirSync(path.join(dir, 'backups'))
-      .filter((name) => name.endsWith('.db'));
+    expect(() => prepare(db, dbPath, { randomId: () => 'second-id' })).toThrow(DatabaseRecoveryRequiredError);
+    const backups = fs.readdirSync(path.join(dir, 'backups')).filter((name) => name.endsWith('.db'));
     expect(backups).toEqual([path.basename(first.backupPath!)]);
 
     clearMigrationInProgressMarker(dbPath, first.backupPath!, {
-      openReadonlyDatabase: (candidate) =>
-        new Database(candidate, { readonly: true, fileMustExist: true }),
+      openReadonlyDatabase: (candidate) => new Database(candidate, { readonly: true, fileMustExist: true }),
     });
     expect(fs.existsSync(first.markerPath!)).toBe(false);
     db.close();
@@ -273,8 +275,7 @@ describe('falhas de backup e marker duravel', () => {
 
     expect(() =>
       clearMigrationInProgressMarker(dbPath, first.backupPath!, {
-        openReadonlyDatabase: (candidate) =>
-          new Database(candidate, { readonly: true, fileMustExist: true }),
+        openReadonlyDatabase: (candidate) => new Database(candidate, { readonly: true, fileMustExist: true }),
       }),
     ).toThrow(DatabaseRecoveryRequiredError);
     expect(fs.existsSync(markerPath)).toBe(true);
@@ -306,8 +307,7 @@ describe('falhas de backup e marker duravel', () => {
     const { db, dbPath } = tempDatabase(LATEST_SCHEMA_VERSION - 1);
     const first = prepare(db, dbPath);
     clearMigrationInProgressMarker(dbPath, first.backupPath!, {
-      openReadonlyDatabase: (candidate) =>
-        new Database(candidate, { readonly: true, fileMustExist: true }),
+      openReadonlyDatabase: (candidate) => new Database(candidate, { readonly: true, fileMustExist: true }),
     });
     expect(() => prepare(db, dbPath)).toThrow(DatabaseBackupError);
     expect(fs.existsSync(first.backupPath!)).toBe(true);

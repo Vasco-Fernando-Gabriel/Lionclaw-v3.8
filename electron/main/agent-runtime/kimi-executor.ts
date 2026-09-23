@@ -1,3 +1,4 @@
+import { builtinToolsToOllamaSchemas } from './tool-schemas';
 
 import { createLogger } from '../logger';
 import { randomUUID } from 'crypto';
@@ -9,27 +10,15 @@ import {
   KimiAuthError,
   type KimiAuthMode,
 } from './kimi-availability';
-import {
-  acquireKimiSlot,
-  isKimiQuotaFailure,
-  KimiQuotaError,
-  KIMI_QUOTA_MESSAGE,
-} from './kimi-concurrency';
-import {
-  buildKimiSessionTools,
-  type KimiToolProfile,
-} from './kimi-session-config';
+import { acquireKimiSlot, isKimiQuotaFailure, KimiQuotaError, KIMI_QUOTA_MESSAGE } from './kimi-concurrency';
+import { buildKimiSessionTools, type KimiToolProfile } from './kimi-session-config';
 import { getKimiAcpDriver } from '../kimi-acp/acp-driver';
 import { startKimiMcpBridge, type KimiMcpBridge } from '../kimi-acp/mcp-http-bridge';
 import type { KimiAcpProfile } from '../kimi-acp/types';
 import type { CliRunHandle } from './cli-agentic/contract';
 import { resolveKimiEffectiveThinking } from '../../../src/constants/kimi-models';
 import type { AgentQueryConfig } from '../agent-config-resolver';
-import type {
-  RuntimeExecutor,
-  AgentExecutionRequest,
-  AgentExecutionResult,
-} from './types';
+import type { RuntimeExecutor, AgentExecutionRequest, AgentExecutionResult } from './types';
 import { emptyResponseExecutionError } from './llm-error';
 
 export { KimiAuthError, KimiUnavailableError } from './kimi-availability';
@@ -61,10 +50,7 @@ function appendKimiRuntimeContext(systemPrompt: string, model: string, effort: s
   return `${systemPrompt || ''}${runtimeBlock}`;
 }
 
-function deriveKimiToolProfile(
-  req: AgentExecutionRequest,
-  config: AgentQueryConfig,
-): KimiToolProfile {
+function deriveKimiToolProfile(req: AgentExecutionRequest, config: AgentQueryConfig): KimiToolProfile {
   if (req.onCodexSessionCreated || req.codexSession || req.projectId) {
     return 'pipeline';
   }
@@ -74,10 +60,7 @@ function deriveKimiToolProfile(
   return 'one-shot';
 }
 
-async function run(
-  req: AgentExecutionRequest,
-  config: AgentQueryConfig,
-): Promise<AgentExecutionResult> {
+async function run(req: AgentExecutionRequest, config: AgentQueryConfig): Promise<AgentExecutionResult> {
   if (req.abortController.signal.aborted) {
     throw new KimiUnavailableError('kimi run aborted before start');
   }
@@ -102,18 +85,18 @@ async function run(
     );
   }
 
-  const role = req.executionContext
-    ? req.executionContext.depth > 0 ? 'child' : 'parent'
-    : 'standalone';
+  const role = req.executionContext ? (req.executionContext.depth > 0 ? 'child' : 'parent') : 'standalone';
   const releaseSlot = await acquireKimiSlot({
     signal: req.abortController.signal,
     role,
     toolBearing: Boolean(req.executionContext && config.allowedTools.includes('Agent')),
     ...(req.executionContext ? { parentExecutionId: req.executionContext.parentExecutionId } : {}),
-    ...(req.executionContext ? {
-      rootExecutionId: req.executionContext.rootExecutionId,
-      executionDepth: req.executionContext.depth,
-    } : {}),
+    ...(req.executionContext
+      ? {
+          rootExecutionId: req.executionContext.rootExecutionId,
+          executionDepth: req.executionContext.depth,
+        }
+      : {}),
   });
 
   let bridge: KimiMcpBridge | null = null;
@@ -143,14 +126,28 @@ async function run(
     );
 
     const kimiProfile = deriveKimiToolProfile(req, config);
-    const sessionTools = await buildKimiSessionTools({
-      profile: kimiProfile,
-      config,
-      cwd: req.cwd,
-      abortController: req.abortController,
-      ...(req.projectId ? { projectId: req.projectId } : {}),
-      ...(req.executionContext ? { dispatchContext: req.executionContext } : {}),
-    });
+    const sessionTools = req.swarmToolDispatch
+      ? {
+          systemPrompt: config.systemPrompt,
+          externalTools: builtinToolsToOllamaSchemas(config.allowedTools).map((schema) => ({
+            name: schema.function.name,
+            description: schema.function.description,
+            parameters: schema.function.parameters,
+            handler: async (input: Record<string, unknown>) => {
+              const result = await req.swarmToolDispatch!(schema.function.name, input);
+              req.onActivity?.();
+              return { output: result.result, message: result.result, isError: result.isError };
+            },
+          })),
+        }
+      : await buildKimiSessionTools({
+          profile: kimiProfile,
+          config,
+          cwd: req.cwd,
+          abortController: req.abortController,
+          ...(req.projectId ? { projectId: req.projectId } : {}),
+          ...(req.executionContext ? { dispatchContext: req.executionContext } : {}),
+        });
 
     if (sessionTools.externalTools.length > 0) {
       bridge = await startKimiMcpBridge({
@@ -170,6 +167,8 @@ async function run(
       ...(binary ? { executable: binary } : {}),
       abortSignal: req.abortController.signal,
       permission: req.permission,
+      swarmSupervised: Boolean(req.executionAgent),
+      swarmOwnerDirectory: req.swarmOwnerDirectory,
       profile: acpProfile,
       surface: req.projectId ? 'pipeline' : 'agent',
       ownerKind: req.projectId ? 'pipeline' : 'agent',
@@ -184,9 +183,10 @@ async function run(
       config.model,
       effectiveThinking.effective,
     );
-    const leadingPrompt = systemPromptWithContext.trim().length > 0
-      ? `## Instrucoes do agente\n\n${systemPromptWithContext}\n\n## Tarefa\n\n${req.prompt}`
-      : req.prompt;
+    const leadingPrompt =
+      systemPromptWithContext.trim().length > 0
+        ? `## Instrucoes do agente\n\n${systemPromptWithContext}\n\n## Tarefa\n\n${req.prompt}`
+        : req.prompt;
 
     const cliResponse = await handle.send(
       leadingPrompt,
@@ -202,8 +202,7 @@ async function run(
 
     const durationMs = Date.now() - startedAt;
 
-    const usageReported = cliResponse.usage.inputTokens > 0
-      && cliResponse.usage.outputTokens > 0;
+    const usageReported = cliResponse.usage.inputTokens > 0 && cliResponse.usage.outputTokens > 0;
     const pricingModel = KIMI_PRICING_REMAP[config.model] ?? config.model;
     const resultError = emptyResponseExecutionError({
       content: cliResponse.content,
@@ -318,6 +317,7 @@ async function run(
         await handle.close();
       } catch (closeErr) {
         logger.warn({ agentId: req.agentId, closeErr }, 'kimi acp handle.close() failed');
+        if (req.executionAgent) throw closeErr;
       }
     }
     if (bridge) {

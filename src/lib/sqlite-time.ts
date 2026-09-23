@@ -1,4 +1,3 @@
-
 export interface LocalTimeOptions {
   timeZone?: string;
 }

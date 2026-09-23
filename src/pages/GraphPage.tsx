@@ -17,7 +17,9 @@ export function GraphPage() {
   const [seeding, setSeeding] = useState(false);
   const [seedError, setSeedError] = useState<string | null>(null);
 
-  const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set(['entity', 'meeting', 'decision', 'project', 'reference']));
+  const [activeTypes, setActiveTypes] = useState<Set<string>>(
+    new Set(['entity', 'meeting', 'decision', 'project', 'reference']),
+  );
   const [searchQuery, setSearchQuery] = useState('');
 
   const [zoomInCount, setZoomInCount] = useState(0);
@@ -26,10 +28,7 @@ export function GraphPage() {
   const loadData = useCallback(async () => {
     setLoadState('loading');
     try {
-      const [data, statsData] = await Promise.all([
-        fetchGraphData(),
-        window.lionclaw.mgraph.stats(),
-      ]);
+      const [data, statsData] = await Promise.all([fetchGraphData(), window.lionclaw.mgraph.stats()]);
       setNodes(data.nodes);
       setEdges(data.edges);
       setStats(statsData);
@@ -55,7 +54,7 @@ export function GraphPage() {
   const activeNodeIds = useMemo<Set<string> | null>(() => {
     const hasTypeFilter = activeTypes.size < 5;
     const hasSearch = searchQuery.length > 0;
-    if (!hasTypeFilter && !hasSearch) return null; // all visible
+    if (!hasTypeFilter && !hasSearch) return null;
 
     const q = searchQuery.toLowerCase();
     const ids = new Set<string>();
@@ -63,7 +62,7 @@ export function GraphPage() {
       if (!activeTypes.has(node.type)) continue;
       if (hasSearch) {
         const matchTitle = node.title.toLowerCase().includes(q);
-        const matchTags = node.tags.some(t => t.toLowerCase().includes(q));
+        const matchTags = node.tags.some((t) => t.toLowerCase().includes(q));
         if (!matchTitle && !matchTags) continue;
       }
       ids.add(node.id);
@@ -108,9 +107,7 @@ export function GraphPage() {
           <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center">
             <Network size={28} className="text-zinc-600" />
           </div>
-          <h2 className="text-lg font-medium text-zinc-300">
-            O Memory Graph ainda esta vazio.
-          </h2>
+          <h2 className="text-lg font-medium text-zinc-300">O Memory Graph ainda esta vazio.</h2>
           <p className="text-sm text-zinc-500">
             Converse com o LionClaw para que ele comece a construir conexoes de conhecimento automaticamente.
           </p>
@@ -120,18 +117,12 @@ export function GraphPage() {
               disabled={seeding}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-sm font-medium transition-colors"
             >
-              {seeding ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <Sprout size={16} />
-              )}
+              {seeding ? <Loader2 size={16} className="animate-spin" /> : <Sprout size={16} />}
               Rodar seed agora
             </button>
           )}
           {seedError && (
-            <p className="text-xs text-red-400 bg-red-500/10 rounded px-3 py-2 max-w-sm">
-              Seed falhou: {seedError}
-            </p>
+            <p className="text-xs text-red-400 bg-red-500/10 rounded px-3 py-2 max-w-sm">Seed falhou: {seedError}</p>
           )}
         </div>
       </div>
@@ -144,8 +135,8 @@ export function GraphPage() {
         onFilterChange={setActiveTypes}
         onSearchChange={setSearchQuery}
         onRefresh={loadData}
-        onZoomIn={() => setZoomInCount(c => c + 1)}
-        onZoomOut={() => setZoomOutCount(c => c + 1)}
+        onZoomIn={() => setZoomInCount((c) => c + 1)}
+        onZoomOut={() => setZoomOutCount((c) => c + 1)}
       />
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 relative">
@@ -166,11 +157,7 @@ export function GraphPage() {
           )}
         </div>
         {selectedNode && (
-          <GraphSidebar
-            nodeId={selectedNode.id}
-            nodeType={selectedNode.type}
-            onClose={() => setSelectedNode(null)}
-          />
+          <GraphSidebar nodeId={selectedNode.id} nodeType={selectedNode.type} onClose={() => setSelectedNode(null)} />
         )}
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { createSwarmProcessOwner } from '../agent-runtime/swarm-process';
 
 import { spawn } from 'child_process';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
@@ -6,11 +7,7 @@ import { getCodexBinaryStatus, isCodexAvailable } from './binary';
 import { CodexUnavailableError, CodexAuthError } from './errors';
 import { getAppVersion } from '../app-version';
 import { createLogger } from '../logger';
-import {
-  CodexLifecycleRegistry,
-  detectThreadLeak,
-  OFFICIAL_APP_SERVER_IDLE_SWEEP_MS,
-} from './lifecycle-registry';
+import { CodexLifecycleRegistry, detectThreadLeak, OFFICIAL_APP_SERVER_IDLE_SWEEP_MS } from './lifecycle-registry';
 import type { LoadedThread } from './lifecycle-registry';
 import {
   createAccumulator,
@@ -18,9 +15,11 @@ import {
   finalizeResponse,
   approvalToWire,
   extractCodexErrorCode,
+  extractCodexErrorDetail,
 } from './official-event-translator';
 import type { AppServerEvent, TurnOutcome } from './official-event-translator';
 import { runOfficialPreFlight } from './windows-preflight';
+import { beginCodexTurnBarrier, DEFAULT_CODEX_TURN_SETTLE_MS } from './turn-barrier';
 import { getPipelineCodexHomeFallbackExtras } from '../codex-pipeline-config';
 import type {
   CodexAvailability,
@@ -64,7 +63,6 @@ export const APP_SERVER_HANDSHAKE_TIMEOUT_MS = 10_000;
 
 export const DEFAULT_IDLE_TIMEOUT_MS = 1_200_000;
 
-
 export interface AppServerTransport {
   request(method: string, params?: unknown): Promise<unknown>;
   notify(method: string, params?: unknown): void;
@@ -79,42 +77,46 @@ export interface AppServerSpawnConfig {
   cwd: string;
   env?: Record<string, string>;
   extraArgs?: string[];
+  swarmSupervised?: boolean;
+  swarmOwnerDirectory?: string;
 }
 
-export type AppServerTransportFactory = (
-  config: AppServerSpawnConfig,
-) => Promise<AppServerTransport>;
+export type AppServerTransportFactory = (config: AppServerSpawnConfig) => Promise<AppServerTransport>;
 
+const STDERR_WARN_LIMIT = 20;
 
 class StdioJsonRpcTransport implements AppServerTransport {
   private nextId = 1;
-  private readonly pending = new Map<
-    number,
-    { resolve: (v: unknown) => void; reject: (e: Error) => void }
-  >();
+  private readonly pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   private readonly notificationHandlers = new Set<(event: AppServerEvent) => void>();
   private readonly errorHandlers = new Set<(err: Error) => void>();
   private buffer = '';
   private closed = false;
+  private stderrLogged = 0;
 
   constructor(private readonly child: ChildProcessWithoutNullStreams) {
     child.stdout.on('data', (chunk: Buffer) => this.onData(chunk));
-    child.stderr.on('data', () => {
+    child.stderr.on('data', (chunk: Buffer) => {
+      const text = chunk.toString('utf8').trim();
+      if (!text) return;
+      const payload = { stderr: text.slice(0, 2000) };
+      if (this.stderrLogged < STDERR_WARN_LIMIT) {
+        this.stderrLogged += 1;
+        logger.warn(payload, 'codex app-server stderr');
+        return;
+      }
+      logger.debug(payload, 'codex app-server stderr (limite de aviso atingido)');
     });
     child.on('exit', (code) => {
       this.closed = true;
-      const err = new CodexUnavailableError(
-        `codex app-server exited (code=${String(code)})`,
-      );
+      const err = new CodexUnavailableError(`codex app-server exited (code=${String(code)})`);
       for (const { reject } of this.pending.values()) reject(err);
       this.pending.clear();
       for (const h of this.errorHandlers) h(err);
     });
     child.on('error', (err) => {
       this.closed = true;
-      const wrapped = new CodexUnavailableError(
-        `codex app-server process error: ${err.message}`,
-      );
+      const wrapped = new CodexUnavailableError(`codex app-server process error: ${err.message}`);
       for (const { reject } of this.pending.values()) reject(wrapped);
       this.pending.clear();
       for (const h of this.errorHandlers) h(wrapped);
@@ -185,21 +187,19 @@ class StdioJsonRpcTransport implements AppServerTransport {
     if (this.closed) return;
     try {
       this.child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n');
-    } catch {
-    }
+    } catch {}
   }
 
   private respond(id: unknown, result: unknown): void {
     if (this.closed) return;
     try {
       this.child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\n');
-    } catch {
-    }
+    } catch {}
   }
 
   private replyToServerRequest(id: unknown, method: string, params: Record<string, unknown>): void {
     switch (method) {
-      case 'item/commandExecution/requestApproval': // CommandExecutionApprovalDecision
+      case 'item/commandExecution/requestApproval':
       case 'item/fileChange/requestApproval': // FileChangeApprovalDecision
         this.respond(id, { decision: 'acceptForSession' });
         return;
@@ -273,31 +273,33 @@ class StdioJsonRpcTransport implements AppServerTransport {
 }
 
 export const defaultTransportFactory: AppServerTransportFactory = async (config) => {
-  const useShell =
-    process.platform === 'win32' && config.binary.toLowerCase().endsWith('.cmd');
-  const child = spawn(
-    config.binary,
-    [
-      'app-server',
-      '-c',
-      'sandbox_workspace_write.network_access=true',
-      ...(config.extraArgs ?? []),
-    ],
-    {
-      cwd: config.cwd,
-      detached: DETACH_FOR_TREE_KILL,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      shell: useShell,
-      env: { ...process.env, ...(config.env ?? {}) },
-    },
-  ) as ChildProcessWithoutNullStreams;
+  const useShell = process.platform === 'win32' && config.binary.toLowerCase().endsWith('.cmd');
+  const child = config.swarmSupervised
+    ? createSwarmProcessOwner(config.swarmOwnerDirectory).spawnProcess({
+        command: config.binary,
+        args: ['app-server', '-c', 'sandbox_workspace_write.network_access=true', ...(config.extraArgs ?? [])],
+        cwd: config.cwd,
+        env: { ...process.env, ...(config.env ?? {}) },
+        signal: new AbortController().signal,
+      })
+    : (spawn(
+        config.binary,
+        ['app-server', '-c', 'sandbox_workspace_write.network_access=true', ...(config.extraArgs ?? [])],
+        {
+          cwd: config.cwd,
+          detached: DETACH_FOR_TREE_KILL,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          shell: useShell,
+          env: { ...process.env, ...(config.env ?? {}) },
+        },
+      ) as ChildProcessWithoutNullStreams);
   return new StdioJsonRpcTransport(child);
 };
-
 
 interface TurnTimers {
   hard?: ReturnType<typeof setTimeout>;
   idle?: ReturnType<typeof setTimeout>;
+  settle?: ReturnType<typeof setTimeout>;
 }
 
 class OfficialAppServerRunHandle implements CodexRunHandle {
@@ -313,6 +315,10 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
   public hasStartedTurn = false;
 
   private turnEffort: CodexRunOptions['reasoningEffort'];
+  private turnModel: string | undefined;
+  private closingBarrier: Promise<void> | null = null;
+  private releaseClosingBarrier: (() => void) | null = null;
+  private releaseOwnerBarrier: (() => void) | null = null;
   public observedCliUserAgent: string | null = null;
 
   private generation = 0;
@@ -337,6 +343,42 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
     this.turnEffort = effort;
   }
 
+  setModel(model: string): void {
+    this.turnModel = model;
+  }
+
+  isClosed(): boolean {
+    return this.closed;
+  }
+
+  isClosing(): boolean {
+    return this.closingBarrier !== null;
+  }
+
+  private beginClosingBarrier(): void {
+    if (this.closingBarrier) return;
+    this.closingBarrier = new Promise<void>((resolve) => {
+      this.releaseClosingBarrier = resolve;
+    });
+    if (this.key.ownerKind === 'chat' && this.key.ownerId) {
+      this.releaseOwnerBarrier = beginCodexTurnBarrier(this.key.ownerId);
+    }
+  }
+
+  private endClosingBarrier(): void {
+    const release = this.releaseClosingBarrier;
+    const releaseOwner = this.releaseOwnerBarrier;
+    this.releaseClosingBarrier = null;
+    this.releaseOwnerBarrier = null;
+    this.closingBarrier = null;
+    releaseOwner?.();
+    release?.();
+  }
+
+  private async awaitClosingBarrier(): Promise<void> {
+    while (this.closingBarrier) await this.closingBarrier;
+  }
+
   private bumpActivity(): void {
     this.lastActivityAt = Date.now();
   }
@@ -353,10 +395,7 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
           clientInfo: { name: 'LionClaw', version: getAppVersion() },
         }),
         new Promise<never>((_resolve, reject) => {
-          timer = setTimeout(
-            () => reject(new CodexUnavailableError('codex app-server initialize timeout')),
-            timeoutMs,
-          );
+          timer = setTimeout(() => reject(new CodexUnavailableError('codex app-server initialize timeout')), timeoutMs);
         }),
       ])) as Record<string, unknown> | undefined;
       const ua = typeof initResult?.['userAgent'] === 'string' ? initResult['userAgent'] : null;
@@ -364,10 +403,7 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
       notifyObservedCodexCliUserAgent(ua);
       this.transport.notify('initialized', {});
     } catch (err) {
-      throw new CodexUnavailableError(
-        `codex app-server handshake failed: ${(err as Error).message}`,
-        { cause: err },
-      );
+      throw new CodexUnavailableError(`codex app-server handshake failed: ${(err as Error).message}`, { cause: err });
     } finally {
       if (timer) clearTimeout(timer);
     }
@@ -379,18 +415,13 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
         { entry, runId: this.key.runId, threadId: this.threadId, turnId: this.turnId },
         'turno ja em andamento neste handle; segundo turno rejeitado (one-in-flight)',
       );
-      throw new CodexTurnInFlightError(
-        `${entry}() rejected: a turn is already in flight on this handle`,
-      );
+      throw new CodexTurnInFlightError(`${entry}() rejected: a turn is already in flight on this handle`);
     }
     this.turnGuardHeld = true;
   }
 
-  async send(
-    prompt: string,
-    cb?: CodexStreamCallbacks,
-    abortSignal?: AbortSignal,
-  ): Promise<CodexResponse> {
+  async send(prompt: string, cb?: CodexStreamCallbacks, abortSignal?: AbortSignal): Promise<CodexResponse> {
+    if (this.closingBarrier) await this.awaitClosingBarrier();
     this.acquireTurnGuard('send');
     try {
       this.rejectUnsafePolicy();
@@ -399,33 +430,23 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
           cwd: this.opts.cwd,
           sandbox: this.opts.sandbox,
           approvalPolicy: approvalToWire(this.opts.approvalPolicy),
-        })) as
-          | { thread?: { id?: string; sessionId?: string }; threadId?: string; thread_id?: string }
-          | undefined;
-        const threadId =
-          startResult?.thread?.id ??
-          startResult?.threadId ??
-          startResult?.thread_id ??
-          null;
+        })) as { thread?: { id?: string; sessionId?: string }; threadId?: string; thread_id?: string } | undefined;
+        const threadId = startResult?.thread?.id ?? startResult?.threadId ?? startResult?.thread_id ?? null;
         if (!threadId) {
           throw new CodexUnavailableError('thread/start returned no threadId');
         }
         this.threadId = threadId;
       }
-      const firstInput = this.opts.systemPrompt
-        ? `${this.opts.systemPrompt}\n\n${prompt}`
-        : prompt;
+      const firstInput = this.opts.systemPrompt ? `${this.opts.systemPrompt}\n\n${prompt}` : prompt;
       return await this.runTurn(firstInput, cb, abortSignal);
     } finally {
       this.turnGuardHeld = false;
+      this.endClosingBarrier();
     }
   }
 
-  async reply(
-    message: string,
-    cb?: CodexStreamCallbacks,
-    abortSignal?: AbortSignal,
-  ): Promise<CodexResponse> {
+  async reply(message: string, cb?: CodexStreamCallbacks, abortSignal?: AbortSignal): Promise<CodexResponse> {
+    if (this.closingBarrier) await this.awaitClosingBarrier();
     this.acquireTurnGuard('reply');
     try {
       this.rejectUnsafePolicy();
@@ -435,14 +456,12 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
       return await this.runTurn(message, cb, abortSignal);
     } finally {
       this.turnGuardHeld = false;
+      this.endClosingBarrier();
     }
   }
 
   private rejectUnsafePolicy(): void {
-    if (
-      this.opts.approvalPolicy === 'never' &&
-      this.opts.sandbox === 'danger-full-access'
-    ) {
+    if (this.opts.approvalPolicy === 'never' && this.opts.sandbox === 'danger-full-access') {
       logger.info(
         { approvalPolicy: this.opts.approvalPolicy, sandbox: this.opts.sandbox },
         'LionClaw bypass: full-autonomy sandbox (never + danger-full-access) by design',
@@ -450,30 +469,32 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
     }
   }
 
-  private async runTurn(
-    input: string,
-    cb?: CodexStreamCallbacks,
-    abortSignal?: AbortSignal,
-  ): Promise<CodexResponse> {
+  private async runTurn(input: string, cb?: CodexStreamCallbacks, abortSignal?: AbortSignal): Promise<CodexResponse> {
     const gen = this.generation;
     const acc = createAccumulator(this.threadId);
     this.status = 'running';
-    this.hasStartedTurn = true; // KI-2: past the idle-window; a sibling-reap is now governed by status.
-    this.bumpActivity(); // KI-2: a turn is starting; this handle is busy, never idle-reapable.
+    this.hasStartedTurn = true;
+    this.bumpActivity();
 
     const timers: TurnTimers = {};
     const hardMs = this.opts.timeoutMs ?? DEFAULT_HARD_TIMEOUT_MS;
     const idleMs = this.opts.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
+    const settleMs = this.opts.turnSettleMs ?? DEFAULT_CODEX_TURN_SETTLE_MS;
 
     return new Promise<CodexResponse>((resolve, reject) => {
       let settled = false;
       let detach: (() => void) | null = null;
+      let turnStartSent = false;
+      let interruptOutcome: 'interrupted' | 'timeout' | null = null;
+      let interruptSent = false;
 
       const clearTimers = (): void => {
         if (timers.hard) clearTimeout(timers.hard);
         if (timers.idle) clearTimeout(timers.idle);
+        if (timers.settle) clearTimeout(timers.settle);
         timers.hard = undefined;
         timers.idle = undefined;
+        timers.settle = undefined;
       };
 
       const finish = (outcome: TurnOutcome): void => {
@@ -502,30 +523,71 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
         reject(err);
       };
 
-      const armIdle = (): void => {
-        if (idleMs === undefined) return;
+      const sendInterrupt = (): void => {
+        if (interruptSent || settled) return;
+        interruptSent = true;
+        const turnId = this.turnId;
+        this.transport.request('turn/interrupt', { turnId }).then(
+          () => {
+            logger.info(
+              { runId: this.key.runId, threadId: this.threadId, turnId, outcome: interruptOutcome },
+              'turn/interrupt confirmado pelo app-server; aguardando o evento terminal do turno',
+            );
+          },
+          (err: Error) => {
+            logger.warn(
+              { runId: this.key.runId, threadId: this.threadId, turnId, err: err.message },
+              'turn/interrupt falhou; aguardando evento terminal ou timeout de assentamento',
+            );
+          },
+        );
+      };
+
+      const requestInterrupt = (outcome: 'interrupted' | 'timeout'): void => {
+        if (settled || interruptOutcome !== null) return;
+        interruptOutcome = outcome;
+        if (outcome === 'timeout') acc.timedOut = true;
+        if (timers.hard) clearTimeout(timers.hard);
         if (timers.idle) clearTimeout(timers.idle);
+        timers.hard = undefined;
+        timers.idle = undefined;
+        this.beginClosingBarrier();
+        timers.settle = setTimeout(() => {
+          if (settled) return;
+          logger.warn(
+            {
+              runId: this.key.runId,
+              threadId: this.threadId,
+              turnId: this.turnId,
+              outcome,
+              settleMs,
+            },
+            'turno sem evento terminal apos turn/interrupt; handle fechado e processo morto (nunca reutilizado)',
+          );
+          this.resetNow('turn-settle-timeout');
+          finish(outcome);
+        }, settleMs);
+        if (this.turnId) sendInterrupt();
+      };
+
+      const armIdle = (): void => {
+        if (idleMs === undefined || this.opts.externallyManagedWatchdog) return;
+        if (timers.idle) clearTimeout(timers.idle);
+        if (interruptOutcome !== null) return;
         timers.idle = setTimeout(() => {
-          acc.timedOut = true;
-          void this.transport
-            .request('turn/interrupt', { turnId: this.turnId })
-            .catch(() => undefined);
-          finish('timeout');
+          requestInterrupt('timeout');
         }, idleMs);
       };
 
-      timers.hard = setTimeout(() => {
-        acc.timedOut = true;
-        void this.transport
-          .request('turn/interrupt', { turnId: this.turnId })
-          .catch(() => undefined);
-        finish('timeout');
-      }, hardMs);
+      if (!this.opts.externallyManagedWatchdog)
+        timers.hard = setTimeout(() => {
+          requestInterrupt('timeout');
+        }, hardMs);
       armIdle();
 
       const onEvent = (event: AppServerEvent): void => {
         if (gen !== this.generation) return;
-        this.bumpActivity(); // KI-2: any inbound turn event marks the handle active.
+        this.bumpActivity();
 
         const isErrorEvent = event.method === 'error';
         const evThreadObj = event.params?.['thread'] as { id?: string } | undefined;
@@ -561,22 +623,24 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
             this.turnId = tid;
           }
         }
+        if (interruptOutcome !== null && this.turnId) sendInterrupt();
         armIdle();
+
+        if (event.method === 'account/rateLimits/updated') {
+          logger.info(
+            { rateLimits: event.params, model: this.opts?.model },
+            'codex app-server: snapshot de limites da conta',
+          );
+        }
 
         translateEvent(event, acc, {
           callbacks: cb,
-          onUnknownEvent: (e) =>
-            logger.debug({ method: e.method }, 'unknown app-server event (audited)'),
+          onUnknownEvent: (e) => logger.debug({ method: e.method }, 'unknown app-server event (audited)'),
         });
 
         if (event.method === 'turn/completed' || event.method === 'turn/complete') {
-          const turnObj = event.params?.['turn'] as
-            | { status?: string; error?: unknown }
-            | undefined;
-          const reported =
-            turnObj?.status ??
-            (event.params?.['status'] as string | undefined) ??
-            'completed';
+          const turnObj = event.params?.['turn'] as { status?: string; error?: unknown } | undefined;
+          const reported = turnObj?.status ?? (event.params?.['status'] as string | undefined) ?? 'completed';
           const hasError = turnObj?.error != null;
           if (acc.authRequired || reported === 'auth_required') finish('auth_required');
           else if (acc.timedOut) finish('timeout');
@@ -584,6 +648,9 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
           else if (reported === 'failed' || reported === 'error' || hasError) {
             const errorCode = extractCodexErrorCode(event);
             if (errorCode !== undefined) acc.errorCode = errorCode;
+            const errorDetail = extractCodexErrorDetail(event);
+            if (errorDetail !== undefined) acc.errorDetail = errorDetail;
+            logger.warn({ method: event.method, errorCode, errorDetail }, 'app-server reportou turno com falha');
             acc.failed = true;
             finish('failed');
           } else finish('completed');
@@ -592,6 +659,8 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
           if (reason === 'unauthorized' || reported(event) === 'auth_required') {
             fail(new CodexAuthError(`codex app-server auth error: ${reason || 'unauthorized'}`));
           } else {
+            if (reason) acc.errorDetail = reason;
+            logger.warn({ method: event.method, reason }, 'app-server sinalizou turno falho');
             acc.failed = true;
             finish('failed');
           }
@@ -609,6 +678,9 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
           } else {
             const errorCode = extractCodexErrorCode(event);
             if (errorCode !== undefined) acc.errorCode = errorCode;
+            const errorDetail = extractCodexErrorDetail(event);
+            if (errorDetail !== undefined) acc.errorDetail = errorDetail;
+            logger.warn({ method: event.method, errorCode, errorDetail }, 'app-server emitiu erro de turno');
             acc.failed = true;
             finish('failed');
           }
@@ -616,18 +688,23 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
       };
 
       const onAbort = (): void => {
-        void this.transport
-          .request('turn/interrupt', { turnId: this.turnId })
-          .catch(() => undefined);
-        finish('interrupted');
+        if (!turnStartSent) {
+          finish('interrupted');
+          return;
+        }
+        requestInterrupt('interrupted');
       };
 
       const onErr = (err: Error): void => {
-        fail(
-          err instanceof CodexUnavailableError
-            ? err
-            : new CodexUnavailableError(err.message),
-        );
+        if (interruptOutcome !== null) {
+          logger.info(
+            { runId: this.key.runId, threadId: this.threadId, err: err.message, outcome: interruptOutcome },
+            'app-server encerrou durante a barreira de turno; turno assentado pela saida do processo',
+          );
+          finish(interruptOutcome);
+          return;
+        }
+        fail(err instanceof CodexUnavailableError ? err : new CodexUnavailableError(err.message));
       };
 
       const offEvent = this.transport.onNotification(onEvent);
@@ -653,17 +730,24 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
         const effectiveEffort = this.turnEffort ?? this.opts.reasoningEffort;
         if (effectiveEffort) turnParams['effort'] = effectiveEffort;
       }
-      if (this.opts.model) turnParams['model'] = this.opts.model;
+      {
+        const effectiveModel = this.turnModel ?? this.opts.model;
+        if (effectiveModel) turnParams['model'] = effectiveModel;
+      }
+      turnStartSent = true;
       this.transport
         .request('turn/start', turnParams)
         .then((res) => {
-          const r = res as
-            | { turn?: { id?: string }; turnId?: string; turn_id?: string }
-            | undefined;
+          const r = res as { turn?: { id?: string }; turnId?: string; turn_id?: string } | undefined;
           const id = r?.turn?.id ?? r?.turnId ?? r?.turn_id;
           if (id && !this.turnId) this.turnId = id;
+          if (interruptOutcome !== null && this.turnId) sendInterrupt();
         })
         .catch((err: Error) => {
+          if (interruptOutcome !== null) {
+            finish(interruptOutcome);
+            return;
+          }
           if (this.lastTransportError) onErr(this.lastTransportError);
           else fail(new CodexUnavailableError(`turn/start failed: ${err.message}`));
         });
@@ -675,10 +759,7 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
       try {
         await this.transport.request('turn/interrupt', { turnId: this.turnId, reason });
       } catch (err) {
-        logger.warn(
-          { reason, turnId: this.turnId, err: (err as Error).message },
-          'turn/interrupt failed',
-        );
+        logger.warn({ reason, turnId: this.turnId, err: (err as Error).message }, 'turn/interrupt failed');
       }
     }
     this.status = 'interrupted';
@@ -687,7 +768,7 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
-    this.generation += 1; // invalidate late events
+    this.generation += 1;
     this.turnGuardHeld = false;
 
     if (this.status === 'running') {
@@ -698,30 +779,23 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
       try {
         await this.transport.request('thread/unsubscribe', { threadId: this.threadId });
       } catch (err) {
-        logger.warn(
-          { threadId: this.threadId, err: (err as Error).message },
-          'thread/unsubscribe failed',
-        );
+        logger.warn({ threadId: this.threadId, err: (err as Error).message }, 'thread/unsubscribe failed');
       }
       if (this.key.ownerKind === 'pipeline') {
         try {
           await this.transport.request('thread/archive', { threadId: this.threadId });
-        } catch {
-        }
+        } catch {}
       }
     }
 
     let leaked = false;
     try {
       const list = (await this.transport.request('thread/loaded/list', {})) as
-        | { threads?: LoadedThread[] }
-        | LoadedThread[]
-        | undefined;
-      const loaded: LoadedThread[] = Array.isArray(list) ? list : list?.threads ?? [];
+        { threads?: LoadedThread[] } | LoadedThread[] | undefined;
+      const loaded: LoadedThread[] = Array.isArray(list) ? list : (list?.threads ?? []);
       const owned = this.threadId ? [this.threadId] : [];
       leaked = detectThreadLeak(loaded, owned).leaked;
-    } catch {
-    }
+    } catch {}
 
     this.transport.kill('scope-close');
     const exited = await this.transport.waitClosed(2000);
@@ -733,6 +807,7 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
       await this.forceKillFallback(leaked ? 'loaded-thread-leak' : 'process-did-not-exit');
     }
     this.status = 'closed';
+    this.endClosingBarrier();
   }
 
   async waitClosed(timeoutMs: number): Promise<boolean> {
@@ -784,6 +859,7 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
     this.unsubscribeNotifications = null;
     this.unsubscribeError = null;
     this.registry.remove(this.key);
+    this.endClosingBarrier();
     this.transport.kill(`reset-now:${reason}`);
     void this.transport.waitClosed(2_000).then((exited) => {
       if (!exited) {
@@ -801,6 +877,12 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
       send: (prompt, cb, abortSignal) => self.send(prompt, cb, abortSignal),
       reply: (message, cb, abortSignal) => self.reply(message, cb, abortSignal),
       setReasoningEffort: (effort) => self.setReasoningEffort(effort),
+      setModel: (model) => self.setModel(model),
+      isClosed: () => self.isClosed(),
+      closeConfirmed: async (): Promise<void> => {
+        self.resetNow('swarm-session-close');
+        while (!(await self.waitClosed(60_000))) self.transport.kill('swarm-await-exit');
+      },
       close: (): void => {
         self.resetNow('sync-session-close');
       },
@@ -808,16 +890,13 @@ class OfficialAppServerRunHandle implements CodexRunHandle {
   }
 }
 
-
 export class OfficialAppServerDriver implements CodexDriver {
   public readonly implementation = 'official-app-server' as const;
   private readonly registry = new CodexLifecycleRegistry();
 
   private idleReaperTimer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(
-    private readonly transportFactory: AppServerTransportFactory = defaultTransportFactory,
-  ) {}
+  constructor(private readonly transportFactory: AppServerTransportFactory = defaultTransportFactory) {}
 
   async createRun(opts: CodexRunOptions): Promise<CodexRunHandle> {
     runOfficialPreFlight(opts.cwd, opts.key.projectId, opts.key.agentId);
@@ -827,9 +906,7 @@ export class OfficialAppServerDriver implements CodexDriver {
       throw new CodexUnavailableError(availability.error ?? 'codex binary not found');
     }
     if (!availability.appServerSupported) {
-      throw new CodexUnavailableError(
-        availability.error ?? 'codex CLI does not support app-server',
-      );
+      throw new CodexUnavailableError(availability.error ?? 'codex CLI does not support app-server');
     }
     if (!availability.authenticated) {
       throw new CodexAuthError('codex CLI is not authenticated; run `codex login`');
@@ -846,21 +923,18 @@ export class OfficialAppServerDriver implements CodexDriver {
         }
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
-        logger.error(
-          { reason },
-          'failed to prepare dedicated CODEX_HOME for disableGlobalMcp; aborting official run',
-        );
-        throw new CodexUnavailableError(
-          `failed to isolate global MCP (dedicated CODEX_HOME): ${reason}`,
-        );
+        logger.error({ reason }, 'failed to prepare dedicated CODEX_HOME for disableGlobalMcp; aborting official run');
+        throw new CodexUnavailableError(`failed to isolate global MCP (dedicated CODEX_HOME): ${reason}`);
       }
     }
 
     const transport = await this.transportFactory({
       binary,
       cwd: opts.cwd,
-      env: spawnEnv,
+      env: opts.swarmSpawnEnv ? { ...spawnEnv, ...opts.swarmSpawnEnv } : spawnEnv,
       extraArgs: opts.extraArgs,
+      swarmSupervised: opts.externallyManagedWatchdog,
+      swarmOwnerDirectory: opts.swarmOwnerDirectory,
     });
     const handle = new OfficialAppServerRunHandle(transport, opts, this.registry);
     try {
@@ -971,9 +1045,7 @@ export class OfficialAppServerDriver implements CodexDriver {
   }
 }
 
-export function createOfficialAppServerDriver(
-  transportFactory?: AppServerTransportFactory,
-): OfficialAppServerDriver {
+export function createOfficialAppServerDriver(transportFactory?: AppServerTransportFactory): OfficialAppServerDriver {
   return new OfficialAppServerDriver(transportFactory);
 }
 

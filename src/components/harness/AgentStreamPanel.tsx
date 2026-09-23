@@ -34,22 +34,12 @@ function formatDuration(ms: number): string {
   return `${m}m${rem.toString().padStart(2, '0')}s`;
 }
 
-export function AgentStreamPanel({
-  label,
-  stream,
-  isActive,
-  tokens,
-  cost,
-  duration,
-}: AgentStreamPanelProps) {
+export function AgentStreamPanel({ label, stream, isActive, tokens, cost, duration }: AgentStreamPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const followTailRef = useRef(true);
   const scrollRafRef = useRef<number | null>(null);
-  const timeline = useMemo(
-    () => timelineFromOrderedStream(stream, label),
-    [stream, label],
-  );
+  const timeline = useMemo(() => timelineFromOrderedStream(stream, label), [stream, label]);
 
   useEffect(() => {
     if (!followTailRef.current || scrollRafRef.current !== null) return;
@@ -59,9 +49,12 @@ export function AgentStreamPanel({
     });
   }, [timeline]);
 
-  useEffect(() => () => {
-    if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (scrollRafRef.current !== null) cancelAnimationFrame(scrollRafRef.current);
+    },
+    [],
+  );
 
   const hasContent = timeline.length > 0;
 
@@ -78,9 +71,7 @@ export function AgentStreamPanel({
           <span className="h-2 w-2 rounded-full bg-zinc-700 shrink-0" />
         )}
         <span className="text-xs font-semibold text-zinc-200 uppercase tracking-wide">{label}</span>
-        {isActive && (
-          <span className="ml-auto text-[10px] text-blue-400 font-mono">ativo</span>
-        )}
+        {isActive && <span className="ml-auto text-[10px] text-blue-400 font-mono">ativo</span>}
       </div>
 
       {/* Stream content */}
@@ -94,9 +85,7 @@ export function AgentStreamPanel({
         }}
       >
         {!hasContent && (
-          <p className="text-xs text-zinc-600 italic">
-            {isActive ? 'Aguardando saida...' : '(aguardando)'}
-          </p>
+          <p className="text-xs text-zinc-600 italic">{isActive ? 'Aguardando saida...' : '(aguardando)'}</p>
         )}
 
         <StreamTimeline
@@ -125,15 +114,11 @@ export function AgentStreamPanel({
             in: {tokens.input.toLocaleString()} / out: {tokens.output.toLocaleString()}
           </span>
         )}
-        {cost != null && cost > 0 && (
-          <span className="text-[10px] text-zinc-500 font-mono">{formatCost(cost)}</span>
-        )}
+        {cost != null && cost > 0 && <span className="text-[10px] text-zinc-500 font-mono">{formatCost(cost)}</span>}
         {duration != null && duration > 0 && (
           <span className="text-[10px] text-zinc-500 font-mono">{formatDuration(duration)}</span>
         )}
-        {!tokens && !cost && !duration && (
-          <span className="text-[10px] text-zinc-700 font-mono">sem metricas</span>
-        )}
+        {!tokens && !cost && !duration && <span className="text-[10px] text-zinc-700 font-mono">sem metricas</span>}
       </div>
     </div>
   );

@@ -6,7 +6,7 @@
 
 Assistente pessoal de IA em app desktop Electron. Single-user, single-machine, com acesso ao terminal, filesystem, internet, MCPs locais e agentes especializados.
 
-Versao atual do pacote: `v3.8.0` (`package.json`).
+Versao atual do pacote: `v3.9.0` (`package.json`).
 
 ---
 
@@ -32,7 +32,7 @@ Versao atual do pacote: `v3.8.0` (`package.json`).
 18. [Empacotamento e Release](#empacotamento-e-release)
 19. [Troubleshooting](#troubleshooting)
 20. [Licenca](#licenca)
-21. [v3.8](#v38)
+21. [v3.9](#v39)
 22. [v3.7.1](#v371)
 
 ---
@@ -76,9 +76,17 @@ Trocar o SDK orquestrador depois do onboarding e feito em **Settings > Orquestra
 
 ## Novidades desta versao
 
+### Conversas paralelas
+
+Duas conversas rodando ao mesmo tempo, cada uma com fila, thread, orquestrador (provedor, modelo e esforco no composer), Clear e pipeline proprios. Novo Chat pergunta qual conversa recebe o Clear. Detalhe em [v3.9](#v39).
+
+### Artefatos HTML e Swarm (previa)
+
+Pagina HTML gerada pelo agente abre num painel ao lado do chat, com a skill padrao revisao-de-decisoes. O chip Swarm no composer dispara analise paralela em comite ou fanout. Detalhe em [v3.9](#v39).
+
 ### Workflows Dinamicos reescritos
 
-O workflow nasce de conversa, nao de formulario: voce descreve o processo no chat e o orquestrador escreve o `.js`, cria e inicia num passo so. O modal de criacao manual saiu. Sem teto de custo: o freio e pausar ou abortar pelo chat. Cockpit proprio do run com Execucao, Custo, Saidas e Linha do tempo. Detalhe em [v3.8](#v38).
+O workflow nasce de conversa, nao de formulario: voce descreve o processo no chat e o orquestrador escreve o `.js`, cria e inicia num passo so. O modal de criacao manual saiu. Sem teto de custo: o freio e pausar ou abortar pelo chat. Cockpit proprio do run com Execucao, Custo, Saidas e Linha do tempo. Detalhe em [v3.9](#v39).
 
 ### Kanban nativo
 
@@ -92,6 +100,10 @@ Nono runtime: o agente do Cursor (Composer, mais Claude, GPT, Grok e Gemini pelo
 
 Sai o `cli.js` interpretado, entra o binario nativo do Claude Code por plataforma, empacotado na distribuicao, com tela propria e login pelo engine resolvido. A lista de tarefas do agente passa a funcionar em todos os modelos, e os runtimes compativeis (Z.ai, MiniMax) recebem a janela de contexto real via `CLAUDE_CODE_MAX_CONTEXT_TOKENS`.
 
+### Claude Opus 5.5 e GPT-6 Sol/Luna (22/09)
+
+`claude-opus-5-5` e o novo default do orquestrador e dos sub-agentes Opus (migration V157 promove quem estava no Opus 5 e os seeds que estavam em Opus 4.8/4.7). `gpt-6-sol` e o novo default do runtime Codex e `gpt-6-luna` entra como opcao barata (migration V158 atualiza o coder Codex dos workflows). Nao existe GPT-6 Terra. **Os dois exigem Codex CLI 0.155 ou superior** (`npm i -g @openai/codex@latest`); com CLI mais antigo o app recusa o modelo na hora e diz como atualizar. Detalhe em [v3.9](#v39).
+
 ### GPT-6 Astra e Claude Fable 5.1
 
 `gpt-6-astra` e o novo default do runtime Codex (janela de 1.05M, esforco ate `ultra`; exige Codex CLI 0.153+). `claude-fable-5-1` substitui o Fable 5 no catalogo Claude, com migracao automatica de quem estava no modelo antigo.
@@ -100,9 +112,9 @@ Sai o `cli.js` interpretado, entra o binario nativo do Claude Code por plataform
 
 Dois runtimes novos por assinatura via CLI. **Grok**: CLI oficial da xAI, modelo `grok-4.5` com contexto de 500k e efforts `low`/`medium`/`high`. **Kimi K3**: flagship da Moonshot com contexto de 1M e efforts `low`/`high`/`max`; exige tier Moderato+ da assinatura. Ver as secoes dedicadas no fim deste README.
 
-### Claude Opus 5 default do orquestrador
+### Claude Opus 5.5 default do orquestrador
 
-O modelo default do app agora e `claude-opus-5` (`claude-models.ts:29`). A migration V142 atualiza DBs existentes preservando escolha customizada de modelo.
+O modelo default do app agora e `claude-opus-5-5` (`claude-models.ts`). A migration V157 atualiza DBs existentes preservando escolha customizada de modelo (antes dela, V142 tinha promovido para o Opus 5).
 
 ### Bug Pipeline (novo)
 
@@ -484,7 +496,7 @@ pnpm install --frozen-lockfile   # roda manualmente para ver o stderr real
 Se voce ja tem o LionClaw instalado e quer subir para esta release, o fluxo e basicamente `git pull` + reinstalar dependencias + rebuild nativo. **Nao existe um script unico de upgrade**; siga os passos do seu sistema.
 
 > [!NOTE]
-> O banco SQLite e o vendor Open Design se **auto-curam no boot**: as migrations pendentes (ate V151) sao aplicadas automaticamente e o boot-installer reinstala o vendor se detectar drift de ABI ou de lockfile. Voce nao roda migration na mao.
+> O banco SQLite e o vendor Open Design se **auto-curam no boot**: as migrations pendentes (ate V159) sao aplicadas automaticamente e o boot-installer reinstala o vendor se detectar drift de ABI ou de lockfile. Voce nao roda migration na mao.
 
 Antes de comecar, garanta que sua working tree esta limpa (`git status`) - o LionClaw nunca faz commit por voce.
 
@@ -492,8 +504,16 @@ Antes de comecar, garanta que sua working tree esta limpa (`git status`) - o Lio
 
 ```bash
 git pull
-npm install            # reinstala deps + recompila MCP servers via postinstall
+npm install                        # reinstala deps (inclui o Codex CLI 0.156 do projeto); o postinstall recompila os MCP servers e o sidecar Cursor
 ```
+
+Em `npm run dev` o app usa o Codex CLI que vem com o projeto (`node_modules/.bin/codex`), entao o `npm install` acima ja resolve. Quem roda o app **empacotado** usa o Codex global do sistema e precisa atualiza-lo tambem:
+
+```bash
+npm i -g @openai/codex@latest      # Codex CLI 0.155+ (gpt-6-sol/gpt-6-luna nao existem em CLI mais antigo)
+```
+
+Se o `npm install` nao recompilar os MCPs (ex.: erro de permissao ao limpar `node_modules` de algum servidor), rode `npm run build:mcps` de novo antes de subir o app.
 
 ### macOS / Linux
 
@@ -514,8 +534,9 @@ npm run dev
 
 No primeiro boot pos-upgrade:
 
-- As migrations rodam ate V151, com backup verificado do banco antes de qualquer upgrade de schema.
-- Os seed agents sao reconciliados (INSERT-ONLY; suas customizacoes sobrevivem).
+- As migrations rodam ate V159, com backup verificado do banco antes de qualquer upgrade de schema.
+- Os seed agents sao reconciliados (INSERT-ONLY; suas customizacoes sobrevivem). Nesta versao, quem estava no orquestrador padrao sobe para o Claude Opus 5.5 e os sub-agentes acompanham (V157/V159); o coder Codex dos workflows vai para o GPT-6 Sol (V158).
+- Se o orquestrador for o Codex e o chat recusar o modelo dizendo que ele nao e anunciado pelo CLI, o Codex CLI esta desatualizado: `npm i -g @openai/codex@latest` e reinicie.
 - O vendor Open Design reinstala se necessario.
 
 ---
@@ -673,10 +694,13 @@ Se o binario nao estiver no `PATH`, configure **Path customizado do binario** em
 
 | Modelo | Descricao no app |
 |--------|------------------|
-| `gpt-5.6-sol` | Frontier agentic (recomendado, **default**) |
+| `gpt-6-sol` | GPT-6 agentic, custo 5x menor que Astra (recomendado, **default**) |
+| `gpt-6-astra` | Frontier GPT-6, maximo de capacidade |
+| `gpt-6-luna` | GPT-6 rapido e barato |
+| `gpt-5.6-sol` | Frontier agentic da geracao 5.6 |
 | `gpt-5.6-terra` | Equilibrado, ~5.5 pela metade do preco |
 | `gpt-5.6-luna` | Rapido e barato |
-| `gpt-5.5` | Frontier, codex-tuned |
+| `gpt-5.5` | Codex-tuned; sai do Codex em 14/10/2026 |
 | `gpt-5.4` | Generalista frontier |
 | `gpt-5.4-mini` | Mais barato e rapido |
 | `gpt-5.3-codex` | Variante codex-tuned (legado) |
@@ -1556,25 +1580,24 @@ Se o keytar ainda falhar, o app usa fallback criptografado local.
 
 UNLICENSED - Proprietary (LionLabs)
 
-## v3.8
+## v3.9
 
-### Workflows Dinamicos: modo unico, orquestrador no comando
+### Conversas paralelas
 
-O modo baseado em manifesto e builder foi aposentado. O arquivo `.js` E o workflow: `agent()`, `parallel()`, `pipeline()`, `phase()`, com modelo e esforco escolhidos por node. A criacao e exclusiva do orquestrador do chat pelas tools do MCP `lionclaw-dynamic-workflows`; nao existe modal de criacao.
+O LionClaw deixou de ser uma conversa por vez. Agora sao duas (por enquanto), rodando de verdade ao mesmo tempo.
 
-Nao ha teto de custo por desenho: nenhum limite artificial interrompe um desenvolvimento no meio, e o freio operacional e pausar ou abortar pela conversa. O custo autoritativo do run fica em `dynamic_workflow_runs.total_cost_usd`.
+- **Duas conversas, dois cerebros.** Cada conversa tem fila, thread e orquestrador proprios. Uma responde enquanto a outra trabalha, sem uma esperar a outra terminar.
+- **Orquestrador por conversa.** Provedor, modelo e esforco sao escolhidos direto no composer, e a escolha vale so para aquela conversa. Da para deixar uma no Claude e outra no Codex simultaneamente, cada uma com o esforco que faz sentido para a tarefa dela.
+- **Clear por conversa.** O Clear continua fazendo tudo que fazia (resumo, dreaming, memoria semantica, grafo, USER.md e MEMORY.md), mas roda na conversa escolhida, sem congelar a outra. Um dreaming por vez, por desenho: duas conversas nunca escrevem na memoria ao mesmo tempo.
+- **Novo Chat virou Clear com escolha.** Com as duas conversas abertas, o botao pergunta qual delas recebe o Clear e mostra o estado de cada uma (disponivel, ocupada, em Clear, com pipeline rodando). So conversa disponivel pode ser escolhida.
+- **Pipeline por conversa.** Cada conversa conduz o seu pipeline, sem travar a outra. O pipeline fica preso a conversa que o iniciou e volta para ela depois de um Clear (migration V156).
+- **Nada se perde.** A thread nunca e apagada. Se o app fechar no meio de um Clear, a conversa reaparece em somente leitura com o botao "Refazer Clear", e o trabalho continua de onde parou.
 
-O commit de entrega chega no repositorio sem arquivo interno da plataforma, e arquivos seus versionados dentro de `.lionclaw/` sao preservados.
+### Kanban nativo
 
-### Orquestrador-driver e cockpit do run
+Gestao de demandas dentro do app: um quadro por repositorio registrado, operado tanto pela tela quanto pelo orquestrador no chat. A entrada **Canais** do menu deu lugar a **Kanban** (migration V147). Ver [Funcionalidades > Kanban nativo](#kanban-nativo).
 
-O host deriva um veredito deterministico por evento (sem LLM) e so o evento terminal de uma cadeia acorda o orquestrador. Nas fronteiras de fase vale um semaforo fail-closed: achado P1 aberto, retry pendente ou writer sem green-check pausam o run num gate para o orquestrador decidir. Ausencia de sinal nunca conta como verde.
-
-O wake e duravel: sobrevive a reinicio do app, e um run bloqueado no gate de entrega volta a acordar o orquestrador depois do restart. Contra loop, ha limite de wakes por run, com o turno seguinte entrando em modo somente-leitura.
-
-`intervene rerun-node` reexecuta um node travado com instrucao nova sem perder o journal ja gravado, e `adjust-next-node` injeta ajuste no proximo node que iniciar.
-
-A pagina do run ganhou cockpit com quatro abas: **Execucao**, **Custo** (por fase), **Saidas** e **Linha do tempo** com hora local. No chat, o workflow em execucao fica fixo no painel de Atividade, fora do scroll, e volta ao turno quando termina.
+O LionCode opera os quadros como cliente externo pelo MCP `lionclaw-kanban`, com o ator e o modelo identificados em cada evento do card.
 
 ### Runtime Cursor (nono runtime)
 
@@ -1590,29 +1613,64 @@ A lista de tarefas do agente passa a valer em todos os modelos, e os runtimes Cl
 
 ### Modelos
 
-`gpt-6-astra` e o novo default do runtime Codex: janela de 1.05M, escala de esforco ate `ultra`, tarifa de long-context acima de 272K. **Exige Codex CLI 0.153 ou superior**; em versao anterior o app recusa na hora, com a mensagem dizendo o motivo (migration V150).
+**Claude Opus 5.5** (`claude-opus-5-5`, lancado em 22/09): janela de 1M, saida de 128K, $4 / $20 por MTok (20% abaixo do Opus 5), esforco padrao `medium` e thinking sempre ligado. Exige o engine Claude Code 2.1.280+: o Agent SDK sobe para 0.3.280 (engine nativo 2.1.280) e o `npm install` traz o binario novo; com engine anterior a API devolve 400 "does not support this model". Vira o default do orquestrador e dos sub-agentes que estavam em Opus 4.8/4.7 (migration V157, preserva escolha customizada). Disponivel tambem via OpenRouter (`anthropic/claude-opus-5-5`).
+
+**GPT-6 Sol e Luna** (`gpt-6-sol` $2 / $10, `gpt-6-luna` $0.10 / $0.50; janela 1.05M; Sol com esforco ate `ultra`, Luna ate `max`): Sol vira o default do runtime Codex e do coder Codex dos workflows (migration V158). Nao existe GPT-6 Terra. **Exigem Codex CLI 0.155+**: o app confere o `model/list` do CLI instalado e, se o modelo nao for anunciado, recusa com a instrucao de atualizar (`npm i -g @openai/codex@latest`). Os dois tambem entram no runtime external (OpenAI direto e OpenRouter). `gpt-5.5` sai do Codex em 14/10/2026. Precos dos `gpt-5.6-*` corrigidos pela tabela oficial (Sol $4 / $20, Terra $2 / $12, Luna $0.20 / $1.20).
+
+`gpt-6-astra` tinha sido o default do runtime Codex desde a 3.8: janela de 1.05M, escala de esforco ate `ultra`, tarifa de long-context acima de 272K. **Exige Codex CLI 0.153 ou superior**; em versao anterior o app recusa na hora, com a mensagem dizendo o motivo (migration V150).
 
 `claude-fable-5-1` substitui o Fable 5 no catalogo Claude, com migracao automatica de `orchestrator_model` e `agents.model` (migration V148).
 
 No Z.ai, o **GLM-5.2 voltou a ser o padrao**. O 5.3 continua selecionavel, agora com aviso: a rota dele ainda entrega tool-calling instavel, e o 5.2 serve o mesmo modelo por alias.
 
-### Kanban nativo
+### Workflows Dinamicos: modo unico, orquestrador no comando
 
-Ver [Funcionalidades > Kanban nativo](#kanban-nativo). Migration V147.
+O modo baseado em manifesto e builder foi aposentado. O arquivo `.js` e o workflow: `agent()`, `parallel()`, `pipeline()`, `phase()`, com modelo e esforco escolhidos por node. A criacao e exclusiva do orquestrador do chat pelas tools do MCP `lionclaw-dynamic-workflows`; nao existe modal de criacao.
 
-### Contador de tokens da sessao
+Nao ha teto de custo por desenho: nenhum limite artificial interrompe um desenvolvimento no meio, e o freio operacional e pausar ou abortar pela conversa. O custo autoritativo do run fica em `dynamic_workflow_runs.total_cost_usd`.
 
-O numero de tokens e o custo da sessao no chat passam a ser **so do orquestrador**. O consumo dos sub-agentes sai da soma e fica no detalhe por tarefa. O rotulo "tokens nao reportados" foi removido: o numero aparece sempre.
+O host deriva um veredito deterministico por evento (sem LLM) e so o evento terminal de uma cadeia acorda o orquestrador. Nas fronteiras de fase vale um semaforo fail-closed: achado P1 aberto, retry pendente ou writer sem green-check pausam o run num gate para o orquestrador decidir. O wake e duravel: sobrevive a reinicio do app. `intervene rerun-node` reexecuta um node travado com instrucao nova sem perder o journal ja gravado, e `adjust-next-node` injeta ajuste no proximo node que iniciar.
+
+A pagina do run ganhou cockpit com quatro abas: **Execucao**, **Custo** (por fase), **Saidas** e **Linha do tempo** com hora local. No chat, o workflow em execucao fica fixo no painel de Atividade, fora do scroll, e volta ao turno quando termina.
+
+### Swarm (previa)
+
+Com o chip **Swarm** ligado no composer, o orquestrador dispara varios agentes em paralelo a partir do prompt, em dois modos: **comite** (varios especialistas no mesmo alvo) ou **fanout** (um perfil em varios alvos). Acompanhamento no painel de Atividade, limites em Settings. Uma run por conversa, so para analise: desenvolvimento continua nos workflows.
+
+### Artefatos HTML no painel lateral
+
+Pagina HTML que o agente gera abre num painel ao lado da conversa, com o codigo isolado do app. Arquivo gravado em `~/.lionclaw/artifacts` e reconhecido sozinho, sem depender de marcador no texto.
+
+A skill padrao **revisao-de-decisoes** transforma uma SPEC em pagina de aprovacao regra a regra (ok, ajustar ou rejeitar, com nota); no fim as decisoes sao exportadas e voltam para o documento.
+
+### Codex mais confiavel
+
+- **Pipelines e workflows voltaram a funcionar com o Codex.** As ferramentas do LionClaw recebem a conversa certa quando o orquestrador e o Codex.
+- **Erro com motivo.** Quando o Codex falha, a mensagem diz o que aconteceu (limite de uso atingido, rate limit, problema do provedor) em vez do generico "erro inesperado". Os limites da conta ficam registrados no log do app.
+- **Troca de modelo sem perder a conversa.** Mudar o modelo do Codex no meio do papo mantem a mesma thread e o contexto vivo.
+
+### Memoria e contexto
+
+- **Timeline de tools no historico.** Chamadas de ferramenta e resultados passam a ser gravados por turno (migration V155) e podem voltar ao historico da conversa. Liga em Settings; vem desligado por padrao.
+- **Contador de tokens da sessao.** O numero de tokens e o custo da sessao no chat passam a ser **so do orquestrador**. O consumo dos sub-agentes sai da soma e fica no detalhe por tarefa. O rotulo "tokens nao reportados" foi removido.
+
+### Interface
+
+- **Composer mais limpo.** O cronometro e o indicador de pipeline sairam da barra de baixo. O pipeline continua visivel na sidebar, com nome, fase e estado. Telegram virou so icone e o repositorio vira um "+".
+- Links de arquivo local abrem pelo sistema. Icone do app no formato do macOS.
 
 ### Correcoes
 
-- **Gateway MCP em desenvolvimento**: em dev o gateway subia sem ferramentas e a sessao nascia sem memoria, grafo, skills e integracoes, em qualquer modelo. Corrigido com `ELECTRON_RUN_AS_NODE` no spawn.
+- **Kimi**: tools MCP diretas recebem os schemas completos.
 - **Guard de versao do banco**: apos a migration do Fable 5.1 o app recusava o proprio banco recem-migrado.
+- **Higgsfield**: o boot deixou de apagar a sessao OAuth; ela passa a ser guardada no Vault.
+- **Gateway MCP em desenvolvimento**: em dev o gateway subia sem ferramentas e a sessao nascia sem memoria, grafo, skills e integracoes. Corrigido com `ELECTRON_RUN_AS_NODE` no spawn.
 - **Painel de Atividade**: o bloco do workflow nao sequestra mais a rolagem do painel.
 
 ### Repositorio
 
-Comentarios removidos do codigo do produto e a pasta `docs/` saiu do repositorio. Documento envelhece e desencontra do codigo; o nome e o teste valem mais que a explicacao.
+Comentarios removidos do codigo do produto, a pasta `docs/` saiu do repositorio e o codigo passou a ser formatado com Prettier (`npm run format`). Documento envelhece e desencontra do codigo; o nome e o teste valem mais que a explicacao.
+
 
 ## v3.7.1
 
@@ -1625,14 +1683,15 @@ O catalogo Claude desta release (`src/constants/claude-models.ts`):
 | Modelo | Observacao |
 |--------|------------|
 | `claude-fable-5-1` | Tier Mythos |
-| `claude-opus-5` | **Default do app** (`claude-models.ts:29`) |
+| `claude-opus-5-5` | **Default do app** (`claude-models.ts`) |
+| `claude-opus-5` | |
 | `claude-opus-4-8` | |
 | `claude-opus-4-7` | |
 | `claude-sonnet-5` | |
 | `claude-sonnet-4-6` | |
 | `claude-haiku-4-5-20251001` | |
 
-Opus 5, Opus 4.8+, Sonnet 5+ e Fable 5.1 usam **janela de contexto de 1M tokens**. Os modelos Claude-compat (GLM, MiniMax) declaram a janela real ao engine pela variavel `CLAUDE_CODE_MAX_CONTEXT_TOKENS` (injetada por `buildCompatEnv`/`buildZaiEnv`/`buildMinimaxTpEnv` a partir de `getContextWindow`); o antigo sufixo `[1m]` no nome do modelo foi removido porque o engine 0.3.x injeta uma beta que os endpoints compat rejeitam. A janela de cada modelo vem da fonte unica `getContextWindow`, a mesma que alimenta a barra de contexto do chat.
+Opus 5.5, Opus 5, Opus 4.8+, Sonnet 5+ e Fable 5.1 usam **janela de contexto de 1M tokens**. Os modelos Claude-compat (GLM, MiniMax) declaram a janela real ao engine pela variavel `CLAUDE_CODE_MAX_CONTEXT_TOKENS` (injetada por `buildCompatEnv`/`buildZaiEnv`/`buildMinimaxTpEnv` a partir de `getContextWindow`); o antigo sufixo `[1m]` no nome do modelo foi removido porque o engine 0.3.x injeta uma beta que os endpoints compat rejeitam. A janela de cada modelo vem da fonte unica `getContextWindow`, a mesma que alimenta a barra de contexto do chat.
 
 ### Ledger de execucoes
 

@@ -1,4 +1,3 @@
-
 import {
   translateProviderError,
   type LlmErrorCode,
@@ -34,11 +33,7 @@ export function extractOpenAiEmbeddedError(parsed: unknown): OpenAiEmbeddedError
     const message = typeof e['message'] === 'string' ? e['message'] : '';
     const type = typeof e['type'] === 'string' ? e['type'] : undefined;
     const code =
-      typeof e['code'] === 'string'
-        ? e['code']
-        : typeof e['code'] === 'number'
-          ? String(e['code'])
-          : undefined;
+      typeof e['code'] === 'string' ? e['code'] : typeof e['code'] === 'number' ? String(e['code']) : undefined;
     if (message || type || code) {
       return {
         message: message || type || code || 'erro do provider sem mensagem',

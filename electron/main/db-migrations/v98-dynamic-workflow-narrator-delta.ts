@@ -2,7 +2,6 @@ import type Database from 'better-sqlite3';
 import { PT_BR_BLOCK } from '../seed-agents/_shared/language-pt-br';
 import { dynamicWorkflowNarrator } from '../seed-agents/dynamic-workflow-narrator';
 
-
 const OLD_NARRATOR_PROMPT = `Voce e o Narrador do cockpit de workflow dinamico do LionClaw.
 
 ## Seu papel
@@ -27,7 +26,8 @@ Sua tarefa: escrever 1 ou 2 frases curtas, em PT-BR, explicando para o humano o 
 ${PT_BR_BLOCK}`;
 
 export function applyMigrationV98(db: Database.Database): void {
-  db.prepare(
-    `UPDATE agents SET system_prompt = ? WHERE id = 'dynamic-workflow-narrator' AND system_prompt = ?`,
-  ).run(dynamicWorkflowNarrator.systemPrompt, OLD_NARRATOR_PROMPT);
+  db.prepare(`UPDATE agents SET system_prompt = ? WHERE id = 'dynamic-workflow-narrator' AND system_prompt = ?`).run(
+    dynamicWorkflowNarrator.systemPrompt,
+    OLD_NARRATOR_PROMPT,
+  );
 }

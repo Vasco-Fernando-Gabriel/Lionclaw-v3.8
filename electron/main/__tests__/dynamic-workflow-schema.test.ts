@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   resolveStructuredOutput,
@@ -148,7 +147,7 @@ describe('workflow-schema: resolveStructuredOutput (AC-6)', () => {
     const attempt: SchemaAttemptFn = async ({ feedback }) => {
       feedbacks.push(feedback);
       call++;
-      if (call === 1) return { text: '{"summary":"falta items"}' }; // sem items
+      if (call === 1) return { text: '{"summary":"falta items"}' };
       return { text: '{"summary":"ok","items":[1]}' };
     };
     const res = await resolveStructuredOutput({
@@ -205,9 +204,7 @@ describe('workflow-schema: resolveStructuredOutput (AC-6)', () => {
       attempt,
       validator: (value) => {
         const v = value as { score?: number };
-        return (v.score ?? 0) >= 10
-          ? { ok: true, errors: [] }
-          : { ok: false, errors: ['score < 10'] };
+        return (v.score ?? 0) >= 10 ? { ok: true, errors: [] } : { ok: false, errors: ['score < 10'] };
       },
       maxAttempts: 1,
     });

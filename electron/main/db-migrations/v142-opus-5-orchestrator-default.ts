@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const PREVIOUS_DEFAULT_MODEL = 'claude-opus-4-8';
 const NEW_DEFAULT_MODEL = 'claude-opus-5';
 

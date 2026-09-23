@@ -8,8 +8,9 @@ node_modules/
 dist/
 out/
 release/
-# Evidencia dos spikes do runtime Cursor e versionada (a regra out/ acima a ignoraria)
-!docs/spike-f05/out/
+# SPECs, planos e logs de build ficam fora do repo (Projetos/DOCS LionClaw v4.0)
+/docs/
+.claude/*.md
 
 .env
 .env.local
@@ -30,7 +31,7 @@ electron.vite.config.*.mjs
 # Bundle fisico do sidecar Cursor (gerado no postinstall via build:cursor-sidecar)
 resources/cursor-sidecar/
 
-AUDIT-*.md
+/AUDIT-*.md
 BUGS_PENDENTES.md
 PIPELINE_REFACTOR_SPEC.md
 # SPEC-010 Workflows Dinamicos: doc de trabalho local (ainda em discussao, nao versionar)
@@ -84,5 +85,5 @@ test-results/
 playwright-report/
 
 # Contrato de agente: local, fora do repositorio
-AGENTS.md
-CLAUDE.md
+/AGENTS.md
+/CLAUDE.md

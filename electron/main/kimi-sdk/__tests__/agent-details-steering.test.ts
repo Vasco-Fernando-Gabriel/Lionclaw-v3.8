@@ -1,9 +1,5 @@
-
 import { describe, it, expect } from 'vitest';
-import {
-  appendAgentDetailsSteering,
-  KIMI_AGENT_DETAILS_TOOL_NAME,
-} from '../agent-details-steering';
+import { appendAgentDetailsSteering, KIMI_AGENT_DETAILS_TOOL_NAME } from '../agent-details-steering';
 
 describe('AC-62 — steering condicional do agent_details no Kimi', () => {
   const PROMPT = '## Instrucoes\n\nPrompt reconciliado da sessao.';

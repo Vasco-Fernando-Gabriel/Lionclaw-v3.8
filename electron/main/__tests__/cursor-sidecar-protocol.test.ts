@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   CURSOR_SIDECAR_RPC_PREFIX,
@@ -34,7 +33,7 @@ describe('cursor-sidecar protocol framing', () => {
     );
     feed('log qualquer do sdk\n');
     feed(encodeSidecarLine({ type: 'ping', id: 'p3' }));
-    feed('\n'); // linha vazia nao vira garbage
+    feed('\n');
     expect(received).toEqual([{ type: 'ping', id: 'p3' }]);
     expect(garbage).toEqual(['log qualquer do sdk']);
   });

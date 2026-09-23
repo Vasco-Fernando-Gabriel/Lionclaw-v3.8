@@ -1,18 +1,18 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const DEVOPS_ENGINEER_ID = 'devops-engineer';
 
 export const devopsEngineer: Omit<AgentConfig, 'sortOrder'> = {
   id: DEVOPS_ENGINEER_ID,
-  name: "Engenheiro DevOps",
-  description: "Use quando precisar construir ou otimizar automação de infraestrutura, pipelines CI/CD, estratégias de containerização e workflows de deploy para acelerar a entrega de software com confiabilidade",
-  model: "claude-opus-4-8",
+  name: 'Engenheiro DevOps',
+  description:
+    'Use quando precisar construir ou otimizar automação de infraestrutura, pipelines CI/CD, estratégias de containerização e workflows de deploy para acelerar a entrega de software com confiabilidade',
+  model: 'claude-opus-5-5',
   effort: 'medium' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,
   maxToolRounds: 5,
-  allowedTools: ["Read","Write","Edit","Bash","Glob","Grep"],
+  allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep'],
   mcpServers: [],
   isActive: true,
   skills: [],

@@ -1,7 +1,6 @@
 import { Network, Loader2, AlertTriangle, CircleAlert } from 'lucide-react';
 import type { RepoGraphBadgeState } from '@/types/repo-graph';
 
-
 interface RepoGraphBadgeProps {
   state: RepoGraphBadgeState;
   buildPercent?: number;
@@ -73,17 +72,11 @@ export function RepoGraphBadge({ state, buildPercent, onClick }: RepoGraphBadgeP
       onClick={visual.clickable && onClick ? onClick : undefined}
       className={`relative inline-flex items-center gap-1 px-1.5 py-1 rounded-md transition-colors ${visual.className}`}
     >
-      {state === 'building' ? (
-        <Loader2 size={14} className="animate-spin" />
-      ) : (
-        <Network size={14} />
-      )}
+      {state === 'building' ? <Loader2 size={14} className="animate-spin" /> : <Network size={14} />}
       {state === 'runtime-limited' && (
         <AlertTriangle size={9} className="absolute -top-0.5 -right-0.5 text-amber-400" />
       )}
-      {state === 'error' && (
-        <CircleAlert size={9} className="absolute -top-0.5 -right-0.5 text-red-400" />
-      )}
+      {state === 'error' && <CircleAlert size={9} className="absolute -top-0.5 -right-0.5 text-red-400" />}
       {state === 'building' && buildPercent !== undefined && (
         <span className="text-[10px] tabular-nums">{Math.round(buildPercent)}%</span>
       )}

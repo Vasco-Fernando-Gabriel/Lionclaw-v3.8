@@ -1,42 +1,3 @@
-/**
- * Security pipeline handlers (SPEC §4 / Sprint 8A.2).
- *
- * Houses the 9 per-phase methods previously inline in index.ts:
- *   - runSecurityPhase1                 (phase 1, auto — Repo Profiler)
- *   - runSecurityPhase2                 (phase 2, auto — multi-agent SecurityAuditRunner)
- *   - runSecurityPhase3                 (phase 3, auto — Deduplicador)
- *   - handleSecurityPhase4Message       (phase 4, conversation — Skeptic Security)
- *   - handleSecurityPhase5Message       (phase 5, conversation — Skeptic Quality)
- *   - runSecurityPhase6                 (phase 6, auto — SPEC Generator)
- *   - handleSecurityPhase7Message       (phase 7, conversation — SPEC Enricher)
- *   - handleSecurityPhase9Message       (phase 9, conversation — Sprint Validator)
- *
- * They were moved VERBATIM (mechanical move, not a rewrite) and reparameterized
- * from `this.X` to an injected `ctx: PipelineEngineContext` — the same late-bound
- * `buildXEngine` pattern as reset.ts / message-router.ts / lifecycle.ts and the
- * 8A.1 architecture-review extraction. index.ts keeps a thin delegator method for
- * each (so the existing sendMessage / runAutoPhase dispatch via
- * `this.handleSecurityX` / `this.runSecurityX` is unchanged) and builds the ctx
- * per call with bound delegates.
- *
- * INVARIANTS PRESERVED
- *  - INV-2 (R8): every agent run goes through `ctx.spawnAgent` — the single
- *    executeAgent entry point in index.ts. Phase 2's multi-agent fan-out goes
- *    through `ctx.createSecurityAuditRunner()`, which constructs a
- *    SecurityAuditRunner bound to the live engine; the runner reuses the SAME
- *    spawnAgent for its 7 specialists. No executeAgent here, no second copy.
- *  - INV-13 (SQL only in db.ts): phase 6's inline
- *    `getDb().prepare('UPDATE harness_projects SET spec_path = ?, updated_at = ...')`
- *    is replaced by `updateHarnessProject(projectId, { specPath })`, which runs the
- *    byte-identical SQL (`spec_path = ?, updated_at = datetime('now')`) — same
- *    behavior, no SQL outside db.ts (mirrors the 8A.1 / reset.ts Sprint 6 treatment).
- *  - INV-1 (IPC): all pipeline:* emits are on the same channels with the same
- *    payloads, unchanged.
- *  - Security phase 2 persistence rule: the 7 specialists' individual streams are
- *    NOT persisted — only the consolidated MD is emitted/persisted by the runner.
- *    Unchanged (the runner is untouched; this module only constructs it).
- */
-
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../../logger';
@@ -45,12 +6,7 @@ import { emitPipelineStream } from '../stream';
 import { persistMessage } from '../../pipeline-shared/persist';
 import { buildCodexResumePrompt } from '../codex-sessions';
 import { rethrowPipelinePause } from '../provider-auth';
-import {
-  getHarnessProject,
-  updateHarnessProject,
-  savePipelinePhaseMetrics,
-  patchSecuritySummaryJson,
-} from '../../db';
+import { getHarnessProject, updateHarnessProject, savePipelinePhaseMetrics, patchSecuritySummaryJson } from '../../db';
 import { runRepoProfiler } from '../../repo-profiler';
 import type { PhaseCallbacks } from '../../repo-profiler';
 import { parseSecurityFindings } from '../../security-findings-parser';
@@ -72,10 +28,6 @@ import type { AgentConfig } from '../../../../src/types';
 import type { PipelineEngineContext, HandlerPhaseState, ResolvedHarnessProject } from './context';
 
 const logger = createLogger('pipeline-engine');
-
-// -------------------------------------------------------------------------
-// Security Phase 1: Repo Profiler (auto)
-// -------------------------------------------------------------------------
 
 export async function runSecurityPhase1(
   ctx: PipelineEngineContext,
@@ -103,8 +55,6 @@ export async function runSecurityPhase1(
     'Security Phase 1: Repo Profiler completed',
   );
 
-  // Persist completion metrics so the UI stops showing phase 1 as "running".
-  // runAutoPhase created a 'running' row at entry; this call upserts it to 'completed'.
   savePipelinePhaseMetrics({
     projectId,
     phaseNumber: 1,
@@ -132,13 +82,8 @@ export async function runSecurityPhase1(
     awaitingUser: false,
   });
 
-  // Auto-advance to Phase 2 (Security Audit)
   await ctx.advanceToNextPhase(projectId, state);
 }
-
-// -------------------------------------------------------------------------
-// Security Phase 2: Security Audit (parallel multi-agent via SecurityAuditRunner)
-// -------------------------------------------------------------------------
 
 export async function runSecurityPhase2(
   ctx: PipelineEngineContext,
@@ -161,15 +106,12 @@ export async function runSecurityPhase2(
   };
 
   const consolidatedPath = await runner.run(
-    // HarnessProject e superset de PipelineProject pros campos usados pelo runner.
-    // Cast via unknown porque os types tem signatures de sobreposicao parcial.
     project as unknown as Parameters<typeof runner.run>[0],
     state.abortController,
     callbacks,
     (project as { pipelineDocsId?: string | null }).pipelineDocsId ?? null,
   );
 
-  // Bug #12: emit document-updated with the raw consolidated report from phase 2
   if (consolidatedPath && fs.existsSync(consolidatedPath)) {
     try {
       const content = fs.readFileSync(consolidatedPath, 'utf-8');
@@ -187,9 +129,6 @@ export async function runSecurityPhase2(
 
   logger.info({ projectId }, 'Security Phase 2: Security Audit completed');
 
-  // Mark the phase-level metrics row (sprint_index=-1) as completed. The runner
-  // writes per-agent rows (sprint_index=1..7); without this upsert the phase
-  // aggregate stays stuck on 'running' from runAutoPhase's initial insert.
   savePipelinePhaseMetrics({
     projectId,
     phaseNumber: 2,
@@ -209,13 +148,8 @@ export async function runSecurityPhase2(
     awaitingUser: false,
   });
 
-  // Auto-advance to Phase 3 (Deduplicador)
   await ctx.advanceToNextPhase(projectId, state);
 }
-
-// -------------------------------------------------------------------------
-// Security Phase 3: Deduplicador (auto, single agent)
-// -------------------------------------------------------------------------
 
 export async function runSecurityPhase3(
   ctx: PipelineEngineContext,
@@ -225,12 +159,8 @@ export async function runSecurityPhase3(
 ): Promise<void> {
   logger.info({ projectId }, 'Security Phase 3: Deduplicador starting');
 
-  // Resolve consolidated security report path via canonical helper.
   const project3 = getHarnessProject(projectId);
-  const consolidatedPath = findConsolidatedSecurityReport(
-    projectPath,
-    project3?.pipelineDocsId ?? null,
-  );
+  const consolidatedPath = findConsolidatedSecurityReport(projectPath, project3?.pipelineDocsId ?? null);
   const securityDir = path.join(projectPath, '.lionclaw', 'Security');
 
   const prompt = consolidatedPath
@@ -263,7 +193,6 @@ export async function runSecurityPhase3(
 
   logger.info({ projectId }, 'Security Phase 3: Deduplicador completed');
 
-  // Write Site 1: populate totalFindings + bySeverity after deduplication.
   if (consolidatedPath) {
     try {
       const parsed = parseSecurityFindings(consolidatedPath);
@@ -279,8 +208,6 @@ export async function runSecurityPhase3(
 
   emitPipelineStream({ projectId, phase: 3, type: 'done' });
 
-  // Bug #12: emit document-updated with the dedup output so the viewer
-  // reflects the post-deduplication state immediately.
   if (consolidatedPath && fs.existsSync(consolidatedPath)) {
     try {
       const content = fs.readFileSync(consolidatedPath, 'utf-8');
@@ -302,22 +229,8 @@ export async function runSecurityPhase3(
     awaitingUser: false,
   });
 
-  // Auto-advance to Phase 4 (Validador Cetico — conversation)
   await ctx.advanceToNextPhase(projectId, state);
 }
-
-// -------------------------------------------------------------------------
-// Security Phase 6: SPEC Generator (auto builder<->validator loop + review gate)
-//
-// SPEC-loop-fix §3: rewritten from a single spec-builder run into a builder<->
-// validator loop mirroring feature runPhase9. Up to 3 rounds, SPEC_BUILDER_ID ->
-// SECURITY_SPEC_VALIDATOR_ID; break when the validation report FILE contains the
-// literal '## Status: PASS'. On success, pauses at status 'awaiting-spec-review'
-// (awaitingUser:true) instead of auto-advancing, and auto-triggers the validator
-// greeting via handleSecurityPhase6SpecReviewMessage. Approval (index.ts approve
-// route + finalizeConversationPhase) advances to phase 7. Uses the split-aggregate
-// createEmptyMetrics/mergeMetrics style (NOT dev-v2's accumulate).
-// -------------------------------------------------------------------------
 
 export async function runSecurityPhase6(
   ctx: PipelineEngineContext,
@@ -328,21 +241,18 @@ export async function runSecurityPhase6(
   const projectPath = (project as { projectPath: string }).projectPath;
   logger.info({ projectId }, 'Security Phase 6: SPEC Generator (builder<->validator loop) starting');
 
-  // Find consolidated Security report via canonical helper (preserved logic)
   const securityDir = path.join(projectPath, '.lionclaw', 'Security');
   const securityReportPath = findConsolidatedSecurityReport(
     projectPath,
     (project as unknown as { pipelineDocsId?: string | null }).pipelineDocsId ?? null,
   );
 
-  // Derive scan ID from the file name for the SPEC output path (legacy basename pattern only)
   const scanIdMatch = securityReportPath
     ? path.basename(securityReportPath).match(/Security[-_]?(\d{8}[-_]\d{4,6})\.md/)
     : null;
   const scanId = scanIdMatch ? scanIdMatch[1] : 'unknown';
   const specOutputPath = path.join(securityDir, `SPECsecurity-${scanId}.md`);
 
-  // Mirrors feature's validationReportPath (dev-feature.ts:447).
   const validationReportPath = path.join(securityDir, 'security-spec-validation.md');
 
   const securityContextPrompt = securityReportPath
@@ -379,7 +289,6 @@ export async function runSecurityPhase6(
   let passed = false;
   let lastError: string | undefined;
 
-  // Aggregate metrics separately for builder and validator across rounds.
   const builderAgg = ctx.createEmptyMetrics();
   const validatorAgg = ctx.createEmptyMetrics();
   let builderModel = SPEC_BUILDER_ID;
@@ -401,11 +310,9 @@ export async function runSecurityPhase6(
         metadata: { round, maxRounds: MAX_ROUNDS },
       });
 
-      // --- Spec Builder ---
       let builderPrompt: string;
       if (round === 1) {
-        builderPrompt =
-          `Gere um SPEC completo a partir do relatorio de auditoria de seguranca.${securityContextPrompt}`;
+        builderPrompt = `Gere um SPEC completo a partir do relatorio de auditoria de seguranca.${securityContextPrompt}`;
       } else {
         const validationContent = fs.existsSync(validationReportPath)
           ? fs.readFileSync(validationReportPath, 'utf-8')
@@ -427,11 +334,21 @@ export async function runSecurityPhase6(
         onText: (chunk) => {
           builderOutput += chunk;
           emitPipelineStream({
-            projectId, phase: 6, type: 'text', content: chunk, metadata: { agent: 'spec-builder', round },
+            projectId,
+            phase: 6,
+            type: 'text',
+            content: chunk,
+            metadata: { agent: 'spec-builder', round },
           });
         },
         onToolUse: (toolName) => {
-          emitPipelineStream({ projectId, phase: 6, type: 'tool_call', tool: toolName, metadata: { agent: 'spec-builder', round } });
+          emitPipelineStream({
+            projectId,
+            phase: 6,
+            type: 'tool_call',
+            tool: toolName,
+            metadata: { agent: 'spec-builder', round },
+          });
         },
       });
 
@@ -453,7 +370,6 @@ export async function runSecurityPhase6(
 
       if (state.abortController.signal.aborted) break;
 
-      // --- Spec Validator ---
       emitIPC('pipeline:phase-changed', {
         projectId,
         phase: 6,
@@ -479,11 +395,21 @@ export async function runSecurityPhase6(
         onText: (chunk) => {
           validatorOutput += chunk;
           emitPipelineStream({
-            projectId, phase: 6, type: 'text', content: chunk, metadata: { agent: 'security-spec-validator', round },
+            projectId,
+            phase: 6,
+            type: 'text',
+            content: chunk,
+            metadata: { agent: 'security-spec-validator', round },
           });
         },
         onToolUse: (toolName) => {
-          emitPipelineStream({ projectId, phase: 6, type: 'tool_call', tool: toolName, metadata: { agent: 'security-spec-validator', round } });
+          emitPipelineStream({
+            projectId,
+            phase: 6,
+            type: 'tool_call',
+            tool: toolName,
+            metadata: { agent: 'security-spec-validator', round },
+          });
         },
       });
 
@@ -495,7 +421,6 @@ export async function runSecurityPhase6(
       validatorModel = validatorResult.model;
       validatorRuntime = validatorResult.runtime;
 
-      // Check validation result against the FILE content (not the agent stdout).
       const validationReport = fs.existsSync(validationReportPath)
         ? fs.readFileSync(validationReportPath, 'utf-8')
         : '';
@@ -520,7 +445,6 @@ export async function runSecurityPhase6(
 
   const durationMs = Date.now() - startedAt;
 
-  // Save 2 aggregated metric rows: builder (phase 6) + validator (sub-row 61).
   savePipelinePhaseMetrics({
     projectId,
     phaseNumber: 6,
@@ -581,16 +505,15 @@ export async function runSecurityPhase6(
     return;
   }
 
-  // Update project's specPath to point to the security SPEC.
-  // INV-13: routed through updateHarnessProject (byte-identical SQL:
-  // `spec_path = ?, updated_at = datetime('now')`) instead of inline getDb().prepare.
   updateHarnessProject(projectId, { specPath: specOutputPath });
 
   emitPipelineStream({ projectId, phase: 6, type: 'done' });
 
-  logger.info({ projectId, specOutputPath, passed }, 'Security Phase 6: auto loop complete — entering spec review conversation');
+  logger.info(
+    { projectId, specOutputPath, passed },
+    'Security Phase 6: auto loop complete — entering spec review conversation',
+  );
 
-  // Pause at the review gate (no auto-advance). Approval advances to phase 7.
   emitIPC('pipeline:phase-changed', {
     projectId,
     phase: 6,
@@ -600,8 +523,6 @@ export async function runSecurityPhase6(
     metadata: { passed },
   });
 
-  // Auto-trigger the Security Spec Validator greeting so it presents its analysis.
-  // Called directly in-file (both handlers live here); project passed as the 5th arg.
   const greetingProject = getHarnessProject(projectId);
   const greetingMsg =
     `Projeto "${greetingProject?.name ?? projectId}". ` +
@@ -618,13 +539,6 @@ export async function runSecurityPhase6(
   }
 }
 
-// -------------------------------------------------------------------------
-// Security Phase 6 (review gate): conversational SPEC review with the Security
-// Spec Validator. Mirrors feature handlePhase9Message + the security greeting
-// pattern of handleSecurityPhase7Message. Conversation-turn metrics under
-// sub-key 61 (like feature's 91). Approval advances to phase 7.
-// -------------------------------------------------------------------------
-
 export async function handleSecurityPhase6SpecReviewMessage(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -640,7 +554,6 @@ export async function handleSecurityPhase6SpecReviewMessage(
     state.continueSessions.set(sessionKey, sessionEntry);
   }
 
-  // Re-resolve the security SPEC + report + validation report paths.
   const securityDir = path.join(projectPath, '.lionclaw', 'Security');
   const securityReportPath = findConsolidatedSecurityReport(
     projectPath,
@@ -650,14 +563,12 @@ export async function handleSecurityPhase6SpecReviewMessage(
     ? path.basename(securityReportPath).match(/Security[-_]?(\d{8}[-_]\d{4,6})\.md/)
     : null;
   const scanId = scanIdMatch ? scanIdMatch[1] : 'unknown';
-  const specOutputPath = (project as { specPath?: string }).specPath
-    || path.join(securityDir, `SPECsecurity-${scanId}.md`);
+  const specOutputPath =
+    (project as { specPath?: string }).specPath || path.join(securityDir, `SPECsecurity-${scanId}.md`);
   const validationReportPath = path.join(securityDir, 'security-spec-validation.md');
 
   const isFirstTurn = !sessionEntry.alive;
-  const previousSpecContent = fs.existsSync(specOutputPath)
-    ? fs.readFileSync(specOutputPath, 'utf-8')
-    : '';
+  const previousSpecContent = fs.existsSync(specOutputPath) ? fs.readFileSync(specOutputPath, 'utf-8') : '';
 
   const prompt = isFirstTurn
     ? `## SPEC de correcoes de seguranca\nCaminho: ${specOutputPath}\n\n` +
@@ -677,7 +588,6 @@ export async function handleSecurityPhase6SpecReviewMessage(
     cwd: projectPath,
     abortController: state.abortController,
     continueSession: sessionEntry.alive,
-    // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
     rebuildPromptOnRetry: () =>
       buildCodexResumePrompt({
         projectId,
@@ -685,7 +595,9 @@ export async function handleSecurityPhase6SpecReviewMessage(
         preamble:
           `## SPEC de correcoes de seguranca\nCaminho: ${specOutputPath}\n\n` +
           `## Relatorio de auditoria consolidado\nCaminho: ${securityReportPath}\n\n` +
-          (fs.existsSync(validationReportPath) ? `## Relatorio de validacao\nCaminho: ${validationReportPath}\n\n` : '') +
+          (fs.existsSync(validationReportPath)
+            ? `## Relatorio de validacao\nCaminho: ${validationReportPath}\n\n`
+            : '') +
           `## Instrucao importante\n` +
           `Voce e o Security Spec Validator. Se o usuario pedir ajustes, edite o SPEC em ${specOutputPath} via Edit. ` +
           `Ao final, ele clicara em Aprovar para avancar para o Enricher.`,
@@ -720,16 +632,6 @@ export async function handleSecurityPhase6SpecReviewMessage(
   emitPipelineStream({ projectId, phase: 6, type: 'done' });
 }
 
-// =========================================================================
-// Security Pipeline Conversation Phases
-// =========================================================================
-
-// -------------------------------------------------------------------------
-// Security Phase 4: Validador Cetico
-// First runs security-skeptic-security then security-skeptic-quality automatically,
-// then opens human chat (awaitingUser=true).
-// -------------------------------------------------------------------------
-
 export async function handleSecurityPhase4Message(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -746,7 +648,6 @@ export async function handleSecurityPhase4Message(
     state.continueSessions.set(sessionKey, sessionEntry);
   }
 
-  // First message (greeting): run security skeptic once, then wait for user.
   if (!sessionEntry.alive) {
     const securityDir = path.join(projectPath, '.lionclaw', 'Security');
     const securityReportPath = findConsolidatedSecurityReport(
@@ -765,11 +666,15 @@ export async function handleSecurityPhase4Message(
         content: fs.readFileSync(securityReportPath, 'utf-8'),
       });
     } else {
-      logger.warn({ projectId, securityDir }, 'Security Phase 4: consolidated report not found, skipping document-updated emit');
+      logger.warn(
+        { projectId, securityDir },
+        'Security Phase 4: consolidated report not found, skipping document-updated emit',
+      );
     }
 
     logger.info({ projectId }, 'Security Phase 4: running security-skeptic-security');
-    const secPrompt = `Voce e o Validador Cetico de Seguranca nesta fase de VALIDACAO.\n\n` +
+    const secPrompt =
+      `Voce e o Validador Cetico de Seguranca nesta fase de VALIDACAO.\n\n` +
       `## Entrada\n` +
       `${reportContext}\n\n` +
       `## Seu escopo\n` +
@@ -815,11 +720,9 @@ export async function handleSecurityPhase4Message(
 
     logger.info({ projectId }, 'Security Phase 4: skeptic-security done, entering human chat');
 
-    // agent-completed signals the UI to surface the Aprovar button
     emitIPC('pipeline:agent-completed', { projectId });
     emitPipelineStream({ projectId, phase: 4, type: 'done' });
   } else {
-    // Follow-up turns: continue conversation with skeptic-security
     const phase4Acc = { text: '', completed: false };
     const followupResult = await ctx.spawnAgent('security-skeptic-security', message, {
       projectId,
@@ -827,7 +730,6 @@ export async function handleSecurityPhase4Message(
       cwd: projectPath,
       abortController: state.abortController,
       continueSession: true,
-      // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
       rebuildPromptOnRetry: () => {
         const resumeReportPath = findConsolidatedSecurityReport(
           projectPath,
@@ -866,11 +768,6 @@ export async function handleSecurityPhase4Message(
   }
 }
 
-// -------------------------------------------------------------------------
-// Security Phase 5: Skeptic Quality conversation
-// Runs the quality-focused skeptic once on first turn, then opens human chat.
-// -------------------------------------------------------------------------
-
 export async function handleSecurityPhase5Message(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -907,7 +804,8 @@ export async function handleSecurityPhase5Message(
     }
 
     logger.info({ projectId }, 'Security Phase 5: running security-skeptic-quality');
-    const qualPrompt = `Voce e o Validador Cetico de Qualidade nesta fase de VALIDACAO. O Skeptic Security ja revisou as secoes 01, 02, 03, 07; voce agora valida as secoes de QUALIDADE.\n\n` +
+    const qualPrompt =
+      `Voce e o Validador Cetico de Qualidade nesta fase de VALIDACAO. O Skeptic Security ja revisou as secoes 01, 02, 03, 07; voce agora valida as secoes de QUALIDADE.\n\n` +
       `## Entrada\n` +
       `${reportContext}\n\n` +
       `## Seu escopo\n` +
@@ -963,7 +861,6 @@ export async function handleSecurityPhase5Message(
       cwd: projectPath,
       abortController: state.abortController,
       continueSession: true,
-      // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
       rebuildPromptOnRetry: () => {
         const resumeReportPath = findConsolidatedSecurityReport(
           projectPath,
@@ -1002,10 +899,6 @@ export async function handleSecurityPhase5Message(
   }
 }
 
-// -------------------------------------------------------------------------
-// Security Phase 7: SPEC Enricher conversation
-// -------------------------------------------------------------------------
-
 export async function handleSecurityPhase7Message(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -1021,11 +914,16 @@ export async function handleSecurityPhase7Message(
     state.continueSessions.set(sessionKey, sessionEntry);
   }
 
-  const docsCtxSec7 = getPipelineDocsContext(projectPath, (project as { pipelineDocsId?: string | null }).pipelineDocsId ?? null);
+  const docsCtxSec7 = getPipelineDocsContext(
+    projectPath,
+    (project as { pipelineDocsId?: string | null }).pipelineDocsId ?? null,
+  );
 
-  // Resolve specPath (the SPECsecurity-*.md generated in Phase 5)
-  const specPath = (project as { specPath?: string }).specPath
-    || (docsCtxSec7 ? docsCtxSec7.resolveDocPath('SPEC.md') : path.join(projectPath, '.lionclaw', 'Security', 'SPECsecurity-unknown.md'));
+  const specPath =
+    (project as { specPath?: string }).specPath ||
+    (docsCtxSec7
+      ? docsCtxSec7.resolveDocPath('SPEC.md')
+      : path.join(projectPath, '.lionclaw', 'Security', 'SPECsecurity-unknown.md'));
 
   const isFirstTurn = !sessionEntry.alive;
   const previousSpecContent = fs.existsSync(specPath) ? fs.readFileSync(specPath, 'utf-8') : '';
@@ -1047,7 +945,6 @@ export async function handleSecurityPhase7Message(
     docsDir: docsCtxSec7?.docsDir,
     abortController: state.abortController,
     continueSession: sessionEntry.alive,
-    // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
     rebuildPromptOnRetry: () =>
       buildCodexResumePrompt({
         projectId,
@@ -1084,10 +981,6 @@ export async function handleSecurityPhase7Message(
   emitPipelineStream({ projectId, phase: 7, type: 'done' });
 }
 
-// -------------------------------------------------------------------------
-// Security Phase 9: Sprint Validator conversation
-// -------------------------------------------------------------------------
-
 export async function handleSecurityPhase9Message(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -1103,20 +996,25 @@ export async function handleSecurityPhase9Message(
     state.continueSessions.set(sessionKey, sessionEntry);
   }
 
-  const docsCtxSec9 = getPipelineDocsContext(projectPath, (project as { pipelineDocsId?: string | null }).pipelineDocsId ?? null);
-  const specPath = (project as { specPath?: string }).specPath || (docsCtxSec9
-    ? docsCtxSec9.resolveDocPath('SPEC.md')
-    : path.join(projectPath, 'SPEC.md'));
-  const sprintsPath = findHarnessSprintsReadPath({
-    id: (project as { id: string }).id,
+  const docsCtxSec9 = getPipelineDocsContext(
     projectPath,
-    pipelineDocsId: (project as { pipelineDocsId?: string | null }).pipelineDocsId ?? null,
-    sprintsJsonPath: (project as { sprintsJsonPath?: string }).sprintsJsonPath,
-  }) ?? resolveHarnessSprintsPath({
-    id: (project as { id: string }).id,
-    projectPath,
-    pipelineDocsId: (project as { pipelineDocsId?: string | null }).pipelineDocsId ?? null,
-  });
+    (project as { pipelineDocsId?: string | null }).pipelineDocsId ?? null,
+  );
+  const specPath =
+    (project as { specPath?: string }).specPath ||
+    (docsCtxSec9 ? docsCtxSec9.resolveDocPath('SPEC.md') : path.join(projectPath, 'SPEC.md'));
+  const sprintsPath =
+    findHarnessSprintsReadPath({
+      id: (project as { id: string }).id,
+      projectPath,
+      pipelineDocsId: (project as { pipelineDocsId?: string | null }).pipelineDocsId ?? null,
+      sprintsJsonPath: (project as { sprintsJsonPath?: string }).sprintsJsonPath,
+    }) ??
+    resolveHarnessSprintsPath({
+      id: (project as { id: string }).id,
+      projectPath,
+      pipelineDocsId: (project as { pipelineDocsId?: string | null }).pipelineDocsId ?? null,
+    });
   const reportPath = docsCtxSec9
     ? docsCtxSec9.resolveDocPath('sprint-validation.md')
     : path.join(projectPath, '.sprint-validation-report.md');
@@ -1142,7 +1040,6 @@ export async function handleSecurityPhase9Message(
     abortController: state.abortController,
     continueSession: sessionEntry.alive,
     docsDir: docsCtxSec9?.docsDir,
-    // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
     rebuildPromptOnRetry: () =>
       buildCodexResumePrompt({
         projectId,
@@ -1181,13 +1078,6 @@ export async function handleSecurityPhase9Message(
   emitPipelineStream({ projectId, phase: 9, type: 'done' });
 }
 
-// -------------------------------------------------------------------------
-// Resolution Tracker (security post-pipeline): re-scan the consolidated
-// Security report after sprints land and classify each finding as resolved /
-// partially_resolved / unresolved. Fire-and-forget from acceptSprint /
-// rejectSprint (8A.5: body moved here verbatim, this.X -> ctx.X).
-// -------------------------------------------------------------------------
-
 export async function runResolutionTracker(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -1196,14 +1086,15 @@ export async function runResolutionTracker(
   const projectPath = (project as { projectPath: string }).projectPath;
   logger.info({ projectId }, 'Resolution Tracker: starting post-pipeline scan');
 
-  // Find the original Security-*.md consolidated report
   const securityDir = path.join(projectPath, '.lionclaw', 'Security');
   const consolidatedFiles = fs.existsSync(securityDir)
-    ? fs.readdirSync(securityDir).filter((f) => /^Security-\d{8}-\d{4}\.md$/.test(f)).sort()
+    ? fs
+        .readdirSync(securityDir)
+        .filter((f) => /^Security-\d{8}-\d{4}\.md$/.test(f))
+        .sort()
     : [];
-  const securityReportPath = consolidatedFiles.length > 0
-    ? path.join(securityDir, consolidatedFiles[consolidatedFiles.length - 1]!)
-    : null;
+  const securityReportPath =
+    consolidatedFiles.length > 0 ? path.join(securityDir, consolidatedFiles[consolidatedFiles.length - 1]!) : null;
 
   if (!securityReportPath) {
     logger.warn({ projectId }, 'Resolution Tracker: no Security report found — skipping');
@@ -1262,7 +1153,6 @@ export async function runResolutionTracker(
     return;
   }
 
-  // Parse summary from generated JSON
   let summary: { resolved: number; partiallyResolved: number; unresolved: number } = {
     resolved: 0,
     partiallyResolved: 0,
@@ -1286,7 +1176,6 @@ export async function runResolutionTracker(
     logger.warn({ projectId, outputPath }, 'Resolution Tracker: failed to parse JSON output');
   }
 
-  // Write Site 3: persist resolved / partiallyResolved / unresolved in metadata.
   try {
     patchSecuritySummaryJson(projectId, {
       resolved: summary.resolved,
@@ -1298,8 +1187,6 @@ export async function runResolutionTracker(
     logger.warn({ err, projectId }, 'SecuritySummary: failed to write resolution fields, skipping');
   }
 
-  // The authoritative record is the SecurityScan-{id}.json on disk.
-  // Emit the summary in the IPC event so the frontend can update its store.
   logger.info({ projectId, summary, outputPath }, 'Resolution Tracker: completed');
 
   emitIPC('pipeline:resolution-tracker-complete', {

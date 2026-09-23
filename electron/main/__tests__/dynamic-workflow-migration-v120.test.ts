@@ -1,15 +1,9 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { dynamicWorkflowBuilder } from '../seed-agents/dynamic-workflow-builder';
 
-const V120_PATH = join(
-  __dirname,
-  '..',
-  'db-migrations',
-  'v120-dynamic-workflow-builder-single-gate.ts',
-);
+const V120_PATH = join(__dirname, '..', 'db-migrations', 'v120-dynamic-workflow-builder-single-gate.ts');
 const V120_SOURCE = readFileSync(V120_PATH, 'utf8');
 
 const NEW_GATE_CALL =

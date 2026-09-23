@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import path from 'path';
 import fs from 'fs';
@@ -23,16 +22,13 @@ import {
   BUG_PHASE2_SECTIONS,
 } from '../bug-paths';
 
-
 let tmpRoot: string;
 
 const RUN_ID = '20260101_120000-abcdef';
 
 const ALL_PHASES = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
-function makeProject(
-  overrides: Partial<{ id: string; runId?: string; outcome?: 'pending' | 'fix' | 'no-bug' }> = {},
-) {
+function makeProject(overrides: Partial<{ id: string; runId?: string; outcome?: 'pending' | 'fix' | 'no-bug' }> = {}) {
   return {
     id: overrides.id ?? 'project-test-bug-1',
     projectPath: tmpRoot,
@@ -42,9 +38,7 @@ function makeProject(
       evaluatorAgentId: 'harness-evaluator',
       plannerAgentId: 'harness-planner',
       stack: [],
-      bug: overrides.runId
-        ? { runId: overrides.runId, outcome: overrides.outcome }
-        : undefined,
+      bug: overrides.runId ? { runId: overrides.runId, outcome: overrides.outcome } : undefined,
     },
   };
 }
@@ -56,10 +50,8 @@ beforeEach(() => {
 afterEach(() => {
   try {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
 });
-
 
 describe('generateBugRunId', () => {
   it('matches format YYYYMMDD_HHmmss-<hex6>', () => {
@@ -141,16 +133,12 @@ describe('ensureBugContext', () => {
 
   it('is idempotent on re-call with the same runId (no new runId, no manifest overwrite)', () => {
     const result1 = ensureBugContext(makeProject());
-    const createdAt1 = JSON.parse(
-      fs.readFileSync(result1.context.manifestPath, 'utf-8'),
-    ).createdAt as string;
+    const createdAt1 = JSON.parse(fs.readFileSync(result1.context.manifestPath, 'utf-8')).createdAt as string;
 
     const result2 = ensureBugContext(makeProject({ runId: result1.context.runId }));
     expect(result2.runIdGenerated).toBe(false);
     expect(result2.context.runId).toBe(result1.context.runId);
-    const createdAt2 = JSON.parse(
-      fs.readFileSync(result2.context.manifestPath, 'utf-8'),
-    ).createdAt as string;
+    const createdAt2 = JSON.parse(fs.readFileSync(result2.context.manifestPath, 'utf-8')).createdAt as string;
     expect(createdAt2).toBe(createdAt1);
   });
 });
@@ -185,7 +173,6 @@ describe('patchBugManifest', () => {
   });
 });
 
-
 describe('resolveBugPhaseDocument — valores esperados FASE A FASE (secao 4.9.1)', () => {
   it('fase 1 -> diagnosticoPath', () => {
     const project = makeProject({ runId: RUN_ID });
@@ -196,11 +183,7 @@ describe('resolveBugPhaseDocument — valores esperados FASE A FASE (secao 4.9.1
   it('fase 2 -> [analise01, analise02, analise03] NESSA ORDEM', () => {
     const project = makeProject({ runId: RUN_ID });
     const ctx = getBugContext(project)!;
-    expect(resolveBugPhaseDocument(project, 2)).toEqual([
-      ctx.analise01Path,
-      ctx.analise02Path,
-      ctx.analise03Path,
-    ]);
+    expect(resolveBugPhaseDocument(project, 2)).toEqual([ctx.analise01Path, ctx.analise02Path, ctx.analise03Path]);
   });
 
   it('fase 3 -> planoPath', () => {
@@ -221,7 +204,7 @@ describe('resolveBugPhaseDocument — valores esperados FASE A FASE (secao 4.9.1
   });
 
   it('getBugContext === null -> devolve null nas 9 fases', () => {
-    const project = makeProject(); // sem runId
+    const project = makeProject();
     expect(getBugContext(project)).toBeNull();
     for (const phase of ALL_PHASES) {
       expect(resolveBugPhaseDocument(project, phase)).toBeNull();
@@ -238,11 +221,7 @@ describe('resolveBugPhaseDocument — valores esperados FASE A FASE (secao 4.9.1
 describe('BUG_PHASE2_SECTIONS', () => {
   it('tem exatamente 3 entradas, na ordem root-cause -> historian -> refuter', () => {
     expect(BUG_PHASE2_SECTIONS).toHaveLength(3);
-    expect(BUG_PHASE2_SECTIONS.map((s) => s.key)).toEqual([
-      'analise01Path',
-      'analise02Path',
-      'analise03Path',
-    ]);
+    expect(BUG_PHASE2_SECTIONS.map((s) => s.key)).toEqual(['analise01Path', 'analise02Path', 'analise03Path']);
     expect(BUG_PHASE2_SECTIONS[0].heading).toBe('## Analise 1 - Causa raiz (bug-root-cause-analyst)');
     expect(BUG_PHASE2_SECTIONS[1].heading).toBe('## Analise 2 - Historico e contexto (bug-context-historian)');
     expect(BUG_PHASE2_SECTIONS[2].heading).toBe('## Analise 3 - Refutacao adversarial (bug-hypothesis-refuter)');

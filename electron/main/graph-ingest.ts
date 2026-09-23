@@ -25,16 +25,15 @@ import { assertKnowledgeIngestFileSupported } from '../../src/constants/knowledg
 const logger = createLogger('graph-ingest');
 const dnsResolve = promisify(dns.resolve4);
 
-
 const MAX_CHUNKS_PER_JOB = 30;
 const CHUNK_SIZE = 25000;
 const CHUNK_OVERLAP_RATIO = 0.1;
-const QUALITY_THRESHOLD = 200; // chars per page for PDF quality
-const URL_MIN_CONTENT = 200; // minimum chars for URL extraction to be considered good
+const QUALITY_THRESHOLD = 200;
+const URL_MIN_CONTENT = 200;
 const MAX_PDF_VISION_PAGES = 20;
 
-const CLAUDE_INPUT_PRICE_PER_TOKEN = 3 / 1_000_000;   // $3/MTok
-const CLAUDE_OUTPUT_PRICE_PER_TOKEN = 15 / 1_000_000;  // $15/MTok
+const CLAUDE_INPUT_PRICE_PER_TOKEN = 3 / 1_000_000;
+const CLAUDE_OUTPUT_PRICE_PER_TOKEN = 15 / 1_000_000;
 const ESTIMATED_OUTPUT_TOKENS_PER_CHUNK = 800;
 
 const PRIVATE_RANGES = [
@@ -61,7 +60,6 @@ const PRIVATE_RANGES = [
   { prefix: '0.', mask: 8 },
 ];
 
-
 function getIngestSettings(): IngestSettings {
   return {
     visionModel: (getSetting('ingest_vision_model') as string) || '',
@@ -83,12 +81,9 @@ function assertIngestFileSize(filePath: string): void {
     throw new Error(`Invalid ingest file size limit: ${maxFileSizeMb} MB`);
   }
   if (sizeBytes > maxBytes) {
-    throw new Error(
-      `File too large: ${(sizeBytes / 1024 / 1024).toFixed(1)} MB (max ${maxFileSizeMb} MB)`,
-    );
+    throw new Error(`File too large: ${(sizeBytes / 1024 / 1024).toFixed(1)} MB (max ${maxFileSizeMb} MB)`);
   }
 }
-
 
 function isPrivateIP(ip: string): boolean {
   for (const range of PRIVATE_RANGES) {
@@ -130,15 +125,8 @@ export async function validateUrlSafety(urlStr: string): Promise<{ safe: boolean
   return { safe: true };
 }
 
-
-async function callClaudeVision(
-  imageBase64: string,
-  mimeType: string,
-  prompt: string,
-): Promise<string> {
-  const { runVisionPrompt, normalizeVisionMediaType } = await import(
-    './memory-pipeline/oneshot-vision'
-  );
+async function callClaudeVision(imageBase64: string, mimeType: string, prompt: string): Promise<string> {
+  const { runVisionPrompt, normalizeVisionMediaType } = await import('./memory-pipeline/oneshot-vision');
   const settings = getIngestSettings();
   return runVisionPrompt(
     [
@@ -156,7 +144,6 @@ async function callClaudeVision(
   );
 }
 
-
 export async function extractPdfText(filePath: string): Promise<{ text: string; quality: 'good' | 'poor' }> {
   const { getDocumentProxy, extractText } = await import('unpdf');
 
@@ -167,7 +154,10 @@ export async function extractPdfText(filePath: string): Promise<{ text: string; 
   const charsPerPage = totalPages > 0 ? text.length / totalPages : 0;
   const quality = charsPerPage > QUALITY_THRESHOLD ? 'good' : 'poor';
 
-  logger.info({ filePath, totalPages, charsPerPage: Math.round(charsPerPage), quality }, 'PDF text extracted via unpdf');
+  logger.info(
+    { filePath, totalPages, charsPerPage: Math.round(charsPerPage), quality },
+    'PDF text extracted via unpdf',
+  );
   return { text, quality };
 }
 
@@ -185,7 +175,7 @@ export async function extractPdfVision(filePath: string): Promise<string> {
   logger.info({ filePath, totalPages, pagesToProcess }, 'PDF Vision OCR starting');
 
   const pageTexts: string[] = [];
-  const SCALE = 2.0; // render at 2x for better OCR quality
+  const SCALE = 2.0;
 
   for (let i = 1; i <= pagesToProcess; i++) {
     const page = await pdf.getPage(i);
@@ -239,7 +229,6 @@ export async function extractPdf(filePath: string): Promise<string> {
   return extractPdfVision(filePath);
 }
 
-
 export async function extractDocx(filePath: string): Promise<string> {
   const mammoth = await import('mammoth');
   const buffer = fs.readFileSync(filePath);
@@ -248,7 +237,6 @@ export async function extractDocx(filePath: string): Promise<string> {
   logger.info({ filePath, textLength: result.value.length }, 'DOCX text extracted');
   return result.value;
 }
-
 
 export async function extractSpreadsheet(filePath: string): Promise<string> {
   const XLSX = await import('xlsx');
@@ -284,11 +272,9 @@ export async function extractSpreadsheet(filePath: string): Promise<string> {
   return text;
 }
 
-
 export function extractPlainText(filePath: string): string {
   return fs.readFileSync(filePath, 'utf-8');
 }
-
 
 export async function extractImage(filePath: string): Promise<string> {
   const ext = path.extname(filePath).toLowerCase();
@@ -315,7 +301,6 @@ export async function extractImage(filePath: string): Promise<string> {
   logger.info({ filePath, textLength: text.length }, 'Image content extracted via Vision');
   return text;
 }
-
 
 export async function extractAudio(filePath: string): Promise<string> {
   const settings = getIngestSettings();
@@ -360,7 +345,6 @@ async function transcribeWithElevenLabs(filePath: string): Promise<string> {
   logger.info({ filePath, textLength: result.text?.length }, 'ElevenLabs transcription complete');
   return result.text || '';
 }
-
 
 export async function extractUrlLight(url: string): Promise<string> {
   const { JSDOM } = await import('jsdom');
@@ -518,7 +502,6 @@ export async function extractUrl(url: string): Promise<string> {
   return '';
 }
 
-
 function isTableRow(line: string): boolean {
   return /^\|.*\|$/.test(line.trim());
 }
@@ -563,7 +546,7 @@ export function chunkText(text: string): string[] {
   }
 
   for (const line of lines) {
-    const lineLen = line.length + 1; // +1 for newline
+    const lineLen = line.length + 1;
 
     if (isTableRow(line)) {
       if (!insideTable) {
@@ -621,7 +604,6 @@ export function chunkText(text: string): string[] {
   return chunks;
 }
 
-
 function estimateTokens(charCount: number): number {
   return Math.ceil(charCount / 3.5);
 }
@@ -629,7 +611,7 @@ function estimateTokens(charCount: number): number {
 export function estimateCost(totalInputTokens: number, nChunks: number): number {
   const inputCost = totalInputTokens * CLAUDE_INPUT_PRICE_PER_TOKEN;
   const outputCost = nChunks * ESTIMATED_OUTPUT_TOKENS_PER_CHUNK * CLAUDE_OUTPUT_PRICE_PER_TOKEN;
-  return Math.round((inputCost + outputCost) * 10000) / 10000; // round to 4 decimal places
+  return Math.round((inputCost + outputCost) * 10000) / 10000;
 }
 
 export function estimateIngest(text: string): IngestEstimate {
@@ -660,7 +642,6 @@ export async function estimateIngestFile(filePath: string): Promise<IngestEstima
   const text = await extractByExtension(filePath);
   return estimateIngest(text);
 }
-
 
 const INGEST_PROMPT = `You are a knowledge extraction system. Analyze the following content and produce vault operations to populate a persistent knowledge graph.
 
@@ -699,7 +680,6 @@ CRITICAL: Output ONLY valid JSON array, no markdown fences, no explanation.`;
 
 const MAX_RETRIES = 3;
 
-
 let currentJobId: string | null = null;
 let cancelledJobs = new Set<string>();
 
@@ -727,24 +707,30 @@ async function extractByExtension(filePath: string): Promise<string> {
   assertKnowledgeIngestFileSupported(filePath);
   const ext = path.extname(filePath).toLowerCase();
   switch (ext) {
-    case '.pdf': return extractPdf(filePath);
-    case '.docx': return extractDocx(filePath);
+    case '.pdf':
+      return extractPdf(filePath);
+    case '.docx':
+      return extractDocx(filePath);
     case '.xlsx':
-    case '.csv': return extractSpreadsheet(filePath);
+    case '.csv':
+      return extractSpreadsheet(filePath);
     case '.md':
     case '.txt':
     case '.json':
     case '.yaml':
-    case '.yml': return extractPlainText(filePath);
+    case '.yml':
+      return extractPlainText(filePath);
     case '.png':
     case '.jpg':
     case '.jpeg':
-    case '.webp': return extractImage(filePath);
+    case '.webp':
+      return extractImage(filePath);
     case '.mp3':
     case '.wav':
     case '.ogg':
     case '.m4a':
-    case '.flac': return extractAudio(filePath);
+    case '.flac':
+      return extractAudio(filePath);
     default:
       return extractPlainText(filePath);
   }
@@ -807,8 +793,7 @@ async function processContent(
 
     const existingNotes = getExistingVaultFilesList();
 
-    const prompt = INGEST_PROMPT
-      .replace('{{SOURCE_NAME}}', sourceName)
+    const prompt = INGEST_PROMPT.replace('{{SOURCE_NAME}}', sourceName)
       .replace('{{SOURCE_TYPE}}', sourceType)
       .replace('{{CONTENT}}', chunk.substring(0, 50000))
       .replace('{{EXISTING_NOTES}}', existingNotes || '(none)');
@@ -873,7 +858,9 @@ async function processContent(
         } else {
           notesUpdated++;
         }
-        appendVaultLog(`[${new Date().toISOString()}] INGEST ${op.action.toUpperCase()} ${op.path} "${op.title}" (job:${jobId})`);
+        appendVaultLog(
+          `[${new Date().toISOString()}] INGEST ${op.action.toUpperCase()} ${op.path} "${op.title}" (job:${jobId})`,
+        );
       } else {
         logger.warn({ jobId, op: op.path, error: result.error }, 'Vault operation failed');
       }
@@ -912,7 +899,6 @@ async function processContent(
   logger.info({ jobId, notesCreated, notesUpdated }, 'Ingest job completed');
 }
 
-
 export async function ingestFile(filePath: string, fileName: string): Promise<IngestJob> {
   assertKnowledgeIngestFileSupported(filePath, fileName);
   assertIngestFileSize(filePath);
@@ -946,11 +932,13 @@ export async function ingestFile(filePath: string, fileName: string): Promise<In
   emitProgress(job);
 
   currentJobId = jobId;
-  processFileAsync(jobId, uploadPath, fileName).catch((err) => {
-    logger.error({ jobId, err }, 'ingestFile processing failed');
-  }).finally(() => {
-    if (currentJobId === jobId) currentJobId = null;
-  });
+  processFileAsync(jobId, uploadPath, fileName)
+    .catch((err) => {
+      logger.error({ jobId, err }, 'ingestFile processing failed');
+    })
+    .finally(() => {
+      if (currentJobId === jobId) currentJobId = null;
+    });
 
   return job;
 }
@@ -986,12 +974,7 @@ async function processFileAsync(jobId: string, filePath: string, fileName: strin
     let job = getIngestJob(jobId);
     if (job) emitProgress(job);
 
-    await processContent(
-      effectiveChunks,
-      fileName,
-      path.extname(fileName).replace('.', '') || 'file',
-      jobId,
-    );
+    await processContent(effectiveChunks, fileName, path.extname(fileName).replace('.', '') || 'file', jobId);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     updateIngestJob(jobId, {
@@ -1018,11 +1001,13 @@ export async function ingestUrl(url: string): Promise<IngestJob> {
   emitProgress(job);
 
   currentJobId = jobId;
-  processUrlAsync(jobId, url).catch((err) => {
-    logger.error({ jobId, err }, 'ingestUrl processing failed');
-  }).finally(() => {
-    if (currentJobId === jobId) currentJobId = null;
-  });
+  processUrlAsync(jobId, url)
+    .catch((err) => {
+      logger.error({ jobId, err }, 'ingestUrl processing failed');
+    })
+    .finally(() => {
+      if (currentJobId === jobId) currentJobId = null;
+    });
 
   return job;
 }
@@ -1084,11 +1069,13 @@ export async function ingestText(text: string, title?: string): Promise<IngestJo
   emitProgress(job);
 
   currentJobId = jobId;
-  processTextAsync(jobId, text, name).catch((err) => {
-    logger.error({ jobId, err }, 'ingestText processing failed');
-  }).finally(() => {
-    if (currentJobId === jobId) currentJobId = null;
-  });
+  processTextAsync(jobId, text, name)
+    .catch((err) => {
+      logger.error({ jobId, err }, 'ingestText processing failed');
+    })
+    .finally(() => {
+      if (currentJobId === jobId) currentJobId = null;
+    });
 
   return job;
 }
@@ -1156,17 +1143,13 @@ export async function resumeIngestJob(jobId: string): Promise<IngestJob> {
   emitProgress(updatedJob);
 
   currentJobId = jobId;
-  processContent(
-    effectiveChunks,
-    job.fileName,
-    job.sourceType,
-    jobId,
-    startFrom,
-  ).catch((err) => {
-    logger.error({ jobId, err }, 'resumeIngestJob processing failed');
-  }).finally(() => {
-    if (currentJobId === jobId) currentJobId = null;
-  });
+  processContent(effectiveChunks, job.fileName, job.sourceType, jobId, startFrom)
+    .catch((err) => {
+      logger.error({ jobId, err }, 'resumeIngestJob processing failed');
+    })
+    .finally(() => {
+      if (currentJobId === jobId) currentJobId = null;
+    });
 
   return updatedJob;
 }
@@ -1220,7 +1203,6 @@ export function getIngestHistory(): IngestJob[] {
   return getAllIngestJobs();
 }
 
-
 export function cleanOldUploads(): { removed: number } {
   const uploadsDir = path.join(getVaultRoot(), '..', 'uploads');
   if (!fs.existsSync(uploadsDir)) return { removed: 0 };
@@ -1257,7 +1239,6 @@ export function cleanOldUploads(): { removed: number } {
   return { removed };
 }
 
-
 const INGEST_QUEUE_DIR = path.join(getVaultRoot(), '.ingest-queue');
 
 export async function processIngestJob(jobFilePath: string): Promise<void> {
@@ -1265,15 +1246,17 @@ export async function processIngestJob(jobFilePath: string): Promise<void> {
     if (!fs.existsSync(jobFilePath)) return;
 
     const raw = fs.readFileSync(jobFilePath, 'utf-8');
-    const job = JSON.parse(raw) as { type: 'text' | 'file' | 'url'; content: string; title?: string | null; timestamp: string };
+    const job = JSON.parse(raw) as {
+      type: 'text' | 'file' | 'url';
+      content: string;
+      title?: string | null;
+      timestamp: string;
+    };
 
     logger.info({ jobFilePath, type: job.type }, 'Processing ingest queue job');
 
     if (job.type === 'file') {
-      assertKnowledgeIngestFileSupported(
-        job.content,
-        job.title || path.basename(job.content),
-      );
+      assertKnowledgeIngestFileSupported(job.content, job.title || path.basename(job.content));
     }
 
     fs.unlinkSync(jobFilePath);
@@ -1307,12 +1290,15 @@ export function startIngestQueueWatcher(): void {
         status: 'failed',
         error: 'Processo interrompido por reinicio do app',
       });
-      logger.warn({ jobId: job.id, fileName: job.fileName, previousStatus: job.status }, 'Recovered stuck ingest job on boot');
+      logger.warn(
+        { jobId: job.id, fileName: job.fileName, previousStatus: job.status },
+        'Recovered stuck ingest job on boot',
+      );
     }
     logger.info({ count: stuckJobs.length }, 'Marked stuck ingest jobs as failed on boot');
   }
 
-  const existingFiles = fs.readdirSync(INGEST_QUEUE_DIR).filter(f => f.endsWith('.json'));
+  const existingFiles = fs.readdirSync(INGEST_QUEUE_DIR).filter((f) => f.endsWith('.json'));
   for (const file of existingFiles) {
     processIngestJob(path.join(INGEST_QUEUE_DIR, file)).catch((err) => {
       logger.error({ file, err }, 'Failed to process pre-existing ingest job');

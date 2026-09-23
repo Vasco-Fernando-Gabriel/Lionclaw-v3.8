@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type {
   CliRunHandle,
@@ -53,20 +52,14 @@ vi.mock('../agent-runtime/kimi-availability', async () => {
       authenticated: sdkState.loggedIn,
       authMode: sdkState.loggedIn ? 'subscription' : 'none',
       managedProviderVerified: sdkState.loggedIn,
-      modelAvailable: sdkState.loggedIn && (
-        model === 'kimi-code/kimi-for-coding' || model === 'kimi-code/k3'
-      ),
+      modelAvailable: sdkState.loggedIn && (model === 'kimi-code/kimi-for-coding' || model === 'kimi-code/k3'),
       usable: sdkState.loggedIn,
       availableModels: sdkState.loggedIn ? ['kimi-code/kimi-for-coding'] : [],
     })),
   };
 });
 
-type SendImpl = (
-  prompt: string,
-  cb?: CliStreamCallbacks,
-  abortSignal?: AbortSignal,
-) => Promise<CliAgenticResponse>;
+type SendImpl = (prompt: string, cb?: CliStreamCallbacks, abortSignal?: AbortSignal) => Promise<CliAgenticResponse>;
 
 const driverState = vi.hoisted(() => ({
   sendImpl: undefined as unknown as SendImpl,
@@ -77,17 +70,12 @@ const driverState = vi.hoisted(() => ({
 
 vi.mock('../kimi-acp/acp-driver', () => ({
   getKimiAcpDriver: () => ({
-    createRun: (opts: CliRunOptions) =>
-      (driverState.createRun as (o: CliRunOptions) => Promise<CliRunHandle>)(opts),
+    createRun: (opts: CliRunOptions) => (driverState.createRun as (o: CliRunOptions) => Promise<CliRunHandle>)(opts),
   }),
 }));
 
 import { kimiExecutor, KimiAuthError, KimiUnavailableError, KimiQuotaError } from '../agent-runtime/kimi-executor';
-import {
-  _resetKimiPoolForTests,
-  _kimiPoolStateForTests,
-  acquireKimiSlot,
-} from '../agent-runtime/kimi-concurrency';
+import { _resetKimiPoolForTests, _kimiPoolStateForTests, acquireKimiSlot } from '../agent-runtime/kimi-concurrency';
 import { PERM_BYPASS_NO_GUARD } from '../agent-runtime/permission-profiles';
 import type { AgentExecutionRequest } from '../agent-runtime/types';
 import type { AgentQueryConfig } from '../agent-config-resolver';
@@ -97,9 +85,7 @@ import {
   resolveKimiStoredEffort,
 } from '../../../src/constants/kimi-models';
 
-function defaultResponse(
-  overrides: Partial<CliAgenticResponse> = {},
-): CliAgenticResponse {
+function defaultResponse(overrides: Partial<CliAgenticResponse> = {}): CliAgenticResponse {
   return {
     content: 'Hello world',
     usage: {
@@ -245,14 +231,16 @@ describe('kimi-executor dispatch end-to-end (SPEC-011 §6.1)', () => {
     await kimiExecutor.run(makeReq({ projectId: 'proj-9' }), makeConfig());
     await kimiExecutor.run(makeReq({ projectId: 'proj-9' }), makeConfig());
 
-    const runOptions = (driverState.createRun as ReturnType<typeof vi.fn>).mock.calls
-      .map(([options]) => options as {
-        profile: string;
-        surface: string;
-        ownerKind: string;
-        projectId?: string;
-        runId: string;
-      });
+    const runOptions = (driverState.createRun as ReturnType<typeof vi.fn>).mock.calls.map(
+      ([options]) =>
+        options as {
+          profile: string;
+          surface: string;
+          ownerKind: string;
+          projectId?: string;
+          runId: string;
+        },
+    );
     const opts = runOptions[0]!;
     const second = runOptions[1]!;
     expect(opts.profile).toBe('pipeline');
@@ -282,20 +270,16 @@ describe('kimi-executor dispatch end-to-end (SPEC-011 §6.1)', () => {
   it('rejeita override explicito de effort no K2.7 boolean-only antes de criar o run', async () => {
     const req = makeReq({ effortOverride: 'high' });
 
-    await expect(kimiExecutor.run(
-      req,
-      makeConfig({ model: 'kimi-code/kimi-for-coding', effort: 'low' }),
-    )).rejects.toBeInstanceOf(KimiEffortUnsupportedError);
+    await expect(
+      kimiExecutor.run(req, makeConfig({ model: 'kimi-code/kimi-for-coding', effort: 'low' })),
+    ).rejects.toBeInstanceOf(KimiEffortUnsupportedError);
 
     expect(driverState.createRun as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
     expect(_kimiPoolStateForTests().active).toBe(0);
   });
 
   it('aplica override explicito de effort no K3 tiered', async () => {
-    await kimiExecutor.run(
-      makeReq({ effortOverride: 'low' }),
-      makeConfig({ model: 'kimi-code/k3', effort: 'max' }),
-    );
+    await kimiExecutor.run(makeReq({ effortOverride: 'low' }), makeConfig({ model: 'kimi-code/k3', effort: 'max' }));
 
     expect((driverState.lastRunOptions as { effort?: string }).effort).toBe('low');
   });
@@ -335,10 +319,12 @@ describe('kimi-executor cost (SPEC-011 §7, decision 8)', () => {
     expect(res.metrics.costStatus).toBe('known');
     expect(res.metrics.tokenStatus).toBe('reported');
     expect(res.model).toBe('kimi-code/kimi-for-coding');
-    expect(res.metadata?.pricingSnapshot).toEqual(expect.objectContaining({
-      pricingVersion: 'test-pricing',
-      model: 'kimi-k2.7-code',
-    }));
+    expect(res.metadata?.pricingSnapshot).toEqual(
+      expect.objectContaining({
+        pricingVersion: 'test-pricing',
+        model: 'kimi-k2.7-code',
+      }),
+    );
     expect(res.metadata?.modelUsage).toEqual({
       'kimi-k2.7-code': {
         inputTokens: 1000,
@@ -374,55 +360,58 @@ describe('kimi-executor cost (SPEC-011 §7, decision 8)', () => {
 
   it('subscription usage unilateral permanece unknown/not_reported', async () => {
     sdkState.loggedIn = true;
-    driverState.sendImpl = async () => defaultResponse({
-      content: 'resposta parcial',
-      usage: { inputTokens: 100, outputTokens: 0, cacheReadTokens: 20, cacheCreationTokens: 0 },
-      toolUses: 0,
-    });
+    driverState.sendImpl = async () =>
+      defaultResponse({
+        content: 'resposta parcial',
+        usage: { inputTokens: 100, outputTokens: 0, cacheReadTokens: 20, cacheCreationTokens: 0 },
+        toolUses: 0,
+      });
 
     const res = await kimiExecutor.run(makeReq(), makeConfig());
 
-    expect(res.metrics).toEqual(expect.objectContaining({
-      inputTokens: 0,
-      outputTokens: 0,
-      costUsd: 0,
-      costStatus: 'unknown',
-      tokenStatus: 'not_reported',
-      costUnknownReason: 'no-usage-reported',
-    }));
+    expect(res.metrics).toEqual(
+      expect.objectContaining({
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: 0,
+        costStatus: 'unknown',
+        tokenStatus: 'not_reported',
+        costUnknownReason: 'no-usage-reported',
+      }),
+    );
     expect(calculateCostMock).not.toHaveBeenCalled();
   });
 
   it('turno somente-tool sem usage permanece unknown/not_reported', async () => {
     sdkState.loggedIn = true;
-    driverState.sendImpl = async () => defaultResponse({
-      content: '',
-      usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
-      toolUses: 1,
-    });
+    driverState.sendImpl = async () =>
+      defaultResponse({
+        content: '',
+        usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
+        toolUses: 1,
+      });
 
     const res = await kimiExecutor.run(makeReq(), makeConfig());
 
     expect(res.error).toBeUndefined();
-    expect(res.metrics).toEqual(expect.objectContaining({
-      toolUses: 1,
-      costUsd: 0,
-      costStatus: 'unknown',
-      tokenStatus: 'not_reported',
-      costUnknownReason: 'no-usage-reported',
-    }));
+    expect(res.metrics).toEqual(
+      expect.objectContaining({
+        toolUses: 1,
+        costUsd: 0,
+        costStatus: 'unknown',
+        tokenStatus: 'not_reported',
+        costUnknownReason: 'no-usage-reported',
+      }),
+    );
     expect(calculateCostMock).not.toHaveBeenCalled();
   });
-
 });
 
 describe('kimi-executor no-auth (SPEC-011 §6.7)', () => {
   it('not logged in => KimiAuthError, no run created, no $0 result (no api-key fallback)', async () => {
     sdkState.loggedIn = false;
 
-    await expect(kimiExecutor.run(makeReq(), makeConfig())).rejects.toBeInstanceOf(
-      KimiAuthError,
-    );
+    await expect(kimiExecutor.run(makeReq(), makeConfig())).rejects.toBeInstanceOf(KimiAuthError);
     expect(driverState.createRun as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
     expect(_kimiPoolStateForTests().active).toBe(0);
   });
@@ -438,7 +427,7 @@ describe('kimi-executor cancel (SPEC-011 §8, §4.2, §6.1 deferral #5)', () => 
     };
 
     await expect(kimiExecutor.run(req, makeConfig())).rejects.toBeInstanceOf(KimiUnavailableError);
-    expect((driverState.close as ReturnType<typeof vi.fn>)).toHaveBeenCalled();
+    expect(driverState.close as ReturnType<typeof vi.fn>).toHaveBeenCalled();
     expect(_kimiPoolStateForTests().active).toBe(0);
   });
 
@@ -460,7 +449,7 @@ describe('kimi-executor KI-3 wedge/error => phase FAILS (AC-S6.1b, SPEC §8.4)',
     const result = kimiExecutor.run(makeReq(), makeConfig());
     await expect(result).rejects.toBeInstanceOf(KimiUnavailableError);
     await expect(result).rejects.toThrow(/idle-timeout/);
-    expect((driverState.close as ReturnType<typeof vi.fn>)).toHaveBeenCalled();
+    expect(driverState.close as ReturnType<typeof vi.fn>).toHaveBeenCalled();
     expect(_kimiPoolStateForTests().active).toBe(0);
   });
 
@@ -469,9 +458,7 @@ describe('kimi-executor KI-3 wedge/error => phase FAILS (AC-S6.1b, SPEC §8.4)',
       throw new KimiUnavailableError('kimi acp error notification: model_error');
     };
 
-    await expect(kimiExecutor.run(makeReq(), makeConfig())).rejects.toBeInstanceOf(
-      KimiUnavailableError,
-    );
+    await expect(kimiExecutor.run(makeReq(), makeConfig())).rejects.toBeInstanceOf(KimiUnavailableError);
     expect(_kimiPoolStateForTests().active).toBe(0);
   });
 });
@@ -487,7 +474,7 @@ describe('kimi-executor quota degradation (SPEC-011 §6.8 G-08)', () => {
     const release = await acquireKimiSlot();
     expect(typeof release).toBe('function');
     release();
-    expect((driverState.close as ReturnType<typeof vi.fn>)).toHaveBeenCalled();
+    expect(driverState.close as ReturnType<typeof vi.fn>).toHaveBeenCalled();
   });
 
   it('a generic (non-quota) error propagates as-is (not wrapped in KimiQuotaError)', async () => {

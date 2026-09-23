@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Terminal, RefreshCw } from 'lucide-react';
 
@@ -66,8 +65,7 @@ export function ClaudeCodeSection() {
   const handleOpenLogin = async () => {
     try {
       await window.lionclaw.claudeCli.openLogin();
-    } catch {
-    }
+    } catch {}
   };
 
   const handleSavePath = async () => {
@@ -124,17 +122,15 @@ export function ClaudeCodeSection() {
       </h2>
 
       <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-4 space-y-4">
-
         {/* Tooltip / explicacao */}
         <p className="text-xs text-zinc-500">
           O Claude e o runtime nativo do LionClaw: o SDK usa o engine{' '}
-          <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">claude</code>{' '}
-          embutido do Claude Code (binario nativo) e autentica pela sua assinatura via{' '}
-          <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">claude login</code>{' '}
-          (OAuth em ~/.claude) ou por{' '}
-          <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">ANTHROPIC_API_KEY</code>{' '}
-          no Vault. Use o path customizado abaixo so se o binario nao resolver sozinho
-          (ex: node_modules em outro HD/SSD).
+          <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">claude</code> embutido do Claude
+          Code (binario nativo) e autentica pela sua assinatura via{' '}
+          <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">claude login</code> (OAuth em
+          ~/.claude) ou por{' '}
+          <code className="px-1 py-0.5 bg-zinc-800 rounded text-zinc-300 text-[10px]">ANTHROPIC_API_KEY</code> no Vault.
+          Use o path customizado abaixo so se o binario nao resolver sozinho (ex: node_modules em outro HD/SSD).
         </p>
 
         {/* Indicador de status */}
@@ -162,9 +158,7 @@ export function ClaudeCodeSection() {
 
         {/* Path resolvido (ajuda a debugar o caso do binario em outro HD) */}
         {status?.resolvedPath && (
-          <p className="text-[10px] text-zinc-600 font-mono break-all">
-            binario: {status.resolvedPath}
-          </p>
+          <p className="text-[10px] text-zinc-600 font-mono break-all">binario: {status.resolvedPath}</p>
         )}
 
         {/* Botoes de acao */}
@@ -177,9 +171,8 @@ export function ClaudeCodeSection() {
               Conectar Claude
             </button>
             <p className="text-[10px] text-zinc-600 max-w-xs">
-              Abre um terminal externo com{' '}
-              <code className="text-zinc-500">claude login</code>{' '}
-              para autenticacao OAuth via browser. Depois clique em "Testar conexao".
+              Abre um terminal externo com <code className="text-zinc-500">claude login</code> para autenticacao OAuth
+              via browser. Depois clique em "Testar conexao".
             </p>
           </div>
 
@@ -214,9 +207,7 @@ export function ClaudeCodeSection() {
 
         {/* Path customizado do binario */}
         <div className="pt-2 border-t border-zinc-800 space-y-2">
-          <label className="block text-xs text-zinc-400">
-            Path customizado do binario (opcional)
-          </label>
+          <label className="block text-xs text-zinc-400">Path customizado do binario (opcional)</label>
           <div className="flex gap-2">
             <input
               type="text"
@@ -234,9 +225,9 @@ export function ClaudeCodeSection() {
             </button>
           </div>
           <p className="text-[10px] text-zinc-600">
-            Deixe vazio para usar o engine embutido do SDK. Aceita o caminho de um
-            executavel claude/claude.exe (Claude Code 2.1.251 ou superior). Um cli.js
-            legado ainda roda via node, mas e a versao antiga e nao serve o Fable 5.1.
+            Deixe vazio para usar o engine embutido do SDK. Aceita o caminho de um executavel claude/claude.exe (Claude
+            Code 2.1.251 ou superior). Um cli.js legado ainda roda via node, mas e a versao antiga e nao serve o Fable
+            5.1.
           </p>
         </div>
       </div>

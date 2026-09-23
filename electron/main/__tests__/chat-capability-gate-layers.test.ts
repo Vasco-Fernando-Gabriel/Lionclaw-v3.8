@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const hoisted = vi.hoisted(() => {
@@ -33,6 +32,10 @@ vi.mock('../logger', () => ({
   }),
 }));
 
+vi.mock('../in-flight-desktop-session', () => ({
+  getInFlightDesktopSession: () => hoisted.state.activeChatSession?.id ?? null,
+  setInFlightDesktopSession: () => {},
+}));
 vi.mock('../db', () => ({
   getSetting: (key: string) => hoisted.settings[key],
   getAllAgents: () => [],
@@ -42,7 +45,6 @@ vi.mock('../db', () => ({
   getCompletedDocsCount: () => 0,
   insertAuditEntry: vi.fn(),
 }));
-
 
 const guardFn = vi.hoisted(() => vi.fn());
 const createPermissionGuardMock = vi.hoisted(() => vi.fn());
@@ -69,7 +71,6 @@ vi.mock('../mcp-tool-bridge', () => ({
   callMCPTool: callMock,
   teardownMCPsForSession: teardownMock,
 }));
-
 
 vi.mock('../secrets-vault', () => ({ getSecret: async () => null }));
 
@@ -114,16 +115,8 @@ vi.mock('../dynamic-workflows/workflow-control-core', () => ({
   dynamicWorkflowEditCoordinatorCore: vi.fn(),
 }));
 
-
-import {
-  initMcpInvoke,
-  invokeMcpTool,
-  _resetMcpInvokeForTesting,
-} from '../mcp-invoke';
-import {
-  dispatch,
-  type JsonRpcContext,
-} from '../local-ipc/jsonrpc-methods';
+import { initMcpInvoke, invokeMcpTool, _resetMcpInvokeForTesting } from '../mcp-invoke';
+import { dispatch, type JsonRpcContext } from '../local-ipc/jsonrpc-methods';
 import { lionMcpCall, lionMcpCallViaWrapper } from '../lion-sdk/tools/mcp';
 import {
   registerChatCapabilityTurn,
@@ -131,10 +124,7 @@ import {
   __resetChatCapabilityContextForTests,
   type ChatCapabilityTurnContextInput,
 } from '../chat-capability-context';
-import {
-  createInternalCapabilityLease,
-  __resetInternalCapabilityLeasesForTests,
-} from '../chat-capability-lease';
+import { createInternalCapabilityLease, __resetInternalCapabilityLeasesForTests } from '../chat-capability-lease';
 import { CHAT_CAPABILITY_GATE_MODE_SETTING_KEY } from '../chat-capability-gate';
 
 const PIPELINE_SERVER = 'lionclaw-pipeline-control';
@@ -149,9 +139,7 @@ function setMode(mode: 'shadow' | 'enforce' | undefined): void {
   }
 }
 
-function seedTurn(
-  overrides?: Partial<ChatCapabilityTurnContextInput>,
-): void {
+function seedTurn(overrides?: Partial<ChatCapabilityTurnContextInput>): void {
   const sessionId = overrides?.sessionId ?? 'sess-1';
   const turnId = overrides?.turnId ?? 'turn-1';
   registerChatCapabilityTurn({
@@ -223,7 +211,6 @@ beforeEach(() => {
   initMcpInvoke({ getWindow: () => null });
 });
 
-
 describe('camada 1 (invokeMcpTool)', () => {
   const gatedReq = {
     serverId: PIPELINE_SERVER,
@@ -233,12 +220,12 @@ describe('camada 1 (invokeMcpTool)', () => {
     sessionId: 'caps-sess',
     turnId: '1',
     allowedServerIds: [PIPELINE_SERVER, 'google-gmail'],
-    context: { surface: 'chat' as const },
+    context: { surface: 'chat' as const, sessionId: 'sess-1', turnId: 'turn-1' },
   };
 
   it('enforce + capability OFF -> isError com _meta {code, capability}, SEM spawn/discovery/guard', async () => {
     setMode('enforce');
-    seedTurn(); // off/off
+    seedTurn();
     const result = await invokeMcpTool(gatedReq);
     expect(result.isError).toBe(true);
     expect(result.content).toBe(PIPELINE_OFF_MESSAGE);
@@ -263,7 +250,7 @@ describe('camada 1 (invokeMcpTool)', () => {
   });
 
   it('shadow (DEFAULT) + capability OFF -> fluxo NORMAL (executa) + log "negaria"', async () => {
-    seedTurn(); // off/off, setting ausente
+    seedTurn();
     const result = await invokeMcpTool(gatedReq);
     expect(result.isError).toBeUndefined();
     expect(result.content).toBe('resultado-ok');
@@ -302,16 +289,15 @@ describe('camada 1 (invokeMcpTool)', () => {
   });
 });
 
-
 describe('camada 2 (dispatch pipeline_*/dynamic_workflow_*)', () => {
   it('enforce + capability OFF -> erro estruturado {error, code, capability} SEM executar o core', async () => {
     setMode('enforce');
-    seedTurn(); // off/off
+    seedTurn();
     const res = await dispatch(AUTHED_CTX, {
       jsonrpc: '2.0',
       id: 1,
       method: 'pipeline_list',
-      params: {},
+      params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' } },
     });
     expect(res.error).toBeUndefined();
     expect(res.result).toEqual({
@@ -329,7 +315,7 @@ describe('camada 2 (dispatch pipeline_*/dynamic_workflow_*)', () => {
       jsonrpc: '2.0',
       id: 2,
       method: 'dynamic_workflow_inspect',
-      params: { runId: 'r1' },
+      params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' }, runId: 'r1' },
     });
     expect(res.result).toMatchObject({
       code: 'chat_capability_workflows_disabled',
@@ -345,7 +331,7 @@ describe('camada 2 (dispatch pipeline_*/dynamic_workflow_*)', () => {
       jsonrpc: '2.0',
       id: 3,
       method: 'pipeline_list',
-      params: {},
+      params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' } },
     });
     expect(res.result).toMatchObject({ code: 'chat_capability_no_turn_context' });
     expect(pipelineListCoreMock).not.toHaveBeenCalled();
@@ -358,7 +344,7 @@ describe('camada 2 (dispatch pipeline_*/dynamic_workflow_*)', () => {
       jsonrpc: '2.0',
       id: 4,
       method: 'pipeline_list',
-      params: {},
+      params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' } },
     });
     expect(res.result).toEqual([{ id: 'p1' }]);
     expect(pipelineListCoreMock).toHaveBeenCalledTimes(1);
@@ -379,12 +365,12 @@ describe('camada 2 (dispatch pipeline_*/dynamic_workflow_*)', () => {
       internalLeaseToken: token,
       driveProjectId: 'proj-1',
       driveTurnId: 'dt-1',
-    }); // toggles off/off — a lease e quem libera
+    });
     const res = await dispatch(AUTHED_CTX, {
       jsonrpc: '2.0',
       id: 5,
       method: 'pipeline_reply',
-      params: { id: 'p1', message: 'go' },
+      params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' }, id: 'p1', message: 'go' },
     });
     expect(res.error).toBeUndefined();
     expect(res.result).toEqual({ replied: true });
@@ -393,12 +379,12 @@ describe('camada 2 (dispatch pipeline_*/dynamic_workflow_*)', () => {
   });
 
   it('shadow (DEFAULT) + capability OFF -> fluxo IDENTICO ao pre-S4 (executa + log S3b)', async () => {
-    seedTurn(); // off/off, setting ausente
+    seedTurn();
     const res = await dispatch(AUTHED_CTX, {
       jsonrpc: '2.0',
       id: 6,
       method: 'pipeline_list',
-      params: {},
+      params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' } },
     });
     expect(res.error).toBeUndefined();
     expect(res.result).toEqual([{ id: 'p1' }]);
@@ -408,55 +394,50 @@ describe('camada 2 (dispatch pipeline_*/dynamic_workflow_*)', () => {
   });
 
   it('shadow (DEFAULT) + conexao anonima -> nada negado (comportamento pre-S4)', async () => {
+    seedTurn();
     const res = await dispatch(ANON_CTX, {
       jsonrpc: '2.0',
       id: 7,
       method: 'pipeline_list',
-      params: {},
+      params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' } },
     });
     expect(res.error).toBeUndefined();
     expect(res.result).toEqual([{ id: 'p1' }]);
   });
 
   it('S6b (S4-ii): shadow + capability OFF -> executa normal E loga o would-deny da capability (alem do S3b)', async () => {
-    seedTurn(); // off/off, setting ausente = shadow
+    seedTurn();
     const res = await dispatch(AUTHED_CTX, {
       jsonrpc: '2.0',
       id: 9,
       method: 'pipeline_list',
-      params: {},
+      params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' } },
     });
     expect(res.error).toBeUndefined();
     expect(res.result).toEqual([{ id: 'p1' }]);
     expect(pipelineListCoreMock).toHaveBeenCalledTimes(1);
     const negaria = hoisted.logEntries.filter((e) => e.msg.includes('negaria'));
     expect(negaria).toHaveLength(1);
-    expect(negaria[0].msg).toContain(
-      'negaria pipelineControl em lionclaw-pipeline-control.pipeline_list',
-    );
+    expect(negaria[0].msg).toContain('negaria pipelineControl em lionclaw-pipeline-control.pipeline_list');
     expect((negaria[0].data as Record<string, unknown>)['shadow']).toBe(true);
     const s3b = hoisted.logEntries.filter((e) => e.msg.startsWith('S3b shadow'));
     expect(s3b).toHaveLength(1);
   });
 
   it('S6b: shadow + conexao anonima -> executa E loga would-deny fail-closed (no-turn-context)', async () => {
-    seedTurn(); // turno ativo existe, mas a conexao nao provou quem e
+    seedTurn();
     const res = await dispatch(ANON_CTX, {
       jsonrpc: '2.0',
       id: 10,
       method: 'pipeline_list',
-      params: {},
+      params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' } },
     });
     expect(res.error).toBeUndefined();
     expect(res.result).toEqual([{ id: 'p1' }]);
     const negaria = hoisted.logEntries.filter((e) => e.msg.includes('negaria'));
     expect(negaria).toHaveLength(1);
-    expect((negaria[0].data as Record<string, unknown>)['reason']).toBe(
-      'unauthenticated-connection',
-    );
-    expect((negaria[0].data as Record<string, unknown>)['code']).toBe(
-      'chat_capability_no_turn_context',
-    );
+    expect((negaria[0].data as Record<string, unknown>)['reason']).toBe('unauthenticated-connection');
+    expect((negaria[0].data as Record<string, unknown>)['code']).toBe('chat_capability_no_turn_context');
   });
 
   it('S6b: shadow com lease system-event NAO esgota a lease (dryRun); so o enforce consome', async () => {
@@ -483,7 +464,7 @@ describe('camada 2 (dispatch pipeline_*/dynamic_workflow_*)', () => {
         jsonrpc: '2.0',
         id: 11 + i,
         method: 'pipeline_reply',
-        params: { id: 'p1', message: 'go' },
+        params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' }, id: 'p1', message: 'go' },
       });
       expect(res.result).toEqual({ replied: true });
     }
@@ -494,7 +475,7 @@ describe('camada 2 (dispatch pipeline_*/dynamic_workflow_*)', () => {
       jsonrpc: '2.0',
       id: 20,
       method: 'pipeline_reply',
-      params: { id: 'p1', message: 'go' },
+      params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' }, id: 'p1', message: 'go' },
     });
     expect(ok.result).toEqual({ replied: true });
 
@@ -502,10 +483,10 @@ describe('camada 2 (dispatch pipeline_*/dynamic_workflow_*)', () => {
       jsonrpc: '2.0',
       id: 21,
       method: 'pipeline_reply',
-      params: { id: 'p1', message: 'go' },
+      params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' }, id: 'p1', message: 'go' },
     });
     expect(denied.result).toMatchObject({ code: 'chat_capability_lease_invalid' });
-    expect(pipelineReplyCoreMock).toHaveBeenCalledTimes(4); // 3 shadow + 1 enforce
+    expect(pipelineReplyCoreMock).toHaveBeenCalledTimes(4);
   });
 
   it('metodo NAO-gated nunca consulta o gate (sem log, sem negacao) mesmo em enforce', async () => {
@@ -514,21 +495,25 @@ describe('camada 2 (dispatch pipeline_*/dynamic_workflow_*)', () => {
       jsonrpc: '2.0',
       id: 8,
       method: 'list_skills',
-      params: {},
+      params: { ...{ sessionId: 'sess-1', turnId: 'turn-1' } },
     });
     expect(res.error).toBeUndefined();
     expect(res.result).toEqual([]);
   });
 });
 
-
 describe('camada 3 (lion mcp_call)', () => {
   it('lionMcpCallViaWrapper herda a camada 1: enforce + OFF -> isError com a mensagem A.7', async () => {
     setMode('enforce');
-    seedTurn(); // off/off
+    seedTurn();
     const result = await lionMcpCallViaWrapper(
       { server_id: PIPELINE_SERVER, tool: 'pipeline_list', args: {} },
-      { sessionId: 's', turnId: '1', allowedServerIds: [PIPELINE_SERVER] },
+      {
+        sessionId: 's',
+        turnId: '1',
+        allowedServerIds: [PIPELINE_SERVER],
+        binding: { sessionId: 'sess-1', turnId: 'turn-1' },
+      },
     );
     expect(result.isError).toBe(true);
     expect(result.content).toBe(PIPELINE_OFF_MESSAGE);
@@ -537,23 +522,25 @@ describe('camada 3 (lion mcp_call)', () => {
 
   it('lionMcpCall legado: enforce + OFF -> nega ANTES do bridge; shadow -> segue normal', async () => {
     setMode('enforce');
-    seedTurn(); // off/off
+    seedTurn();
     const client = {
       connections: [{ serverId: PIPELINE_SERVER }],
     } as never;
-    const denied = await lionMcpCall(client, {
-      server_id: PIPELINE_SERVER,
-      tool: 'pipeline_list',
-    });
+    const denied = await lionMcpCall(
+      client,
+      { server_id: PIPELINE_SERVER, tool: 'pipeline_list' },
+      { sessionId: 'sess-1', turnId: 'turn-1' },
+    );
     expect(denied.ok).toBe(false);
     expect(denied.error).toBe(PIPELINE_OFF_MESSAGE);
     expect(callMock).not.toHaveBeenCalled();
 
-    setMode(undefined); // shadow default
-    const allowed = await lionMcpCall(client, {
-      server_id: PIPELINE_SERVER,
-      tool: 'pipeline_list',
-    });
+    setMode(undefined);
+    const allowed = await lionMcpCall(
+      client,
+      { server_id: PIPELINE_SERVER, tool: 'pipeline_list' },
+      { sessionId: 'sess-1', turnId: 'turn-1' },
+    );
     expect(allowed.ok).toBe(true);
     expect(allowed.content).toBe('resultado-ok');
     expect(callMock).toHaveBeenCalledTimes(1);

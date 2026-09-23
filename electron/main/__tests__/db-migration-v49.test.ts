@@ -1,4 +1,3 @@
-
 import Database from 'better-sqlite3';
 import { describe, it, expect, beforeEach } from 'vitest';
 
@@ -45,10 +44,17 @@ describe('db-migration-v49: analise estrutural do SQL', () => {
 
   it('atribui squad security aos 11 security agents quando squad IS NULL', () => {
     const securityIds = [
-      'security-secrets-scanner', 'security-auth-auditor', 'security-isolation-inspector',
-      'security-duplication-detector', 'security-logic-analyzer', 'security-standards-checker',
-      'security-owasp-scanner', 'security-deduplicator', 'security-skeptic-security',
-      'security-skeptic-quality', 'security-resolution-tracker',
+      'security-secrets-scanner',
+      'security-auth-auditor',
+      'security-isolation-inspector',
+      'security-duplication-detector',
+      'security-logic-analyzer',
+      'security-standards-checker',
+      'security-owasp-scanner',
+      'security-deduplicator',
+      'security-skeptic-security',
+      'security-skeptic-quality',
+      'security-resolution-tracker',
     ];
     for (const id of securityIds) {
       expect(MIGRATION_V49_FIX_AGENT_SQUADS).toContain(`'${id}'`);
@@ -57,8 +63,7 @@ describe('db-migration-v49: analise estrutural do SQL', () => {
   });
 
   it('todas as 4 statements sao insert-only (nao tocam squads ja preenchidos com outros valores)', () => {
-    const statements = MIGRATION_V49_FIX_AGENT_SQUADS
-      .split(';')
+    const statements = MIGRATION_V49_FIX_AGENT_SQUADS.split(';')
       .map((s) => s.trim())
       .filter((s) => s.startsWith('UPDATE'));
     expect(statements).toHaveLength(4);
@@ -70,13 +75,27 @@ describe('db-migration-v49: analise estrutural do SQL', () => {
 
   it('total de IDs reconciliados: 4 (tech) + 3 (harness) + 3 (pipeline) + 11 (security) = 21', () => {
     const allIds = [
-      'tech-database', 'tech-backend', 'tech-frontend', 'tech-security',
-      'harness-coder', 'harness-planner', 'harness-evaluator',
-      'repo-profiler', 'spec-builder', 'spec-validator',
-      'security-secrets-scanner', 'security-auth-auditor', 'security-isolation-inspector',
-      'security-duplication-detector', 'security-logic-analyzer', 'security-standards-checker',
-      'security-owasp-scanner', 'security-deduplicator', 'security-skeptic-security',
-      'security-skeptic-quality', 'security-resolution-tracker',
+      'tech-database',
+      'tech-backend',
+      'tech-frontend',
+      'tech-security',
+      'harness-coder',
+      'harness-planner',
+      'harness-evaluator',
+      'repo-profiler',
+      'spec-builder',
+      'spec-validator',
+      'security-secrets-scanner',
+      'security-auth-auditor',
+      'security-isolation-inspector',
+      'security-duplication-detector',
+      'security-logic-analyzer',
+      'security-standards-checker',
+      'security-owasp-scanner',
+      'security-deduplicator',
+      'security-skeptic-security',
+      'security-skeptic-quality',
+      'security-resolution-tracker',
     ];
     expect(allIds).toHaveLength(21);
     for (const id of allIds) {
@@ -95,7 +114,6 @@ describe('db-migration-v49: applyMigrationV49Tools (allowed_tools secrets-scanne
     expect(JSON.parse(NEW_TOOLS)).toHaveLength(4);
   });
 });
-
 
 const SCHEMA_AGENTS = `
   CREATE TABLE agents (
@@ -118,17 +136,13 @@ const OLD_TOOLS = '["Read","Grep","Glob"]';
 const NEW_TOOLS = '["Read","Grep","Glob","Bash"]';
 
 function applyV49Tools(db: Database.Database): void {
-  db.prepare(
-    `UPDATE agents SET allowed_tools = ? WHERE id = 'security-secrets-scanner' AND allowed_tools = ?`,
-  ).run(NEW_TOOLS, OLD_TOOLS);
+  db.prepare(`UPDATE agents SET allowed_tools = ? WHERE id = 'security-secrets-scanner' AND allowed_tools = ?`).run(
+    NEW_TOOLS,
+    OLD_TOOLS,
+  );
 }
 
-function insertAgent(
-  db: Database.Database,
-  id: string,
-  squad: string | null,
-  allowed_tools: string = '[]',
-): void {
+function insertAgent(db: Database.Database, id: string, squad: string | null, allowed_tools: string = '[]'): void {
   db.prepare(
     `INSERT INTO agents (id, name, description, system_prompt, squad, allowed_tools) VALUES (?, ?, ?, ?, ?, ?)`,
   ).run(id, id, `desc-${id}`, `prompt-${id}`, squad, allowed_tools);
@@ -150,9 +164,10 @@ describe('db-migration-v49: execucao em banco in-memory', () => {
 
     db.exec(MIGRATION_V49_FIX_AGENT_SQUADS);
 
-    const rows = db
-      .prepare(`SELECT id, squad FROM agents WHERE id LIKE 'tech-%' ORDER BY id`)
-      .all() as Array<{ id: string; squad: string }>;
+    const rows = db.prepare(`SELECT id, squad FROM agents WHERE id LIKE 'tech-%' ORDER BY id`).all() as Array<{
+      id: string;
+      squad: string;
+    }>;
     expect(rows).toEqual([
       { id: 'tech-backend', squad: 'pipeline' },
       { id: 'tech-database', squad: 'pipeline' },
@@ -168,9 +183,10 @@ describe('db-migration-v49: execucao em banco in-memory', () => {
 
     db.exec(MIGRATION_V49_FIX_AGENT_SQUADS);
 
-    const rows = db
-      .prepare(`SELECT id, squad FROM agents WHERE id LIKE 'harness-%' ORDER BY id`)
-      .all() as Array<{ id: string; squad: string }>;
+    const rows = db.prepare(`SELECT id, squad FROM agents WHERE id LIKE 'harness-%' ORDER BY id`).all() as Array<{
+      id: string;
+      squad: string;
+    }>;
     expect(rows).toEqual([
       { id: 'harness-coder', squad: 'harness' },
       { id: 'harness-evaluator', squad: 'harness' },
@@ -197,18 +213,23 @@ describe('db-migration-v49: execucao em banco in-memory', () => {
 
   it('atribui squad security aos 11 security agents quando squad IS NULL', () => {
     const securityIds = [
-      'security-secrets-scanner', 'security-auth-auditor', 'security-isolation-inspector',
-      'security-duplication-detector', 'security-logic-analyzer', 'security-standards-checker',
-      'security-owasp-scanner', 'security-deduplicator', 'security-skeptic-security',
-      'security-skeptic-quality', 'security-resolution-tracker',
+      'security-secrets-scanner',
+      'security-auth-auditor',
+      'security-isolation-inspector',
+      'security-duplication-detector',
+      'security-logic-analyzer',
+      'security-standards-checker',
+      'security-owasp-scanner',
+      'security-deduplicator',
+      'security-skeptic-security',
+      'security-skeptic-quality',
+      'security-resolution-tracker',
     ];
     for (const id of securityIds) insertAgent(db, id, null);
 
     db.exec(MIGRATION_V49_FIX_AGENT_SQUADS);
 
-    const rows = db
-      .prepare(`SELECT squad FROM agents WHERE id LIKE 'security-%'`)
-      .all() as Array<{ squad: string }>;
+    const rows = db.prepare(`SELECT squad FROM agents WHERE id LIKE 'security-%'`).all() as Array<{ squad: string }>;
     expect(rows).toHaveLength(11);
     for (const r of rows) expect(r.squad).toBe('security');
   });
@@ -231,9 +252,9 @@ describe('db-migration-v49: execucao em banco in-memory', () => {
 
     applyV49Tools(db);
 
-    const row = db
-      .prepare(`SELECT allowed_tools FROM agents WHERE id='security-secrets-scanner'`)
-      .get() as { allowed_tools: string };
+    const row = db.prepare(`SELECT allowed_tools FROM agents WHERE id='security-secrets-scanner'`).get() as {
+      allowed_tools: string;
+    };
     expect(row.allowed_tools).toBe(NEW_TOOLS);
     expect(JSON.parse(row.allowed_tools)).toContain('Bash');
   });
@@ -244,9 +265,9 @@ describe('db-migration-v49: execucao em banco in-memory', () => {
 
     applyV49Tools(db);
 
-    const row = db
-      .prepare(`SELECT allowed_tools FROM agents WHERE id='security-secrets-scanner'`)
-      .get() as { allowed_tools: string };
+    const row = db.prepare(`SELECT allowed_tools FROM agents WHERE id='security-secrets-scanner'`).get() as {
+      allowed_tools: string;
+    };
     expect(row.allowed_tools).toBe(CUSTOM);
   });
 

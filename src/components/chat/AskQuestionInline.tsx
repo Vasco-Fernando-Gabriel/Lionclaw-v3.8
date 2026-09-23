@@ -29,7 +29,9 @@ export function AskQuestionInline({ questions, answers }: AskQuestionInlineProps
             {q.options.map((opt) => {
               const answer = answers?.[q.question];
               const isChosen = answer
-                ? (Array.isArray(answer) ? answer.includes(opt.label) : answer === opt.label)
+                ? Array.isArray(answer)
+                  ? answer.includes(opt.label)
+                  : answer === opt.label
                 : false;
 
               return (

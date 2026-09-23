@@ -1,11 +1,6 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
-
-import {
-  applyMigrationV74,
-  __V74_INTERNAL,
-} from '../db-migrations/v74-dreaming-state';
+import { applyMigrationV74, __V74_INTERNAL } from '../db-migrations/v74-dreaming-state';
 
 describe('§A applyMigrationV74 - estrutural', () => {
   it('exporta applyMigrationV74 como funcao', () => {
@@ -89,7 +84,6 @@ describe('§A applyMigrationV74 - mock DB', () => {
   });
 });
 
-
 type Row = {
   last_gate_run_at: number | null;
   last_turn_run_at: number | null;
@@ -99,13 +93,16 @@ type Row = {
 };
 
 function makeSimulatedDb(initialRow?: Row | null) {
-  let state: Row | undefined = initialRow === null ? undefined : (initialRow ?? {
-    last_gate_run_at: null,
-    last_turn_run_at: null,
-    turn_count: 0,
-    total_turn_runs: 0,
-    total_turn_failsafes: 0,
-  });
+  let state: Row | undefined =
+    initialRow === null
+      ? undefined
+      : (initialRow ?? {
+          last_gate_run_at: null,
+          last_turn_run_at: null,
+          turn_count: 0,
+          total_turn_runs: 0,
+          total_turn_failsafes: 0,
+        });
 
   const settings: Record<string, string> = {};
 
@@ -149,7 +146,6 @@ function makeSimulatedDb(initialRow?: Row | null) {
 
   return { prepare, settings, getState: () => state };
 }
-
 
 describe('§B getDreamingState — row presente', () => {
   it('mapeia todos os campos de snake_case para camelCase corretamente', () => {
@@ -218,7 +214,7 @@ describe('§D setLastGateRunAt / setLastTurnRunAt — SQL correto', () => {
     const state = sim.getState();
     expect(state?.last_gate_run_at).toBe(t1);
     expect(sim.prepare).toHaveBeenCalledWith(
-      expect.stringMatching(/UPDATE\s+dreaming_state\s+SET\s+last_gate_run_at\s*=\s*\?/i)
+      expect.stringMatching(/UPDATE\s+dreaming_state\s+SET\s+last_gate_run_at\s*=\s*\?/i),
     );
   });
 
@@ -251,7 +247,8 @@ describe('§E incrementTurnCount — retorna novo valor apos 3 incrementos', () 
 
     function doIncrement(): number {
       sim.prepare('UPDATE dreaming_state SET turn_count = turn_count + 1 WHERE id = 1').run();
-      const row = sim.prepare('SELECT turn_count FROM dreaming_state WHERE id = 1').get() as { turn_count: number } | undefined;
+      const row = sim.prepare('SELECT turn_count FROM dreaming_state WHERE id = 1').get() as
+        { turn_count: number } | undefined;
       return row?.turn_count ?? 0;
     }
 
@@ -310,7 +307,9 @@ describe('§H CHECK (id = 1) — constraint declarada no SQL de migracao', () =>
   it('o SQL de CREATE TABLE inclui CHECK (id = 1) que impede id != 1', () => {
     const execCalls: string[] = [];
     const mockDb = {
-      exec: (sql: string) => { execCalls.push(sql); },
+      exec: (sql: string) => {
+        execCalls.push(sql);
+      },
       prepare: vi.fn().mockReturnValue({ run: vi.fn() }),
       transaction: vi.fn((fn: () => void) => fn),
     } as unknown as import('better-sqlite3').Database;
@@ -322,7 +321,6 @@ describe('§H CHECK (id = 1) — constraint declarada no SQL de migracao', () =>
   });
 });
 
-
 function getDreamingTurnIntervalLogic(rawSetting: string | undefined): number {
   const raw = rawSetting || '20';
   const parsed = parseInt(raw, 10);
@@ -331,7 +329,7 @@ function getDreamingTurnIntervalLogic(rawSetting: string | undefined): number {
 }
 
 describe('§I getDreamingTurnInterval — clamp e defaults', () => {
-  it("setting ausente (undefined) -> 20 (default)", () => {
+  it('setting ausente (undefined) -> 20 (default)', () => {
     expect(getDreamingTurnIntervalLogic(undefined)).toBe(20);
   });
 

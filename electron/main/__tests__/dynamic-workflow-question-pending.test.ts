@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   createWorkflowHostApi,
@@ -120,8 +119,7 @@ function makeHarness(adapter: (input: RunNodeAgentInput) => Promise<NodeRunResul
     crud,
     gateGate,
     runNodeAgent: (input) => adapter(input),
-    emit: (input) =>
-      events.push({ type: input.type, nodeId: input.nodeId, payload: input.payload }),
+    emit: (input) => events.push({ type: input.type, nodeId: input.nodeId, payload: input.payload }),
     emitStreamChunk: (chunk) => streamChunks.push(chunk),
     generateId: (prefix) => `${prefix}_${nodeRuns.size}`,
     now: () => '2026-06-13T00:00:00.000Z',

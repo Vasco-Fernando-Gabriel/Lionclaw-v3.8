@@ -7,6 +7,11 @@ import { calculateCost, hasKnownPricing } from '../pricing';
 import type { ArtifactData, AuditEntry, StreamChunk } from '../../../src/types';
 import type { CliStreamCallbacks } from '../agent-runtime/cli-agentic/contract';
 import type { GrokAcpResponse } from '../grok-acp/acp-translator';
+import {
+  createObservedTimelineRecorder,
+  type TimelineMetricsEvent,
+  type TimelineTurnHandle,
+} from '../session-timeline';
 
 const logger = createLogger('grok-stream-translator');
 
@@ -18,18 +23,24 @@ export interface GrokStreamTranslatorOptions {
   onAuditEntry?: (entry: Omit<AuditEntry, 'id' | 'createdAt'>) => void;
   subagent?: string;
   turnIndex?: number;
+  timeline?: TimelineTurnHandle;
 }
 
 export interface GrokStreamTranslator {
   callbacks: CliStreamCallbacks;
   finalize(response: GrokAcpResponse, usage: NonNullable<StreamChunk['usage']>): void;
   fail(error: unknown): void;
+  timelineEvents(): TimelineMetricsEvent[];
 }
 
 function stringify(value: unknown): string {
   if (typeof value === 'string') return value;
   if (value === null || value === undefined) return '';
-  try { return JSON.stringify(value); } catch { return String(value); }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
 
 function fallbackCost(response: GrokAcpResponse, model: string): number | null {
@@ -44,25 +55,19 @@ function fallbackCost(response: GrokAcpResponse, model: string): number | null {
     const detailedCacheRead = rows.reduce((sum, [, usage]) => sum + usage.cachedReadTokens, 0);
     const detailedReasoning = rows.reduce((sum, [, usage]) => sum + usage.reasoningTokens, 0);
     if (
-      detailedCalls !== totalModelCalls
-      || detailedInput !== response.usage.inputTokens
-      || detailedOutput !== response.usage.outputTokens
-      || detailedCacheRead !== response.usage.cacheReadTokens
-      || (response.usage.reasoningTokens !== undefined
-        && detailedReasoning !== response.usage.reasoningTokens)
-    ) return null;
+      detailedCalls !== totalModelCalls ||
+      detailedInput !== response.usage.inputTokens ||
+      detailedOutput !== response.usage.outputTokens ||
+      detailedCacheRead !== response.usage.cacheReadTokens ||
+      (response.usage.reasoningTokens !== undefined && detailedReasoning !== response.usage.reasoningTokens)
+    )
+      return null;
     let total = 0;
     for (const [usedModel, usage] of rows) {
       if (usage.modelCalls !== 1 || !hasKnownPricing(usedModel)) return null;
-      total += calculateCost(
-        usedModel,
-        usage.inputTokens,
-        usage.outputTokens,
-        usage.cachedReadTokens,
-        0,
-        0,
-        { perRequestInput: true },
-      );
+      total += calculateCost(usedModel, usage.inputTokens, usage.outputTokens, usage.cachedReadTokens, 0, 0, {
+        perRequestInput: true,
+      });
     }
     return total;
   }
@@ -84,16 +89,11 @@ export function buildGrokUsageSnapshot(
   estimated: { inputTokens: number; outputTokens: number },
 ): NonNullable<StreamChunk['usage']> {
   const usage = response.usage;
-  const tokenReported = usage.reported ?? (
-    usage.inputTokens > 0 && usage.outputTokens > 0
-  );
+  const tokenReported = usage.reported ?? (usage.inputTokens > 0 && usage.outputTokens > 0);
   const ticks = response.metadata?.costUsdTicks;
-  const providerCost = typeof ticks === 'number' && Number.isSafeInteger(ticks) && ticks >= 0
-    ? ticks / 10_000_000_000
-    : null;
-  const costUsd = tokenReported
-    ? providerCost ?? fallbackCost(response, model)
-    : null;
+  const providerCost =
+    typeof ticks === 'number' && Number.isSafeInteger(ticks) && ticks >= 0 ? ticks / 10_000_000_000 : null;
+  const costUsd = tokenReported ? (providerCost ?? fallbackCost(response, model)) : null;
   return {
     inputTokens: tokenReported ? usage.inputTokens : estimated.inputTokens,
     outputTokens: tokenReported ? usage.outputTokens : estimated.outputTokens,
@@ -106,18 +106,18 @@ export function buildGrokUsageSnapshot(
     costUsd,
     costStatus: costUsd === null ? 'unknown' : 'known',
     tokenStatus: tokenReported ? 'reported' : 'not_reported',
-    ...(costUsd === null ? {
-      costUnknownReason: tokenReported
-        ? 'insufficient-per-call-pricing-breakdown'
-        : 'no-usage-reported',
-    } : {}),
+    ...(costUsd === null
+      ? {
+          costUnknownReason: tokenReported ? 'insufficient-per-call-pricing-breakdown' : 'no-usage-reported',
+        }
+      : {}),
     costEstimationKind: 'subscription-equivalent-payg',
   };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : null;
 }
 
@@ -131,6 +131,7 @@ export function createGrokStreamTranslator(opts: GrokStreamTranslatorOptions): G
   const seenArtifacts = new Set<string>();
   const turnIndex = opts.turnIndex ?? 0;
   const openActivities = new Map<string, string>();
+  const timeline = createObservedTimelineRecorder(opts.timeline);
   const closeActivity = (
     activityId: string,
     name: string,
@@ -206,7 +207,12 @@ export function createGrokStreamTranslator(opts: GrokStreamTranslatorOptions): G
       const id = crypto.randomUUID();
       toolCallId = id;
       if (driverToolCallId) activityIdByToolCallId.set(driverToolCallId, id);
-      try { artifact(captureToolUse(id, name, {})); } catch { /* best effort */ }
+      timeline.toolCall({ toolUseId: driverToolCallId ?? id, toolName: name, content: '' });
+      try {
+        artifact(captureToolUse(id, name, {}));
+      } catch {
+        /* best effort */
+      }
       opts.emit({ type: 'tool_call', tool: name, toolCallId: id, input: {} });
       audit({ sessionId: opts.sessionId, subagent: opts.subagent, eventType: 'tool_call', toolName: name });
       if (activityTracked(name)) {
@@ -230,9 +236,18 @@ export function createGrokStreamTranslator(opts: GrokStreamTranslatorOptions): G
     onToolUseIO(name, input, result, driverToolCallId) {
       const correlated = driverToolCallId ? activityIdByToolCallId.get(driverToolCallId) : undefined;
       if (driverToolCallId) activityIdByToolCallId.delete(driverToolCallId);
+      const timelineId = driverToolCallId ?? toolCallId;
       const id = correlated ?? toolCallId ?? crypto.randomUUID();
       const output = stringify(result);
-      try { artifact(captureToolResult(id, output, false)); } catch { /* best effort */ }
+      if (input !== undefined && timelineId !== null) {
+        timeline.toolCallArgs({ toolUseId: timelineId, toolName: name, content: stringify(input) });
+      }
+      timeline.toolResult({ toolUseId: timelineId, toolName: name, content: output, isError: false });
+      try {
+        artifact(captureToolResult(id, output, false));
+      } catch {
+        /* best effort */
+      }
       opts.emit({
         type: 'tool_result',
         tool: name,
@@ -250,8 +265,8 @@ export function createGrokStreamTranslator(opts: GrokStreamTranslatorOptions): G
       });
       if (openActivities.has(id)) {
         const record = asRecord(result);
-        const exitCode = typeof record?.['exitCode'] === 'number' ? record['exitCode'] as number : undefined;
-        const success = typeof record?.['success'] === 'boolean' ? record['success'] as boolean : true;
+        const exitCode = typeof record?.['exitCode'] === 'number' ? (record['exitCode'] as number) : undefined;
+        const success = typeof record?.['success'] === 'boolean' ? (record['success'] as boolean) : true;
         closeActivity(id, name, {
           status: !success || (typeof exitCode === 'number' && exitCode !== 0) ? 'error' : 'done',
           ...(typeof record?.['command'] === 'string' ? { command: record['command'] as string } : {}),
@@ -274,5 +289,5 @@ export function createGrokStreamTranslator(opts: GrokStreamTranslatorOptions): G
     opts.emit({ type: 'error', error: error instanceof Error ? error.message : String(error) });
   };
 
-  return { callbacks, finalize, fail };
+  return { callbacks, finalize, fail, timelineEvents: timeline.events };
 }

@@ -1,26 +1,11 @@
-import { CLAUDE_MODELS } from '../../src/constants/claude-models';
 import { CLAUDE_COMPAT_PRESETS } from '../../src/constants/claude-compat-presets';
-import { CODEX_MODELS } from '../../src/constants/codex-models';
-import { CURSOR_MODELS } from '../../src/constants/cursor-models';
-import { GROK_MODELS } from '../../src/constants/grok-models';
-import { KIMI_MODELS } from '../../src/constants/kimi-models';
 import type { OrchestratorProvider, OrchestratorRuntime } from '../../src/types';
-import {
-  findDiscoveredCodexModel,
-  getCodexModelCapabilities,
-} from './codex-runtime/model-capabilities';
+import { findDiscoveredCodexModel, getCodexModelCapabilities } from './codex-runtime/model-capabilities';
+import { findCatalogModel, isCuratedModel, reasoningOptionsFor } from './provider-models-catalog';
 
-const LION_PROVIDERS = new Set<OrchestratorProvider>([
-  'ollama',
-  'lmstudio',
-  'openai-compatible',
-  'vertex-ai',
-]);
+const LION_PROVIDERS = new Set<OrchestratorProvider>(['ollama', 'lmstudio', 'openai-compatible', 'vertex-ai']);
 
-function providerMatchesRuntime(
-  runtime: OrchestratorRuntime,
-  provider: OrchestratorProvider,
-): boolean {
+function providerMatchesRuntime(runtime: OrchestratorRuntime, provider: OrchestratorProvider): boolean {
   switch (runtime) {
     case 'claude-sdk':
       return provider === 'anthropic';
@@ -42,13 +27,7 @@ function providerMatchesRuntime(
 }
 
 function belongsToAnotherCuratedRuntime(model: string): boolean {
-  return CLAUDE_MODELS.some((entry) => entry.id === model)
-    || CODEX_MODELS.some((entry) => entry.slug === model)
-    || findDiscoveredCodexModel(model) !== undefined
-    || CLAUDE_COMPAT_PRESETS.some((preset) => preset.models.some((entry) => entry.id === model))
-    || KIMI_MODELS.some((entry) => entry.slug === model)
-    || GROK_MODELS.some((entry) => entry.slug === model)
-    || CURSOR_MODELS.some((entry) => entry.slug === model);
+  return isCuratedModel(model) || findDiscoveredCodexModel(model) !== undefined;
 }
 
 export async function validateOrchestratorTriple(
@@ -63,28 +42,18 @@ export async function validateOrchestratorTriple(
   let modelAllowed = false;
   switch (runtime) {
     case 'claude-sdk':
-      modelAllowed = CLAUDE_MODELS.some((entry) => entry.id === model);
-      break;
     case 'claude-compat-sdk':
-      modelAllowed = CLAUDE_COMPAT_PRESETS
-        .find((preset) => preset.id === provider)
-        ?.models.some((entry) => entry.id === model) === true;
+    case 'kimi-sdk':
+    case 'grok-sdk':
+    case 'cursor-sdk':
+      modelAllowed = findCatalogModel(runtime, provider, model) !== undefined;
       break;
     case 'codex-sdk':
-      modelAllowed = CODEX_MODELS.some((entry) => entry.slug === model);
+      modelAllowed = findCatalogModel(runtime, provider, model) !== undefined;
       if (!modelAllowed) {
         await getCodexModelCapabilities();
         modelAllowed = findDiscoveredCodexModel(model) !== undefined;
       }
-      break;
-    case 'kimi-sdk':
-      modelAllowed = KIMI_MODELS.some((entry) => entry.slug === model);
-      break;
-    case 'grok-sdk':
-      modelAllowed = GROK_MODELS.some((entry) => entry.slug === model);
-      break;
-    case 'cursor-sdk':
-      modelAllowed = CURSOR_MODELS.some((entry) => entry.slug === model);
       break;
     case 'lion-sdk':
       modelAllowed = !belongsToAnotherCuratedRuntime(model);
@@ -93,7 +62,33 @@ export async function validateOrchestratorTriple(
       modelAllowed = false;
   }
 
-  return modelAllowed
-    ? null
-    : `Modelo "${model}" nao pertence ao provider "${provider}" do runtime "${runtime}".`;
+  return modelAllowed ? null : `Modelo "${model}" nao pertence ao provider "${provider}" do runtime "${runtime}".`;
+}
+
+export type OrchestratorOverrideErrorCode = 'model_not_in_provider' | 'effort_not_supported';
+
+export type OrchestratorOverrideValidation =
+  { ok: true } | { ok: false; code: OrchestratorOverrideErrorCode; error: string };
+
+export async function validateOrchestratorOverride(input: {
+  runtime: OrchestratorRuntime;
+  provider: OrchestratorProvider;
+  model: string;
+  effort?: string;
+}): Promise<OrchestratorOverrideValidation> {
+  const tripleError = await validateOrchestratorTriple(input.runtime, input.provider, input.model);
+  if (tripleError) return { ok: false, code: 'model_not_in_provider', error: tripleError };
+  if (input.effort === undefined) return { ok: true };
+  const { options } = reasoningOptionsFor(input.runtime, input.provider, input.model);
+  if (!options.includes(input.effort)) {
+    return {
+      ok: false,
+      code: 'effort_not_supported',
+      error:
+        options.length === 0
+          ? `Modelo "${input.model}" (${input.provider}) nao aceita effort.`
+          : `Effort "${input.effort}" nao e suportado por "${input.model}" (${input.provider}); opcoes: ${options.join(', ')}.`,
+    };
+  }
+  return { ok: true };
 }

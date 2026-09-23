@@ -1,6 +1,4 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-
 
 import {
   WorkflowRunner,
@@ -10,10 +8,7 @@ import {
   type WorkflowRunnerCrud,
   type WorkflowRunnerDeps,
 } from '../dynamic-workflows/workflow-runner';
-import type {
-  DynamicWorkflowRun,
-  DynamicWorkflowRunStatus,
-} from '../dynamic-workflows/types';
+import type { DynamicWorkflowRun, DynamicWorkflowRunStatus } from '../dynamic-workflows/types';
 
 function makeRun(over: Partial<DynamicWorkflowRun> & { id: string }): DynamicWorkflowRun {
   return {
@@ -54,8 +49,7 @@ function makeGuardDeps(runs: DynamicWorkflowRun[]): {
   const crud = {
     getRun: (id: string) => runsById.get(id) ?? null,
     getDefinition: () => null, // forca o "proximo passo" quando o guard passa
-    listRunsByStatus: (status: DynamicWorkflowRunStatus) =>
-      [...runsById.values()].filter((r) => r.status === status),
+    listRunsByStatus: (status: DynamicWorkflowRunStatus) => [...runsById.values()].filter((r) => r.status === status),
     setRunStatus: (id: string, status: DynamicWorkflowRunStatus) => {
       const r = runsById.get(id);
       if (r) runsById.set(id, { ...r, status });
@@ -78,11 +72,19 @@ function makeGuardDeps(runs: DynamicWorkflowRun[]): {
 
   const deps: WorkflowRunnerDeps = {
     crud,
-    sandboxFactory: { spawn: () => { throw new Error('sandbox NAO deveria subir no caminho do guard'); } } as never,
-    git: (async () => { throw new Error('git NAO deveria rodar no caminho do guard'); }) as never,
+    sandboxFactory: {
+      spawn: () => {
+        throw new Error('sandbox NAO deveria subir no caminho do guard');
+      },
+    } as never,
+    git: (async () => {
+      throw new Error('git NAO deveria rodar no caminho do guard');
+    }) as never,
     emitIPC: () => {},
     now: () => '2026-06-12T00:00:00.000Z',
-    runNodeAgent: (async () => { throw new Error('adapter NAO deveria rodar'); }) as never,
+    runNodeAgent: (async () => {
+      throw new Error('adapter NAO deveria rodar');
+    }) as never,
   };
   return { deps, runsById };
 }
@@ -102,9 +104,7 @@ describe('E3/T3: guard single-active-run em runner.start (FONTE DE VERDADE)', ()
   });
 
   it('IN_PROGRESS_RUN_STATUSES e o conjunto fechado exato {running,blocked,paused,interrupted}', () => {
-    expect([...IN_PROGRESS_RUN_STATUSES].sort()).toEqual(
-      ['blocked', 'interrupted', 'paused', 'running'].sort(),
-    );
+    expect([...IN_PROGRESS_RUN_STATUSES].sort()).toEqual(['blocked', 'interrupted', 'paused', 'running'].sort());
   });
 
   for (const statusA of IN_PROGRESS) {
@@ -119,8 +119,8 @@ describe('E3/T3: guard single-active-run em runner.start (FONTE DE VERDADE)', ()
       expect('error' in res).toBe(true);
       const err = (res as { error: string }).error;
       expect(err).toContain('single-active-run');
-      expect(err).toContain('run-A'); // identifica o offender
-      expect(err).not.toContain('definition'); // nao chegou ao proximo passo
+      expect(err).toContain('run-A');
+      expect(err).not.toContain('definition');
     });
   }
 
@@ -194,17 +194,12 @@ describe('E3: helper puro assertNoOtherActiveRun (runner export)', () => {
   });
 });
 
-
 vi.mock('../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-const listByStatusMock = vi.fn<(status: DynamicWorkflowRunStatus) => DynamicWorkflowRun[]>(
-  () => [],
-);
-const getRunMock = vi.fn<(id: string) => DynamicWorkflowRun | null>((id) =>
-  makeRun({ id, status: 'created' }),
-);
+const listByStatusMock = vi.fn<(status: DynamicWorkflowRunStatus) => DynamicWorkflowRun[]>(() => []);
+const getRunMock = vi.fn<(id: string) => DynamicWorkflowRun | null>((id) => makeRun({ id, status: 'created' }));
 vi.mock('../db', () => ({
   getActiveChatSession: () => ({ id: 'chat-1' }),
   getDynamicWorkflowRun: (id: string) => getRunMock(id),
@@ -240,10 +235,7 @@ vi.mock('../dynamic-workflows/workflow-runner-deps', () => ({
   createDefaultRunnerDeps: () => ({}),
 }));
 
-import {
-  dynamicWorkflowStartCore,
-  dynamicWorkflowAuthorCore,
-} from '../dynamic-workflows/workflow-control-core';
+import { dynamicWorkflowStartCore, dynamicWorkflowAuthorCore } from '../dynamic-workflows/workflow-control-core';
 
 describe('E3/T3: fail-fast de UX nas portas de control-core (start/author)', () => {
   beforeEach(() => {
@@ -309,7 +301,7 @@ describe('E3/T3: fail-fast de UX nas portas de control-core (start/author)', () 
   });
 
   it('nenhuma porta recusa quando nao ha outro run ativo (todos terminais/idle)', async () => {
-    listByStatusMock.mockReturnValue([]); // ninguem em-progresso
+    listByStatusMock.mockReturnValue([]);
 
     const start = await dynamicWorkflowStartCore('run-target');
     expect(start.ok).toBe(true);

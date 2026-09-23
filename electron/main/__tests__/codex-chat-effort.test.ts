@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -209,18 +208,12 @@ describe('setting orchestrator_codex_effort (get default + update validado)', ()
 });
 
 describe('wiring do effort no executeCodexSdkQuery (auditoria por fonte)', () => {
-  const codexSrc = readFileSync(
-    join(__dirname, '..', 'codex-sdk', 'index.ts'),
-    'utf-8',
-  );
+  const codexSrc = readFileSync(join(__dirname, '..', 'codex-sdk', 'index.ts'), 'utf-8');
 
-  it('le a setting POR TURNO e clampa pelo modelo ativo (fallback high)', () => {
-    expect(codexSrc).toMatch(
-      /getSetting\("orchestrator_codex_effort"\) as CodexChatReasoningEffort\) \|\| "high"/,
-    );
-    expect(codexSrc).toMatch(
-      /clampCodexEffortForModelDiscovered\(\s*requestedCodexEffort,\s*selection\.model,?\s*\)/,
-    );
+  it('le o effort DA LANE (selection.effort, 7.6) por turno e clampa pelo modelo ativo (fallback high); nunca o setting global', () => {
+    expect(codexSrc).not.toMatch(/getSetting\("orchestrator_codex_effort"\)/);
+    expect(codexSrc).toMatch(/const laneCodexEffort = \(selection\.effort \?\? ''\)\.trim\(\);/);
+    expect(codexSrc).toMatch(/clampCodexEffortForModelDiscovered\(\s*requestedCodexEffort,\s*selection\.model,?\s*\)/);
   });
 
   it('criacao da sessao passa o effort clampado (turno normal E recovery SC-1)', () => {
@@ -246,19 +239,13 @@ describe('wiring do effort no executeCodexSdkQuery (auditoria por fonte)', () =>
 
 describe('wiring do effort nos AGENTES codex (auditoria por fonte)', () => {
   it('codex-executor passa reasoningEffort largo para o driver oficial', () => {
-    const executorSrc = readFileSync(
-      join(__dirname, '..', 'agent-runtime', 'codex-executor.ts'),
-      'utf-8',
-    );
+    const executorSrc = readFileSync(join(__dirname, '..', 'agent-runtime', 'codex-executor.ts'), 'utf-8');
     expect(executorSrc).toContain('reasoningEffortOverride: requestedEffort,');
     expect(executorSrc).toContain('reasoningEffort: requestedEffort,');
   });
 
   it('workflow-agent-adapter preserva o effort largo ate o driver oficial', () => {
-    const adapterSrc = readFileSync(
-      join(__dirname, '..', 'dynamic-workflows', 'workflow-agent-adapter.ts'),
-      'utf-8',
-    );
+    const adapterSrc = readFileSync(join(__dirname, '..', 'dynamic-workflows', 'workflow-agent-adapter.ts'), 'utf-8');
     expect(adapterSrc).toContain('input.effectiveEffort !== undefined');
     expect(adapterSrc).toContain('input.effectiveEffort ?? agentEffort;');
     expect(adapterSrc).toContain('reasoningEffortOverride: nodeEffort,');
@@ -272,7 +259,7 @@ describe('wiring do effort nos AGENTES codex (auditoria por fonte)', () => {
     );
     expect(modalSrc).toContain('discoveredEffortsFor(codexModel).map((opt)');
     expect(modalSrc).toMatch(
-      /setCodexReasoningEffort\(\s*clampCodexEffortToSupported\(codexReasoningEffort, discoveredEffortsFor\(codexModel\)\),\s*\);/,
+      /setCodexReasoningEffort\(\s*clampCodexEffortToSupported\(codexReasoningEffort, discoveredEffortsFor\(codexModel\)\),?\s*\);/,
     );
     expect(modalSrc).not.toContain('CODEX_REASONING_EFFORT');
   });

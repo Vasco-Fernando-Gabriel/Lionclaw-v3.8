@@ -1,11 +1,7 @@
-
 import path from 'path';
 import { getPipelineDocsContext } from '../pipeline-paths';
 
-export function getArchitectureReviewConversationGreeting(
-  phase: number,
-  projectName: string,
-): string | null {
+export function getArchitectureReviewConversationGreeting(phase: number, projectName: string): string | null {
   switch (phase) {
     case 2:
       return (
@@ -42,10 +38,7 @@ export function getArchitectureReviewConversationGreeting(
   }
 }
 
-export function getBugConversationGreeting(
-  phase: number,
-  projectName: string,
-): string {
+export function getBugConversationGreeting(phase: number, projectName: string): string {
   switch (phase) {
     case 1:
       return (

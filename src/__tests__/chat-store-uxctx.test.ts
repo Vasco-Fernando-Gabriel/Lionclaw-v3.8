@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 
-
 let contextUsageImpl: (sessionId: string) => Promise<unknown> = async () => null;
 let getContextUsageCalls: string[] = [];
 
@@ -10,6 +9,7 @@ beforeAll(() => {
       chat: {
         getSessions: async () => [],
         getMessages: async () => [],
+        listOpenSessions: async () => [],
         getContextUsage: (sessionId: string) => contextUsageImpl(sessionId),
         send: async () => ({ accepted: true }),
       },
@@ -31,56 +31,65 @@ const SAMPLE_CONTEXT = {
   source: 'estimate' as const,
 };
 
+async function visible() {
+  const { useChatStore, selectVisibleThread } = await getStore();
+  return selectVisibleThread(useChatStore.getState());
+}
+
 beforeEach(async () => {
   getContextUsageCalls = [];
   contextUsageImpl = async (id: string) => {
     getContextUsageCalls.push(id);
     return null;
   };
-  const { useChatStore } = await getStore();
+  const { useChatStore, createThreadState } = await getStore();
   useChatStore.setState({
     currentSessionId: 's1',
     sessions: [],
     telegramSessions: [],
-    messages: [],
-    streamingContent: '',
-    isStreaming: false,
-    currentUsage: null,
-    currentContext: null,
-    toolCalls: [],
-    artifacts: [],
-    activities: [],
-    submittedUserTurnCount: 0,
-    streamTurnStartedAt: null,
+    openLanes: [],
+    threads: { s1: createThreadState({ hydrated: true }) },
+    streamingSessionIds: new Set(),
   });
 });
 
 describe('UX-CTX-1: submit na mesma sessao preserva a barrinha', () => {
   it('UX-CTX-1: sendMessage (modo normal) NAO zera currentContext', async () => {
-    const { useChatStore } = await getStore();
-    useChatStore.setState({ isStreaming: false, currentContext: SAMPLE_CONTEXT });
+    const { useChatStore, createThreadState } = await getStore();
+    useChatStore.setState({
+      threads: { s1: createThreadState({ hydrated: true, isStreaming: false, currentContext: SAMPLE_CONTEXT }) },
+    });
 
     await useChatStore.getState().sendMessage('oi');
 
-    expect(useChatStore.getState().currentContext).toEqual(SAMPLE_CONTEXT);
-    expect(useChatStore.getState().currentUsage).toBeNull();
-    expect(useChatStore.getState().isStreaming).toBe(true);
+    expect((await visible()).currentContext).toEqual(SAMPLE_CONTEXT);
+    expect((await visible()).currentUsage).toBeNull();
+    expect((await visible()).isStreaming).toBe(true);
   });
 
   it('UX-CTX-1: submit em modo queue (isStreaming) tambem preserva currentContext', async () => {
-    const { useChatStore } = await getStore();
-    useChatStore.setState({ isStreaming: true, currentContext: SAMPLE_CONTEXT, submittedUserTurnCount: 1 });
+    const { useChatStore, createThreadState } = await getStore();
+    useChatStore.setState({
+      threads: {
+        s1: createThreadState({
+          hydrated: true,
+          isStreaming: true,
+          currentContext: SAMPLE_CONTEXT,
+          submittedUserTurnCount: 1,
+        }),
+      },
+    });
 
     await useChatStore.getState().sendMessage('mais uma');
 
-    expect(useChatStore.getState().currentContext).toEqual(SAMPLE_CONTEXT);
+    expect((await visible()).currentContext).toEqual(SAMPLE_CONTEXT);
+    expect((await visible()).queueRemaining).toBe(1);
   });
 });
 
 describe('UX-CTX-2: abrir/trocar de sessao hidrata (ou limpa) a barrinha', () => {
   it('UX-CTX-2: selectSession hidrata currentContext do valor persistido', async () => {
     const { useChatStore } = await getStore();
-    useChatStore.setState({ currentSessionId: 's1', currentContext: null });
     contextUsageImpl = async (id: string) => {
       getContextUsageCalls.push(id);
       return SAMPLE_CONTEXT;
@@ -90,26 +99,26 @@ describe('UX-CTX-2: abrir/trocar de sessao hidrata (ou limpa) a barrinha', () =>
 
     expect(useChatStore.getState().currentSessionId).toBe('s2');
     expect(getContextUsageCalls).toContain('s2');
-    expect(useChatStore.getState().currentContext).toEqual(SAMPLE_CONTEXT);
+    expect((await visible()).currentContext).toEqual(SAMPLE_CONTEXT);
   });
 
-  it('UX-CTX-2: trocar para sessao sem contexto (null) LIMPA a barrinha', async () => {
-    const { useChatStore } = await getStore();
-    useChatStore.setState({ currentSessionId: 's1', currentContext: SAMPLE_CONTEXT });
+  it('UX-CTX-2: trocar para sessao sem contexto (null) mostra a thread dela sem barrinha; a anterior mantem a sua', async () => {
+    const { useChatStore, createThreadState } = await getStore();
+    useChatStore.setState({ threads: { s1: createThreadState({ hydrated: true, currentContext: SAMPLE_CONTEXT }) } });
     contextUsageImpl = async (id: string) => {
       getContextUsageCalls.push(id);
-      return null; // janela desconhecida / sessao ainda sem tokens
+      return null;
     };
 
     await useChatStore.getState().selectSession('s3');
 
     expect(useChatStore.getState().currentSessionId).toBe('s3');
-    expect(useChatStore.getState().currentContext).toBeNull();
+    expect((await visible()).currentContext).toBeNull();
+    expect(useChatStore.getState().threads.s1.currentContext).toEqual(SAMPLE_CONTEXT);
   });
 
   it('UX-CTX-2: getContextUsage que rejeita degrada para null (nao quebra a troca)', async () => {
     const { useChatStore } = await getStore();
-    useChatStore.setState({ currentSessionId: 's1', currentContext: SAMPLE_CONTEXT });
     contextUsageImpl = async () => {
       throw new Error('ipc indisponivel');
     };
@@ -117,16 +126,27 @@ describe('UX-CTX-2: abrir/trocar de sessao hidrata (ou limpa) a barrinha', () =>
     await useChatStore.getState().selectSession('s4');
 
     expect(useChatStore.getState().currentSessionId).toBe('s4');
-    expect(useChatStore.getState().currentContext).toBeNull();
+    expect((await visible()).currentContext).toBeNull();
+    expect((await visible()).hydrated).toBe(true);
   });
 
   it('UX-CTX-2: selectSession na MESMA sessao e no-op (nao rebusca contexto)', async () => {
-    const { useChatStore } = await getStore();
-    useChatStore.setState({ currentSessionId: 's1', currentContext: SAMPLE_CONTEXT });
+    const { useChatStore, createThreadState } = await getStore();
+    useChatStore.setState({ threads: { s1: createThreadState({ hydrated: true, currentContext: SAMPLE_CONTEXT }) } });
 
     await useChatStore.getState().selectSession('s1');
 
     expect(getContextUsageCalls).not.toContain('s1');
-    expect(useChatStore.getState().currentContext).toEqual(SAMPLE_CONTEXT);
+    expect((await visible()).currentContext).toEqual(SAMPLE_CONTEXT);
+  });
+
+  it('10.1: thread ja hidratada nao rebusca ao voltar para ela (hidratacao so uma vez)', async () => {
+    const { useChatStore } = await getStore();
+    await useChatStore.getState().selectSession('s2');
+    await useChatStore.getState().selectSession('s1');
+    await useChatStore.getState().selectSession('s2');
+
+    expect(getContextUsageCalls.filter((id) => id === 's2')).toHaveLength(1);
+    expect(getContextUsageCalls).not.toContain('s1');
   });
 });

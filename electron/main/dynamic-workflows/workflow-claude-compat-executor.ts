@@ -1,4 +1,3 @@
-
 import type { AgentQueryConfig } from '../agent-config-resolver';
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk';
 
@@ -38,26 +37,30 @@ export interface ClaudeCompatExecDeps {
   buildZaiOptions?: BuildOptionsWithKeyFn;
   buildMinimaxOptions?: BuildOptionsWithKeyFn;
   processStream?: ProcessStreamFn;
-  calculateCost?: (
-    model: string,
-    inT: number,
-    outT: number,
-    cacheR: number,
-    cacheC: number,
-  ) => number;
+  calculateCost?: (model: string, inT: number, outT: number, cacheR: number, cacheC: number) => number;
   resolveCliPath?: () => string | Promise<string>;
   resolveProviderApiKey?: (runtime: 'zai' | 'minimax-tp') => Promise<string>;
 }
 
 type BuildOptionsFn = (
-  req: { agentId: string; prompt: string; cwd: string; permission: { mode: 'default'; dangerouslySkipPermissions: false; canUseTool: CanUseTool } },
+  req: {
+    agentId: string;
+    prompt: string;
+    cwd: string;
+    permission: { mode: 'default'; dangerouslySkipPermissions: false; canUseTool: CanUseTool };
+  },
   config: AgentQueryConfig,
   cliPath: string,
   childAbort: AbortController,
 ) => Record<string, unknown>;
 
 type BuildOptionsWithKeyFn = (
-  req: { agentId: string; prompt: string; cwd: string; permission: { mode: 'default'; dangerouslySkipPermissions: false; canUseTool: CanUseTool } },
+  req: {
+    agentId: string;
+    prompt: string;
+    cwd: string;
+    permission: { mode: 'default'; dangerouslySkipPermissions: false; canUseTool: CanUseTool };
+  },
   config: AgentQueryConfig,
   cliPath: string,
   childAbort: AbortController,
@@ -135,8 +138,7 @@ export function createSdkUsageTap(): {
         for await (const msg of stream) {
           try {
             observe(msg);
-          } catch {
-          }
+          } catch {}
           yield msg;
         }
       },
@@ -191,13 +193,10 @@ export async function runClaudeCompatNode(
   if (input.abortSignal.aborted) childAbort.abort();
   else input.abortSignal.addEventListener('abort', () => childAbort.abort(), { once: true });
 
-  const processOptions = deps.resolveCliPath
-    ? {}
-    : await defaultResolveProcessOptions();
+  const processOptions = deps.resolveCliPath ? {} : await defaultResolveProcessOptions();
   const cliPath = deps.resolveCliPath
     ? await deps.resolveCliPath()
-    : (processOptions.pathToClaudeCodeExecutable as string) ??
-      (await defaultResolveCliPath());
+    : ((processOptions.pathToClaudeCodeExecutable as string) ?? (await defaultResolveCliPath()));
   const reqForBuilder = {
     agentId: 'dynamic-workflow-node',
     prompt: input.prompt,
@@ -218,8 +217,8 @@ export async function runClaudeCompatNode(
     const apiKey = await resolveKey(input.runtime);
     const build =
       input.runtime === 'zai'
-        ? deps.buildZaiOptions ?? (await defaultBuildZai())
-        : deps.buildMinimaxOptions ?? (await defaultBuildMinimax());
+        ? (deps.buildZaiOptions ?? (await defaultBuildZai()))
+        : (deps.buildMinimaxOptions ?? (await defaultBuildMinimax()));
     options = build(reqForBuilder, effectiveConfig, cliPath, childAbort, apiKey);
   }
   options = { ...options, ...processOptions };
@@ -244,29 +243,29 @@ export async function runClaudeCompatNode(
   let result: Awaited<ReturnType<ProcessStreamFn>>;
   try {
     result = await processStream(q, {
-    shouldAbort: () => childAbort.signal.aborted,
-    onText: input.onStreamChunk
-      ? (t: string) => {
-          textBuf += t;
-          flushText(false);
-        }
-      : undefined,
-    onToolUse: input.onStreamChunk
-      ? (tool: string) => {
-          flushText(true);
-          input.onStreamChunk?.({ type: 'tool_call_start', toolName: tool });
-        }
-      : undefined,
-    onToolUseComplete: input.onStreamChunk
-      ? (tool: string, toolInput: unknown) => {
-          flushText(true);
-          input.onStreamChunk?.({
-            type: 'tool_call',
-            toolName: tool,
-            content: nodeToolDetail(toolInput),
-          });
-        }
-      : undefined,
+      shouldAbort: () => childAbort.signal.aborted,
+      onText: input.onStreamChunk
+        ? (t: string) => {
+            textBuf += t;
+            flushText(false);
+          }
+        : undefined,
+      onToolUse: input.onStreamChunk
+        ? (tool: string) => {
+            flushText(true);
+            input.onStreamChunk?.({ type: 'tool_call_start', toolName: tool });
+          }
+        : undefined,
+      onToolUseComplete: input.onStreamChunk
+        ? (tool: string, toolInput: unknown) => {
+            flushText(true);
+            input.onStreamChunk?.({
+              type: 'tool_call',
+              toolName: tool,
+              content: nodeToolDetail(toolInput),
+            });
+          }
+        : undefined,
     });
   } catch (err) {
     flushText(true);
@@ -308,7 +307,6 @@ export async function runClaudeCompatNode(
   };
 }
 
-
 async function defaultBuildCloud(): Promise<BuildOptionsFn> {
   const { buildClaudeQueryOptions } = await import('../agent-runtime/cloud-executor');
   return buildClaudeQueryOptions as unknown as BuildOptionsFn;
@@ -318,30 +316,18 @@ async function defaultBuildZai(): Promise<BuildOptionsWithKeyFn> {
   return buildZaiQueryOptions as unknown as BuildOptionsWithKeyFn;
 }
 async function defaultBuildMinimax(): Promise<BuildOptionsWithKeyFn> {
-  const { buildMinimaxTpQueryOptions } = await import(
-    '../agent-runtime/minimax-tokenplan-executor'
-  );
+  const { buildMinimaxTpQueryOptions } = await import('../agent-runtime/minimax-tokenplan-executor');
   return buildMinimaxTpQueryOptions as unknown as BuildOptionsWithKeyFn;
 }
-async function defaultQuery(): Promise<
-  (opts: Record<string, unknown>) => AsyncIterable<Record<string, unknown>>
-> {
+async function defaultQuery(): Promise<(opts: Record<string, unknown>) => AsyncIterable<Record<string, unknown>>> {
   const { query } = await import('@anthropic-ai/claude-agent-sdk');
-  return query as unknown as (
-    opts: Record<string, unknown>,
-  ) => AsyncIterable<Record<string, unknown>>;
+  return query as unknown as (opts: Record<string, unknown>) => AsyncIterable<Record<string, unknown>>;
 }
 async function defaultProcessStream(): Promise<ProcessStreamFn> {
   const { processAgentStream } = await import('../stream-processor');
   return processAgentStream as unknown as ProcessStreamFn;
 }
-type CalculateCostFn = (
-  model: string,
-  inT: number,
-  outT: number,
-  cacheR: number,
-  cacheC: number,
-) => number;
+type CalculateCostFn = (model: string, inT: number, outT: number, cacheR: number, cacheC: number) => number;
 async function defaultCalculateCost(): Promise<CalculateCostFn> {
   const { calculateCost } = await import('../pricing');
   return calculateCost;
@@ -356,15 +342,10 @@ async function defaultResolveProcessOptions(): Promise<Record<string, unknown>> 
   mod.ensureNodeInPath();
   return mod.getClaudeSdkProcessOptions() as Record<string, unknown>;
 }
-async function defaultResolveProviderApiKey(
-  runtime: 'zai' | 'minimax-tp',
-): Promise<string> {
+async function defaultResolveProviderApiKey(runtime: 'zai' | 'minimax-tp'): Promise<string> {
   const { getSetting } = await import('../db');
   const { getSecret } = await import('../secrets-vault');
-  const settingKey =
-    runtime === 'zai'
-      ? 'orchestrator_zai_api_key_ref'
-      : 'orchestrator_minimax_api_key_ref';
+  const settingKey = runtime === 'zai' ? 'orchestrator_zai_api_key_ref' : 'orchestrator_minimax_api_key_ref';
   const vaultRef = getSetting(settingKey);
   if (!vaultRef || vaultRef.trim().length === 0) {
     throw new Error(

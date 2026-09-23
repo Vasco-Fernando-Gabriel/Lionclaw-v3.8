@@ -1,11 +1,6 @@
-
 import { useEffect, useState, useCallback } from 'react';
 import { AlertTriangle, X, Wrench } from 'lucide-react';
-import type {
-  CodexWindowsHealthWarning,
-  CodexWindowsPrepSkipped,
-  CodexPatchFailureWarning,
-} from '@/types';
+import type { CodexWindowsHealthWarning, CodexWindowsPrepSkipped, CodexPatchFailureWarning } from '@/types';
 
 interface BannerState {
   type: 'health' | 'prep-skipped' | 'patch-failure';
@@ -49,9 +44,7 @@ export function CodexWindowsHealthBanner({
       <div className="bg-amber-900/30 border-l-4 border-amber-500 px-4 py-3 flex items-start gap-3">
         <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-amber-200 mb-1">
-            Codex Windows Health Check
-          </div>
+          <div className="font-medium text-amber-200 mb-1">Codex Windows Health Check</div>
           <ul className="text-sm text-amber-100/80 space-y-1">
             {payload.issues.map((issue) => (
               <li key={issue.type}>
@@ -92,9 +85,7 @@ export function CodexWindowsHealthBanner({
       <div className="bg-orange-900/30 border-l-4 border-orange-500 px-4 py-3 flex items-start gap-3">
         <AlertTriangle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-orange-200 mb-1">
-            Codex auto-prep pulado
-          </div>
+          <div className="font-medium text-orange-200 mb-1">Codex auto-prep pulado</div>
           <div className="text-sm text-orange-100/80">
             Razao: <span className="font-mono">{payload.reason}</span>
           </div>
@@ -124,15 +115,11 @@ export function CodexWindowsHealthBanner({
       <div className="bg-red-900/30 border-l-4 border-red-500 px-4 py-3 flex items-start gap-3">
         <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-red-200 mb-1">
-            Codex apply_patch falhou {payload.count}x
-          </div>
+          <div className="font-medium text-red-200 mb-1">Codex apply_patch falhou {payload.count}x</div>
           <div className="text-sm text-red-100/80">
             Provavel mojibake (encoding) ou CRLF mismatch. Veja Health Check pra preparar projeto.
           </div>
-          <div className="text-xs text-red-200/60 mt-1 font-mono">
-            agent: {payload.agentId}
-          </div>
+          <div className="text-xs text-red-200/60 mt-1 font-mono">agent: {payload.agentId}</div>
         </div>
         <button
           type="button"

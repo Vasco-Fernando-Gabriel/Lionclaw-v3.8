@@ -1,8 +1,6 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-
 
 const h = vi.hoisted(() => ({
   queryMock: vi.fn<(args: { prompt: unknown; options: Record<string, unknown> }) => unknown>(),
@@ -14,7 +12,6 @@ const h = vi.hoisted(() => ({
   insertMessageMock: vi.fn(() => 1),
   clearSessionPendingSeedMock: vi.fn(),
 }));
-
 
 vi.mock('../logger', () => ({
   createLogger: () => ({
@@ -71,6 +68,8 @@ vi.mock('../lion-sdk', () => ({
 }));
 
 vi.mock('../db', () => ({
+  threadIdOf: (s: { id: string; sdkSessionId?: string | null }) => s.sdkSessionId ?? s.id,
+  getSessionOrchestrator: () => null,
   getAllAgents: () => [],
   getAgent: () => undefined,
   insertMessage: (...args: unknown[]) => h.insertMessageMock(...(args as [])),
@@ -154,7 +153,6 @@ vi.mock('../prompt-builder-repo-graph', () => ({
   buildRepoGraphSubagentSection: () => '',
 }));
 
-
 import {
   buildSdkPrompt,
   executeClaudeSdkQuery,
@@ -166,8 +164,7 @@ import {
 const fakeGetWindow = () => null;
 
 type SdkContentBlock =
-  | { type: 'text'; text: string }
-  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } };
+  { type: 'text'; text: string } | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } };
 
 interface CollectedUserMessage {
   type: string;
@@ -198,9 +195,7 @@ function makeImageAttachment(
 }
 
 async function collectMessages(prompt: unknown): Promise<CollectedUserMessage[]> {
-  expect(typeof prompt, 'prompt com imagem deveria ser AsyncIterable, nao string').not.toBe(
-    'string',
-  );
+  expect(typeof prompt, 'prompt com imagem deveria ser AsyncIterable, nao string').not.toBe('string');
   const iterable = prompt as AsyncIterable<CollectedUserMessage>;
   const messages: CollectedUserMessage[] = [];
   const iterator = iterable[Symbol.asyncIterator]();
@@ -231,8 +226,7 @@ function legacySessionRow(id: string, type: 'chat' | 'telegram' = 'chat'): Recor
 
 function okQueryResult() {
   return {
-    async *[Symbol.asyncIterator]() {
-    },
+    async *[Symbol.asyncIterator]() {},
     toggleMcpServer: async () => {},
   };
 }
@@ -260,7 +254,6 @@ beforeEach(() => {
   resetTelegramSessionState();
   resetCronSessionState();
 });
-
 
 describe('buildSdkPrompt: caminho texto-puro byte-identico (AC-25)', () => {
   it('sem attachments (undefined) retorna a PROPRIA string', () => {
@@ -333,7 +326,7 @@ describe('buildSdkPrompt: imagem vira content block nativo (AC-24)', () => {
       makeImageAttachment({ id: 'img', data: 'IMG=' }),
     ];
     const [m] = await collectMessages(buildSdkPrompt('oi', atts, 't'));
-    expect(m.message.content).toHaveLength(2); // text + 1 image (pdf ignorado)
+    expect(m.message.content).toHaveLength(2);
   });
 
   it('mensagem vazia com imagem usa instrucao default SEM mencao a tool Read', async () => {
@@ -351,7 +344,6 @@ describe('buildSdkPrompt: imagem vira content block nativo (AC-24)', () => {
     expect(img.source.media_type).toBe('image/png');
   });
 });
-
 
 describe('executeClaudeSdkQuery: prompt ao SDK (SPEC 8.2)', () => {
   it('AC-25: texto puro chega ao SDK como a string EXATA da mensagem', async () => {
@@ -386,9 +378,7 @@ describe('executeClaudeSdkQuery: prompt ao SDK (SPEC 8.2)', () => {
     h.getSessionMock.mockImplementation((id: string) =>
       id === 'd-comp' ? { ...legacySessionRow(id), sdkSessionId: 'thread-uuid-9' } : undefined,
     );
-    h.getSessionMessagesMock.mockImplementation((id: string) =>
-      id === 'd-comp' ? [{ id: 1 }] : [],
-    );
+    h.getSessionMessagesMock.mockImplementation((id: string) => (id === 'd-comp' ? [{ id: 1 }] : []));
     await executeClaudeSdkQuery(
       'veja a foto',
       { sessionId: 'd-comp', silent: true, attachments: [makeImageAttachment()] },
@@ -404,9 +394,7 @@ describe('executeClaudeSdkQuery: prompt ao SDK (SPEC 8.2)', () => {
 
   it('pending_seed entra como preambulo do bloco de TEXTO quando ha imagem (SPEC 4.3 + 8.2)', async () => {
     h.getSessionMock.mockImplementation((id: string) =>
-      id === 'd-seed'
-        ? { ...legacySessionRow(id), pendingSeed: '[Resumo] contexto compactado' }
-        : undefined,
+      id === 'd-seed' ? { ...legacySessionRow(id), pendingSeed: '[Resumo] contexto compactado' } : undefined,
     );
     await executeClaudeSdkQuery(
       'e agora?',
@@ -421,15 +409,10 @@ describe('executeClaudeSdkQuery: prompt ao SDK (SPEC 8.2)', () => {
   });
 });
 
-
 describe('orchestrator.ts: mecanismo legado de imagem removido (AC-24)', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'orchestrator.ts'), 'utf8');
 
-  it.each([
-    ['lionclaw-img-'],
-    ['[Imagem '],
-    ['os.tmpdir()'],
-  ])('nao contem o padrao legado %p', (pattern: string) => {
+  it.each([['lionclaw-img-'], ['[Imagem '], ['os.tmpdir()']])('nao contem o padrao legado %p', (pattern: string) => {
     expect(src).not.toContain(pattern);
   });
 

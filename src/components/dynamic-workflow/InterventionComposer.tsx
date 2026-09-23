@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Send, Pause, Square, CornerDownLeft, Clock } from 'lucide-react';
 
-
 export interface ComposerFeedItem {
   id: string;
   kind: 'event' | 'human';
@@ -63,16 +62,14 @@ export function InterventionComposer({
           <Clock size={10} className="text-amber-400/70" />
           <span>
             Node em execucao: o envio sera{' '}
-            <span className="text-amber-300">agendado para {currentNodeId ?? 'o proximo node'}</span>.
-            Para afetar a tentativa em voo, use Pausar/Abortar.
+            <span className="text-amber-300">agendado para {currentNodeId ?? 'o proximo node'}</span>. Para afetar a
+            tentativa em voo, use Pausar/Abortar.
           </span>
         </div>
       )}
 
       {localError && (
-        <div className="border-t border-red-500/20 bg-red-500/10 px-4 py-1 text-[10px] text-red-300">
-          {localError}
-        </div>
+        <div className="border-t border-red-500/20 bg-red-500/10 px-4 py-1 text-[10px] text-red-300">{localError}</div>
       )}
 
       {/* Linha do input + acoes */}
@@ -81,8 +78,8 @@ export function InterventionComposer({
         <div className="flex items-center gap-1.5 border-t border-zinc-800/60 px-4 pt-1.5 text-[10px] text-zinc-500">
           <CornerDownLeft size={10} className="shrink-0 text-amber-400/60" />
           <span>
-            Intervir: sua mensagem vira um ajuste para o proximo node (ou conversa com o
-            closer na fase final). Nao interrompe o node em execucao.
+            Intervir: sua mensagem vira um ajuste para o proximo node (ou conversa com o closer na fase final). Nao
+            interrompe o node em execucao.
           </span>
         </div>
       )}

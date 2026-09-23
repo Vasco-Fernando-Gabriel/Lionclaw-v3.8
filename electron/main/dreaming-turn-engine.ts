@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import { randomUUID } from 'crypto';
@@ -26,26 +25,31 @@ import {
   incrementTotalTurnRuns,
   incrementTotalTurnFailsafes,
 } from './db';
-import type {
-  MemorySection,
-  GateOutputQuarantineItem,
-  GateOutputDiscardedItem,
-  LlmInvoker,
-} from './dreaming-gate';
+import type { MemorySection, GateOutputQuarantineItem, GateOutputDiscardedItem, LlmInvoker } from './dreaming-gate';
 import { resolveDreamingTimeoutMs } from './dreaming-gate';
+import {
+  extractTouchedFiles,
+  formatTouchedFilesLine,
+  getTimelineRuns,
+  groupMessageIntervals,
+  groupRunsByAnchor,
+  selectLatestRun,
+  type MessageInterval,
+} from './session-timeline';
+import { isChatTimelineReinjectEnabled } from './chat-compaction-trigger';
+import type { ChatMessage } from '../../src/types';
 
 const logger = createLogger('dreaming-turn-engine');
 
-
 export interface TurnUpdateItem {
-  oldText: string;      // texto exato a substituir (line-match)
-  newText: string;      // texto novo (com [YYYY-MM-DD] atualizado)
+  oldText: string;
+  newText: string;
   section: MemorySection;
 }
 
 export interface UserTurnUpdateItem {
-  oldText: string;      // linha EXATA do USER.md (line-match obrigatorio)
-  newText: string;      // texto novo
+  oldText: string;
+  newText: string;
   section: UserSection;
 }
 
@@ -55,7 +59,7 @@ export interface TurnDreamingResult {
     update: TurnUpdateItem[];
     userRemove?: string[];
     userUpdate?: UserTurnUpdateItem[];
-  }; // SEM add
+  };
   quarantine: GateOutputQuarantineItem[];
   discarded: GateOutputDiscardedItem[];
   report: string;
@@ -72,23 +76,21 @@ export interface TurnDreamingInput {
 
 export interface RunTurnDreamingOptions {
   invoker?: LlmInvoker;
-  timeoutMs?: number; // default 30000
+  timeoutMs?: number;
 }
-
 
 interface LlmTurnOutput {
   apply: {
     remove: string[];
     update: Array<{ oldText: string; newText: string; section: string }>;
-    add?: unknown[]; // presente quando modelo ignora instrucao — descartado
+    add?: unknown[];
     userRemove?: string[];
     userUpdate?: Array<{ oldText: string; newText: string; section: string }>;
-    userAdd?: unknown[]; // turn-based NUNCA adiciona — descartado com warn
+    userAdd?: unknown[];
   };
   quarantine: GateOutputQuarantineItem[];
   discarded: GateOutputDiscardedItem[];
 }
-
 
 const VALID_SECTIONS: ReadonlySet<MemorySection> = new Set<MemorySection>([
   'decisoes_ativas',
@@ -122,26 +124,18 @@ function buildFailSafeResult(
 
 function buildSuccessReport(output: LlmTurnOutput): string {
   const removeLines =
-    output.apply.remove.length > 0
-      ? output.apply.remove.map((l) => `- ${l}`).join('\n')
-      : '_nenhuma_';
+    output.apply.remove.length > 0 ? output.apply.remove.map((l) => `- ${l}`).join('\n') : '_nenhuma_';
 
   const updateLines =
     output.apply.update.length > 0
-      ? output.apply.update
-          .map((u) => `- [${u.section}] "${u.oldText}" -> "${u.newText}"`)
-          .join('\n')
+      ? output.apply.update.map((u) => `- [${u.section}] "${u.oldText}" -> "${u.newText}"`).join('\n')
       : '_nenhuma_';
 
   const quarantineLines =
-    output.quarantine.length > 0
-      ? output.quarantine.map((q) => `- ${q.text} _(${q.reason})_`).join('\n')
-      : '_nenhuma_';
+    output.quarantine.length > 0 ? output.quarantine.map((q) => `- ${q.text} _(${q.reason})_`).join('\n') : '_nenhuma_';
 
   const discardedLines =
-    output.discarded.length > 0
-      ? output.discarded.map((d) => `- ${d.text} _(${d.reason})_`).join('\n')
-      : '_nenhuma_';
+    output.discarded.length > 0 ? output.discarded.map((d) => `- ${d.text} _(${d.reason})_`).join('\n') : '_nenhuma_';
 
   const parts = [
     `# Turn-Based Dreaming - Relatorio de Auditoria`,
@@ -166,14 +160,7 @@ function buildSuccessReport(output: LlmTurnOutput): string {
     );
   }
 
-  parts.push(
-    ``,
-    `## Quarentena`,
-    quarantineLines,
-    ``,
-    `## Descartados`,
-    discardedLines,
-  );
+  parts.push(``, `## Quarentena`, quarantineLines, ``, `## Descartados`, discardedLines);
   return parts.join('\n');
 }
 
@@ -184,9 +171,7 @@ function formatToday(): string {
 }
 
 function buildPrompt(skillMd: string, input: TurnDreamingInput): string {
-  const turnsText = input.recentTurns
-    .map((t) => `[${t.role}] ${excerptStartEnd(t.content, 2000)}`)
-    .join('\n\n');
+  const turnsText = input.recentTurns.map((t) => `[${t.role}] ${excerptStartEnd(t.content, 2000)}`).join('\n\n');
   const today = formatToday();
 
   return `[TURN_DREAMING_INSTRUCTIONS]
@@ -266,39 +251,28 @@ IMPORTANTE: NUNCA inclua apply.add nem apply.userAdd — turn-based NAO adiciona
 Retorne JSON puro, sem markdown, sem comentarios.`;
 }
 
-
 export async function runTurnDreaming(
   input: TurnDreamingInput,
   options?: RunTurnDreamingOptions,
 ): Promise<TurnDreamingResult> {
-  const invoker: LlmInvoker =
-    options?.invoker ?? ((p: string) => runStructuredMemoryLlm(p));
+  const invoker: LlmInvoker = options?.invoker ?? ((p: string) => runStructuredMemoryLlm(p));
   const timeoutMs = options?.timeoutMs ?? resolveDreamingTimeoutMs();
 
   const skillPath = path.join(getLionClawHome(), 'skills', 'dreaming', 'SKILL.md');
   let skillMd: string;
   try {
     if (!fs.existsSync(skillPath)) {
-      logger.warn(
-        { skillPath },
-        'turn_dreaming_failed: skill_md_missing',
-      );
+      logger.warn({ skillPath }, 'turn_dreaming_failed: skill_md_missing');
       return buildFailSafeResult('skill_md_missing', `SKILL.md nao encontrado em ${skillPath}`);
     }
     skillMd = fs.readFileSync(skillPath, 'utf-8').trim();
     if (!skillMd) {
-      logger.warn(
-        { skillPath },
-        'turn_dreaming_failed: skill_md_missing (vazio)',
-      );
+      logger.warn({ skillPath }, 'turn_dreaming_failed: skill_md_missing (vazio)');
       return buildFailSafeResult('skill_md_missing', `SKILL.md vazio em ${skillPath}`);
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.warn(
-      { skillPath, err },
-      'turn_dreaming_failed: skill_md_missing (erro de IO)',
-    );
+    logger.warn({ skillPath, err }, 'turn_dreaming_failed: skill_md_missing (erro de IO)');
     return buildFailSafeResult('skill_md_missing', `Erro ao ler SKILL.md: ${msg}`);
   }
 
@@ -307,10 +281,7 @@ export async function runTurnDreaming(
   let rawResponse: string;
   try {
     const timeoutPromise = new Promise<never>((_, reject) => {
-      const id = setTimeout(
-        () => reject(new Error('dreaming_turn_timeout')),
-        timeoutMs,
-      );
+      const id = setTimeout(() => reject(new Error('dreaming_turn_timeout')), timeoutMs);
       if (typeof id === 'object' && 'unref' in id) {
         (id as NodeJS.Timeout).unref();
       }
@@ -421,10 +392,7 @@ export async function runTurnDreaming(
       ) {
         throw new Error(`Schema invalido em quarantine[${i}]: text/reason obrigatorios`);
       }
-      if (
-        item.proposed_section !== undefined &&
-        !VALID_SECTIONS.has(item.proposed_section)
-      ) {
+      if (item.proposed_section !== undefined && !VALID_SECTIONS.has(item.proposed_section)) {
         throw new Error(
           `Schema invalido em quarantine[${i}]: proposed_section invalido ('${String(item.proposed_section)}')`,
         );
@@ -432,10 +400,7 @@ export async function runTurnDreaming(
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.warn(
-      { err, rawLength: rawResponse.length },
-      'turn_dreaming_failed: json_parse_error',
-    );
+    logger.warn({ err, rawLength: rawResponse.length }, 'turn_dreaming_failed: json_parse_error');
     return buildFailSafeResult('json_parse_error', msg);
   }
 
@@ -467,30 +432,16 @@ export async function runTurnDreaming(
   };
 }
 
-
 export async function saveTurnDreamingReport(result: TurnDreamingResult): Promise<string> {
   const now = new Date();
   const pad = (n: number, len = 2) => String(n).padStart(len, '0');
-  const datePart = [
-    now.getFullYear(),
-    pad(now.getMonth() + 1),
-    pad(now.getDate()),
-  ].join('-');
-  const timePart = [
-    pad(now.getHours()),
-    pad(now.getMinutes()),
-    pad(now.getSeconds()),
-  ].join('');
+  const datePart = [now.getFullYear(), pad(now.getMonth() + 1), pad(now.getDate())].join('-');
+  const timePart = [pad(now.getHours()), pad(now.getMinutes()), pad(now.getSeconds())].join('');
 
   const randomSuffix = randomUUID();
   const filename = `${datePart}_${timePart}_${randomSuffix}_turn-dreaming-report.md`;
 
-  const dir = path.join(
-    getLionClawHome(),
-    'workspaces',
-    'lionclaw',
-    'dreaming-reports',
-  );
+  const dir = path.join(getLionClawHome(), 'workspaces', 'lionclaw', 'dreaming-reports');
 
   fs.mkdirSync(dir, { recursive: true });
 
@@ -516,10 +467,8 @@ export async function saveTurnDreamingReport(result: TurnDreamingResult): Promis
   return filePath;
 }
 
-
-
 function countNonEmptyLines(content: string): number {
-  return content.split('\n').filter(l => l.trim().length > 0).length;
+  return content.split('\n').filter((l) => l.trim().length > 0).length;
 }
 
 function readMemoryMd(): string {
@@ -540,51 +489,122 @@ function readUserMd(): string {
   }
 }
 
-
-function emitDreamingStatus(getWindow: () => BrowserWindow | null, isDreaming: boolean): void {
+function emitDreamingStatus(getWindow: () => BrowserWindow | null, isDreaming: boolean, sessionId: string): void {
   const win = getWindow();
   if (win && !win.isDestroyed()) {
     win.webContents.send('chat:stream', {
       type: 'dreaming_status',
       isDreaming,
+      sessionId,
     });
   }
 }
 
+interface RecentTurnRow {
+  id: number;
+  role: string;
+  content: string;
+  created_at: string;
+}
+
+function intervalCarrier(interval: MessageInterval): ChatMessage | null {
+  for (let i = interval.messages.length - 1; i >= 0; i--) {
+    if (interval.messages[i].role === 'assistant') return interval.messages[i];
+  }
+  return interval.user;
+}
+
+function findPrecedingUserMessageId(sessionId: string, messageId: number): number | null {
+  const row = getDb()
+    .prepare(
+      `
+    SELECT MAX(id) AS id
+    FROM messages
+    WHERE session_id = ? AND role = 'user' AND id < ?
+  `,
+    )
+    .get(sessionId, messageId) as { id: number | null } | undefined;
+  return row?.id ?? null;
+}
+
+function appendTouchedFilesLines(
+  sessionId: string,
+  rows: RecentTurnRow[],
+  turns: Array<{ role: 'user' | 'assistant'; content: string }>,
+): void {
+  const runsByAnchor = groupRunsByAnchor(getTimelineRuns(sessionId, null));
+  if (runsByAnchor.size === 0) return;
+
+  const messages: ChatMessage[] = rows.map((r) => ({
+    id: r.id,
+    sessionId,
+    role: r.role as ChatMessage['role'],
+    content: r.content,
+    createdAt: r.created_at,
+  }));
+  const indexById = new Map(rows.map((r, index) => [r.id, index]));
+
+  for (const interval of groupMessageIntervals(messages)) {
+    const carrier = intervalCarrier(interval);
+    if (carrier === null) continue;
+
+    const anchorId =
+      interval.user !== null ? interval.user.id : findPrecedingUserMessageId(sessionId, interval.messages[0].id);
+    if (anchorId === null) continue;
+
+    const run = selectLatestRun(runsByAnchor.get(anchorId) ?? []);
+    if (run === null) continue;
+
+    const line = formatTouchedFilesLine(extractTouchedFiles(run));
+    if (line === '') continue;
+
+    const index = indexById.get(carrier.id);
+    if (index === undefined) continue;
+    turns[index].content = `${turns[index].content}\n${line}`;
+  }
+}
 
 function collectRecentTurns(
   sessionId: string,
   turnCount: number,
 ): Array<{ role: 'user' | 'assistant'; content: string }> {
   const db = getDb();
-  const rows = db.prepare(`
-    SELECT m.role, m.content
+  const rows = db
+    .prepare(
+      `
+    SELECT m.id, m.role, m.content, m.created_at
     FROM messages m
     WHERE m.session_id = ?
       AND m.role IN ('user', 'assistant')
-    ORDER BY m.created_at DESC
+    ORDER BY m.created_at DESC, m.id DESC
     LIMIT ?
-  `).all(sessionId, turnCount * 2) as Array<{ role: string; content: string }>;
+  `,
+    )
+    .all(sessionId, turnCount * 2) as RecentTurnRow[];
 
-  return rows.reverse().map(r => ({
+  const ordered = rows.reverse();
+  const turns = ordered.map((r) => ({
     role: r.role as 'user' | 'assistant',
     content: excerptStartEnd(r.content || '', 2000),
   }));
+
+  if (turns.length > 0 && isChatTimelineReinjectEnabled()) {
+    appendTouchedFilesLines(sessionId, ordered, turns);
+  }
+
+  return turns;
 }
 
+export const __dreamingInternals = { collectRecentTurns };
 
 function resolveDefaultInvoker(): LlmInvoker {
   return (p: string) => runStructuredMemoryLlm(p);
 }
 
-
 async function applyTurnDreamingResult(result: TurnDreamingResult): Promise<void> {
   await applyMemoryUpdates({
-    add: result.apply.update.map(u => ({ section: u.section, text: u.newText })),
-    remove: [
-      ...result.apply.remove,
-      ...result.apply.update.map(u => u.oldText),
-    ],
+    add: result.apply.update.map((u) => ({ section: u.section, text: u.newText })),
+    remove: [...result.apply.remove, ...result.apply.update.map((u) => u.oldText)],
   });
 
   const userRemove = result.apply.userRemove ?? [];
@@ -592,7 +612,7 @@ async function applyTurnDreamingResult(result: TurnDreamingResult): Promise<void
   if (userRemove.length === 0 && userUpdate.length === 0) return;
 
   const userLines = new Set(readUserMd().split('\n'));
-  const matchedUpdates = userUpdate.filter(u => {
+  const matchedUpdates = userUpdate.filter((u) => {
     if (!userLines.has(u.oldText)) {
       logger.warn(
         { oldText: u.oldText },
@@ -604,19 +624,12 @@ async function applyTurnDreamingResult(result: TurnDreamingResult): Promise<void
   });
 
   await applyUserProfileUpdates({
-    add: matchedUpdates.map(u => ({ section: u.section, text: u.newText })),
-    remove: [
-      ...userRemove,
-      ...matchedUpdates.map(u => u.oldText),
-    ],
+    add: matchedUpdates.map((u) => ({ section: u.section, text: u.newText })),
+    remove: [...userRemove, ...matchedUpdates.map((u) => u.oldText)],
   });
 }
 
-
-async function runTurnDreamingAndCommit(
-  sessionId: string,
-  getWindow: () => BrowserWindow | null,
-): Promise<void> {
+async function runTurnDreamingAndCommit(sessionId: string, getWindow: () => BrowserWindow | null): Promise<void> {
   const result = await tryWithMemoryGateLock(async () => {
     const memoryMd = readMemoryMd();
 
@@ -624,7 +637,7 @@ async function runTurnDreamingAndCommit(
       return { kind: 'skipped_small' as const };
     }
 
-    emitDreamingStatus(getWindow, true);
+    emitDreamingStatus(getWindow, true, sessionId);
     try {
       const userMd = readUserMd();
       const recentTurns = collectRecentTurns(sessionId, 20);
@@ -639,7 +652,7 @@ async function runTurnDreamingAndCommit(
       }
       return { kind: 'executed' as const, turnResult };
     } finally {
-      emitDreamingStatus(getWindow, false);
+      emitDreamingStatus(getWindow, false, sessionId);
     }
   });
 
@@ -664,11 +677,7 @@ async function runTurnDreamingAndCommit(
   resetTurnCount();
 }
 
-
-export async function maybeRunTurnDreaming(
-  sessionId: string,
-  getWindow: () => BrowserWindow | null,
-): Promise<void> {
+export async function maybeRunTurnDreaming(sessionId: string, getWindow: () => BrowserWindow | null): Promise<void> {
   if (getSetting('dreaming_turn_based_enabled') !== 'true') return;
 
   const state = getDreamingState();
@@ -679,16 +688,12 @@ export async function maybeRunTurnDreaming(
     return;
   }
 
-  void runTurnDreamingAndCommit(sessionId, getWindow).catch(err => {
+  void runTurnDreamingAndCommit(sessionId, getWindow).catch((err) => {
     logger.warn({ err }, 'turn_dreaming_failed_outside_failsafe');
   });
 }
 
-
-export function recordCompletedMainChatTurn(
-  sessionId: string,
-  getWindow: () => BrowserWindow | null,
-): void {
+export function recordCompletedMainChatTurn(sessionId: string, getWindow: () => BrowserWindow | null): void {
   const session = getSession(sessionId);
   if (!session || session.type !== 'chat') return;
 
@@ -697,7 +702,7 @@ export function recordCompletedMainChatTurn(
   const newCount = incrementTurnCount();
   const interval = getDreamingTurnInterval();
   if (newCount >= interval) {
-    void maybeRunTurnDreaming(sessionId, getWindow).catch(err => {
+    void maybeRunTurnDreaming(sessionId, getWindow).catch((err) => {
       logger.warn({ err }, 'turn_dreaming_maybe_failed');
     });
   }

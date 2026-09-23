@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -15,18 +14,12 @@ export interface KimiWireOffsetSnapshot {
   offsets: Record<string, number>;
 }
 
-export function deriveKimiSessionDir(
-  kimiHome: string,
-  workDir: string,
-  sessionId: string,
-): string {
+export function deriveKimiSessionDir(kimiHome: string, workDir: string, sessionId: string): string {
   const raw = path.isAbsolute(workDir) ? workDir : path.resolve(workDir);
   const absWorkDir = raw.replace(/\\/g, '/').replace(/\/+$/, '') || '/';
   const slug = (absWorkDir.split('/').pop() ?? '').toLowerCase();
   const hash = crypto.createHash('sha256').update(absWorkDir).digest('hex').slice(0, 12);
-  const bareSessionId = sessionId.startsWith('session_')
-    ? sessionId.slice('session_'.length)
-    : sessionId;
+  const bareSessionId = sessionId.startsWith('session_') ? sessionId.slice('session_'.length) : sessionId;
   const home = kimiHome.replace(/\\/g, '/').replace(/\/+$/, '');
   return `${home}/sessions/wd_${slug}_${hash}/session_${bareSessionId}`;
 }
@@ -54,20 +47,17 @@ export function snapshotKimiWireOffsets(sessionDir: string): KimiWireOffsetSnaps
   for (const file of listWireFiles(sessionDir)) {
     try {
       offsets[file] = fs.statSync(file).size;
-    } catch {
-    }
+    } catch {}
   }
   return { sessionDir, offsets };
 }
 
-export function readKimiWireUsageDelta(
-  snapshot: KimiWireOffsetSnapshot,
-): KimiWireUsage | null {
+export function readKimiWireUsageDelta(snapshot: KimiWireOffsetSnapshot): KimiWireUsage | null {
   if (!fs.existsSync(snapshot.sessionDir)) return null;
   const currentFiles = listWireFiles(snapshot.sessionDir);
   const currentSet = new Set(currentFiles);
   for (const known of Object.keys(snapshot.offsets)) {
-    if (!currentSet.has(known)) return null; // rotacionado/deletado mid-turno
+    if (!currentSet.has(known)) return null;
   }
 
   const totals: KimiWireUsage = {
@@ -85,7 +75,7 @@ export function readKimiWireUsageDelta(
     } catch {
       return null;
     }
-    if (size < offset) return null; // truncado -> nunca contagem negativa
+    if (size < offset) return null;
     if (size === offset) continue;
 
     let chunk: string;
@@ -129,20 +119,13 @@ export function readKimiWireUsageDelta(
       const u = usage as Record<string, unknown>;
       const integer = (key: string): number | null => {
         const value = u[key];
-        return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
-          ? value
-          : null;
+        return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
       };
       const inputOther = integer('inputOther');
       const inputCacheRead = integer('inputCacheRead');
       const inputCacheCreation = integer('inputCacheCreation');
       const output = integer('output');
-      if (
-        inputOther === null
-        || inputCacheRead === null
-        || inputCacheCreation === null
-        || output === null
-      ) return null;
+      if (inputOther === null || inputCacheRead === null || inputCacheCreation === null || output === null) return null;
       const inclusiveInput = inputOther + inputCacheRead + inputCacheCreation;
       if (!Number.isSafeInteger(inclusiveInput)) return null;
       for (const totalKey of ['input', 'inputTokens', 'inputTotal']) {
@@ -155,11 +138,12 @@ export function readKimiWireUsageDelta(
       totals.cacheReadTokens += inputCacheRead;
       totals.cacheCreationTokens += inputCacheCreation;
       if (
-        !Number.isSafeInteger(totals.inputTokens)
-        || !Number.isSafeInteger(totals.outputTokens)
-        || !Number.isSafeInteger(totals.cacheReadTokens)
-        || !Number.isSafeInteger(totals.cacheCreationTokens)
-      ) return null;
+        !Number.isSafeInteger(totals.inputTokens) ||
+        !Number.isSafeInteger(totals.outputTokens) ||
+        !Number.isSafeInteger(totals.cacheReadTokens) ||
+        !Number.isSafeInteger(totals.cacheCreationTokens)
+      )
+        return null;
     }
   }
 

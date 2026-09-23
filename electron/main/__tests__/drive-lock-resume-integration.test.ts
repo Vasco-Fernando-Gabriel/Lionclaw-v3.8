@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
 import type { DriveState } from '../../../src/types';
@@ -52,10 +51,28 @@ function fakeSetDriveState(projectId: string, patch: Partial<DriveState>): Drive
   return merged;
 }
 
+function fakeIsDriveEngaged(projectId: string): boolean {
+  const drive = projects.get(projectId)?.config.drive;
+  return !!drive && drive.driver === 'orchestrator' && drive.status !== 'stopped';
+}
+function fakeProjectsBySession(sessionId: string): FakeProject[] {
+  return [...projects.values()].filter((p) => p.config.drive?.sessionId === sessionId);
+}
+
 vi.mock('../db', () => ({
   getHarnessProject: vi.fn((id: string) => projects.get(id)),
   listHarnessProjects: vi.fn(() => [...projects.values()]),
+  listHarnessProjectsBySession: vi.fn((id: string) => fakeProjectsBySession(id)),
+  findEngagedDriveBySession: vi.fn(
+    (id: string) => fakeProjectsBySession(id).find((p) => fakeIsDriveEngaged(p.id)) ?? null,
+  ),
   getDriveState: vi.fn((id: string) => projects.get(id)?.config.drive ?? null),
+  getDriveSessionId: vi.fn((id: string) => projects.get(id)?.config.drive?.sessionId ?? null),
+  isDriveEngaged: vi.fn((id: string) => fakeIsDriveEngaged(id)),
+  getOpenLaneSessionById: vi.fn((id: string) =>
+    id ? { id, laneBadge: Number(id.replace(/\D/g, '')) || 1, title: id } : null,
+  ),
+  getSession: vi.fn((id: string) => ({ id })),
   setDriveState: vi.fn((id: string, patch: Partial<DriveState>) => fakeSetDriveState(id, patch)),
   getLatestUserTurnIndex: vi.fn(() => 0),
 }));
@@ -70,7 +87,7 @@ vi.mock('../pipeline-control-core', () => ({
 
 import { submitMessage } from '../orchestrator';
 import { pipelineEventBus } from '../pipeline-event-bus';
-import { _resetDriveLockForTesting, activeDriveProjectId } from '../drive-lock';
+import { _resetDriveLockForTesting, driveOwnerOfProject } from '../drive-lock';
 import { PipelineDriveCoordinator } from '../pipeline-drive-coordinator';
 
 const submitMock = submitMessage as Mock;
@@ -96,7 +113,7 @@ function discardsByF7Contract(opts: DriveTurnOptions): boolean {
   if (opts.origin !== 'system-event' || !opts.driveProjectId) return false;
   if (typeof opts.drivePhase !== 'number') return false;
   const realPhase = projects.get(opts.driveProjectId)?.pipelineCurrentPhase;
-  if (typeof realPhase !== 'number') return false; // fail-open
+  if (typeof realPhase !== 'number') return false;
   return opts.drivePhase < realPhase;
 }
 
@@ -135,7 +152,7 @@ describe('W4.3 - retomada pos-lock no primeiro ponto acionavel + descarte F7 do 
     expect(projects.get('proj_v2')?.config.drive?.status).toBe('driving');
     expect(submitMock).not.toHaveBeenCalled();
 
-    project.pipelineCurrentPhase = FIRST_ACTIONABLE_AFTER_LOCK; // fase real ja em 8
+    project.pipelineCurrentPhase = FIRST_ACTIONABLE_AFTER_LOCK;
     const staleOdsTurn: DriveTurnOptions = {
       sessionId: 'sess_1',
       origin: 'system-event',
@@ -174,13 +191,13 @@ describe('W4.3 - retomada pos-lock no primeiro ponto acionavel + descarte F7 do 
       const drive = projects.get('proj_v2')?.config.drive;
       expect(drive?.status).toBe('driving');
       expect(drive?.handoff).toBe('none');
-      expect(activeDriveProjectId()).toBe('proj_v2');
+      expect(driveOwnerOfProject('proj_v2')).toBe('sess_1');
       expect(submitMock).toHaveBeenCalledTimes(1);
 
       const resumeOpts = optsOfCall(0);
       expect(resumeOpts.driveProjectId).toBe('proj_v2');
       expect(resumeOpts.drivePhase).toBe(FIRST_ACTIONABLE_AFTER_LOCK);
-      expect(discardsByF7Contract(resumeOpts)).toBe(false); // turno valido, executa
+      expect(discardsByF7Contract(resumeOpts)).toBe(false);
     } finally {
       vi.useRealTimers();
     }

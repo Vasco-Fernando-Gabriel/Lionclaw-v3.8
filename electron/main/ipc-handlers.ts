@@ -1,13 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { createLogger } from './logger';
-import {
-  getSetting,
-  setSetting,
-} from './db';
-import {
-  getSecret,
-  invalidateVaultStatusCache,
-} from './vault-registry';
+import { getSetting, setSetting } from './db';
+import { getSecret, invalidateVaultStatusCache } from './vault-registry';
 import { PROVIDER_PRESETS } from '../../src/lib/provider-presets';
 import type { IpcContext } from './ipc/context';
 import { registerAllIpcHandlers } from './ipc';
@@ -21,18 +15,11 @@ import {
 } from './provider-availability';
 import { setSecret, deleteSecret } from './secrets-vault';
 import { syncCodexMcpConfig } from './codex-sdk/mcp-config-sync';
-import type {
-  OrchestratorProvider,
-  OrchestratorRuntime,
-  OpenAiCompatiblePreset,
-} from '../../src/types';
+import type { OrchestratorProvider, OrchestratorRuntime, OpenAiCompatiblePreset } from '../../src/types';
 
 const logger = createLogger('ipc');
 
-const COMPAT_VAULT_REFS: Record<
-  'zai' | 'minimax',
-  { vaultKey: string; settingKey: string }
-> = {
+const COMPAT_VAULT_REFS: Record<'zai' | 'minimax', { vaultKey: string; settingKey: string }> = {
   zai: {
     vaultKey: 'ORCHESTRATOR_ZAI_API_KEY',
     settingKey: 'orchestrator_zai_api_key_ref',
@@ -46,30 +33,19 @@ const COMPAT_VAULT_REFS: Record<
 function registerProviderHandlers(_ctx: IpcContext): void {
   ipcMain.handle(
     'provider:test-connection',
-    async (
-      _event,
-      providerName: string,
-      baseUrl: string,
-      apiKeyRef: string,
-    ) => {
+    async (_event, providerName: string, baseUrl: string, apiKeyRef: string) => {
       try {
         const resolvedApiKeyRef =
-          providerName === 'gemini-agent-platform' &&
-          apiKeyRef === 'orchestrator_vertex_api_key_ref'
+          providerName === 'gemini-agent-platform' && apiKeyRef === 'orchestrator_vertex_api_key_ref'
             ? getSetting('orchestrator_vertex_api_key_ref') || apiKeyRef
             : apiKeyRef;
         const apiKey = await getSecret(resolvedApiKeyRef);
-        if (!apiKey)
-          return { ok: false, error: 'API key nao configurada no Vault.' };
+        if (!apiKey) return { ok: false, error: 'API key nao configurada no Vault.' };
 
         if (providerName === 'gemini-agent-platform') {
           const { GoogleGenAI } = await import('@google/genai');
-          const { normalizeGoogleGenAiError } = await import(
-            './lion-sdk/adapters/google-genai-errors'
-          );
-          const { VERTEX_DEFAULT_MODEL } = await import(
-            '../../src/constants/vertex-gemini-models'
-          );
+          const { normalizeGoogleGenAiError } = await import('./lion-sdk/adapters/google-genai-errors');
+          const { VERTEX_DEFAULT_MODEL } = await import('../../src/constants/vertex-gemini-models');
 
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 15_000);
@@ -151,10 +127,9 @@ function registerProviderHandlers(_ctx: IpcContext): void {
     },
   );
 
-
-  ipcMain.handle('provider:list-statuses', async () => {
+  ipcMain.handle('provider:list-statuses', async (_event, opts?: { refresh?: boolean }) => {
     try {
-      return await listProviderStatuses();
+      return await listProviderStatuses({ refresh: opts?.refresh === true });
     } catch (err) {
       logger.error({ err }, 'provider:list-statuses failed');
       return {
@@ -165,10 +140,7 @@ function registerProviderHandlers(_ctx: IpcContext): void {
 
   ipcMain.handle(
     'provider:check',
-    async (
-      _event,
-      payload: { runtime: OrchestratorRuntime; provider: OrchestratorProvider },
-    ) => {
+    async (_event, payload: { runtime: OrchestratorRuntime; provider: OrchestratorProvider }) => {
       try {
         invalidateProviderStatusCache();
         return await checkProvider(payload.runtime, payload.provider);
@@ -197,9 +169,7 @@ function registerProviderHandlers(_ctx: IpcContext): void {
         if (!baseUrl) return { ok: false, error: 'baseUrl obrigatorio.' };
         if (!apiKey) return { ok: false, error: 'apiKey obrigatorio.' };
 
-        const preset = payload.preset
-          ? (payload.preset as OpenAiCompatiblePreset)
-          : undefined;
+        const preset = payload.preset ? (payload.preset as OpenAiCompatiblePreset) : undefined;
         const probe = await probeOpenAiCompatibleModels(baseUrl, apiKey, preset);
         if (!probe.ok) {
           return {
@@ -227,7 +197,7 @@ function registerProviderHandlers(_ctx: IpcContext): void {
         provider: OrchestratorProvider;
         apiKey?: string;
         baseUrl?: string;
-        preset?: string; // OpenAI-compatible preset id
+        preset?: string;
       },
     ) => {
       try {
@@ -242,12 +212,10 @@ function registerProviderHandlers(_ctx: IpcContext): void {
           await setSecret(cfg.vaultKey, payload.apiKey.trim());
           setSetting(cfg.settingKey, cfg.vaultKey);
         } else if (payload.provider === 'ollama') {
-          const baseUrl =
-            (payload.baseUrl ?? '').trim() || 'http://localhost:11434';
+          const baseUrl = (payload.baseUrl ?? '').trim() || 'http://localhost:11434';
           setSetting('orchestrator_ollama_base_url', baseUrl);
         } else if (payload.provider === 'lmstudio') {
-          const baseUrl =
-            (payload.baseUrl ?? '').trim() || 'http://localhost:1234';
+          const baseUrl = (payload.baseUrl ?? '').trim() || 'http://localhost:1234';
           setSetting('orchestrator_lmstudio_base_url', baseUrl);
         } else if (payload.provider === 'openai-compatible') {
           if (!payload.apiKey || payload.apiKey.trim().length === 0) {
@@ -256,24 +224,17 @@ function registerProviderHandlers(_ctx: IpcContext): void {
           if (!payload.baseUrl || payload.baseUrl.trim().length === 0) {
             return { error: 'baseUrl obrigatorio para OpenAI-compatible.' };
           }
-          const presetSafe =
-            payload.preset && payload.preset.length > 0
-              ? payload.preset
-              : 'custom';
+          const presetSafe = payload.preset && payload.preset.length > 0 ? payload.preset : 'custom';
           const vaultRef = 'ORCHESTRATOR_OPENAI_COMPAT_API_KEY';
           await setSecret(vaultRef, payload.apiKey.trim());
           setSetting('orchestrator_openai_compat_api_key_ref', vaultRef);
-          setSetting(
-            'orchestrator_openai_compat_base_url',
-            payload.baseUrl.trim(),
-          );
+          setSetting('orchestrator_openai_compat_base_url', payload.baseUrl.trim());
           setSetting('orchestrator_openai_compat_preset', presetSafe);
           mustSyncCodex = true;
         } else if (payload.provider === 'vertex-ai') {
           const vaultRef = 'ORCHESTRATOR_VERTEX_API_KEY';
           const existingRef = getSetting('orchestrator_vertex_api_key_ref');
-          const hasNewKey =
-            typeof payload.apiKey === 'string' && payload.apiKey.trim().length > 0;
+          const hasNewKey = typeof payload.apiKey === 'string' && payload.apiKey.trim().length > 0;
           if (!hasNewKey && !existingRef) {
             return { error: 'apiKey obrigatorio para Vertex Gemini.' };
           }
@@ -295,13 +256,11 @@ function registerProviderHandlers(_ctx: IpcContext): void {
           invalidateVaultStatusCache('CURSOR_API_KEY');
         } else if (payload.provider === 'anthropic') {
           return {
-            error:
-              'Anthropic auth is managed via the Vault page, not this handler.',
+            error: 'Anthropic auth is managed via the Vault page, not this handler.',
           };
         } else if (payload.provider === 'codex') {
           return {
-            error:
-              'Codex login is handled by the Codex CLI; use codex:open-login.',
+            error: 'Codex login is handled by the Codex CLI; use codex:open-login.',
           };
         } else {
           return { error: `Unknown provider: ${String(payload.provider)}` };
@@ -312,10 +271,7 @@ function registerProviderHandlers(_ctx: IpcContext): void {
           try {
             await syncCodexMcpConfig();
           } catch (err) {
-            logger.warn(
-              { err },
-              'syncCodexMcpConfig failed after provider:connect',
-            );
+            logger.warn({ err }, 'syncCodexMcpConfig failed after provider:connect');
           }
         }
         return { ok: true };
@@ -328,77 +284,69 @@ function registerProviderHandlers(_ctx: IpcContext): void {
     },
   );
 
-  ipcMain.handle(
-    'provider:disconnect',
-    async (_event, payload: { provider: OrchestratorProvider }) => {
-      try {
-        let mustSyncCodex = false;
+  ipcMain.handle('provider:disconnect', async (_event, payload: { provider: OrchestratorProvider }) => {
+    try {
+      let mustSyncCodex = false;
 
-        if (payload.provider === 'zai' || payload.provider === 'minimax') {
-          const cfg = COMPAT_VAULT_REFS[payload.provider];
-          const vaultRef = getSetting(cfg.settingKey);
-          if (vaultRef) {
-            await deleteSecret(vaultRef);
-          }
-          setSetting(cfg.settingKey, '');
-        } else if (payload.provider === 'ollama') {
-          setSetting('orchestrator_ollama_base_url', '');
-        } else if (payload.provider === 'lmstudio') {
-          setSetting('orchestrator_lmstudio_base_url', '');
-        } else if (payload.provider === 'openai-compatible') {
-          const vaultRef = getSetting('orchestrator_openai_compat_api_key_ref');
-          if (vaultRef) {
-            await deleteSecret(vaultRef);
-          }
-          setSetting('orchestrator_openai_compat_api_key_ref', '');
-          setSetting('orchestrator_openai_compat_base_url', '');
-          setSetting('orchestrator_openai_compat_preset', '');
-          mustSyncCodex = true;
-        } else if (payload.provider === 'vertex-ai') {
-          const vaultRef = getSetting('orchestrator_vertex_api_key_ref');
-          if (vaultRef) {
-            await deleteSecret(vaultRef);
-          }
-          setSetting('orchestrator_vertex_api_key_ref', '');
-          setSetting('orchestrator_vertex_location', '');
-          setSetting('orchestrator_vertex_project_id', '');
-        } else if (payload.provider === 'cursor') {
-          await deleteSecret('CURSOR_API_KEY');
-          invalidateVaultStatusCache('CURSOR_API_KEY');
-        } else if (payload.provider === 'anthropic') {
-          return {
-            error:
-              'Anthropic auth is managed via the Vault page, not this handler.',
-          };
-        } else if (payload.provider === 'codex') {
-          return {
-            error:
-              'Codex disconnect is handled by `codex logout`; not via this handler.',
-          };
-        } else {
-          return { error: `Unknown provider: ${String(payload.provider)}` };
+      if (payload.provider === 'zai' || payload.provider === 'minimax') {
+        const cfg = COMPAT_VAULT_REFS[payload.provider];
+        const vaultRef = getSetting(cfg.settingKey);
+        if (vaultRef) {
+          await deleteSecret(vaultRef);
         }
-
-        invalidateProviderStatusCache();
-        if (mustSyncCodex) {
-          try {
-            await syncCodexMcpConfig();
-          } catch (err) {
-            logger.warn(
-              { err },
-              'syncCodexMcpConfig failed after provider:disconnect',
-            );
-          }
+        setSetting(cfg.settingKey, '');
+      } else if (payload.provider === 'ollama') {
+        setSetting('orchestrator_ollama_base_url', '');
+      } else if (payload.provider === 'lmstudio') {
+        setSetting('orchestrator_lmstudio_base_url', '');
+      } else if (payload.provider === 'openai-compatible') {
+        const vaultRef = getSetting('orchestrator_openai_compat_api_key_ref');
+        if (vaultRef) {
+          await deleteSecret(vaultRef);
         }
-        return { ok: true };
-      } catch (err) {
-        logger.error({ err }, 'provider:disconnect failed');
+        setSetting('orchestrator_openai_compat_api_key_ref', '');
+        setSetting('orchestrator_openai_compat_base_url', '');
+        setSetting('orchestrator_openai_compat_preset', '');
+        mustSyncCodex = true;
+      } else if (payload.provider === 'vertex-ai') {
+        const vaultRef = getSetting('orchestrator_vertex_api_key_ref');
+        if (vaultRef) {
+          await deleteSecret(vaultRef);
+        }
+        setSetting('orchestrator_vertex_api_key_ref', '');
+        setSetting('orchestrator_vertex_location', '');
+        setSetting('orchestrator_vertex_project_id', '');
+      } else if (payload.provider === 'cursor') {
+        await deleteSecret('CURSOR_API_KEY');
+        invalidateVaultStatusCache('CURSOR_API_KEY');
+      } else if (payload.provider === 'anthropic') {
         return {
-          error: err instanceof Error ? err.message : 'Erro desconhecido',
+          error: 'Anthropic auth is managed via the Vault page, not this handler.',
         };
+      } else if (payload.provider === 'codex') {
+        return {
+          error: 'Codex disconnect is handled by `codex logout`; not via this handler.',
+        };
+      } else {
+        return { error: `Unknown provider: ${String(payload.provider)}` };
       }
-    },
-  );
+
+      invalidateProviderStatusCache();
+      if (mustSyncCodex) {
+        try {
+          await syncCodexMcpConfig();
+        } catch (err) {
+          logger.warn({ err }, 'syncCodexMcpConfig failed after provider:disconnect');
+        }
+      }
+      return { ok: true };
+    } catch (err) {
+      logger.error({ err }, 'provider:disconnect failed');
+      return {
+        error: err instanceof Error ? err.message : 'Erro desconhecido',
+      };
+    }
+  });
 
   ipcMain.handle(
     'provider:test-vertex-ai',
@@ -408,13 +356,9 @@ function registerProviderHandlers(_ctx: IpcContext): void {
         apiKey?: string;
         model?: string;
       },
-    ): Promise<
-      { ok: true; models?: number } | { ok: false; error: string }
-    > => {
+    ): Promise<{ ok: true; models?: number } | { ok: false; error: string }> => {
       const { GoogleGenAI } = await import('@google/genai');
-      const { normalizeGoogleGenAiError } = await import(
-        './lion-sdk/adapters/google-genai-errors'
-      );
+      const { normalizeGoogleGenAiError } = await import('./lion-sdk/adapters/google-genai-errors');
 
       try {
         let apiKey = (payload.apiKey ?? '').trim();
@@ -432,10 +376,7 @@ function registerProviderHandlers(_ctx: IpcContext): void {
           };
         }
 
-        const model =
-          (payload.model ?? '').trim().length > 0
-            ? payload.model!.trim()
-            : 'gemini-3-flash-preview';
+        const model = (payload.model ?? '').trim().length > 0 ? payload.model!.trim() : 'gemini-3-flash-preview';
 
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 15_000);
@@ -452,9 +393,7 @@ function registerProviderHandlers(_ctx: IpcContext): void {
               abortSignal: controller.signal,
             },
           });
-          const { VERTEX_MODEL_CATALOG } = await import(
-            '../../src/constants/vertex-gemini-models'
-          );
+          const { VERTEX_MODEL_CATALOG } = await import('../../src/constants/vertex-gemini-models');
           return { ok: true, models: VERTEX_MODEL_CATALOG.length };
         } finally {
           clearTimeout(timeout);

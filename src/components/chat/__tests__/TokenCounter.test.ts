@@ -1,9 +1,5 @@
-
 import { describe, expect, it } from 'vitest';
-import {
-  resolveTokenCounterCostDisplay,
-  shouldShowCompactionBadge,
-} from '../TokenCounter';
+import { resolveTokenCounterCostDisplay, shouldShowCompactionBadge } from '../TokenCounter';
 
 function resolveCostDisplay(
   costUsd: number | null | undefined,
@@ -99,7 +95,7 @@ describe('TokenCounter props contract', () => {
       contextWindowTokens: 'number | undefined',
       compactionThresholdPercent: 'number | undefined',
       contextSource: "'estimate' | 'provider' | undefined",
-      costUsd: 'number | null | undefined',  // nova prop S6.6
+      costUsd: 'number | null | undefined', // nova prop S6.6
     };
     expect(propsShape).toMatchSnapshot();
   });

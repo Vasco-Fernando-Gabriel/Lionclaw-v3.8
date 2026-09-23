@@ -1,16 +1,10 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-import {
-  CodexLifecycleRegistry,
-  detectThreadLeak,
-  assertValidScope,
-  keyMatchesScope,
-} from '../lifecycle-registry';
+import { CodexLifecycleRegistry, detectThreadLeak, assertValidScope, keyMatchesScope } from '../lifecycle-registry';
 import type { CodexRunHandle, CodexRunSessionKey } from '../types';
 
 function fakeHandle(
@@ -174,33 +168,20 @@ describe('T14 detectThreadLeak (no-thread-leak via loaded/list)', () => {
   });
 
   it('leak detected when an owned thread is still loaded (triggers forceKillFallback)', () => {
-    const res = detectThreadLeak(
-      [{ threadId: 'thr-closed' }, { threadId: 'other' }],
-      ['thr-closed'],
-    );
+    const res = detectThreadLeak([{ threadId: 'thr-closed' }, { threadId: 'other' }], ['thr-closed']);
     expect(res.leaked).toBe(true);
     expect(res.staleThreadIds).toEqual(['thr-closed']);
   });
 
   it('respects a grace window: a recently-loaded owned thread is not yet a leak', () => {
     const now = 10_000;
-    const res = detectThreadLeak(
-      [{ threadId: 'thr-closed', loadedSince: 9_000 }],
-      ['thr-closed'],
-      5_000,
-      now,
-    );
+    const res = detectThreadLeak([{ threadId: 'thr-closed', loadedSince: 9_000 }], ['thr-closed'], 5_000, now);
     expect(res.leaked).toBe(false);
   });
 
   it('past the grace window the owned thread is a leak', () => {
     const now = 20_000;
-    const res = detectThreadLeak(
-      [{ threadId: 'thr-closed', loadedSince: 9_000 }],
-      ['thr-closed'],
-      5_000,
-      now,
-    );
+    const res = detectThreadLeak([{ threadId: 'thr-closed', loadedSince: 9_000 }], ['thr-closed'], 5_000, now);
     expect(res.leaked).toBe(true);
   });
 });

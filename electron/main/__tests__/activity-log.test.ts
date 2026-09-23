@@ -132,3 +132,32 @@ describe('activity-log', () => {
     );
   });
 });
+
+describe('recordSystemActivity (P3-2): sessao explicita ou atividade global, nunca adivinhada', () => {
+  it('com sessionId grava no Activity Log daquela sessao (turnIndex 0, phase end)', async () => {
+    const { recordSystemActivity } = await import('../activity-log');
+    recordSystemActivity({
+      id: 'od-autostart-abort-1',
+      label: 'LionDesign autostart abortado',
+      description: 'sem sessionConfig',
+      status: 'error',
+      sessionId: 'sess-b',
+    });
+    expect(mocks.upsertActivityLog).toHaveBeenCalledTimes(1);
+    expect(mocks.upsertActivityLog).toHaveBeenCalledWith(
+      'sess-b',
+      0,
+      expect.objectContaining({ id: 'od-autostart-abort-1', kind: 'tool', phase: 'end', status: 'error' }),
+    );
+  });
+
+  it('sem sessionId e atividade global: fica so no log, nenhuma sessao recebe o registro', async () => {
+    const { recordSystemActivity } = await import('../activity-log');
+    recordSystemActivity({
+      id: 'mcp-discovery-skip-1',
+      label: 'mcp-discovery pulado',
+      description: 'orquestrador nao e claude-sdk',
+    });
+    expect(mocks.upsertActivityLog).not.toHaveBeenCalled();
+  });
+});

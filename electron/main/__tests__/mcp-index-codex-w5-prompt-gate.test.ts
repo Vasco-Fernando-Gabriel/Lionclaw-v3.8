@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const state = vi.hoisted(() => ({
@@ -101,11 +100,7 @@ vi.mock('../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-import {
-  buildSystemPrompt,
-  buildMcpIndexSection,
-  buildCodexMcpIndexSection,
-} from '../prompt-builder';
+import { buildSystemPrompt, buildMcpIndexSection, buildCodexMcpIndexSection } from '../prompt-builder';
 import {
   GATEWAY_INVOKE_TOOL_NAME,
   CODEX_GATEWAY_INVOKE_TOOL_NAME,

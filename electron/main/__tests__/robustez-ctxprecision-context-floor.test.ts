@@ -13,23 +13,13 @@ import { activeToolSchemasJson } from '../agent-runtime/tool-schemas';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MAIN = path.resolve(__dirname, '..');
 
-const SYSTEM_PROMPT = 'S'.repeat(92_000); // ~23.000 tokens
+const SYSTEM_PROMPT = 'S'.repeat(92_000);
 const HISTORY_TEXTS = [
   'U'.repeat(88_000), // turno de usuario grande (~22K tokens)
   'A'.repeat(60_000), // resposta anterior (~15K tokens)
 ];
-const ASSISTANT_RESPONSE = 'R'.repeat(4_000); // ~1.000 tokens
-const ENABLED_TOOLS = [
-  'Read',
-  'Write',
-  'Edit',
-  'Glob',
-  'Grep',
-  'Bash',
-  'WebFetch',
-  'TodoWrite',
-  'NotebookEdit',
-];
+const ASSISTANT_RESPONSE = 'R'.repeat(4_000);
+const ENABLED_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebFetch', 'TodoWrite', 'NotebookEdit'];
 
 describe('activeToolSchemasJson — bucket de schemas do PISO (Hermes str(tools))', () => {
   it('serializa full schema para builtins conhecidos e stub {name} para o resto', () => {
@@ -47,15 +37,13 @@ describe('activeToolSchemasJson — bucket de schemas do PISO (Hermes str(tools)
 
   it('escala com a contagem de tools (50+ tools = 20-30K invisiveis, #14695)', () => {
     const few = activeToolSchemasJson(['Read']).length;
-    const many = activeToolSchemasJson(
-      Array.from({ length: 50 }, (_, i) => `mcp_tool_${i}`),
-    ).length;
+    const many = activeToolSchemasJson(Array.from({ length: 50 }, (_, i) => `mcp_tool_${i}`)).length;
     expect(many).toBeGreaterThan(few);
   });
 });
 
 describe('MINOR-1 — compat: contexto vivo NUNCA vira o odometro do resultUsage', () => {
-  const lastMainUsageRaw: Record<string, number> | null = null; // GLM/MiniMax
+  const lastMainUsageRaw: Record<string, number> | null = null;
   const resultUsage = {
     input_tokens: 646_000,
     cache_read_input_tokens: 40_000,
@@ -76,15 +64,11 @@ describe('MINOR-1 — compat: contexto vivo NUNCA vira o odometro do resultUsage
   });
 
   it('sem usage por-request, o contexto vivo = PISO do payload (odometro ignorado)', () => {
-    const primaryUsage = lastMainUsageRaw; // <- SEM `?? resultUsage`
+    const primaryUsage = lastMainUsageRaw;
     const canonical = primaryUsage ? normalizeUsage(primaryUsage, 'anthropic') : null;
     const realPromptTokens = canonical ? canonicalPromptTokens(canonical) : 0;
     const realOutputTokens = canonical ? 12_000 : 0;
-    const live = reconcileActiveContext(
-      realPromptTokens,
-      realOutputTokens,
-      compatContextEstimate,
-    );
+    const live = reconcileActiveContext(realPromptTokens, realOutputTokens, compatContextEstimate);
 
     expect(live).not.toBe(686_000);
     expect(live).toBeLessThan(200_000);
@@ -94,7 +78,7 @@ describe('MINOR-1 — compat: contexto vivo NUNCA vira o odometro do resultUsage
     expect(oldSubcount).toBeLessThan(2_000);
     expect(live).toBeGreaterThan(oldSubcount * 20);
     expect(live).toBe(compatContextEstimate);
-    expect(live).toBeGreaterThan(50_000); // ~60K: system+historico
+    expect(live).toBeGreaterThan(50_000);
   });
 
   it('quando o provider POPULA usage por-request, o real (nao-odometro) vence', () => {
@@ -105,11 +89,7 @@ describe('MINOR-1 — compat: contexto vivo NUNCA vira o odometro do resultUsage
       output_tokens: 161,
     };
     const canonical = normalizeUsage(perRequest, 'anthropic');
-    const live = reconcileActiveContext(
-      canonicalPromptTokens(canonical),
-      161,
-      compatContextEstimate,
-    );
+    const live = reconcileActiveContext(canonicalPromptTokens(canonical), 161, compatContextEstimate);
     expect(live).toBe(51_016 + 161);
   });
 });

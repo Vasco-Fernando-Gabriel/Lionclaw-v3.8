@@ -1,10 +1,7 @@
 #!/usr/bin/env node
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { google, calendar_v3 } from 'googleapis';
 
 let calendarApi: calendar_v3.Calendar;
@@ -62,10 +59,7 @@ function formatEventList(events: calendar_v3.Schema$Event[]): string {
   return events.map((e, i) => `--- Evento ${i + 1} ---\n${formatEvent(e)}`).join('\n\n');
 }
 
-const server = new Server(
-  { name: 'google-calendar', version: '1.0.0' },
-  { capabilities: { tools: {} } },
-);
+const server = new Server({ name: 'google-calendar', version: '1.0.0' }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
@@ -257,7 +251,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'quick_add',
-      description: 'Adicionar evento via texto em linguagem natural (ex: "Reuniao amanha as 15h", "Almoço com João sexta 12:30").',
+      description:
+        'Adicionar evento via texto em linguagem natural (ex: "Reuniao amanha as 15h", "Almoço com João sexta 12:30").',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -296,10 +291,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           timeZone: cal.timeZone,
         }));
         return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify(calendars, null, 2),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(calendars, null, 2),
+            },
+          ],
         };
       }
 
@@ -322,10 +319,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const events = response.data.items ?? [];
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: formatEventList(events),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: formatEventList(events),
+            },
+          ],
         };
       }
 
@@ -335,10 +334,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           eventId: a.event_id as string,
         });
         return {
-          content: [{
-            type: 'text' as const,
-            text: formatEvent(response.data),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: formatEvent(response.data),
+            },
+          ],
         };
       }
 
@@ -352,12 +353,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         const eventBody: calendar_v3.Schema$Event = {
           summary: a.summary as string,
-          start: isAllDay
-            ? { date: startDt }
-            : { dateTime: startDt, timeZone: timezone },
-          end: isAllDay
-            ? { date: endDt }
-            : { dateTime: endDt, timeZone: timezone },
+          start: isAllDay ? { date: startDt } : { dateTime: startDt, timeZone: timezone },
+          end: isAllDay ? { date: endDt } : { dateTime: endDt, timeZone: timezone },
         };
 
         if (a.description) eventBody.description = a.description as string;
@@ -374,10 +371,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: `Evento criado com sucesso.\n\n${formatEvent(response.data)}`,
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: `Evento criado com sucesso.\n\n${formatEvent(response.data)}`,
+            },
+          ],
         };
       }
 
@@ -420,10 +419,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: `Evento atualizado com sucesso.\n\n${formatEvent(response.data)}`,
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: `Evento atualizado com sucesso.\n\n${formatEvent(response.data)}`,
+            },
+          ],
         };
       }
 
@@ -435,10 +436,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: `Evento ${a.event_id as string} excluido com sucesso do calendario ${a.calendar_id as string}.`,
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: `Evento ${a.event_id as string} excluido com sucesso do calendario ${a.calendar_id as string}.`,
+            },
+          ],
         };
       }
 
@@ -478,10 +481,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           if (merged.length === 0 || interval.start > merged[merged.length - 1].end) {
             merged.push({ start: interval.start, end: interval.end });
           } else {
-            merged[merged.length - 1].end = Math.max(
-              merged[merged.length - 1].end,
-              interval.end,
-            );
+            merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, interval.end);
           }
         }
 
@@ -517,26 +517,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         if (freeSlots.length === 0) {
           return {
-            content: [{
-              type: 'text' as const,
-              text: `Nenhum horario livre de pelo menos ${a.duration_minutes as number} minutos encontrado no periodo informado.`,
-            }],
+            content: [
+              {
+                type: 'text' as const,
+                text: `Nenhum horario livre de pelo menos ${a.duration_minutes as number} minutos encontrado no periodo informado.`,
+              },
+            ],
           };
         }
 
         const lines = [
           `Horarios livres encontrados (minimo ${a.duration_minutes as number} min):`,
           '',
-          ...freeSlots.map((s, i) =>
-            `Slot ${i + 1}: ${s.start} ate ${s.end} (${s.duration_minutes} minutos)`,
-          ),
+          ...freeSlots.map((s, i) => `Slot ${i + 1}: ${s.start} ate ${s.end} (${s.duration_minutes} minutos)`),
         ];
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: lines.join('\n'),
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: lines.join('\n'),
+            },
+          ],
         };
       }
 
@@ -550,10 +552,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         return {
-          content: [{
-            type: 'text' as const,
-            text: `Evento adicionado via texto livre.\n\n${formatEvent(response.data)}`,
-          }],
+          content: [
+            {
+              type: 'text' as const,
+              text: `Evento adicionado via texto livre.\n\n${formatEvent(response.data)}`,
+            },
+          ],
         };
       }
 
@@ -565,10 +569,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   } catch (err) {
     return {
-      content: [{
-        type: 'text' as const,
-        text: `Erro Google Calendar: ${(err as Error).message}`,
-      }],
+      content: [
+        {
+          type: 'text' as const,
+          text: `Erro Google Calendar: ${(err as Error).message}`,
+        },
+      ],
       isError: true,
     };
   }

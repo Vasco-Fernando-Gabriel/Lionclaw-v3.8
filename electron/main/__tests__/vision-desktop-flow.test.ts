@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const h = vi.hoisted(() => ({
@@ -83,13 +82,16 @@ vi.mock('../repo-graph/turn-context', () => ({
   clearRepoGraphTurnSession: vi.fn(),
   setRepoGraphTurnContext: vi.fn(),
 }));
-vi.mock('../prompt-builder-repo-graph', () => ({ appendRepoGraphSection: (p: string) => p, buildRepoGraphSection: () => '' }));
+vi.mock('../prompt-builder-repo-graph', () => ({
+  appendRepoGraphSection: (p: string) => p,
+  buildRepoGraphSection: () => '',
+}));
 vi.mock('../sdk-session-id', () => ({ makeScopedSdkSessionId: (s: string, i: string) => `${s}:${i}` }));
 vi.mock('../agent-runtime/codex-session-factory', () => ({
   resolveCodexSessionForRun: vi.fn(async () => ({ send: vi.fn(), close: vi.fn() })),
 }));
 vi.mock('../codex-sdk/stream-translator', () => ({
-  createCodexStreamTranslator: () => ({ callbacks: {}, finalize: vi.fn(), fail: vi.fn() }),
+  createCodexStreamTranslator: () => ({ callbacks: {}, finalize: vi.fn(), fail: vi.fn(), timelineEvents: () => [] }),
 }));
 vi.mock('../smoke-audit', () => ({ smokeAudit: h.smokeAuditMock }));
 
@@ -100,10 +102,7 @@ vi.mock('../vision-engine', async () => {
 
 import { resolveDesktopVisionTurn } from '../orchestrator';
 import type { QueryOptions } from '../orchestrator';
-import {
-  VISION_TRANSCRIPTION_MARKER,
-  VisionCallError,
-} from '../vision-engine';
+import { VISION_TRANSCRIPTION_MARKER, VisionCallError } from '../vision-engine';
 
 const IMG = {
   id: 'a1',

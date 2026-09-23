@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -9,7 +8,6 @@ vi.mock('../logger', () => ({
     debug: vi.fn(),
   }),
 }));
-
 
 const getHarnessProjectMock = vi.fn<(id: string) => Record<string, unknown> | null>();
 const getDriveStateMock = vi.fn<(id: string) => Record<string, unknown> | null>(() => null);
@@ -30,13 +28,11 @@ vi.mock('../db', () => ({
   },
 }));
 
-
 vi.mock('../pipeline-create', () => ({ createPipelineProject: vi.fn() }));
 vi.mock('../pipeline-engine-ref', () => ({ getPipelineEngineRef: vi.fn(() => null) }));
 vi.mock('../pipeline-drive-coordinator', () => ({ getPipelineDriveCoordinator: vi.fn(() => null) }));
 vi.mock('../pipeline-event-bus', () => ({ pipelineEventBus: { on: vi.fn(), emit: vi.fn() } }));
 vi.mock('../pipeline-shared/ipc-emitter', () => ({ emitIPC: vi.fn() }));
-
 
 vi.mock('../mcp-manager', () => ({ getAllMCPServers: vi.fn(() => []) }));
 vi.mock('../secrets-vault', () => ({ getSecret: vi.fn(async () => null) }));
@@ -55,7 +51,6 @@ const lionAgentDispatchMock = vi.fn(async (_params: unknown) => ({ ok: true, sum
 vi.mock('../lion-sdk/tools/agent', () => ({
   lionAgentDispatch: (params: unknown) => lionAgentDispatchMock(params),
 }));
-
 
 const getSessionConfigMock = vi.fn<(id: string) => Record<string, unknown> | null>();
 vi.mock('../open-design/session-config', () => ({
@@ -82,11 +77,7 @@ vi.mock('../open-design/adapter-http', () => ({
   createAdapter: (cfg: unknown) => createAdapterMock(cfg as never),
 }));
 
-
-import {
-  sendDesignPrompt,
-  DESIGN_SESSION_INACTIVE_ERROR,
-} from '../open-design/design-prompt';
+import { sendDesignPrompt, DESIGN_SESSION_INACTIVE_ERROR } from '../open-design/design-prompt';
 import { PIPELINE_WRITE_ACTIONS } from '../pipeline-control-core';
 import { dispatch, handleCallAgent } from '../local-ipc/jsonrpc-methods';
 import type { JsonRpcContext } from '../local-ipc/jsonrpc-methods';
@@ -98,6 +89,7 @@ const agentCtx: JsonRpcContext = {
   connection: { authenticatedHelper: true, serverId: 'lionclaw-agents', connectionId: 'design-prompt-agent-test' },
 };
 let activeTurn: ActiveChatTurnFixture;
+const activeBinding = () => ({ sessionId: activeTurn.sessionId, turnId: activeTurn.turnId });
 
 function devV2Project(partial: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -146,7 +138,6 @@ beforeEach(() => {
 });
 
 afterEach(() => activeTurn.dispose());
-
 
 describe('sendDesignPrompt — validacoes do handler (B1-AC2)', () => {
   it('projeto inexistente -> { error } sem tocar o adapter', async () => {
@@ -254,7 +245,6 @@ describe('sendDesignPrompt — validacoes do handler (B1-AC2)', () => {
   });
 });
 
-
 describe('design_prompt removida do catalogo do orquestrador (A4 / A2-AC6)', () => {
   it('design_prompt NAO esta em PIPELINE_WRITE_ACTIONS', () => {
     expect(PIPELINE_WRITE_ACTIONS.has('design_prompt')).toBe(false);
@@ -268,7 +258,7 @@ describe('design_prompt removida do catalogo do orquestrador (A4 / A2-AC6)', () 
     const res = await dispatch(ctx, {
       method: 'design_prompt',
       id: 1,
-      params: { id: 'p1', message: 'deixe o header mais compacto' },
+      params: { ...activeBinding(), id: 'p1', message: 'deixe o header mais compacto' },
     });
     expect(res.result).toBeUndefined();
     expect(res.error).toBeDefined();
@@ -284,13 +274,17 @@ describe('design_prompt removida do catalogo do orquestrador (A4 / A2-AC6)', () 
       const res = await dispatch(ctx, {
         method: 'design_prompt',
         id: 10,
-        params: { id: 'p1', message: 'sub tentou' },
+        params: { ...activeBinding(), id: 'p1', message: 'sub tentou' },
       });
       inner.push({ notFound: res.error?.code === -32601 });
       return { ok: true, summary: 'done' };
     });
 
-    await handleCallAgent(agentCtx, { agent_id: 'sub-1', task: 'algo' });
+    await handleCallAgent(agentCtx, {
+      agent_id: 'sub-1',
+      task: 'algo',
+      binding: { lane: 'desktop', ...activeBinding() },
+    });
 
     expect(inner).toEqual([{ notFound: true }]);
     expect(createAdapterMock).not.toHaveBeenCalled();

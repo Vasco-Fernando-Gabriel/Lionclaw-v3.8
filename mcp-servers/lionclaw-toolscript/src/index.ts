@@ -1,11 +1,7 @@
-
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import {
-  LocalIpcClient,
-  assertEndpointPresentOrExit,
-} from '../../_shared/local-ipc-client.js';
+import { LocalIpcClient, assertEndpointPresentOrExit, withTurnBinding } from '../../_shared/local-ipc-client.js';
 
 assertEndpointPresentOrExit();
 
@@ -46,9 +42,11 @@ server.tool(
   {
     code: z.string().describe('Script Python que importa de lionclaw_tools e imprime o resultado no stdout.'),
   },
-  async ({ code }): Promise<ToolResult> => {
+  async ({ code }, extra): Promise<ToolResult> => {
     try {
-      const result = await client.callMethod('run_tool_script', { code }, { idempotent: false });
+      const result = await client.callMethod('run_tool_script', withTurnBinding({ code }, extra), {
+        idempotent: false,
+      });
       return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

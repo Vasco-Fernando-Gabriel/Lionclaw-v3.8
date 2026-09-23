@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { DynamicWorkflowEvent, DynamicWorkflowRun } from '../dynamic-workflows/types';
 import type { LiveActivityEvent, StreamChunk } from '../../../src/types';
@@ -21,7 +20,6 @@ import {
   initWorkflowActivityBridge,
   type WorkflowActivityDeps,
 } from '../dynamic-workflows/workflow-activity';
-
 
 function makeRun(patch?: Partial<DynamicWorkflowRun>): DynamicWorkflowRun {
   return {
@@ -109,7 +107,6 @@ beforeEach(() => {
   seqCounter = 0;
 });
 
-
 describe('mapWorkflowEventToActivities (S16, mapeador puro)', () => {
   it('run-started: um unico bloco raiz workflow com phase start e projectId = runId', () => {
     const run = makeRun();
@@ -183,7 +180,7 @@ describe('mapWorkflowEventToActivities (S16, mapeador puro)', () => {
       payloadJson: JSON.stringify({ gateId: 'final', mode: 'orchestrator' }),
     });
     const out = mapWorkflowEventToActivities(ev, run);
-    expect(out).toHaveLength(2); // raiz + filho de gate
+    expect(out).toHaveLength(2);
     const gate = out[1]!;
     expect(gate.id).toBe('workflow:run-1:gate:final');
     expect(gate.parentId).toBe('workflow:run-1');
@@ -242,15 +239,11 @@ describe('mapWorkflowEventToActivities (S16, mapeador puro)', () => {
 
   it('payload invalido nao derruba o mapeador (parse defensivo)', () => {
     const run = makeRun();
-    const out = mapWorkflowEventToActivities(
-      makeEvent({ type: 'node-started', payloadJson: '{ nao-e-json' }),
-      run,
-    );
+    const out = mapWorkflowEventToActivities(makeEvent({ type: 'node-started', payloadJson: '{ nao-e-json' }), run);
     expect(out).toHaveLength(2);
     expect(out[1]!.id).toBe('workflow:run-1:node:node#1');
   });
 });
-
 
 describe('initWorkflowActivityBridge gating chat-bound (S16, AC-13)', () => {
   type RecordCall = { sessionId: string; turnIndex: number; ev: LiveActivityEvent };
@@ -274,8 +267,8 @@ describe('initWorkflowActivityBridge gating chat-bound (S16, AC-13)', () => {
   it('run SEM chatSessionId: nenhum record gravado (vive so na pagina)', () => {
     const { bus, records, overrides, cleanup } = setup(makeRun({ chatSessionId: null }));
     bus.publish(makeEvent({ type: 'run-started' }));
-    expect((overrides.getRun as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('run-1');
-    expect((overrides.getTurnIndex as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
+    expect(overrides.getRun as ReturnType<typeof vi.fn>).toHaveBeenCalledWith('run-1');
+    expect(overrides.getTurnIndex as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
     expect(records).toHaveLength(0);
     cleanup();
   });
@@ -317,7 +310,6 @@ describe('initWorkflowActivityBridge gating chat-bound (S16, AC-13)', () => {
     cleanup();
   });
 });
-
 
 describe('initWorkflowActivityBridge idempotencia (S16)', () => {
   it('a segunda chamada desassina a primeira antes de reassinar', () => {

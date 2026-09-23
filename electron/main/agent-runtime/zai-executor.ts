@@ -1,3 +1,5 @@
+import { createSwarmProcessOwner } from './swarm-process';
+import { swarmSdkHooks } from './swarm-sdk-hooks';
 
 import fs from 'fs';
 import { createLogger } from '../logger';
@@ -6,10 +8,7 @@ import { calculateCost, getPricingSnapshot } from '../pricing';
 import { getSetting } from '../db';
 import { getSecret } from '../secrets-vault';
 import { getClaudeCompatPreset } from '../claude-compat-sdk/provider-presets';
-import {
-  getClaudeSdkProcessOptions,
-  ensureNodeInPath,
-} from '../pipeline-shared/sdk-bootstrap';
+import { getClaudeSdkProcessOptions, ensureNodeInPath } from '../pipeline-shared/sdk-bootstrap';
 import type { AgentQueryConfig } from '../agent-config-resolver';
 import type { RuntimeExecutor, AgentExecutionRequest, AgentExecutionResult } from './types';
 import { SDK_DISALLOWED_TOOLS, toSdkToolNames } from './sdk-tool-names';
@@ -69,13 +68,11 @@ export function buildZaiEnv(
     ANTHROPIC_DEFAULT_OPUS_MODEL: model,
     ANTHROPIC_DEFAULT_SONNET_MODEL: model,
     ANTHROPIC_DEFAULT_HAIKU_MODEL: model,
-    ...(contextWindow !== undefined
-      ? { CLAUDE_CODE_MAX_CONTEXT_TOKENS: String(contextWindow) }
-      : {}),
+    ...(contextWindow !== undefined ? { CLAUDE_CODE_MAX_CONTEXT_TOKENS: String(contextWindow) } : {}),
   };
 }
 
-async function resolveZaiApiKey(): Promise<string> {
+export async function resolveZaiApiKey(): Promise<string> {
   const vaultRef = getSetting('orchestrator_zai_api_key_ref');
   if (!vaultRef) {
     throw new Error(
@@ -85,9 +82,7 @@ async function resolveZaiApiKey(): Promise<string> {
 
   const apiKey = await getSecret(vaultRef);
   if (!apiKey) {
-    throw new Error(
-      `Chave Z.ai nao encontrada no Vault (ref=${vaultRef}). Reconecte Z.ai em Provedores externos.`,
-    );
+    throw new Error(`Chave Z.ai nao encontrada no Vault (ref=${vaultRef}). Reconecte Z.ai em Provedores externos.`);
   }
 
   return apiKey;
@@ -101,9 +96,8 @@ export function buildZaiQueryOptions(
   apiKey: string,
 ): Record<string, unknown> {
   const preset = getClaudeCompatPreset('zai');
-  const mcpServersObj = config.mcpServers.length > 0
-    ? Object.fromEntries(config.mcpServers.flatMap((s) => Object.entries(s)))
-    : undefined;
+  const mcpServersObj =
+    config.mcpServers.length > 0 ? Object.fromEntries(config.mcpServers.flatMap((s) => Object.entries(s))) : undefined;
 
   return {
     env: buildZaiEnv(apiKey, config.model, preset.baseUrl),
@@ -111,8 +105,11 @@ export function buildZaiQueryOptions(
     cwd: req.cwd,
     model: config.model,
     systemPrompt: appendZaiRuntimeContext(config.systemPrompt, config.model),
-    allowedTools: toSdkToolNames(config.allowedTools),
+    allowedTools: req.executionAgent ? [] : toSdkToolNames(config.allowedTools),
     disallowedTools: [...SDK_DISALLOWED_TOOLS],
+    ...(req.executionAgent
+      ? { tools: toSdkToolNames(config.allowedTools), settingSources: [], hooks: swarmSdkHooks(req) }
+      : {}),
     permissionMode: req.permission.mode,
     allowDangerouslySkipPermissions: req.permission.dangerouslySkipPermissions,
     ...(req.permission.canUseTool ? { canUseTool: req.permission.canUseTool } : {}),
@@ -138,10 +135,7 @@ export function buildZaiQueryOptions(
   };
 }
 
-async function run(
-  req: AgentExecutionRequest,
-  config: AgentQueryConfig,
-): Promise<AgentExecutionResult> {
+async function run(req: AgentExecutionRequest, config: AgentQueryConfig): Promise<AgentExecutionResult> {
   ensureNodeInPath();
 
   const apiKey = await resolveZaiApiKey();
@@ -167,16 +161,15 @@ async function run(
     req.abortController.signal.removeEventListener('abort', onParentAbort);
   };
 
-  logger.info(
-    { agentId: req.agentId, model: config.model },
-    'zai-executor: running agent',
-  );
+  logger.info({ agentId: req.agentId, model: config.model }, 'zai-executor: running agent');
 
+  const swarmOwner = req.executionAgent ? createSwarmProcessOwner(req.swarmOwnerDirectory) : null;
   const q = (query as (opts: Record<string, unknown>) => unknown)({
     prompt: req.prompt,
     options: {
       ...buildZaiQueryOptions(req, config, cliPath, childAbort, apiKey),
       ...processOptions,
+      ...(swarmOwner ? { spawnClaudeCodeProcess: swarmOwner.spawnProcess } : {}),
     },
   }) as AsyncIterable<Record<string, unknown>>;
 
@@ -188,7 +181,7 @@ async function run(
   let sessionIds: Awaited<ReturnType<typeof processAgentStream>>['sessionIds'];
 
   try {
-    const result = await processAgentStream(q, {
+    const result = await processAgentStream(withRuntimeActivity(q, req.onActivity), {
       shouldAbort: () => childAbort.signal.aborted,
       onText: req.onText,
       onThinking: req.onThinking,
@@ -203,6 +196,7 @@ async function run(
     resultError = result.resultError;
   } finally {
     cleanupParentListener();
+    await swarmOwner?.closeConfirmed();
   }
 
   const durationMs = Date.now() - startedAt;
@@ -241,3 +235,10 @@ async function run(
 }
 
 export const zaiExecutor: RuntimeExecutor = { run };
+
+async function* withRuntimeActivity<T>(source: AsyncIterable<T>, onActivity?: () => void): AsyncIterable<T> {
+  for await (const event of source) {
+    onActivity?.();
+    yield event;
+  }
+}

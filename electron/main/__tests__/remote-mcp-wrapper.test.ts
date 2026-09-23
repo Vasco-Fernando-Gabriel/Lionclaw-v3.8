@@ -1,9 +1,8 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { spawnSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 
 let SANDBOX = '';
 
@@ -16,8 +15,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   try {
     fs.rmSync(SANDBOX, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
   vi.resetModules();
 });
 
@@ -30,14 +28,15 @@ vi.mock('../logger', () => ({
   }),
 }));
 
-
 const BLOTATO_KEY_VAR = 'BLOTATO_API_KEY';
 const SECRET_VALUE = 'blt-SECRET_VALUE_XYZ.abcdef.NEVER_TO_DISK';
 
 import {
   generateRemoteMcpWrapperSource,
   ensureRemoteMcpWrapperSync,
+  isSessionDirRemoteMcpWrapperEntry,
   resolveRemoteMcpWrapperPath,
+  REMOTE_MCP_STARTUP_LOCK_DIRNAME,
   type RemoteMcpBridgeRuntime,
   type RemoteMcpDescriptor,
 } from '../remote-mcp-wrapper';
@@ -138,7 +137,7 @@ describe('remote-mcp-wrapper :: modo header (Blotato)', () => {
     expect(src).toContain('process.exit(2)');
   });
 
-  it('source monta --header como HEADER_NAME + \': \' + ...', () => {
+  it("source monta --header como HEADER_NAME + ': ' + ...", () => {
     const src = generateSource(blotatoDescriptor());
     expect(src).toContain("'--header'");
     expect(src).toContain("HEADER_NAME + ': ' + apiKey.trim()");
@@ -272,9 +271,7 @@ describe('remote-mcp-wrapper :: filesystem (ensureRemoteMcpWrapperSync)', () => 
     const wrapperPath = ensureWrapper(blotatoDescriptor());
     const expected = resolveRemoteMcpWrapperPath(blotatoDescriptor());
     expect(wrapperPath).toBe(expected);
-    expect(wrapperPath).toBe(
-      path.join(SANDBOX, '.lionclaw', 'runtime', 'blotato', 'blotato-mcp-wrapper.js'),
-    );
+    expect(wrapperPath).toBe(path.join(SANDBOX, '.lionclaw', 'runtime', 'blotato', 'blotato-mcp-wrapper.js'));
     expect(fs.existsSync(wrapperPath)).toBe(true);
   });
 
@@ -295,9 +292,7 @@ describe('remote-mcp-wrapper :: filesystem (ensureRemoteMcpWrapperSync)', () => 
     expect(fs.existsSync((d.auth as { mode: 'session-dir'; configDir: string }).configDir)).toBe(true);
     if (process.platform !== 'win32') {
       expect(fs.statSync(root).mode & 0o777).toBe(0o700);
-      expect(
-        fs.statSync((d.auth as { mode: 'session-dir'; configDir: string }).configDir).mode & 0o777,
-      ).toBe(0o700);
+      expect(fs.statSync((d.auth as { mode: 'session-dir'; configDir: string }).configDir).mode & 0o777).toBe(0o700);
     }
   });
 
@@ -333,5 +328,136 @@ describe('remote-mcp-wrapper :: filesystem (ensureRemoteMcpWrapperSync)', () => 
       if (prev === undefined) delete process.env[BLOTATO_KEY_VAR];
       else process.env[BLOTATO_KEY_VAR] = prev;
     }
+  });
+});
+
+describe('remote-mcp-wrapper :: lock de arranque por auth dir (session-dir)', () => {
+  function authDir(): string {
+    return (higgsfieldDescriptor().auth as { mode: 'session-dir'; configDir: string }).configDir;
+  }
+
+  function writeFakeProxy(logFile: string, holdMs: number): void {
+    const proxyPath = testRuntime().proxyEntryPath;
+    fs.mkdirSync(path.dirname(proxyPath), { recursive: true });
+    fs.writeFileSync(
+      proxyPath,
+      [
+        "const fs = require('node:fs');",
+        `const log = ${JSON.stringify(logFile)};`,
+        "fs.appendFileSync(log, process.pid + ':start:' + Date.now() + String.fromCharCode(10));",
+        `setTimeout(() => { fs.appendFileSync(log, process.pid + ':end:' + Date.now() + String.fromCharCode(10)); process.exit(0); }, ${holdMs});`,
+      ].join('\n'),
+    );
+  }
+
+  function runWrapper(wrapperPath: string): Promise<{ code: number | null; stderr: string }> {
+    return new Promise((resolve) => {
+      const child = spawn(process.execPath, [wrapperPath], { stdio: ['ignore', 'ignore', 'pipe'] });
+      let stderr = '';
+      child.stderr?.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
+      child.on('exit', (code) => resolve({ code, stderr }));
+    });
+  }
+
+  it('source adquire o lock com mkdirSync atomico, detecta dono morto e libera na saida', () => {
+    const src = generateSource(higgsfieldDescriptor());
+    expect(src).toContain(`path.join(AUTH_DIR, ${JSON.stringify(REMOTE_MCP_STARTUP_LOCK_DIRNAME)})`);
+    expect(src).toContain('fs.mkdirSync(LOCK_DIR)');
+    expect(src).toContain("err.code === 'EEXIST'");
+    expect(src).toContain('process.kill(pid, 0)');
+    expect(src).toContain("process.on('exit', releaseLock)");
+    expect(src).toContain('tokenSignature(AUTH_DIR) !== tokensBefore');
+    const lockIdx = src.indexOf('while (!tryAcquireLock())');
+    const spawnIdx = src.indexOf('const child = spawn(');
+    expect(lockIdx).toBeGreaterThan(-1);
+    expect(spawnIdx).toBeGreaterThan(lockIdx);
+  });
+
+  it('modo header nao ganha lock (sem auth dir compartilhado)', () => {
+    const src = generateSource(blotatoDescriptor());
+    expect(src).not.toContain('tryAcquireLock');
+  });
+
+  it('dois wrappers concorrentes: o segundo mcp-remote so inicia depois que o primeiro terminou', async () => {
+    const dir = authDir();
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'abc_tokens.json'), '{}');
+    const logFile = path.join(SANDBOX, 'proxy.log');
+    writeFakeProxy(logFile, 400);
+    const wrapperPath = ensureWrapper(higgsfieldDescriptor());
+
+    const [a, b] = await Promise.all([runWrapper(wrapperPath), runWrapper(wrapperPath)]);
+    expect(a.code, a.stderr).toBe(0);
+    expect(b.code, b.stderr).toBe(0);
+
+    const events = fs
+      .readFileSync(logFile, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => {
+        const [pid, kind, at] = line.split(':');
+        return { pid, kind, at: Number(at) };
+      });
+    const starts = events.filter((e) => e.kind === 'start').sort((x, y) => x.at - y.at);
+    const ends = events.filter((e) => e.kind === 'end').sort((x, y) => x.at - y.at);
+    expect(starts).toHaveLength(2);
+    expect(ends).toHaveLength(2);
+    expect(starts[1].at).toBeGreaterThanOrEqual(ends[0].at);
+    expect(fs.existsSync(path.join(dir, REMOTE_MCP_STARTUP_LOCK_DIRNAME))).toBe(false);
+  }, 20000);
+
+  it('lock deixado por processo morto e removido e o wrapper segue', async () => {
+    const dir = authDir();
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'abc_tokens.json'), '{}');
+    const lockDir = path.join(dir, REMOTE_MCP_STARTUP_LOCK_DIRNAME);
+    fs.mkdirSync(lockDir);
+    fs.writeFileSync(path.join(lockDir, 'owner.json'), JSON.stringify({ pid: 999999999, at: Date.now() }));
+    const logFile = path.join(SANDBOX, 'proxy.log');
+    writeFakeProxy(logFile, 50);
+    const wrapperPath = ensureWrapper(higgsfieldDescriptor());
+
+    const startedAt = Date.now();
+    const run = await runWrapper(wrapperPath);
+    expect(run.code, run.stderr).toBe(0);
+    expect(Date.now() - startedAt).toBeLessThan(5000);
+    expect(fs.existsSync(logFile)).toBe(true);
+    expect(fs.existsSync(lockDir)).toBe(false);
+  }, 20000);
+
+  it('token invalidado enquanto outro processo segura o lock: sai com 2 sem iniciar o mcp-remote', async () => {
+    const dir = authDir();
+    fs.mkdirSync(dir, { recursive: true });
+    const tokenFile = path.join(dir, 'abc_tokens.json');
+    fs.writeFileSync(tokenFile, '{}');
+    const lockDir = path.join(dir, REMOTE_MCP_STARTUP_LOCK_DIRNAME);
+    fs.mkdirSync(lockDir);
+    fs.writeFileSync(path.join(lockDir, 'owner.json'), JSON.stringify({ pid: process.pid, at: Date.now() }));
+    const logFile = path.join(SANDBOX, 'proxy.log');
+    writeFakeProxy(logFile, 50);
+    const wrapperPath = ensureWrapper(higgsfieldDescriptor());
+
+    const pending = runWrapper(wrapperPath);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    fs.rmSync(tokenFile);
+    fs.rmSync(lockDir, { recursive: true, force: true });
+    const run = await pending;
+
+    expect(run.code).toBe(2);
+    expect(run.stderr).toContain('aguardando outro processo');
+    expect(run.stderr).toContain('invalidada por outro processo');
+    expect(fs.existsSync(logFile)).toBe(false);
+    expect(fs.existsSync(lockDir)).toBe(false);
+  }, 20000);
+
+  it('isSessionDirRemoteMcpWrapperEntry reconhece so wrapper session-dir', () => {
+    const higgs = ensureWrapper(higgsfieldDescriptor());
+    const blotato = ensureWrapper(blotatoDescriptor());
+    expect(isSessionDirRemoteMcpWrapperEntry(higgs)).toBe(true);
+    expect(isSessionDirRemoteMcpWrapperEntry(blotato)).toBe(false);
+    expect(isSessionDirRemoteMcpWrapperEntry(path.join(SANDBOX, 'nao-existe-mcp-wrapper.js'))).toBe(false);
+    expect(isSessionDirRemoteMcpWrapperEntry(undefined)).toBe(false);
   });
 });

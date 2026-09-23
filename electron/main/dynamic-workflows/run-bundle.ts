@@ -7,10 +7,7 @@ export const RUN_BUNDLE_MAX_ENTRIES = 500;
 const BUNDLE_FILES = ['workflow.js', 'workflow.manifest.json', join('logs', 'events.jsonl')];
 const BUNDLE_DIRS = ['schemas', 'checkpoints', 'artifacts'];
 
-export function listRunBundle(
-  runDir: string,
-  maxEntries: number = RUN_BUNDLE_MAX_ENTRIES,
-): RunBundleEntry[] {
+export function listRunBundle(runDir: string, maxEntries: number = RUN_BUNDLE_MAX_ENTRIES): RunBundleEntry[] {
   const root = resolve(runDir);
   const entries: RunBundleEntry[] = [];
   const isInside = (absolutePath: string): boolean => absolutePath.startsWith(root + sep);

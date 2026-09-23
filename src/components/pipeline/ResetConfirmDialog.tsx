@@ -3,10 +3,7 @@ import { AlertTriangle, Loader2, RotateCcw } from 'lucide-react';
 import { usePipelineStore } from '@/stores/pipeline-store';
 import type { PipelineResetPreview } from '@/types';
 
-
-type ResetTarget =
-  | { phase: number; phaseName: string }
-  | { sprintIndex: number; sprintTitle: string };
+type ResetTarget = { phase: number; phaseName: string } | { sprintIndex: number; sprintTitle: string };
 
 export interface ResetConfirmDialogProps {
   open: boolean;
@@ -15,7 +12,6 @@ export interface ResetConfirmDialogProps {
   onClose: () => void;
   onConfirmed: () => void;
 }
-
 
 function isPhaseTarget(t: ResetTarget): t is { phase: number; phaseName: string } {
   return 'phase' in t;
@@ -28,14 +24,7 @@ function buildTitle(target: ResetTarget): string {
   return `Resetar Sprint ${target.sprintIndex + 1}: ${target.sprintTitle}`;
 }
 
-
-export function ResetConfirmDialog({
-  open,
-  target,
-  projectId,
-  onClose,
-  onConfirmed,
-}: ResetConfirmDialogProps) {
+export function ResetConfirmDialog({ open, target, projectId, onClose, onConfirmed }: ResetConfirmDialogProps) {
   const { getResetPreview, resetPhase, resetSprint } = usePipelineStore();
   const pipelineType = usePipelineStore((s) => s.projects.find((p) => p.id === projectId)?.pipelineType);
 
@@ -54,9 +43,7 @@ export function ResetConfirmDialog({
     setResetError(null);
     setLoadingPreview(true);
 
-    const ipcTarget = isPhaseTarget(target)
-      ? { phase: target.phase }
-      : { sprintIndex: target.sprintIndex };
+    const ipcTarget = isPhaseTarget(target) ? { phase: target.phase } : { sprintIndex: target.sprintIndex };
 
     void getResetPreview(projectId, ipcTarget).then((result) => {
       setLoadingPreview(false);
@@ -96,7 +83,6 @@ export function ResetConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/75 backdrop-blur-sm">
       <div className="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl w-full max-w-md mx-4 flex flex-col">
-
         {/* Header */}
         <div className="flex items-center gap-2.5 px-5 pt-5 pb-3 border-b border-zinc-800">
           <RotateCcw size={16} className="text-red-400 shrink-0" />
@@ -136,7 +122,8 @@ export function ResetConfirmDialog({
               {preview && (preview.messagesToDelete > 0 || preview.metricsToDelete > 0) && (
                 <p className="text-xs text-zinc-400">
                   <span className="font-semibold text-zinc-300">{preview.messagesToDelete}</span> mensagens e{' '}
-                  <span className="font-semibold text-zinc-300">{preview.metricsToDelete}</span> metricas serao apagadas.
+                  <span className="font-semibold text-zinc-300">{preview.metricsToDelete}</span> metricas serao
+                  apagadas.
                 </p>
               )}
 
@@ -144,11 +131,10 @@ export function ResetConfirmDialog({
               {preview && preview.sprintsAffected.length > 0 && (
                 <p className="text-xs text-zinc-400">
                   <span className="font-semibold text-zinc-300">{preview.sprintsAffected.length}</span> sprint
-                  {preview.sprintsAffected.length !== 1 ? 's' : ''} sera{preview.sprintsAffected.length !== 1 ? 'o' : ''} afetada
+                  {preview.sprintsAffected.length !== 1 ? 's' : ''} sera
+                  {preview.sprintsAffected.length !== 1 ? 'o' : ''} afetada
                   {preview.sprintsAffected.length !== 1 ? 's' : ''}:{' '}
-                  <span className="text-zinc-300">
-                    {preview.sprintsAffected.map((i) => `S${i + 1}`).join(', ')}
-                  </span>
+                  <span className="text-zinc-300">{preview.sprintsAffected.map((i) => `S${i + 1}`).join(', ')}</span>
                 </p>
               )}
 
@@ -157,10 +143,9 @@ export function ResetConfirmDialog({
                 <div className="flex items-start gap-2.5 bg-red-500/15 border border-red-500/40 rounded-lg px-3 py-2.5">
                   <AlertTriangle size={14} className="text-red-400 shrink-0 mt-0.5" />
                   <p className="text-xs text-red-200 leading-relaxed">
-                    <b>O design do LionDesign sera APAGADO permanentemente</b> (projeto do sidecar
-                    + snapshot do lock) deste projeto. Ao reabrir o Studio, um novo design sera
-                    recriado do zero a partir do briefing da fase anterior. Os outros projetos e a
-                    conexao do LionDesign nao sao afetados.
+                    <b>O design do LionDesign sera APAGADO permanentemente</b> (projeto do sidecar + snapshot do lock)
+                    deste projeto. Ao reabrir o Studio, um novo design sera recriado do zero a partir do briefing da
+                    fase anterior. Os outros projetos e a conexao do LionDesign nao sao afetados.
                   </p>
                 </div>
               )}
@@ -168,15 +153,11 @@ export function ResetConfirmDialog({
               {/* Warning box */}
               <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2.5">
                 <AlertTriangle size={14} className="text-red-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-red-300 leading-relaxed">
-                  Esta acao e permanente e nao pode ser desfeita.
-                </p>
+                <p className="text-xs text-red-300 leading-relaxed">Esta acao e permanente e nao pode ser desfeita.</p>
               </div>
 
               {/* Error feedback */}
-              {resetError && (
-                <p className="text-xs text-red-400">{resetError}</p>
-              )}
+              {resetError && <p className="text-xs text-red-400">{resetError}</p>}
             </>
           )}
         </div>
@@ -191,7 +172,9 @@ export function ResetConfirmDialog({
             Cancelar
           </button>
           <button
-            onClick={() => { void handleConfirm(); }}
+            onClick={() => {
+              void handleConfirm();
+            }}
             disabled={resetting || loadingPreview}
             className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium rounded-lg bg-red-600 hover:bg-red-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >

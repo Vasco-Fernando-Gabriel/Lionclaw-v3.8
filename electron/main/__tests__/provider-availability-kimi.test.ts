@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -38,11 +37,7 @@ import { getSetting } from '../db';
 import { getSecret } from '../secrets-vault';
 import { isCodexAvailable } from '../codex-runtime/binary';
 import { isKimiAvailable } from '../agent-runtime/kimi-availability';
-import {
-  checkProvider,
-  listProviderStatuses,
-  invalidateProviderStatusCache,
-} from '../provider-availability';
+import { checkProvider, listProviderStatuses, invalidateProviderStatusCache } from '../provider-availability';
 
 const mockedGetSetting = vi.mocked(getSetting);
 const mockedGetSecret = vi.mocked(getSecret);
@@ -134,7 +129,7 @@ describe('SPEC-011: kimi-sdk availability surface (real probe)', () => {
     expect(status.connected).toBe(true);
     expect(status.reason).toBeUndefined();
     expect(status.models?.length).toBeGreaterThan(0);
-    expect(status.models?.map(m => m.id)).toContain('kimi-code/kimi-for-coding');
+    expect(status.models?.map((m) => m.id)).toContain('kimi-code/kimi-for-coding');
   });
 
   it('mantem connected diagnostico quando autenticado, mas bloqueia usable sem provider/modelo', async () => {
@@ -158,26 +153,23 @@ describe('SPEC-011: kimi-sdk availability surface (real probe)', () => {
     expect(status.reason).toMatch(/managed nao verificado/i);
   });
 
-
   it('T-P2: listProviderStatuses includes exactly one kimi-sdk entry and drops no existing probe', async () => {
     const statuses = await listProviderStatuses();
-    const kimiEntries = statuses.filter(s => s.runtime === 'kimi-sdk');
+    const kimiEntries = statuses.filter((s) => s.runtime === 'kimi-sdk');
     expect(kimiEntries).toHaveLength(1);
     expect(kimiEntries[0]?.provider).toBe('kimi');
 
     expect(statuses[0]?.runtime).toBe('claude-sdk');
-    const runtimes = statuses.map(s => s.runtime);
+    const runtimes = statuses.map((s) => s.runtime);
     expect(runtimes).toContain('claude-sdk');
     expect(runtimes).toContain('claude-compat-sdk');
     expect(runtimes).toContain('codex-sdk');
     expect(runtimes).toContain('lion-sdk');
     expect(runtimes).toContain('kimi-sdk');
     const lionProviders = statuses
-      .filter(s => s.runtime === 'lion-sdk')
-      .map(s => s.provider)
+      .filter((s) => s.runtime === 'lion-sdk')
+      .map((s) => s.provider)
       .sort();
-    expect(lionProviders).toEqual(
-      ['lmstudio', 'ollama', 'openai-compatible', 'vertex-ai'].sort(),
-    );
+    expect(lionProviders).toEqual(['lmstudio', 'ollama', 'openai-compatible', 'vertex-ai'].sort());
   });
 });

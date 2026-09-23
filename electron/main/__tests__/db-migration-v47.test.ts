@@ -1,6 +1,4 @@
-
 import { describe, it, expect } from 'vitest';
-
 
 const MIGRATION_V47 = `
   CREATE TABLE agents_new (
@@ -50,7 +48,6 @@ const MIGRATION_V47 = `
   ALTER TABLE agents_new RENAME TO agents;
 `;
 
-
 describe('db-migration-v47: analise estrutural do SQL', () => {
   it('MIGRATION_V47 contem coluna codex_config', () => {
     expect(MIGRATION_V47).toContain('codex_config');
@@ -68,7 +65,7 @@ describe('db-migration-v47: analise estrutural do SQL', () => {
   it('MIGRATION_V47 CHECK constraint aceita exatamente 4 runtimes', () => {
     const match = MIGRATION_V47.match(/runtime IN \(([^)]+)\)/);
     expect(match).not.toBeNull();
-    const runtimes = match![1].split(',').map(s => s.trim().replace(/'/g, ''));
+    const runtimes = match![1].split(',').map((s) => s.trim().replace(/'/g, ''));
     expect(runtimes).toHaveLength(4);
     expect(runtimes).toContain('cloud');
     expect(runtimes).toContain('local');
@@ -90,11 +87,29 @@ describe('db-migration-v47: analise estrutural do SQL', () => {
 
   it('MIGRATION_V47 copia todas as colunas pre-existentes no SELECT', () => {
     const requiredCols = [
-      'id', 'name', 'description', 'system_prompt', 'model',
-      'allowed_tools', 'mcp_servers', 'is_active', 'sort_order',
-      'effort', 'thinking', 'thinking_budget', 'max_turns',
-      'skills', 'kb_enabled', 'runtime', 'local_config', 'external_config',
-      'local_mode', 'max_tool_rounds', 'squad', 'created_at', 'updated_at',
+      'id',
+      'name',
+      'description',
+      'system_prompt',
+      'model',
+      'allowed_tools',
+      'mcp_servers',
+      'is_active',
+      'sort_order',
+      'effort',
+      'thinking',
+      'thinking_budget',
+      'max_turns',
+      'skills',
+      'kb_enabled',
+      'runtime',
+      'local_config',
+      'external_config',
+      'local_mode',
+      'max_tool_rounds',
+      'squad',
+      'created_at',
+      'updated_at',
     ];
     for (const col of requiredCols) {
       expect(MIGRATION_V47).toContain(col);
@@ -110,7 +125,6 @@ describe('db-migration-v47: analise estrutural do SQL', () => {
     expect(MIGRATION_V47).toContain('external_config, local_mode');
   });
 });
-
 
 describe('CodexConfig: estrutura do tipo', () => {
   it('sandbox aceita exatamente 3 valores', () => {
@@ -146,47 +160,18 @@ describe('CodexConfig: estrutura do tipo', () => {
   });
 });
 
-
 describe('db-migration-v47: execucao em banco in-memory', () => {
-  it.skip(
-    'preserva o numero total de agentes (cloud/local/external pre-existentes) apos migration',
-    () => {
-    },
-  );
+  it.skip('preserva o numero total de agentes (cloud/local/external pre-existentes) apos migration', () => {});
 
-  it.skip(
-    'preserva todos os campos campo a campo (name, model, runtime, kb_enabled, local_config, external_config, squad)',
-    () => {
-    },
-  );
+  it.skip('preserva todos os campos campo a campo (name, model, runtime, kb_enabled, local_config, external_config, squad)', () => {});
 
-  it.skip(
-    'nova coluna codex_config existe e e NULL para agentes pre-existentes',
-    () => {
-    },
-  );
+  it.skip('nova coluna codex_config existe e e NULL para agentes pre-existentes', () => {});
 
-  it.skip(
-    'permite inserir agente com runtime "codex" e codex_config JSON apos migration',
-    () => {
-    },
-  );
+  it.skip('permite inserir agente com runtime "codex" e codex_config JSON apos migration', () => {});
 
-  it.skip(
-    'rejeita runtime invalido apos migration (CHECK constraint ativo)',
-    () => {
-    },
-  );
+  it.skip('rejeita runtime invalido apos migration (CHECK constraint ativo)', () => {});
 
-  it.skip(
-    'aceita os 4 runtimes validos: cloud, local, external, codex',
-    () => {
-    },
-  );
+  it.skip('aceita os 4 runtimes validos: cloud, local, external, codex', () => {});
 
-  it.skip(
-    'updateAgent com codexConfig persiste JSON e e lido de volta por getAgent',
-    () => {
-    },
-  );
+  it.skip('updateAgent com codexConfig persiste JSON e e lido de volta por getAgent', () => {});
 });

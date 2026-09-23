@@ -1,12 +1,8 @@
-
 import { describe, it, expect } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
 import type Database from 'better-sqlite3';
 
-import {
-  applyMigrationV130,
-  __V130_INTERNAL,
-} from '../db-migrations/v130-contexto-vivo-piso';
+import { applyMigrationV130, __V130_INTERNAL } from '../db-migrations/v130-contexto-vivo-piso';
 
 function makeSessionsDb(): DatabaseSync {
   const db = new DatabaseSync(':memory:');
@@ -30,9 +26,7 @@ function makeSessionsDb(): DatabaseSync {
 }
 
 function columnNames(db: DatabaseSync): string[] {
-  return (db.prepare("PRAGMA table_info('sessions')").all() as Array<{ name: string }>).map(
-    (r) => r.name,
-  );
+  return (db.prepare("PRAGMA table_info('sessions')").all() as Array<{ name: string }>).map((r) => r.name);
 }
 
 describe('contexto-vivo §6 — migration V130 (colunas do PISO forte em sessions)', () => {
@@ -81,9 +75,10 @@ describe('contexto-vivo §6 — migration V130 (colunas do PISO forte em session
     expect(row.agentic_context_tokens_est).toBe(48210);
     expect(row.thread_reset_message_id).toBe(77);
 
-    db.prepare(
-      "UPDATE sessions SET agentic_context_tokens_est = ?, updated_at = datetime('now') WHERE id = ?",
-    ).run(50999, 's1');
+    db.prepare("UPDATE sessions SET agentic_context_tokens_est = ?, updated_at = datetime('now') WHERE id = ?").run(
+      50999,
+      's1',
+    );
     row = db
       .prepare('SELECT agentic_context_tokens_est, thread_reset_message_id FROM sessions WHERE id = ?')
       .get('s1') as Record<string, unknown>;

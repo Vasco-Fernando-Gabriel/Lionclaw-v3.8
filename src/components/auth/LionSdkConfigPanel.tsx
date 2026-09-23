@@ -56,9 +56,7 @@ export function LionSdkConfigPanel({ onComplete }: LionSdkConfigPanelProps) {
             >
               <span
                 className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 transition-colors ${
-                  chosenProvider === opt.id
-                    ? 'border-amber-500 bg-amber-500'
-                    : 'border-zinc-600 bg-transparent'
+                  chosenProvider === opt.id ? 'border-amber-500 bg-amber-500' : 'border-zinc-600 bg-transparent'
                 }`}
               />
               <span className="flex flex-col">
@@ -76,9 +74,7 @@ export function LionSdkConfigPanel({ onComplete }: LionSdkConfigPanelProps) {
       {/* Sub-painel conforme provedor escolhido */}
       {chosenProvider === 'ollama' && <OllamaSubPanel onComplete={onComplete} />}
       {chosenProvider === 'lmstudio' && <LmStudioSubPanel onComplete={onComplete} />}
-      {chosenProvider === 'openai-compatible' && (
-        <OpenAiCompatSubPanel onComplete={onComplete} />
-      )}
+      {chosenProvider === 'openai-compatible' && <OpenAiCompatSubPanel onComplete={onComplete} />}
       {chosenProvider === 'vertex-ai' && <VertexSubPanel onComplete={onComplete} />}
     </div>
   );

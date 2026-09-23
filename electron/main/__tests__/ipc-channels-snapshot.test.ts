@@ -1,8 +1,76 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DriveState, DriveStateChangedEvent, LionClawAPI } from '../../../src/types';
+import type { OpenDesktopSessionRow } from '../db';
 
+vi.mock('../logger', () => ({
+  createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
+}));
+
+const lane = vi.hoisted(() => ({
+  driveSessionId: null as string | null,
+  openLane: null as OpenDesktopSessionRow | null,
+  projects: [] as Array<Record<string, unknown>>,
+}));
+
+vi.mock('../db', () => ({
+  getHarnessProject: vi.fn((id: string) => lane.projects.find((p) => p['id'] === id)),
+  listHarnessProjects: vi.fn(() => lane.projects),
+  getSecurityAgentStatuses: vi.fn(() => []),
+  getAuditAgentsState: vi.fn(() => null),
+  deleteHarnessProject: vi.fn(),
+  getHarnessSprints: vi.fn(() => []),
+  getHarnessSprintAggregateMetrics: vi.fn(() => ({})),
+  getHarnessSprintByIndex: vi.fn(() => undefined),
+  getPipelinePhaseMessages: vi.fn(() => []),
+  listPipelineMessagesForSprint: vi.fn(() => []),
+  getPipelineMetrics: vi.fn(() => ({})),
+  getSecuritySummaryJson: vi.fn(() => null),
+  getBugAnalysisAgentsState: vi.fn(() => null),
+  isDriveEngaged: vi.fn(() => false),
+  getDriveSessionId: vi.fn(() => lane.driveSessionId),
+  getOpenLaneSessionById: vi.fn((id: string) => (lane.openLane && lane.openLane.id === id ? lane.openLane : null)),
+  getDriveState: vi.fn(() => null),
+  setDriveState: vi.fn(),
+}));
+
+const emitted = vi.hoisted(() => ({ driveEvents: [] as DriveStateChangedEvent[] }));
+vi.mock('../pipeline-shared/ipc-emitter', () => ({
+  emitIPC: (channel: string, payload: DriveStateChangedEvent) => {
+    if (channel === 'drive:state-changed') emitted.driveEvents.push(payload);
+  },
+}));
+
+vi.mock('../pipeline-event-bus', () => ({
+  pipelineEventBus: { emit: vi.fn(), on: vi.fn(() => () => {}) },
+}));
+vi.mock('../pipeline-shared/lock', () => ({
+  acquireProjectLock: vi.fn(() => true),
+  ensureProjectLock: vi.fn(),
+  releaseProjectLock: vi.fn(),
+}));
+vi.mock('../pipeline-create', () => ({ createPipelineProject: vi.fn() }));
+
+const driveCoordinator = vi.hoisted(() => ({ stopDrive: vi.fn() }));
+vi.mock('../pipeline-drive-coordinator', () => ({
+  getPipelineDriveCoordinator: () => driveCoordinator,
+}));
+
+const ipcHandlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => unknown>());
+vi.mock('electron', () => ({
+  ipcMain: {
+    handle: (channel: string, fn: (...args: unknown[]) => unknown) => {
+      ipcHandlers.set(channel, fn);
+    },
+  },
+  shell: { openPath: vi.fn(), showItemInFolder: vi.fn() },
+  BrowserWindow: { getAllWindows: () => [] },
+}));
+
+import { buildDriveStateChangedEvent } from '../drive-state-event';
+import { registerPipelineHandlers } from '../ipc/pipeline';
+import type { IpcContext } from '../ipc/context';
 
 describe('IPC channel payload snapshots', () => {
-
   describe('chat:stream', () => {
     it('text chunk with sessionId', () => {
       const payload = {
@@ -19,6 +87,26 @@ describe('IPC channel payload snapshots', () => {
         tool: 'Read',
         input: { file_path: '/Users/example/file.ts' },
         sessionId: 'sess_abc123',
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('artifact chunk (html) with filePath, size and sha256', () => {
+      const payload = {
+        type: 'artifact',
+        sessionId: 'sess_abc123',
+        artifact: {
+          id: 'art_html_1',
+          type: 'html',
+          title: 'Artefatos HTML',
+          toolName: 'file-output',
+          data: {
+            filePath: 'C:\\Users\\example\\.lionclaw\\artifacts\\revisao-20260908-1400.html',
+            fileName: 'revisao-20260908-1400.html',
+            size: 39855,
+            sha256: 'a'.repeat(64),
+          },
+        },
       };
       expect(payload).toMatchSnapshot();
     });
@@ -72,13 +160,11 @@ describe('IPC channel payload snapshots', () => {
       const payload = {
         type: 'error',
         code: 'orchestrator_unconfigured',
-        error:
-          'Orquestrador nao configurado: runtime ausente nos settings. Abra Configuracoes no app.',
+        error: 'Orquestrador nao configurado: runtime ausente nos settings. Abra Configuracoes no app.',
       };
       expect(payload).toMatchSnapshot();
     });
   });
-
 
   describe('chat:stream — activity (SPEC K2)', () => {
     it('activity chunk — subagent start', () => {
@@ -154,7 +240,6 @@ describe('IPC channel payload snapshots', () => {
       expect(payload).toMatchSnapshot();
     });
   });
-
 
   describe('chat:stream — activity v2 (SPEC K2 v2)', () => {
     it('activity chunk — subagent start (description + turnIndex)', () => {
@@ -243,7 +328,6 @@ describe('IPC channel payload snapshots', () => {
     });
   });
 
-
   describe('chat:ensure-session (SPEC handoff-orchestrator, Canal ADITIVO 1)', () => {
     it('request shape — { preferredSessionId } presente', () => {
       const payload = { preferredSessionId: 'sess_abc123' };
@@ -271,7 +355,6 @@ describe('IPC channel payload snapshots', () => {
     });
   });
 
-
   describe('chat:get-context-usage (SPEC robustez-chat SA-2, Canal ADITIVO UX-CTX)', () => {
     it('request shape — sessionId', () => {
       const payload = 'sess_abc123';
@@ -293,7 +376,6 @@ describe('IPC channel payload snapshots', () => {
       expect(payload).toMatchSnapshot();
     });
   });
-
 
   describe('chat feature toggles (SPEC chat-context-reduction A.3, Canais ADITIVOS S2)', () => {
     it('chat:send options — campo aditivo featureToggles (snapshot do turno)', () => {
@@ -343,8 +425,7 @@ describe('IPC channel payload snapshots', () => {
       const payload = {
         ok: false,
         code: 'session_not_desktop',
-        error:
-          'Toggles de capability so existem em sessoes de chat do desktop (chat/manual).',
+        error: 'Toggles de capability so existem em sessoes de chat do desktop (chat/manual).',
       };
       expect(payload).toMatchSnapshot();
     });
@@ -353,13 +434,11 @@ describe('IPC channel payload snapshots', () => {
       const payload = {
         ok: false,
         code: 'session_not_active',
-        error:
-          'A sessao nao esta ativa; toggles so podem ser alterados em sessao ativa.',
+        error: 'A sessao nao esta ativa; toggles so podem ser alterados em sessao ativa.',
       };
       expect(payload).toMatchSnapshot();
     });
   });
-
 
   describe('dynamic-workflow:get-run (SPEC handoff-orchestrator, Canal ADITIVO 2 — D8)', () => {
     const baseRun = {
@@ -411,7 +490,6 @@ describe('IPC channel payload snapshots', () => {
       expect(payload).toMatchSnapshot();
     });
   });
-
 
   describe('dynamic-workflow:get-run-bundle / open-run-dir (SPEC orquestrador-driver S4, D25c)', () => {
     it('get-run-bundle request shape — runId', () => {
@@ -469,7 +547,6 @@ describe('IPC channel payload snapshots', () => {
       expect(payload).toMatchSnapshot();
     });
   });
-
 
   describe('activity:get-blocks (SPEC K2 v2)', () => {
     it('request shape — sessionId', () => {
@@ -540,7 +617,6 @@ describe('IPC channel payload snapshots', () => {
     });
   });
 
-
   describe('drive:* (SPEC orchestrator-pipeline-control S8)', () => {
     it('get-state request shape — projectId', () => {
       const payload = { projectId: 'proj_456' };
@@ -606,8 +682,7 @@ describe('IPC channel payload snapshots', () => {
 
     it('error response shape (lock global ja ativo)', () => {
       const payload = {
-        error:
-          'ja existe um drive ativo no projeto "proj_999". Pare-o (ou Assumir) antes de iniciar outro.',
+        error: 'ja existe um drive ativo no projeto "proj_999". Pare-o (ou Assumir) antes de iniciar outro.',
       };
       expect(payload).toMatchSnapshot();
     });
@@ -633,7 +708,6 @@ describe('IPC channel payload snapshots', () => {
     });
   });
 
-
   describe('compaction:active', () => {
     it('active with optimistic label (source lionclaw)', () => {
       const payload = { isActive: true, modelLabel: 'GLM-4.6', source: 'lionclaw' };
@@ -650,7 +724,6 @@ describe('IPC channel payload snapshots', () => {
       expect(payload).toMatchSnapshot();
     });
   });
-
 
   describe('harness:agent-stream', () => {
     it('NESTED shape — planner text event', () => {
@@ -735,7 +808,6 @@ describe('IPC channel payload snapshots', () => {
     });
   });
 
-
   describe('enrich:stream', () => {
     it('text chunk', () => {
       const payload = {
@@ -777,7 +849,6 @@ describe('IPC channel payload snapshots', () => {
     });
   });
 
-
   describe('enrich:metrics', () => {
     it('validator metrics', () => {
       const payload = {
@@ -818,7 +889,6 @@ describe('IPC channel payload snapshots', () => {
     });
   });
 
-
   describe('enrich:status', () => {
     it('validator running', () => {
       const payload = {
@@ -847,7 +917,6 @@ describe('IPC channel payload snapshots', () => {
       expect(payload).toMatchSnapshot();
     });
   });
-
 
   describe('pipeline:stream', () => {
     it('text chunk (regular phase)', () => {
@@ -912,7 +981,6 @@ describe('IPC channel payload snapshots', () => {
       expect(payload).toMatchSnapshot();
     });
   });
-
 
   describe('pipeline:phase-changed', () => {
     it('started (with currentModel)', () => {
@@ -983,14 +1051,12 @@ describe('IPC channel payload snapshots', () => {
     });
   });
 
-
   describe('pipeline:messages-updated (SPEC drive-ux-pack I1)', () => {
     it('event shape — projectId + phase', () => {
       const payload = { projectId: 'proj_456', phase: 3 };
       expect(payload).toMatchSnapshot();
     });
   });
-
 
   describe('preview_open (SPEC drive-ux-pack I8)', () => {
     it('request shape — target arquivo .html', () => {
@@ -1043,7 +1109,6 @@ describe('IPC channel payload snapshots', () => {
     });
   });
 
-
   describe('pipeline:project-updated', () => {
     it('status + currentPhase patch', () => {
       const payload = {
@@ -1076,7 +1141,6 @@ describe('IPC channel payload snapshots', () => {
       expect(payload).toMatchSnapshot();
     });
   });
-
 
   describe('pipeline:security-agent-status', () => {
     it('running', () => {
@@ -1112,7 +1176,6 @@ describe('IPC channel payload snapshots', () => {
       expect(payload).toMatchSnapshot();
     });
   });
-
 
   describe('open-design channels (registry)', () => {
     it('preflight result shape (vendor-missing)', () => {
@@ -1155,7 +1218,11 @@ describe('IPC channel payload snapshots', () => {
     });
 
     it('boot install status shape (failed)', () => {
-      const payload = { kind: 'failed', error: 'pnpm install exited with code 1', failedAt: '2026-05-11T10:05:00.000Z' };
+      const payload = {
+        kind: 'failed',
+        error: 'pnpm install exited with code 1',
+        failedAt: '2026-05-11T10:05:00.000Z',
+      };
       expect(payload).toMatchSnapshot();
     });
 
@@ -1169,7 +1236,6 @@ describe('IPC channel payload snapshots', () => {
       ];
       expect(events).toMatchSnapshot();
     });
-
 
     it('session config shape (Sprint 2)', () => {
       const payload = {
@@ -1192,7 +1258,8 @@ describe('IPC channel payload snapshots', () => {
 
     it('set-session-config error response shape (Sprint 2 — secret policy)', () => {
       const payload = {
-        error: 'OpenDesignSessionConfig: chave proibida em "apiKey". Nomes contendo "token"/"apiKey" ou terminando em "key" sao bloqueados (use o Vault do LionClaw ou .od/media-config.json para credenciais).',
+        error:
+          'OpenDesignSessionConfig: chave proibida em "apiKey". Nomes contendo "token"/"apiKey" ou terminando em "key" sao bloqueados (use o Vault do LionClaw ou .od/media-config.json para credenciais).',
       };
       expect(payload).toMatchSnapshot();
     });
@@ -1210,7 +1277,9 @@ describe('IPC channel payload snapshots', () => {
     });
 
     it('ensure-session error response shape (Sprint 2)', () => {
-      const payload = { error: 'boot install not ready (kind=installing); aguarde o motor de design concluir a preparacao' };
+      const payload = {
+        error: 'boot install not ready (kind=installing); aguarde o motor de design concluir a preparacao',
+      };
       expect(payload).toMatchSnapshot();
     });
 
@@ -1235,7 +1304,13 @@ describe('IPC channel payload snapshots', () => {
     });
 
     it('status result shape (running)', () => {
-      const payload = { running: true, daemonUrl: 'http://127.0.0.1:7457', webUrl: 'http://127.0.0.1:5175', daemonPort: 7457, webPort: 5175 };
+      const payload = {
+        running: true,
+        daemonUrl: 'http://127.0.0.1:7457',
+        webUrl: 'http://127.0.0.1:5175',
+        daemonPort: 7457,
+        webPort: 5175,
+      };
       expect(payload).toMatchSnapshot();
     });
 
@@ -1244,17 +1319,22 @@ describe('IPC channel payload snapshots', () => {
       expect(payload).toMatchSnapshot();
     });
 
-
     it('lock ok response shape (Sprint 4 — internal lock(), now with 6 paths)', () => {
       const payload = {
         ok: true,
         snapshotDir: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest',
-        manifestPath: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/manifest.json',
-        contractPath: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-contract.json',
-        briefPath: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-brief.md',
-        reportPath: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-lock-report.md',
-        lockReportPath: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-lock-report.md',
-        artifactHtmlPath: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/artifact/index.html',
+        manifestPath:
+          '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/manifest.json',
+        contractPath:
+          '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-contract.json',
+        briefPath:
+          '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-brief.md',
+        reportPath:
+          '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-lock-report.md',
+        lockReportPath:
+          '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-lock-report.md',
+        artifactHtmlPath:
+          '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/artifact/index.html',
         lockedAt: '2026-05-10T00:00:00.000Z',
       };
       expect(payload).toMatchSnapshot();
@@ -1263,8 +1343,10 @@ describe('IPC channel payload snapshots', () => {
     it('lock rejected response shape (Sprint 4 — internal lock())', () => {
       const payload = {
         ok: false,
-        reportPath: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-lock-report.md',
-        lockReportPath: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-lock-report.md',
+        reportPath:
+          '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-lock-report.md',
+        lockReportPath:
+          '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-lock-report.md',
         report: {
           ok: false,
           problems: [
@@ -1296,9 +1378,12 @@ describe('IPC channel payload snapshots', () => {
         ok: true,
         paths: {
           snapshotDir: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest',
-          manifestPath: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/manifest.json',
-          contractPath: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-contract.json',
-          artifactHtmlPath: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/artifact/index.html',
+          manifestPath:
+            '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/manifest.json',
+          contractPath:
+            '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-contract.json',
+          artifactHtmlPath:
+            '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/artifact/index.html',
         },
         lockedAt: '2026-05-10T00:00:00.000Z',
       };
@@ -1314,7 +1399,8 @@ describe('IPC channel payload snapshots', () => {
       const payload = {
         ok: true,
         designRevisionId: 'rev-1715000000000-abc123',
-        archivePath: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/revisions/rev-1715000000000-abc123',
+        archivePath:
+          '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/revisions/rev-1715000000000-abc123',
       };
       expect(payload).toMatchSnapshot();
     });
@@ -1334,7 +1420,8 @@ describe('IPC channel payload snapshots', () => {
         metadata: {
           openDesignLockRejected: true,
           rejectedLockPhase: 5,
-          reportPath: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-lock-report.md',
+          reportPath:
+            '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/latest/design-lock-report.md',
         },
       };
       expect(payload).toMatchSnapshot();
@@ -1350,7 +1437,8 @@ describe('IPC channel payload snapshots', () => {
         metadata: {
           designRevisionRestarted: true,
           designRevisionId: 'rev-1715000000000-abc123',
-          archivePath: '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/revisions/rev-1715000000000-abc123',
+          archivePath:
+            '/projects/demo/.lionclaw/pipelines/development-v2/run-abc/open-design/snapshots/revisions/rev-1715000000000-abc123',
         },
       };
       expect(payload).toMatchSnapshot();
@@ -1411,7 +1499,6 @@ describe('IPC channel payload snapshots', () => {
     });
   });
 
-
   describe('open-design view bridge', () => {
     it('set-view-bounds ok response', () => {
       const payload = { ok: true };
@@ -1461,8 +1548,6 @@ describe('IPC channel payload snapshots', () => {
       expect(payload).toMatchSnapshot();
     });
   });
-
-
 
   describe('pricing:calculate', () => {
     it('request shape — claude sonnet', () => {
@@ -1645,7 +1730,6 @@ describe('IPC channel payload snapshots', () => {
     });
   });
 
-
   describe('repo-graph:on-status (broadcast)', () => {
     it('building com progresso (chunk UI-only, Z3)', () => {
       const payload = {
@@ -1747,7 +1831,6 @@ describe('IPC channel payload snapshots', () => {
     });
   });
 
-
   describe('repo-graph:metrics (Sprint A4, D-5)', () => {
     it('janela atingida: medias por grupo + percentuais de economia', () => {
       const payload = {
@@ -1778,7 +1861,6 @@ describe('IPC channel payload snapshots', () => {
       expect(payload).toMatchSnapshot();
     });
   });
-
 
   describe('chat:stream — repo_graph (Sprint A2)', () => {
     it('uso de tool em turno (orchestrator-mcp, used=1 com metricas)', () => {
@@ -1823,7 +1905,6 @@ describe('IPC channel payload snapshots', () => {
       expect(payload).toMatchSnapshot();
     });
   });
-
 
   describe('kimi:* (SPEC-011 S4/S10)', () => {
     it('kimi:status result - instalado + autenticado por assinatura', () => {
@@ -1887,7 +1968,6 @@ describe('IPC channel payload snapshots', () => {
     });
   });
 
-
   describe('kanban:changed (SPEC kanban-nativo F3)', () => {
     it('event shape — { boardId }', () => {
       const payload = { boardId: 'b3b1d2c4-5e6f-4a7b-8c9d-0e1f2a3b4c5d' };
@@ -1914,6 +1994,537 @@ describe('IPC channel payload snapshots', () => {
     it('terminal:open result - erro (ABI/teto/colisao)', () => {
       const payload = { ok: false, error: 'limite de 8 terminais simultaneos atingido' };
       expect(payload).toMatchSnapshot();
+    });
+  });
+
+  describe('lanes (SPEC conversas-paralelas 11, Sprint 1a) - canais ADITIVOS e aliases', () => {
+    it('chat:create-session result ok - OpenChatSession com badge e orquestrador pre-selecionado', () => {
+      const payload = {
+        session: {
+          id: 'b3b1d2c4-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
+          laneBadge: 1,
+          title: '',
+          orchestrator: { runtime: 'claude-sdk', provider: 'anthropic', model: 'claude-opus-4-7', effort: 'high' },
+          messageCount: 0,
+          lastUserMessageAt: null,
+          createdAt: '2026-09-08 10:00:00',
+          updatedAt: '2026-09-08 10:00:00',
+          state: 'idle',
+        },
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('chat:create-session erro tipado lanes_full', () => {
+      const payload = {
+        error: 'Todas as lanes estao ocupadas. De Clear numa lane para abrir outra conversa.',
+        code: 'lanes_full',
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('chat:list-open-sessions result - N lanes ordenadas por badge com state', () => {
+      const payload = [
+        {
+          id: 'sess_a',
+          laneBadge: 1,
+          title: 'Lane A',
+          orchestrator: { runtime: 'claude-sdk', provider: 'anthropic', model: 'claude-opus-4-7' },
+          messageCount: 4,
+          lastUserMessageAt: '2026-09-08 09:58:00',
+          createdAt: '2026-09-08 09:00:00',
+          updatedAt: '2026-09-08 09:58:30',
+          state: 'streaming',
+        },
+        {
+          id: 'sess_b',
+          laneBadge: 2,
+          title: '',
+          orchestrator: { runtime: 'codex-sdk', provider: 'codex', model: 'gpt-5.5' },
+          messageCount: 0,
+          lastUserMessageAt: null,
+          createdAt: '2026-09-08 09:30:00',
+          updatedAt: '2026-09-08 09:30:00',
+          state: 'idle',
+        },
+      ];
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('chat:list-open-sessions result em falha - { error } (RM7: nunca [])', () => {
+      const payload = { error: 'SQLITE_BUSY: database is locked' };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('chat:set-session-orchestrator request shape - sessionId + selection', () => {
+      const payload = {
+        sessionId: 'sess_b',
+        selection: { runtime: 'codex-sdk', provider: 'codex', model: 'gpt-5.5', effort: 'xhigh' },
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('chat:set-session-orchestrator result ok e erro provider_locked', () => {
+      const ok = {
+        ok: true,
+        orchestrator: { runtime: 'codex-sdk', provider: 'codex', model: 'gpt-5.5', effort: 'xhigh' },
+      };
+      const locked = {
+        error: 'A lane ja tem mensagens ou um turno pendente: o provider esta travado. De Clear para trocar.',
+        code: 'provider_locked',
+      };
+      expect({ ok, locked }).toMatchSnapshot();
+    });
+
+    it('chat:session-updated event shape (coexiste com chat:sessions-updated sem payload)', () => {
+      const payload = {
+        sessionId: 'sess_b',
+        laneBadge: 2,
+        orchestrator: { runtime: 'codex-sdk', provider: 'codex', model: 'gpt-5.5' },
+        messageCount: 0,
+        state: 'idle',
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('chat:send recusas tipadas - session_required e lane_required (accepted:false + code)', () => {
+      const payload = {
+        sessionRequired: {
+          accepted: false,
+          code: 'session_required',
+          error: 'sessionId obrigatorio: toda mensagem do desktop pertence a uma lane.',
+        },
+        laneRequired: {
+          accepted: false,
+          code: 'lane_required',
+          error: 'Esta conversa esta aberta sem lane: de Clear nela ou escolha uma lane.',
+        },
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('chat:stop request shape - sessionId opcional (sem argumento = alias antigo)', () => {
+      expect({ withSession: 'sess_a', legacy: undefined }).toMatchSnapshot();
+    });
+
+    it('drive:start / drive:resume request shape com sessionId obrigatorio (V9) e recusa session_required', () => {
+      const payload = {
+        start: { projectId: 'proj_456', mode: 'semi', sessionId: 'sess_a' },
+        resume: { projectId: 'proj_456', sessionId: 'sess_a' },
+        refused: {
+          error: 'session_required: escolha a lane (conversa aberta) que vai dirigir o pipeline.',
+          code: 'session_required',
+        },
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('compaction:active ganha sessionId (payload aditivo)', () => {
+      const payload = { isActive: true, sessionId: 'sess_a', modelLabel: 'GLM-4.6', source: 'lionclaw' };
+      expect(payload).toMatchSnapshot();
+    });
+  });
+
+  describe('Clear por lane (SPEC conversas-paralelas 6 e 11, Sprint 1b) - canais ADITIVOS', () => {
+    it('chat:clear request shape - sessionId obrigatorio + force opcional', () => {
+      expect({ sessionId: 'sess_a', opts: { force: true } }).toMatchSnapshot();
+    });
+
+    it('chat:clear result ok - compacted, conversa nova no mesmo badge, warnings por passo', () => {
+      const payload = {
+        ok: true,
+        sessionId: 'sess_a',
+        newSessionId: 'c0ffee00-1111-4222-8333-444455556666',
+        warnings: [
+          {
+            step: 'embeddings',
+            detail: 'configure um provedor de embeddings em Settings (3 de 3 chunks nao gravados)',
+          },
+          { step: 'transcript', detail: 'EACCES: permission denied' },
+        ],
+        pausedDriveProjectIds: [],
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('chat:clear recusas tipadas (6.1, 6.2, V6, D3)', () => {
+      const payload = {
+        busy: {
+          ok: false,
+          code: 'session_busy',
+          error: 'A lane esta ocupada (turno em voo, item na fila ou Compactacao em andamento).',
+        },
+        clearing: { ok: false, code: 'session_clearing', error: 'Esta lane ja esta em Clear.' },
+        drive: {
+          ok: false,
+          code: 'drive_active',
+          error: 'Ha um drive de pipeline ativo nesta lane; pare o drive antes do Clear.',
+        },
+        empty: { ok: false, code: 'empty_session', error: 'Conversa vazia nao tem Clear.' },
+        notSettled: {
+          ok: false,
+          code: 'turn_did_not_settle',
+          error: 'O turno em voo nao assentou no prazo; nada foi arquivado. Tente de novo.',
+        },
+        summary: { ok: false, code: 'COMPACT-SUMMARY-FAILED', error: 'Sumarizador falhou: provider 529 overloaded' },
+        memory: {
+          ok: false,
+          code: 'COMPACT-MEMORY-FAILED',
+          error: 'Gate de memoria / MEMORY.md / USER.md falhou: EACCES',
+        },
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('chat:clear-cancel result ok e clear_not_queued', () => {
+      const payload = {
+        ok: { ok: true, sessionId: 'sess_b' },
+        notQueued: { ok: false, code: 'clear_not_queued', error: 'Nao ha Clear na fila para esta lane.' },
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('chat:send recusa session_clearing (6.1 / 6.10)', () => {
+      const payload = {
+        accepted: false,
+        code: 'session_clearing',
+        error: 'Esta lane esta em Clear; aguarde o Clear terminar ou refaca o Clear.',
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('compaction:active com phase queued/running, modelLabel e title (6.9, AC-9)', () => {
+      const payload = {
+        queued: {
+          isActive: true,
+          sessionId: 'sess_b',
+          phase: 'queued',
+          modelLabel: 'Claude Sonnet 4.6',
+          title: 'Conversa B',
+          source: 'lionclaw',
+        },
+        running: {
+          isActive: true,
+          sessionId: 'sess_a',
+          phase: 'running',
+          modelLabel: 'Claude Sonnet 4.6',
+          title: 'Conversa A',
+          source: 'lionclaw',
+        },
+        done: { isActive: false, sessionId: 'sess_a', source: 'lionclaw' },
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('chat:confirm-request e ask_question carregam sessionId e title (10.1 fase 1)', () => {
+      const payload = {
+        confirm: {
+          id: 'confirm_1',
+          tool: 'Bash',
+          description: 'rm -rf build',
+          input: { command: 'rm -rf build' },
+          risk: 'high',
+          sessionId: 'sess_a',
+          title: 'Conversa A',
+        },
+        ask: {
+          type: 'ask_question',
+          sessionId: 'sess_a',
+          askRequest: { id: 'ask_1', sessionId: 'sess_a', title: 'Conversa A', questions: [] },
+        },
+        dreaming: { type: 'dreaming_status', isDreaming: true, sessionId: 'sess_a' },
+        session: { type: 'session', content: 'sess_a', sessionId: 'sess_a' },
+      };
+      expect(payload).toMatchSnapshot();
+    });
+  });
+
+  describe('orquestrador por lane (SPEC conversas-paralelas 7.2/7.3/7.6/7.7, Sprint 3a) - payloads ADITIVOS', () => {
+    it('chat:send options - campos aditivos model e effort (validados contra o provider da lane, persistidos nas colunas)', () => {
+      const payload = {
+        message: 'Continue a implementacao',
+        options: { sessionId: 'sess_a', model: 'claude-sonnet-5', effort: 'max' },
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('chat:send recusas tipadas - model_not_in_provider e effort_not_supported', () => {
+      const payload = {
+        modelNotInProvider: {
+          accepted: false,
+          code: 'model_not_in_provider',
+          error: 'Modelo "gpt-5.5" nao pertence ao provider "anthropic" do runtime "claude-sdk".',
+        },
+        effortNotSupported: {
+          accepted: false,
+          code: 'effort_not_supported',
+          error: 'Effort "ultra" nao e suportado por "claude-sonnet-5" (anthropic); opcoes: low, medium, high, max.',
+        },
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('chat:session-updated carrega o orquestrador COMPLETO com effort (10.6)', () => {
+      const payload = {
+        sessionId: 'sess_a',
+        laneBadge: 1,
+        orchestrator: { runtime: 'claude-sdk', provider: 'anthropic', model: 'claude-sonnet-5', effort: 'max' },
+        messageCount: 3,
+        state: 'idle',
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('provider:list-statuses request { refresh } e entrada ESTENDIDA (available + models com reasoningOptions/defaultReasoning/contextWindow)', () => {
+      const payload = {
+        request: { refresh: true },
+        entry: {
+          runtime: 'claude-sdk',
+          provider: 'anthropic',
+          connected: false,
+          available: false,
+          reason: 'Engine Claude Code nao encontrado.',
+          models: [
+            {
+              id: 'claude-sonnet-5',
+              displayName: 'Claude Sonnet 5',
+              label: 'Claude Sonnet 5',
+              reasoningOptions: ['low', 'medium', 'high', 'max'],
+              defaultReasoning: 'high',
+              contextWindow: 1_000_000,
+            },
+          ],
+        },
+        dynamicEntry: {
+          runtime: 'lion-sdk',
+          provider: 'ollama',
+          connected: true,
+          available: true,
+          models: [
+            {
+              id: 'llama3.1:8b',
+              displayName: 'llama3.1:8b',
+              label: 'llama3.1:8b',
+              reasoningOptions: [],
+              defaultReasoning: null,
+              contextWindow: 131_072,
+            },
+          ],
+        },
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('chat:confirm-request e ask_question carregam laneBadge (10.4 fase 3, popup rotulado "Lane N: <titulo>")', () => {
+      const payload = {
+        confirm: {
+          id: 'confirm_2',
+          tool: 'mcp__google-gmail__send_email',
+          description: 'Acao MCP destrutiva: send_email',
+          input: { to: 'x@y.z' },
+          risk: 'high',
+          sessionId: 'sess_b',
+          title: 'Conversa B',
+          laneBadge: 2,
+        },
+        ask: {
+          type: 'ask_question',
+          sessionId: 'sess_b',
+          askRequest: { id: 'ask_2', sessionId: 'sess_b', title: 'Conversa B', laneBadge: 2, questions: [] },
+        },
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('mcp:dist-stale (broadcast) e mcp:get-dist-stale (pull) - helpers MCP com dist mais antigo que o src (9.2 rollout, RM4)', () => {
+      const payload = {
+        event: { servers: ['gateway', 'lionclaw-kanban'], command: 'npm run build:mcps' },
+        pullFresh: null,
+      };
+      expect(payload).toMatchSnapshot();
+    });
+
+    it('agents:sync-to-orchestrator request com selection obrigatoria (dryRun e real) e response.orchestrator ecoando a selecao com effort', () => {
+      const payload = {
+        request: {
+          dryRun: true,
+          mode: 'manual-button',
+          selection: { runtime: 'codex-sdk', provider: 'codex', model: 'gpt-5.5', effort: 'xhigh' },
+        },
+        response: {
+          blocked: false,
+          orchestrator: { runtime: 'codex-sdk', provider: 'codex', model: 'gpt-5.5', effort: 'xhigh' },
+          results: [],
+          summary: { updated: 0, skipped: 0, failed: 0 },
+        },
+      };
+      expect(payload).toMatchSnapshot();
+    });
+  });
+});
+
+describe('Swarm V1 IPC payload snapshots', () => {
+  it('stream identifica sessão, run e revisão sem conteúdo nem credenciais', () => {
+    expect({ runId: 'swarm-20260913_120000-abc123', chatSessionId: 'chat-1', revision: 3 }).toMatchSnapshot();
+  });
+  it('start retorna identidade assíncrona e settings usam milissegundos', () => {
+    expect({ runId: 'swarm-20260913_120000-abc123', status: 'queued' }).toMatchSnapshot();
+    expect({ concurrencyCap: 5, maxAttempts: 2, idleTimeoutMs: 1200000, hardTimeoutMs: 7200000 }).toMatchSnapshot();
+  });
+});
+
+type ListProjects = Awaited<ReturnType<LionClawAPI['pipeline']['listProjects']>>;
+
+function laneRow(id: string, laneBadge: number, title: string): OpenDesktopSessionRow {
+  return {
+    id,
+    laneBadge,
+    title,
+    orchestrator: null,
+    messageCount: 7,
+    lastUserMessageAt: '2026-09-17 10:00:00',
+    createdAt: '2026-09-17 09:00:00',
+    updatedAt: '2026-09-17 10:00:00',
+    dreamingStartedAt: null,
+  };
+}
+
+function driveOf(over: Partial<DriveState> = {}): DriveState {
+  return {
+    driver: 'orchestrator',
+    status: 'driving',
+    handoff: 'none',
+    mode: 'semi',
+    requiresHumanPhases: [],
+    ...over,
+  };
+}
+
+function pipelineProject(id: string): Record<string, unknown> {
+  return {
+    id,
+    name: 'Pipeline ' + id,
+    projectPath: 'C:/repo',
+    specPath: 'C:/repo/spec.md',
+    status: 'running',
+    pipelineType: 'development',
+    pipelineCurrentPhase: 3,
+    pipelineStartPhase: 1,
+    pipelineSprintIndex: null,
+    totalSprints: 0,
+    totalFeatures: 0,
+    createdAt: '2026-09-17 09:00:00',
+    updatedAt: '2026-09-17 10:00:00',
+    config: {},
+  };
+}
+
+function invokePipeline(channel: string, ...args: unknown[]): Promise<unknown> {
+  const handler = ipcHandlers.get(channel);
+  expect(handler, 'handler ' + channel).toBeDefined();
+  return Promise.resolve(handler!({}, ...args));
+}
+
+async function invokeListProjects(): Promise<ListProjects> {
+  const result = await invokePipeline('pipeline:list-projects');
+  if (!Array.isArray(result)) throw new Error('pipeline:list-projects nao devolveu lista');
+  return result;
+}
+
+async function invokeGetProject(projectId: string): Promise<{ metadata?: Record<string, unknown> }> {
+  const result = await invokePipeline('pipeline:get-project', projectId);
+  if (result === null || typeof result !== 'object') {
+    throw new Error('pipeline:get-project nao devolveu objeto');
+  }
+  return result;
+}
+
+function lastDriveEvent(): DriveStateChangedEvent {
+  const event = emitted.driveEvents.at(-1);
+  expect(event, 'evento drive:state-changed').toBeDefined();
+  return event!;
+}
+
+describe('SPEC pipeline-por-lane 10: payloads ADITIVOS de lane (eventos e retornos REAIS)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ipcHandlers.clear();
+    emitted.driveEvents.length = 0;
+    lane.driveSessionId = null;
+    lane.openLane = null;
+    lane.projects = [];
+    registerPipelineHandlers({
+      getMainWindow: () => null,
+      getHarnessEngine: () => null,
+      getPipelineEngine: () => null,
+    } as unknown as IpcContext);
+  });
+
+  it('drive:state-changed leva sessionId da coluna e laneBadge da lane, mesmo com a lane em streaming', () => {
+    lane.driveSessionId = 'sess_A';
+    lane.openLane = laneRow('sess_A', 2, 'Lane 2');
+
+    const event: DriveStateChangedEvent = buildDriveStateChangedEvent(
+      'proj_456',
+      driveOf({ status: 'driving', sessionId: 'sess_A' }),
+    );
+
+    expect(event).toEqual({
+      projectId: 'proj_456',
+      drive: driveOf({ status: 'driving', sessionId: 'sess_A' }),
+      sessionId: 'sess_A',
+      laneBadge: 2,
+    });
+  });
+
+  it('drive:state-changed da exclusao do projeto (drive null) leva sessionId e laneBadge null', async () => {
+    lane.driveSessionId = 'sess_A';
+    lane.openLane = laneRow('sess_A', 2, 'Lane 2');
+
+    await invokePipeline('pipeline:delete-project', 'proj_456');
+
+    expect(lastDriveEvent()).toEqual({
+      projectId: 'proj_456',
+      drive: null,
+      sessionId: null,
+      laneBadge: null,
+    });
+  });
+
+  it('pipeline:list-projects acrescenta metadata.driveLane quando a coluna aponta para uma conversa', async () => {
+    lane.projects = [pipelineProject('proj_1')];
+    lane.driveSessionId = 'sess_A';
+    lane.openLane = laneRow('sess_A', 4, 'Refatorar o motor');
+
+    const result = await invokeListProjects();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].metadata).toMatchObject({
+      driveLane: { sessionId: 'sess_A', laneBadge: 4, laneTitle: 'Refatorar o motor' },
+    });
+  });
+
+  it('pipeline:list-projects sem session_id nao ganha o campo driveLane', async () => {
+    lane.projects = [pipelineProject('proj_1')];
+    lane.driveSessionId = null;
+
+    const result = await invokeListProjects();
+
+    expect(result[0].metadata).toBeDefined();
+    expect(result[0].metadata).not.toHaveProperty('driveLane');
+  });
+
+  it('pipeline:get-project traz driveLane com badge e titulo null quando a conversa nao e mais lane aberta', async () => {
+    lane.projects = [pipelineProject('proj_1')];
+    lane.driveSessionId = 'sess_compacted';
+    lane.openLane = null;
+
+    const result = await invokeGetProject('proj_1');
+
+    expect(result.metadata?.['driveLane']).toEqual({
+      sessionId: 'sess_compacted',
+      laneBadge: null,
+      laneTitle: null,
     });
   });
 });

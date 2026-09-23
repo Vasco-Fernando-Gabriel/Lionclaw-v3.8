@@ -1,5 +1,4 @@
-
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../logger', () => ({
   createLogger: () => ({
@@ -12,6 +11,10 @@ vi.mock('../logger', () => ({
 
 const getActiveChatSessionMock = vi.fn<() => { id: string } | null>(() => ({
   id: 'chat-1',
+}));
+vi.mock('../in-flight-desktop-session', () => ({
+  getInFlightDesktopSession: () => getActiveChatSessionMock()?.id ?? null,
+  setInFlightDesktopSession: () => {},
 }));
 vi.mock('../db', () => ({
   getAllAgents: vi.fn(() => []),
@@ -38,19 +41,26 @@ vi.mock('../pipeline-drive-coordinator', () => ({
 }));
 
 const approveSpy = vi.fn(
-  async (_id: string, _metadata?: Record<string, unknown>) =>
-    ({ ok: true, value: { approved: true } }) as const,
+  async (_id: string, _metadata?: Record<string, unknown>) => ({ ok: true, value: { approved: true } }) as const,
 );
 vi.mock('../pipeline-control-core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../pipeline-control-core')>();
   return {
     ...actual,
-    pipelineApproveCore: (id: string, metadata?: Record<string, unknown>) =>
-      approveSpy(id, metadata),
+    pipelineApproveCore: (id: string, metadata?: Record<string, unknown>) => approveSpy(id, metadata),
   };
 });
 
 import { dispatch } from '../local-ipc/jsonrpc-methods';
+import { bindActiveDesktopTurn, type ActiveChatTurnFixture } from './helpers/active-chat-turn-fixture';
+
+let activeTurn: ActiveChatTurnFixture;
+const activeBinding = () => ({ sessionId: activeTurn.sessionId, turnId: activeTurn.turnId });
+beforeEach(() => {
+  activeTurn = bindActiveDesktopTurn();
+});
+afterEach(() => activeTurn.dispose());
+
 import type { JsonRpcContext } from '../local-ipc/jsonrpc-methods';
 import { normalizeApproveMetadata } from '../pipeline-control-core';
 import { normalizeApproveMetadata as normalizeSubprocess } from '../../../mcp-servers/_shared/approve-metadata';
@@ -61,7 +71,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   getActiveChatSessionMock.mockReturnValue({ id: 'chat-1' });
 });
-
 
 describe('F2 (subprocess): normalizeApproveMetadata do lionclaw-pipeline-control', () => {
   it('F2-AC1: objeto passa intacto; string JSON equivalente vira o MESMO objeto', () => {
@@ -99,7 +108,6 @@ describe('F2 (subprocess): normalizeApproveMetadata do lionclaw-pipeline-control
   });
 });
 
-
 describe('F2 (main): normalizeApproveMetadata do pipeline-control-core', () => {
   it('F2-AC1: objeto passa intacto; string JSON equivalente vira o MESMO objeto', () => {
     const obj = { selectedCandidateId: 'C1' };
@@ -121,14 +129,14 @@ describe('F2 (dispatch jsonrpc): pipeline_approve normaliza ANTES do core', () =
     const res1 = await dispatch(ctx, {
       method: 'pipeline_approve',
       id: 1,
-      params: { id: 'p1', metadata: { action: 'lock-and-continue' } },
+      params: { ...activeBinding(), id: 'p1', metadata: { action: 'lock-and-continue' } },
     });
     expect(res1.error).toBeUndefined();
 
     const res2 = await dispatch(ctx, {
       method: 'pipeline_approve',
       id: 2,
-      params: { id: 'p1', metadata: '{"action":"lock-and-continue"}' },
+      params: { ...activeBinding(), id: 'p1', metadata: '{"action":"lock-and-continue"}' },
     });
     expect(res2.error).toBeUndefined();
 
@@ -141,7 +149,7 @@ describe('F2 (dispatch jsonrpc): pipeline_approve normaliza ANTES do core', () =
     const res = await dispatch(ctx, {
       method: 'pipeline_approve',
       id: 3,
-      params: { id: 'p1', metadata: 'lock-and-continue' },
+      params: { ...activeBinding(), id: 'p1', metadata: 'lock-and-continue' },
     });
     expect(res.result).toBeUndefined();
     expect(res.error).toBeDefined();
@@ -154,7 +162,7 @@ describe('F2 (dispatch jsonrpc): pipeline_approve normaliza ANTES do core', () =
     const res = await dispatch(ctx, {
       method: 'pipeline_approve',
       id: 4,
-      params: { id: 'p1' },
+      params: { ...activeBinding(), id: 'p1' },
     });
     expect(res.error).toBeUndefined();
     expect(approveSpy).toHaveBeenCalledWith('p1', undefined);

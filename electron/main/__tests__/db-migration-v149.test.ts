@@ -48,7 +48,9 @@ describe('migration v149 - dynamic_workflow_messages.applied_node_id/consumed_at
     expect(cols).toContain('consumed_at');
     expect(__V149_INTERNAL.COLUMNS).toEqual(['applied_node_id', 'consumed_at']);
     const idx = (
-      db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='dynamic_workflow_messages'").all() as Array<{
+      db
+        .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='dynamic_workflow_messages'")
+        .all() as Array<{
         name: string;
       }>
     ).map((r) => r.name);
@@ -88,7 +90,9 @@ describe('migration v149 - dynamic_workflow_messages.applied_node_id/consumed_at
     const second = claim.all('cc:S1:v1:1', 'run-1', '*') as Array<{ id: number }>;
     expect(first.map((r) => r.id)).toEqual([id]);
     expect(second).toEqual([]);
-    const row = db.prepare('SELECT applied_node_id, consumed_at FROM dynamic_workflow_messages WHERE id = ?').get(id) as {
+    const row = db
+      .prepare('SELECT applied_node_id, consumed_at FROM dynamic_workflow_messages WHERE id = ?')
+      .get(id) as {
       applied_node_id: string;
       consumed_at: string;
     };

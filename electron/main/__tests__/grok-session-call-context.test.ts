@@ -5,10 +5,10 @@ const state = vi.hoisted(() => ({
   handleClose: vi.fn(async () => undefined),
   bridgeStop: vi.fn(async () => undefined),
   releaseSlot: vi.fn(),
-  handler: vi.fn(async (
-    _input: Record<string, unknown>,
-    _context?: { toolUseId: string; signal?: AbortSignal },
-  ) => ({ output: 'ok', message: 'ok' })),
+  handler: vi.fn(async (_input: Record<string, unknown>, _context?: { toolUseId: string; signal?: AbortSignal }) => ({
+    output: 'ok',
+    message: 'ok',
+  })),
   bridgeTools: [] as Array<{
     name: string;
     description: string;
@@ -61,12 +61,14 @@ vi.mock('../agent-runtime/grok-session-config', () => ({
   buildGrokNativeToolPolicy: () => ({ argv: ['--tools', 'read_file'], effectiveTools: ['read_file'] }),
   buildGrokSessionTools: vi.fn(async () => ({
     systemPrompt: 'Prompt reconciliado',
-    externalTools: [{
-      name: 'mcp__fake__echo',
-      description: 'echo',
-      parameters: { type: 'object' },
-      handler: state.handler,
-    }],
+    externalTools: [
+      {
+        name: 'mcp__fake__echo',
+        description: 'echo',
+        parameters: { type: 'object' },
+        handler: state.handler,
+      },
+    ],
   })),
 }));
 vi.mock('../agent-runtime/subagent-dispatch', () => ({
@@ -146,19 +148,15 @@ describe('Grok chat external tool wrapper', () => {
       },
     });
 
-    expect(state.createRun).toHaveBeenCalledWith(expect.objectContaining({
-      abortSignal: abort.signal,
-    }));
+    expect(state.createRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        abortSignal: abort.signal,
+      }),
+    );
 
     expect(state.bridgeTools).toHaveLength(1);
-    await state.bridgeTools[0]!.handler(
-      { text: 'ola' },
-      { toolUseId: 'tool-chat-42' },
-    );
-    expect(state.handler).toHaveBeenCalledWith(
-      { text: 'ola' },
-      { toolUseId: 'tool-chat-42' },
-    );
+    await state.bridgeTools[0]!.handler({ text: 'ola' }, { toolUseId: 'tool-chat-42' });
+    expect(state.handler).toHaveBeenCalledWith({ text: 'ola' }, { toolUseId: 'tool-chat-42' });
 
     await session.close();
     expect(state.handleClose).toHaveBeenCalledOnce();

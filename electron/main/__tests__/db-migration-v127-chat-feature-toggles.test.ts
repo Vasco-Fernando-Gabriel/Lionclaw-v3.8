@@ -1,15 +1,10 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type Database from 'better-sqlite3';
 
-import {
-  applyMigrationV127,
-  __V127_INTERNAL,
-} from '../db-migrations/v127-chat-feature-toggles';
-
+import { applyMigrationV127, __V127_INTERNAL } from '../db-migrations/v127-chat-feature-toggles';
 
 interface Harness {
   sqlite: DatabaseSync;
@@ -32,9 +27,7 @@ function makeDb(): Harness {
 }
 
 function seedSessions(sqlite: DatabaseSync): void {
-  const insert = sqlite.prepare(
-    'INSERT INTO sessions (id, type, status) VALUES (?, ?, ?)',
-  );
+  const insert = sqlite.prepare('INSERT INTO sessions (id, type, status) VALUES (?, ?, ?)');
   insert.run('sess-chat', 'chat', 'active');
   insert.run('sess-manual', 'manual', 'archived');
   insert.run('sess-telegram', 'telegram', 'active');
@@ -57,15 +50,12 @@ function featureRow(sqlite: DatabaseSync, sessionId: string): FeatureRow | undef
     .get(sessionId) as FeatureRow | undefined;
 }
 
-
 describe('applyMigrationV127 - shape da tabela chat_session_features', () => {
   it('cria a tabela com as 4 colunas da A.2 (PK, NOT NULL DEFAULT 0 nas flags)', () => {
     const { sqlite, db } = makeDb();
     applyMigrationV127(db);
 
-    const columns = sqlite
-      .prepare("PRAGMA table_info('chat_session_features')")
-      .all() as Array<{
+    const columns = sqlite.prepare("PRAGMA table_info('chat_session_features')").all() as Array<{
       name: string;
       type: string;
       notnull: number;
@@ -93,9 +83,12 @@ describe('applyMigrationV127 - shape da tabela chat_session_features', () => {
     const { sqlite, db } = makeDb();
     applyMigrationV127(db);
 
-    const fks = sqlite
-      .prepare("PRAGMA foreign_key_list('chat_session_features')")
-      .all() as Array<{ table: string; from: string; to: string; on_delete: string }>;
+    const fks = sqlite.prepare("PRAGMA foreign_key_list('chat_session_features')").all() as Array<{
+      table: string;
+      from: string;
+      to: string;
+      on_delete: string;
+    }>;
 
     expect(fks).toHaveLength(1);
     expect(fks[0].table).toBe('sessions');
@@ -113,7 +106,6 @@ describe('applyMigrationV127 - shape da tabela chat_session_features', () => {
     expect(featureRow(sqlite, 'sess-chat')).toBeUndefined();
   });
 });
-
 
 describe('applyMigrationV127 - backfill', () => {
   it('chat e manual existentes recebem 1/1 (preserva comportamento atual)', () => {
@@ -136,10 +128,8 @@ describe('applyMigrationV127 - backfill', () => {
 
     expect(featureRow(sqlite, 'sess-telegram')).toBeUndefined();
     expect(featureRow(sqlite, 'sess-scheduled')).toBeUndefined();
-    const total = sqlite
-      .prepare('SELECT COUNT(*) AS n FROM chat_session_features')
-      .get() as { n: number };
-    expect(total.n).toBe(3); // sess-chat + sess-manual + sess-null-type
+    const total = sqlite.prepare('SELECT COUNT(*) AS n FROM chat_session_features').get() as { n: number };
+    expect(total.n).toBe(3);
   });
 
   it('type NULL legado e tratado como chat (COALESCE, mesmo racional do rebuild V7)', () => {
@@ -155,13 +145,10 @@ describe('applyMigrationV127 - backfill', () => {
   it('DB sem sessoes: migration roda limpa e tabela nasce vazia', () => {
     const { sqlite, db } = makeDb();
     expect(() => applyMigrationV127(db)).not.toThrow();
-    const total = sqlite
-      .prepare('SELECT COUNT(*) AS n FROM chat_session_features')
-      .get() as { n: number };
+    const total = sqlite.prepare('SELECT COUNT(*) AS n FROM chat_session_features').get() as { n: number };
     expect(total.n).toBe(0);
   });
 });
-
 
 describe('applyMigrationV127 - idempotencia', () => {
   it('re-rodar nao lanca e nao duplica linhas', () => {
@@ -170,9 +157,7 @@ describe('applyMigrationV127 - idempotencia', () => {
     applyMigrationV127(db);
     expect(() => applyMigrationV127(db)).not.toThrow();
 
-    const total = sqlite
-      .prepare('SELECT COUNT(*) AS n FROM chat_session_features')
-      .get() as { n: number };
+    const total = sqlite.prepare('SELECT COUNT(*) AS n FROM chat_session_features').get() as { n: number };
     expect(total.n).toBe(3);
   });
 
@@ -216,25 +201,17 @@ describe('applyMigrationV127 - idempotencia', () => {
   });
 });
 
-
 describe('__V127_INTERNAL - SQL da migration', () => {
   it('CREATE e IF NOT EXISTS com FK ON DELETE CASCADE; backfill e INSERT OR IGNORE com filtro desktop', () => {
-    expect(__V127_INTERNAL.CREATE_CHAT_SESSION_FEATURES).toMatch(
-      /CREATE TABLE IF NOT EXISTS chat_session_features/,
-    );
-    expect(__V127_INTERNAL.CREATE_CHAT_SESSION_FEATURES).toMatch(
-      /REFERENCES sessions\(id\) ON DELETE CASCADE/,
-    );
-    expect(__V127_INTERNAL.BACKFILL_DESKTOP_SESSIONS_LEGACY_ON).toMatch(
-      /INSERT OR IGNORE INTO chat_session_features/,
-    );
+    expect(__V127_INTERNAL.CREATE_CHAT_SESSION_FEATURES).toMatch(/CREATE TABLE IF NOT EXISTS chat_session_features/);
+    expect(__V127_INTERNAL.CREATE_CHAT_SESSION_FEATURES).toMatch(/REFERENCES sessions\(id\) ON DELETE CASCADE/);
+    expect(__V127_INTERNAL.BACKFILL_DESKTOP_SESSIONS_LEGACY_ON).toMatch(/INSERT OR IGNORE INTO chat_session_features/);
     expect(__V127_INTERNAL.BACKFILL_DESKTOP_SESSIONS_LEGACY_ON).toMatch(
       /COALESCE\(type, 'chat'\) IN \('chat', 'manual'\)/,
     );
     expect(__V127_INTERNAL.BACKFILL_DESKTOP_SESSIONS_LEGACY_ON).not.toMatch(/telegram|scheduled/);
   });
 });
-
 
 describe('guardrail estatico - runner da V127 em db.ts', () => {
   const dbSource = readFileSync(join(__dirname, '..', 'db.ts'), 'utf-8');

@@ -1,4 +1,3 @@
-
 import {
   getDynamicWorkflowRun,
   getDynamicWorkflowDefinition,
@@ -42,19 +41,12 @@ import type { AgentQueryConfig } from '../agent-config-resolver';
 import type { WorkflowRunnerCrud, WorkflowRunnerDeps } from './workflow-runner';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import {
-  materializeBuilderPackage,
-  SCHEMAS_SUBDIR,
-  type BuilderPackage,
-} from './workflow-package';
+import { materializeBuilderPackage, SCHEMAS_SUBDIR, type BuilderPackage } from './workflow-package';
 import { runDirFor } from './workflow-create';
 import { runLogPath } from './workflow-artifacts';
 import { listDynamicWorkflowEvents } from '../db';
 import { appendFileSync, mkdirSync } from 'node:fs';
-import type {
-  DynamicWorkflowDefinition,
-  DynamicWorkflowDefinitionCreateInput,
-} from './types';
+import type { DynamicWorkflowDefinition, DynamicWorkflowDefinitionCreateInput } from './types';
 import { randomBytes } from 'node:crypto';
 import type {
   ComposedToolInput,
@@ -77,7 +69,6 @@ import type { NarrateFn, WorkflowNarratorDeps } from './workflow-narrator';
 
 const logger = createLogger('dynamic-workflow-runner-deps');
 
-
 export function buildRunnerCrud(): WorkflowRunnerCrud {
   return {
     getRun: getDynamicWorkflowRun,
@@ -90,8 +81,7 @@ export function buildRunnerCrud(): WorkflowRunnerCrud {
     listNodeRuns: listDynamicWorkflowNodeRuns,
     insertEvent: insertDynamicWorkflowEvent,
     recentEvents: listDynamicWorkflowRecentEvents,
-    listEventsSince: (runId, afterSeq) =>
-      listDynamicWorkflowEvents(runId, { afterSeq, limit: 100_000 }),
+    listEventsSince: (runId, afterSeq) => listDynamicWorkflowEvents(runId, { afterSeq, limit: 100_000 }),
     insertGateDecision: insertDynamicWorkflowGateDecision,
     registerArtifact: insertDynamicWorkflowArtifact,
     insertMessage: insertDynamicWorkflowMessage,
@@ -120,10 +110,7 @@ export function buildRunnerCrud(): WorkflowRunnerCrud {
   };
 }
 
-
-export function closerGuardToSdkCanUseTool(
-  guard: (input: ComposedToolInput) => Promise<ToolDecision>,
-): CanUseTool {
+export function closerGuardToSdkCanUseTool(guard: (input: ComposedToolInput) => Promise<ToolDecision>): CanUseTool {
   return async (toolName, input) => {
     const decision = await guard({ toolName, input });
     return decision.behavior === 'allow'
@@ -144,9 +131,7 @@ export interface RealClaudeCompatBackendDeps {
   hasKnownPricing?: (model: string) => boolean;
 }
 
-export function makeRealCloserAgentTurn(
-  deps?: RealClaudeCompatBackendDeps,
-): CloserAgentTurnRunner {
+export function makeRealCloserAgentTurn(deps?: RealClaudeCompatBackendDeps): CloserAgentTurnRunner {
   return async (input) => {
     const sdkGuard = closerGuardToSdkCanUseTool(input.canUseTool);
     try {
@@ -187,9 +172,7 @@ export function makeRealCloserAgentTurn(
       }
 
       const runtime: ClaudeCompatExecutorRuntime =
-        config.runtime === 'zai' || config.runtime === 'minimax-tp'
-          ? config.runtime
-          : 'cloud';
+        config.runtime === 'zai' || config.runtime === 'minimax-tp' ? config.runtime : 'cloud';
       const result = await runNode(
         {
           runtime,
@@ -225,10 +208,7 @@ export function makeRealCloserAgentTurn(
 
 export const realCloserAgentTurn: CloserAgentTurnRunner = makeRealCloserAgentTurn();
 
-
-export function makeRealClaudeCompatBackend(
-  deps?: RealClaudeCompatBackendDeps,
-): ClaudeCompatBackend {
+export function makeRealClaudeCompatBackend(deps?: RealClaudeCompatBackendDeps): ClaudeCompatBackend {
   return async (input: ClaudeCompatRunInput) => {
     const sdkGuard = composedGuardToSdkCanUseTool(input.canUseTool);
     const resolveConfig =
@@ -241,13 +221,9 @@ export function makeRealClaudeCompatBackend(
     const hasKnownPricing = deps?.hasKnownPricing ?? defaultHasKnownPricing;
     const resolvedConfig = await resolveConfig(input.agentId);
     const isOverride =
-      typeof input.model === 'string' &&
-      input.model.length > 0 &&
-      input.model !== resolvedConfig.model;
-    const isEffortOverride =
-      input.effort !== undefined && input.effort !== resolvedConfig.effort;
-    const isMaxTurnsOverride =
-      input.maxTurns !== undefined && input.maxTurns !== resolvedConfig.maxTurns;
+      typeof input.model === 'string' && input.model.length > 0 && input.model !== resolvedConfig.model;
+    const isEffortOverride = input.effort !== undefined && input.effort !== resolvedConfig.effort;
+    const isMaxTurnsOverride = input.maxTurns !== undefined && input.maxTurns !== resolvedConfig.maxTurns;
     const config: AgentQueryConfig =
       isOverride || isEffortOverride || isMaxTurnsOverride
         ? {
@@ -288,9 +264,7 @@ export function makeRealClaudeCompatBackend(
   };
 }
 
-export function composedGuardToSdkCanUseTool(
-  guard: (input: ComposedToolInput) => ToolDecision,
-): CanUseTool {
+export function composedGuardToSdkCanUseTool(guard: (input: ComposedToolInput) => ToolDecision): CanUseTool {
   return async (toolName, input) => {
     const decision = guard({ toolName, input });
     return decision.behavior === 'allow'
@@ -308,9 +282,7 @@ function makeRealCliBackend(runtime: 'kimi' | 'grok'): KimiBackend | GrokBackend
     const [{ resolveAgentQueryConfig }, profiles, executorModule] = await Promise.all([
       import('../agent-config-resolver'),
       import('../agent-runtime/permission-profiles'),
-      runtime === 'grok'
-        ? import('../agent-runtime/grok-executor')
-        : import('../agent-runtime/kimi-executor'),
+      runtime === 'grok' ? import('../agent-runtime/grok-executor') : import('../agent-runtime/kimi-executor'),
     ]);
     const resolved = await resolveAgentQueryConfig(input.agentId);
     const config: AgentQueryConfig = {
@@ -326,24 +298,26 @@ function makeRealCliBackend(runtime: 'kimi' | 'grok'): KimiBackend | GrokBackend
     const onAbort = (): void => abortController.abort();
     if (input.abortSignal.aborted) abortController.abort();
     else input.abortSignal.addEventListener('abort', onAbort, { once: true });
-    const permission = profiles.PERM_DEFAULT_WITH_GUARD(
-      composedGuardToSdkCanUseTool(input.canUseTool),
-    );
+    const permission = profiles.PERM_DEFAULT_WITH_GUARD(composedGuardToSdkCanUseTool(input.canUseTool));
     try {
-      const executor = runtime === 'grok'
-        ? (executorModule as typeof import('../agent-runtime/grok-executor')).grokExecutor
-        : (executorModule as typeof import('../agent-runtime/kimi-executor')).kimiExecutor;
-      const result = await executor.run({
-        agentId: input.agentId,
-        prompt: input.prompt,
-        cwd: input.cwd,
-        abortController,
-        permission,
-        ...(input.effort !== undefined ? { effortOverride: input.effort } : {}),
-        onText: (content) => input.onStreamChunk?.({ type: 'text', content }),
-        onToolUse: (toolName) => input.onStreamChunk?.({ type: 'tool_call_start', toolName }),
-        onToolUseComplete: (toolName) => input.onStreamChunk?.({ type: 'tool_call', toolName }),
-      }, config);
+      const executor =
+        runtime === 'grok'
+          ? (executorModule as typeof import('../agent-runtime/grok-executor')).grokExecutor
+          : (executorModule as typeof import('../agent-runtime/kimi-executor')).kimiExecutor;
+      const result = await executor.run(
+        {
+          agentId: input.agentId,
+          prompt: input.prompt,
+          cwd: input.cwd,
+          abortController,
+          permission,
+          ...(input.effort !== undefined ? { effortOverride: input.effort } : {}),
+          onText: (content) => input.onStreamChunk?.({ type: 'text', content }),
+          onToolUse: (toolName) => input.onStreamChunk?.({ type: 'tool_call_start', toolName }),
+          onToolUseComplete: (toolName) => input.onStreamChunk?.({ type: 'tool_call', toolName }),
+        },
+        config,
+      );
       return {
         output: result.output,
         model: result.model,
@@ -372,9 +346,9 @@ export function makeRealCursorBackend(): CursorBackend {
   return async (input: ClaudeCompatRunInput) => {
     if (input.effort !== undefined) {
       throw new Error(
-        'cursor backend: transporte de effort nao implementado no executor cursor '
-          + '(nenhum modelo do catalogo 1.0.30 anuncia tiers; o adapter deveria ter '
-          + 'falhado fechado antes). Fail-closed em vez de descarte silencioso.',
+        'cursor backend: transporte de effort nao implementado no executor cursor ' +
+          '(nenhum modelo do catalogo 1.0.30 anuncia tiers; o adapter deveria ter ' +
+          'falhado fechado antes). Fail-closed em vez de descarte silencioso.',
       );
     }
     const [{ resolveAgentQueryConfig }, profiles, executorModule] = await Promise.all([
@@ -395,20 +369,21 @@ export function makeRealCursorBackend(): CursorBackend {
     const onAbort = (): void => abortController.abort();
     if (input.abortSignal.aborted) abortController.abort();
     else input.abortSignal.addEventListener('abort', onAbort, { once: true });
-    const permission = profiles.PERM_DEFAULT_WITH_GUARD(
-      composedGuardToSdkCanUseTool(input.canUseTool),
-    );
+    const permission = profiles.PERM_DEFAULT_WITH_GUARD(composedGuardToSdkCanUseTool(input.canUseTool));
     try {
-      const result = await executorModule.cursorExecutor.run({
-        agentId: input.agentId,
-        prompt: input.prompt,
-        cwd: input.cwd,
-        abortController,
-        permission,
-        onText: (content) => input.onStreamChunk?.({ type: 'text', content }),
-        onToolUse: (toolName) => input.onStreamChunk?.({ type: 'tool_call_start', toolName }),
-        onToolUseComplete: (toolName) => input.onStreamChunk?.({ type: 'tool_call', toolName }),
-      }, config);
+      const result = await executorModule.cursorExecutor.run(
+        {
+          agentId: input.agentId,
+          prompt: input.prompt,
+          cwd: input.cwd,
+          abortController,
+          permission,
+          onText: (content) => input.onStreamChunk?.({ type: 'text', content }),
+          onToolUse: (toolName) => input.onStreamChunk?.({ type: 'tool_call_start', toolName }),
+          onToolUseComplete: (toolName) => input.onStreamChunk?.({ type: 'tool_call', toolName }),
+        },
+        config,
+      );
       return {
         output: result.output,
         model: result.model,
@@ -441,7 +416,6 @@ export function buildRealAdapterDeps(): WorkflowAdapterDeps {
   };
 }
 
-
 export function materializeEditedPackageReal(input: {
   projectPath: string;
   revisionId: string;
@@ -470,9 +444,7 @@ export function materializeEditedPackageReal(input: {
       for (const fileName of readdirSync(currentSchemasDir)) {
         if (!fileName.endsWith('.json')) continue;
         try {
-          collected[fileName] = JSON.parse(
-            readFileSync(join(currentSchemasDir, fileName), 'utf8'),
-          );
+          collected[fileName] = JSON.parse(readFileSync(join(currentSchemasDir, fileName), 'utf8'));
         } catch (e) {
           throw new Error(
             `schema ilegivel na revisao corrente (${fileName}): ${e instanceof Error ? e.message : String(e)}. Conserte ou remova o arquivo em ${currentSchemasDir} antes de editar o workflow.`,
@@ -530,7 +502,6 @@ export function createEditedDefinitionReal(input: {
   return { newDefinitionId };
 }
 
-
 export const realNarrateFn: NarrateFn = async ({ runId, prompt, abortSignal }) => {
   const { executeNarrator } = await import('./workflow-narrator-executor');
   const abortController = new AbortController();
@@ -571,9 +542,7 @@ export interface DefaultNarratorDepsOverrides {
   insertMessage?: WorkflowNarratorDeps['insertMessage'] | null;
 }
 
-export function createDefaultNarratorDeps(
-  overrides?: DefaultNarratorDepsOverrides,
-): WorkflowNarratorDeps {
+export function createDefaultNarratorDeps(overrides?: DefaultNarratorDepsOverrides): WorkflowNarratorDeps {
   const deps: WorkflowNarratorDeps = {
     narrate: overrides?.narrate ?? realNarrateFn,
     emit: overrides?.emit ?? emitIPC,
@@ -588,7 +557,6 @@ export function createDefaultNarratorDeps(
   }
   return deps;
 }
-
 
 function defaultAppendJsonl(runId: string, line: string): void {
   try {
@@ -623,9 +591,7 @@ export const DYNAMIC_WORKFLOW_WALL_TIMEOUT_SETTING_KEY = 'dynamic_workflow_wall_
 
 export const DYNAMIC_WORKFLOW_WALL_TIMEOUT_MAX_MINUTES = 35_000;
 
-export function parseWallTimeoutSetting(
-  raw: string | undefined | null,
-): { ms: number | undefined; reason?: string } {
+export function parseWallTimeoutSetting(raw: string | undefined | null): { ms: number | undefined; reason?: string } {
   if (raw === undefined || raw === null) return { ms: undefined };
   const trimmed = raw.trim();
   if (trimmed.length === 0) return { ms: undefined };
@@ -657,9 +623,7 @@ export function resolveWallTimeoutMsFromSetting(): number | undefined {
   return parsed.ms;
 }
 
-export function createDefaultRunnerDeps(
-  overrides?: DefaultRunnerDepsOverrides,
-): WorkflowRunnerDeps {
+export function createDefaultRunnerDeps(overrides?: DefaultRunnerDepsOverrides): WorkflowRunnerDeps {
   return {
     crud: overrides?.crud ?? buildRunnerCrud(),
     emitIPC: overrides?.emitIPC ?? emitIPC,
@@ -669,7 +633,10 @@ export function createDefaultRunnerDeps(
     narratorDeps: overrides?.narratorDeps ?? createDefaultNarratorDeps(),
     loadActiveAgentIds:
       overrides?.loadActiveAgentIds ??
-      (() => getAllAgents().filter((a) => a.isActive).map((a) => a.id)),
+      (() =>
+        getAllAgents()
+          .filter((a) => a.isActive)
+          .map((a) => a.id)),
     resolveAgentAxes:
       overrides?.resolveAgentAxes ??
       ((agentType: string) => {
@@ -683,12 +650,9 @@ export function createDefaultRunnerDeps(
           allowedTools: agent.allowedTools ?? [],
         };
       }),
-    materializeEditedPackage:
-      overrides?.materializeEditedPackage ?? materializeEditedPackageReal,
-    createEditedDefinition:
-      overrides?.createEditedDefinition ?? createEditedDefinitionReal,
-    repointRunDefinition:
-      overrides?.repointRunDefinition ?? repointDynamicWorkflowRunDefinition,
+    materializeEditedPackage: overrides?.materializeEditedPackage ?? materializeEditedPackageReal,
+    createEditedDefinition: overrides?.createEditedDefinition ?? createEditedDefinitionReal,
+    repointRunDefinition: overrides?.repointRunDefinition ?? repointDynamicWorkflowRunDefinition,
     closerDeps: {
       runAgentTurn: overrides?.closerRunAgentTurn ?? realCloserAgentTurn,
       auditGit: (event) => {

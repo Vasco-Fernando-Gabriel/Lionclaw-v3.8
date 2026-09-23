@@ -33,9 +33,7 @@ export default function OpenDesignStudioPage({ projectId }: OpenDesignStudioPage
 
         <div className="flex items-center gap-2 min-w-0">
           <PenTool size={14} className="text-amber-400 shrink-0" />
-          <span className="text-xs font-medium text-zinc-200 truncate">
-            {project?.name ?? projectId}
-          </span>
+          <span className="text-xs font-medium text-zinc-200 truncate">{project?.name ?? projectId}</span>
           <span className="text-[10px] text-zinc-600">/ Fase 5: LionDesign Studio</span>
         </div>
       </div>

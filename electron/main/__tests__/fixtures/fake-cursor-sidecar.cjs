@@ -1,16 +1,3 @@
-// Fake sidecar Cursor para os testes do sidecar-manager (E3).
-//
-// Fala o protocolo NDJSON prefixado de cursor-sidecar/protocol.ts SEM o
-// @cursor/sdk, com comportamentos por env FAKE_SIDECAR_MODE:
-//   echo         - execute -> started + stream-event + tool-invoke lion_echo
-//                  -> execute-result finished (finalText = ok do tool-result)
-//   long-tool    - execute -> tool-invoke long_op; tool-result de erro dispara
-//                  um PROBE pos-abort (tool-invoke probe); abort -> result
-//                  cancelled com o desfecho do probe no finalText
-//   ignore-abort - execute -> started e silencio: ignora abort (o manager tem
-//                  que matar pelo grace)
-//   crash        - sai com exit(7) logo apos o ready
-//   no-pong      - igual echo, mas NUNCA responde ping (health timeout)
 'use strict';
 
 const PREFIX = '@@LIONRPC@@';
@@ -25,13 +12,13 @@ let executionId = null;
 let probeResult = null;
 
 function handle(msg) {
-  if (mode === 'crash') return; // morre sozinho; nao processa nada
+  if (mode === 'crash') return;
   switch (msg.type) {
     case 'execute': {
       executionId = msg.config.executionId;
       if (mode === 'ignore-abort') {
         send({ type: 'execute-started', executionId, runId: 'run-ia', agentId: 'agent-ia' });
-        return; // nunca termina; ignora abort
+        return;
       }
       send({ type: 'execute-started', executionId, runId: 'run-1', agentId: 'agent-1' });
       send({ type: 'stream-event', executionId, event: { type: 'status', status: 'RUNNING' } });
@@ -67,7 +54,6 @@ function handle(msg) {
         });
         setTimeout(() => process.exit(0), 200);
       } else if (msg.id === 't-long') {
-        // O main abortou (erro session-aborted): PROBE pos-abort obrigatorio.
         send({ type: 'tool-invoke', executionId, id: 't-probe', toolName: 'probe', args: {} });
       } else if (msg.id === 't-probe') {
         probeResult = msg.error || msg.ok || 'sem-resposta';
@@ -76,7 +62,6 @@ function handle(msg) {
     }
     case 'abort': {
       if (mode === 'ignore-abort') return;
-      // Cancelamento cooperativo: espera o probe fluir e fecha cancelled.
       setTimeout(() => {
         send({
           type: 'execute-result',
@@ -94,7 +79,6 @@ function handle(msg) {
       break;
     }
     case 'list-models': {
-      // E4: catalogo vivo (model-catalog.ts). models-error simula falha do SDK.
       if (mode === 'models-error') {
         send({ type: 'models-result', id: msg.id, error: 'catalogo indisponivel (fake)' });
       } else {
@@ -137,7 +121,6 @@ if (mode === 'crash') {
   send({ type: 'ready', pid: process.pid, nodeVersion: process.version });
   setTimeout(() => process.exit(7), 50);
 } else {
-  // Poluicao proposital no stdout: o decoder do main deve ignorar.
   process.stdout.write('linha de poluicao do sdk\n');
   send({ type: 'ready', pid: process.pid, nodeVersion: process.version });
 }

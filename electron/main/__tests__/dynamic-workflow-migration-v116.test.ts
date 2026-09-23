@@ -1,14 +1,10 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { dynamicWorkflowSprintPlanner } from '../seed-agents/dynamic-workflow-sprint-planner';
 
 const MIGRATIONS_DIR = join(__dirname, '..', 'db-migrations');
-const V116_SOURCE = readFileSync(
-  join(MIGRATIONS_DIR, 'v116-dynamic-workflow-sprint-planner-whole-project.ts'),
-  'utf8',
-);
+const V116_SOURCE = readFileSync(join(MIGRATIONS_DIR, 'v116-dynamic-workflow-sprint-planner-whole-project.ts'), 'utf8');
 
 function grabPrinciple6(source: string): string {
   const arr = source.match(/const principle6 = \[([\s\S]*?)\]\.join/);
@@ -29,9 +25,7 @@ describe('migration v116 sprint-planner planeja o projeto INTEIRO (R10, sem DB)'
   });
 
   it('placement: o principio 6 precede imediatamente "## O que voce retorna"', () => {
-    expect(dynamicWorkflowSprintPlanner.systemPrompt).toContain(
-      PRINCIPLE6 + '\n\n' + ANCHOR,
-    );
+    expect(dynamicWorkflowSprintPlanner.systemPrompt).toContain(PRINCIPLE6 + '\n\n' + ANCHOR);
   });
 
   it('o ensino novo (ancora no repo + ignora secao de outro motor) esta no seed', () => {
@@ -44,13 +38,9 @@ describe('migration v116 sprint-planner planeja o projeto INTEIRO (R10, sem DB)'
 
   it('migration: UPDATE UNICO no agente certo, com guard de ancora + idempotencia', () => {
     expect((V116_SOURCE.match(/UPDATE agents/g) || []).length).toBe(1);
-    expect(
-      (V116_SOURCE.match(/id = 'dynamic-workflow-sprint-planner'/g) || []).length,
-    ).toBe(1);
+    expect((V116_SOURCE.match(/id = 'dynamic-workflow-sprint-planner'/g) || []).length).toBe(1);
     expect(V116_SOURCE).toContain("system_prompt LIKE '%' || ? || '%'");
-    expect(V116_SOURCE).toContain(
-      "system_prompt NOT LIKE '%PLANEJA O PROJETO INTEIRO%'",
-    );
+    expect(V116_SOURCE).toContain("system_prompt NOT LIKE '%PLANEJA O PROJETO INTEIRO%'");
     expect(PRINCIPLE6).toContain(MARKER);
   });
 

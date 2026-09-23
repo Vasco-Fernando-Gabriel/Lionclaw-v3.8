@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -50,10 +49,7 @@ import {
   DYNAMIC_WORKFLOW_SPRINT_MERGE_STATUSES,
   type DynamicWorkflowSprintMergeStatus,
 } from '../../../src/types/dynamic-workflow';
-import {
-  journalKeyMatches,
-  lookupJournalReplay,
-} from '../dynamic-workflows/workflow-checkpoints';
+import { journalKeyMatches, lookupJournalReplay } from '../dynamic-workflows/workflow-checkpoints';
 import type {
   DynamicWorkflowRun,
   DynamicWorkflowDefinition,
@@ -66,7 +62,6 @@ import type {
   DynamicWorkflowJournalCallKey,
   DynamicWorkflowJournalEntry,
 } from '../dynamic-workflows/types';
-
 
 interface FakeTimer {
   id: number;
@@ -105,7 +100,6 @@ class FakeScheduler {
   }
 }
 
-
 interface Harness {
   crud: WorkflowRunnerCrud;
   state: {
@@ -129,8 +123,28 @@ function makeManifest(): DynamicWorkflowManifest {
       { id: 'Implementar', name: 'Implementar', order: 1 },
     ],
     nodes: [
-      { id: 'scout', type: 'agent', phaseId: 'Scout', agentId: 'a-scout', access: 'read-only', canResume: true, produces: ['scout'], consumes: [] },
-      { id: 'coder', type: 'agent', phaseId: 'Implementar', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], isolation: 'run-workspace', canResume: true, produces: ['impl'], consumes: ['scout'] },
+      {
+        id: 'scout',
+        type: 'agent',
+        phaseId: 'Scout',
+        agentId: 'a-scout',
+        access: 'read-only',
+        canResume: true,
+        produces: ['scout'],
+        consumes: [],
+      },
+      {
+        id: 'coder',
+        type: 'agent',
+        phaseId: 'Implementar',
+        agentId: 'a-coder',
+        access: 'workspace-write',
+        writeSet: ['src/**'],
+        isolation: 'run-workspace',
+        canResume: true,
+        produces: ['impl'],
+        consumes: ['scout'],
+      },
     ],
     parallelism: { maxConcurrentAgents: 1, parallelWritersAllowed: false },
     gates: [],
@@ -195,7 +209,9 @@ function makeDefinition(over?: Partial<DynamicWorkflowDefinition>): DynamicWorkf
   };
 }
 
-function makeNodeRun(over: Partial<DynamicWorkflowNodeRun> & { nodeId: string; attempt: number }): DynamicWorkflowNodeRun {
+function makeNodeRun(
+  over: Partial<DynamicWorkflowNodeRun> & { nodeId: string; attempt: number },
+): DynamicWorkflowNodeRun {
   return {
     id: `nr-${over.nodeId}-${over.attempt}`,
     runId: 'run-1',
@@ -240,9 +256,7 @@ function makeHarness(opts?: {
 }): Harness {
   const state: Harness['state'] = {
     runs: new Map([['run-1', makeRun(opts?.run)]]),
-    definitions: new Map(
-      (opts?.definitions ?? [makeDefinition(opts?.definition)]).map((d) => [d.id, d]),
-    ),
+    definitions: new Map((opts?.definitions ?? [makeDefinition(opts?.definition)]).map((d) => [d.id, d])),
     nodeRuns: opts?.nodeRuns ?? [],
     events: [],
     gateDecisions: [],
@@ -371,11 +385,16 @@ function makeRunner(harness: Harness, scheduler: FakeScheduler, extra?: Partial<
   return new WorkflowRunner(deps);
 }
 
-function pendingDecisionOf(harness: Harness, runId = 'run-1'): { type?: string; failureClass?: string; policyChanged?: boolean } | null {
+function pendingDecisionOf(
+  harness: Harness,
+  runId = 'run-1',
+): { type?: string; failureClass?: string; policyChanged?: boolean } | null {
   const run = harness.state.runs.get(runId);
   if (!run) return null;
   try {
-    const input = JSON.parse(run.inputJson || '{}') as { pendingDecision?: { type?: string; failureClass?: string; policyChanged?: boolean } };
+    const input = JSON.parse(run.inputJson || '{}') as {
+      pendingDecision?: { type?: string; failureClass?: string; policyChanged?: boolean };
+    };
     return input.pendingDecision ?? null;
   } catch {
     return null;
@@ -387,37 +406,40 @@ beforeEach(() => {
   _resetWorkflowRunnerForTesting();
 });
 
-
 describe('S17 classifyFailureByRuntime: refinamento fino por runtime (10.4)', () => {
   it('janela de uso renovavel (claude-compatible) -> provider-limit (retryavel)', () => {
     expect(
-      classifyFailureByRuntime({ runtime: 'cloud', error: new Error('You have hit your usage limit reached. Try again later.') }),
+      classifyFailureByRuntime({
+        runtime: 'cloud',
+        error: new Error('You have hit your usage limit reached. Try again later.'),
+      }),
     ).toBe('provider-limit');
   });
 
   it('overloaded transitorio -> provider-error', () => {
-    expect(
-      classifyFailureByRuntime({ runtime: 'zai', error: new Error('upstream is overloaded, retry') }),
-    ).toBe('provider-error');
+    expect(classifyFailureByRuntime({ runtime: 'zai', error: new Error('upstream is overloaded, retry') })).toBe(
+      'provider-error',
+    );
   });
 
   it('codex pedindo re-login (mensagem do CLI) -> provider-auth', () => {
-    expect(
-      classifyFailureByRuntime({ runtime: 'codex', error: new Error('session expired, run /login') }),
-    ).toBe('provider-auth');
+    expect(classifyFailureByRuntime({ runtime: 'codex', error: new Error('session expired, run /login') })).toBe(
+      'provider-auth',
+    );
   });
 
   it('nao rebaixa classe ja decidida pelo classificador base (429 -> provider-limit)', () => {
-    expect(
-      classifyFailureByRuntime({ runtime: 'external', error: new Error('nope'), httpStatus: 429 }),
-    ).toBe('provider-limit');
+    expect(classifyFailureByRuntime({ runtime: 'external', error: new Error('nope'), httpStatus: 429 })).toBe(
+      'provider-limit',
+    );
   });
 
   it('sem sinal nenhum continua logic (nao inventa provider-limit)', () => {
-    expect(classifyFailureByRuntime({ runtime: 'cloud', error: new Error('undefined is not a function') })).toBe('logic');
+    expect(classifyFailureByRuntime({ runtime: 'cloud', error: new Error('undefined is not a function') })).toBe(
+      'logic',
+    );
   });
 });
-
 
 describe('S17 handleProviderFailure: retry/backoff/blocked (10.4/AC-22)', () => {
   it('provider-limit -> 3 retries com backoff exponencial -> blocked provider (nunca failed)', async () => {
@@ -482,7 +504,6 @@ describe('S17 handleProviderFailure: retry/backoff/blocked (10.4/AC-22)', () => 
   });
 });
 
-
 describe('S17 scheduleResume: retomada agendada (R2-F4/13.8)', () => {
   it('persiste o timestamp-alvo no checkpoint_json e arma o timer', () => {
     const harness = makeHarness({ run: { status: 'blocked' } });
@@ -528,7 +549,6 @@ describe('S17 scheduleResume: retomada agendada (R2-F4/13.8)', () => {
   });
 });
 
-
 describe('S17 recoverInterrupted: boot recovery oferece Retomar (10.3/AC-25)', () => {
   it('runs running viram interrupted (aguardam Retomar); nodes running tambem', () => {
     const running = makeNodeRun({ nodeId: 'coder', attempt: 1, status: 'running' });
@@ -550,7 +570,6 @@ describe('S17 recoverInterrupted: boot recovery oferece Retomar (10.3/AC-25)', (
     expect(res.recovered).toBe(1);
   });
 });
-
 
 describe('S17 detectPolicyInvalidation: cache invalidado por policy (10.1)', () => {
   it('policy_hash diferente -> emite cache-invalidated:policy-changed e marca blocked', () => {
@@ -583,9 +602,11 @@ describe('S17 detectPolicyInvalidation: cache invalidado por policy (10.1)', () 
   });
 });
 
-
 describe('S17 switchAgent: troca de agente com nova definition version (14.1.1/22.7)', () => {
-  function switchDeps(over: Partial<SwitchAgentValidation>, captured: { newDefInput?: DynamicWorkflowDefinitionCreateInput; prevPatch?: { id: string; supersedes: string } }) {
+  function switchDeps(
+    over: Partial<SwitchAgentValidation>,
+    captured: { newDefInput?: DynamicWorkflowDefinitionCreateInput; prevPatch?: { id: string; supersedes: string } },
+  ) {
     return {
       validateSwitchAgent: (): SwitchAgentValidation => ({
         exists: true,
@@ -623,9 +644,19 @@ describe('S17 switchAgent: troca de agente com nova definition version (14.1.1/2
     const harness = makeHarness({ nodeRuns: [makeNodeRun({ nodeId: 'coder', attempt: 1, status: 'interrupted' })] });
     const scheduler = new FakeScheduler();
     const runner = makeRunner(harness, scheduler);
-    const captured: { newDefInput?: DynamicWorkflowDefinitionCreateInput; prevPatch?: { id: string; supersedes: string } } = {};
+    const captured: {
+      newDefInput?: DynamicWorkflowDefinitionCreateInput;
+      prevPatch?: { id: string; supersedes: string };
+    } = {};
 
-    const res = await runner.switchAgent('run-1', 'coder', 'a-coder-2', 'limite do provedor', 'human', switchDeps({}, captured));
+    const res = await runner.switchAgent(
+      'run-1',
+      'coder',
+      'a-coder-2',
+      'limite do provedor',
+      'human',
+      switchDeps({}, captured),
+    );
     expect('ok' in res && res.ok).toBe(true);
 
     expect(captured.newDefInput?.parentDefinitionId).toBe('def-1');
@@ -692,7 +723,14 @@ describe('S17 switchAgent: troca de agente com nova definition version (14.1.1/2
     const scheduler = new FakeScheduler();
     const runner = makeRunner(harness, scheduler);
     const captured: { newDefInput?: DynamicWorkflowDefinitionCreateInput } = {};
-    const res = await runner.switchAgent('run-1', 'coder', 'ghost', 'troca', 'human', switchDeps({ exists: false, reason: 'agente ghost nao existe no catalogo' }, captured));
+    const res = await runner.switchAgent(
+      'run-1',
+      'coder',
+      'ghost',
+      'troca',
+      'human',
+      switchDeps({ exists: false, reason: 'agente ghost nao existe no catalogo' }, captured),
+    );
     expect('error' in res).toBe(true);
     expect(captured.newDefInput).toBeUndefined();
   });
@@ -702,16 +740,25 @@ describe('S17 switchAgent: troca de agente com nova definition version (14.1.1/2
     const scheduler = new FakeScheduler();
     const runner = makeRunner(harness, scheduler);
     const captured: { newDefInput?: DynamicWorkflowDefinitionCreateInput } = {};
-    const res = await runner.switchAgent('run-1', 'coder', 'a-local', 'troca', 'human', switchDeps({ preflightOk: false, reason: 'runtime local nao suporta allowBash' }, captured));
+    const res = await runner.switchAgent(
+      'run-1',
+      'coder',
+      'a-local',
+      'troca',
+      'human',
+      switchDeps({ preflightOk: false, reason: 'runtime local nao suporta allowBash' }, captured),
+    );
     expect('error' in res).toBe(true);
     expect(captured.newDefInput).toBeUndefined();
   });
 });
 
-
 describe('S17 stall watchdog (13.8)', () => {
   it('sem progresso por 3min -> emite node-stalled', () => {
-    const harness = makeHarness({ run: { status: 'running' }, nodeRuns: [makeNodeRun({ nodeId: 'coder', attempt: 1, status: 'running' })] });
+    const harness = makeHarness({
+      run: { status: 'running' },
+      nodeRuns: [makeNodeRun({ nodeId: 'coder', attempt: 1, status: 'running' })],
+    });
     const scheduler = new FakeScheduler();
     const runner = makeRunner(harness, scheduler);
 
@@ -732,7 +779,6 @@ describe('S17 stall watchdog (13.8)', () => {
     expect(scheduler.activeCount()).toBe(0);
   });
 
-
   it('stallDelayFor deriva do timeout do node (20min -> 21min) e cai no piso sem timeout', () => {
     const min = 60 * 1000;
     expect(stallDelayFor(undefined)).toBe(3 * min);
@@ -743,7 +789,10 @@ describe('S17 stall watchdog (13.8)', () => {
 
   it('node de 20min (template) NAO e auto-pausado aos 3min (regressao do teto fixo)', () => {
     const min = 60 * 1000;
-    const harness = makeHarness({ run: { status: 'running' }, nodeRuns: [makeNodeRun({ nodeId: 'coder', attempt: 1, status: 'running' })] });
+    const harness = makeHarness({
+      run: { status: 'running' },
+      nodeRuns: [makeNodeRun({ nodeId: 'coder', attempt: 1, status: 'running' })],
+    });
     const scheduler = new FakeScheduler();
     const runner = makeRunner(harness, scheduler);
 
@@ -751,12 +800,9 @@ describe('S17 stall watchdog (13.8)', () => {
     expect(scheduler.lastDelayMs()).toBe(21 * min);
 
     scheduler.flush();
-    expect(
-      harness.state.events.some((e) => e.type === 'node-stalled' && e.nodeId === 'coder'),
-    ).toBe(true);
+    expect(harness.state.events.some((e) => e.type === 'node-stalled' && e.nodeId === 'coder')).toBe(true);
   });
 });
-
 
 describe('F2 journal ordenado: match de chave + decisao de replay (sec 3.2)', () => {
   function key(over: Partial<DynamicWorkflowJournalCallKey> = {}): DynamicWorkflowJournalCallKey {
@@ -804,11 +850,12 @@ describe('F2 journal ordenado: match de chave + decisao de replay (sec 3.2)', ()
   it('lookupJournalReplay: reuse no prefixo intacto, diverge no 1o desvio, fresh apos o fim', () => {
     const journal = [entry(1), entry(2, { ...key({ argHash: 'arg-2', nodeId: 'v0', callPath: 'v0:agent' }) })];
     expect(lookupJournalReplay(journal, 1, key()).kind).toBe('reuse');
-    expect(lookupJournalReplay(journal, 2, key({ argHash: 'arg-MUDOU', nodeId: 'v0', callPath: 'v0:agent' })).kind).toBe('diverge');
+    expect(
+      lookupJournalReplay(journal, 2, key({ argHash: 'arg-MUDOU', nodeId: 'v0', callPath: 'v0:agent' })).kind,
+    ).toBe('diverge');
     expect(lookupJournalReplay(journal, 3, key()).kind).toBe('fresh');
   });
 });
-
 
 describe('F3 classificacao consistente: uma classe propagada (1.3/3.3)', () => {
   const USAGE_LIMIT_MSG = 'You have hit your usage limit reached. Try again later.';
@@ -903,7 +950,12 @@ describe('F3 classificacao consistente: uma classe propagada (1.3/3.3)', () => {
     const scheduler = new FakeScheduler();
     const runner = makeRunner(harness, scheduler);
 
-    const r = await runner.handleProviderFailure('run-1', 'coder', { runtime: 'cloud', error: new Error('rate limit') }, 1);
+    const r = await runner.handleProviderFailure(
+      'run-1',
+      'coder',
+      { runtime: 'cloud', error: new Error('rate limit') },
+      1,
+    );
     expect(r.failureClass).toBe('provider-limit');
     expect(r.outcome).toBe('retry-scheduled');
   });
@@ -925,7 +977,6 @@ describe('F3 classificacao consistente: uma classe propagada (1.3/3.3)', () => {
     expect(r.failureClass).not.toBe('cancelled');
   });
 });
-
 
 const VALID_EDIT_JS =
   "export const meta = { name: 'res-wf', description: 'edicao de teste', phases: ['Scout', 'Implementar'] };\n" +
@@ -981,9 +1032,7 @@ describe('F4b editCoordinator: edicao-ao-vivo transacional (SPEC sec 4.3)', () =
     expect(edit.created.calls).toHaveLength(1);
     expect(edit.created.calls[0].prevId).toBe('def-1');
     expect(res.manifestHash).toBe(`mh-${res.revisionId}`);
-    expect(edit.repointed.calls).toEqual([
-      { runId: 'run-1', definitionId: `def-${res.revisionId}` },
-    ]);
+    expect(edit.repointed.calls).toEqual([{ runId: 'run-1', definitionId: `def-${res.revisionId}` }]);
     expect(harness.state.events.some((e) => e.type === 'coordinator-edited')).toBe(true);
     expect(harness.state.messages.some((m) => m.kind === 'coordinator-edit')).toBe(true);
   });
@@ -1207,37 +1256,22 @@ describe('F4b editCoordinator: edicao-ao-vivo transacional (SPEC sec 4.3)', () =
   });
 });
 
-
 describe('F5a V93: colunas de worktree por sprint (sec 3.4/D-3)', () => {
   it('a migration adiciona EXATAMENTE as 5 colunas por sprint na tabela certa', () => {
     expect(__V93_INTERNAL.TABLE).toBe('dynamic_workflow_sprints');
-    expect(__V93_INTERNAL.ADDED_COLUMNS).toEqual([
-      'worktree_path',
-      'branch',
-      'base_sha',
-      'head_sha',
-      'merge_status',
-    ]);
+    expect(__V93_INTERNAL.ADDED_COLUMNS).toEqual(['worktree_path', 'branch', 'base_sha', 'head_sha', 'merge_status']);
   });
 
   it('cada coluna e um ALTER TABLE ADD COLUMN isolado (try/catch idempotente como V87)', () => {
     expect(__V93_INTERNAL.ALTERS).toHaveLength(5);
     for (const alter of __V93_INTERNAL.ALTERS) {
-      expect(alter).toMatch(
-        /^ALTER TABLE dynamic_workflow_sprints ADD COLUMN /,
-      );
+      expect(alter).toMatch(/^ALTER TABLE dynamic_workflow_sprints ADD COLUMN /);
     }
-    expect(
-      __V93_INTERNAL.ALTERS.every((a) =>
-        a.includes('dynamic_workflow_sprints'),
-      ),
-    ).toBe(true);
+    expect(__V93_INTERNAL.ALTERS.every((a) => a.includes('dynamic_workflow_sprints'))).toBe(true);
   });
 
   it('merge_status carrega DEFAULT pending + CHECK gerado do union (disciplina 12.1)', () => {
-    const mergeAlter = __V93_INTERNAL.ALTERS.find((a) =>
-      a.includes('merge_status'),
-    );
+    const mergeAlter = __V93_INTERNAL.ALTERS.find((a) => a.includes('merge_status'));
     expect(mergeAlter).toBeDefined();
     expect(mergeAlter).toContain("DEFAULT 'pending'");
     for (const status of DYNAMIC_WORKFLOW_SPRINT_MERGE_STATUSES) {
@@ -1247,24 +1281,13 @@ describe('F5a V93: colunas de worktree por sprint (sec 3.4/D-3)', () => {
   });
 
   it('o union de merge_status e o dominio fechado esperado (pending->merged->conflict)', () => {
-    const expected: DynamicWorkflowSprintMergeStatus[] = [
-      'pending',
-      'merging',
-      'merged',
-      'conflict',
-      'skipped',
-    ];
+    const expected: DynamicWorkflowSprintMergeStatus[] = ['pending', 'merging', 'merged', 'conflict', 'skipped'];
     expect([...DYNAMIC_WORKFLOW_SPRINT_MERGE_STATUSES]).toEqual(expected);
     expect(DYNAMIC_WORKFLOW_SPRINT_MERGE_STATUSES).toContain('pending');
   });
 });
 
-
-function sprint(
-  index: number,
-  writeSet: string[],
-  dependencies: string[] = [],
-): ParallelGroupSprint {
+function sprint(index: number, writeSet: string[], dependencies: string[] = []): ParallelGroupSprint {
   return { sprintId: `s${index}`, index, writeSet, dependencies };
 }
 
@@ -1288,27 +1311,14 @@ describe('F5b - overlap deterministico dos write-sets (D-2)', () => {
   });
 
   it('SEQUENCIAL-ONLY: worktree-por-sprint removida -> cada sprint vira seu proprio batch', () => {
-    const sprints = [
-      sprint(0, ['a/**']),
-      sprint(1, ['b/**']),
-      sprint(2, ['c/**']),
-    ];
+    const sprints = [sprint(0, ['a/**']), sprint(1, ['b/**']), sprint(2, ['c/**'])];
     const groups = partitionSprintsForParallel(sprints);
     expect(WORKFLOW_PARALLEL_SPRINT_CAP).toBe(3);
-    expect(groups).toEqual([
-      { sprintIds: ['s0'] },
-      { sprintIds: ['s1'] },
-      { sprintIds: ['s2'] },
-    ]);
+    expect(groups).toEqual([{ sprintIds: ['s0'] }, { sprintIds: ['s1'] }, { sprintIds: ['s2'] }]);
   });
 
   it('SEQUENCIAL-ONLY: o cap nao reagrupa - 4 sprints viram 4 batches de 1', () => {
-    const sprints = [
-      sprint(0, ['a/**']),
-      sprint(1, ['b/**']),
-      sprint(2, ['c/**']),
-      sprint(3, ['d/**']),
-    ];
+    const sprints = [sprint(0, ['a/**']), sprint(1, ['b/**']), sprint(2, ['c/**']), sprint(3, ['d/**'])];
     const groups = partitionSprintsForParallel(sprints);
     expect(groups).toEqual([
       { sprintIds: ['s0'] },
@@ -1321,11 +1331,7 @@ describe('F5b - overlap deterministico dos write-sets (D-2)', () => {
   it('AMBIGUIDADE (write-set vazio) -> 1 sprint por batch (sequencial)', () => {
     const sprints = [sprint(0, []), sprint(1, []), sprint(2, [])];
     const groups = partitionSprintsForParallel(sprints);
-    expect(groups).toEqual([
-      { sprintIds: ['s0'] },
-      { sprintIds: ['s1'] },
-      { sprintIds: ['s2'] },
-    ]);
+    expect(groups).toEqual([{ sprintIds: ['s0'] }, { sprintIds: ['s1'] }, { sprintIds: ['s2'] }]);
   });
 
   it('DEPENDENCIA respeitada: a ordem dos batches segue o index/dependencia', () => {
@@ -1338,19 +1344,11 @@ describe('F5b - overlap deterministico dos write-sets (D-2)', () => {
   });
 
   it('DETERMINISTICO: mesma entrada -> mesma particao (idempotente no resume)', () => {
-    const sprints = [
-      sprint(2, ['c/**']),
-      sprint(0, ['a/**']),
-      sprint(1, ['b/**']),
-    ];
+    const sprints = [sprint(2, ['c/**']), sprint(0, ['a/**']), sprint(1, ['b/**'])];
     const a = partitionSprintsForParallel(sprints);
     const b = partitionSprintsForParallel(sprints);
     expect(a).toEqual(b);
-    expect(a).toEqual([
-      { sprintIds: ['s0'] },
-      { sprintIds: ['s1'] },
-      { sprintIds: ['s2'] },
-    ]);
+    expect(a).toEqual([{ sprintIds: ['s0'] }, { sprintIds: ['s1'] }, { sprintIds: ['s2'] }]);
   });
 });
 
@@ -1358,11 +1356,11 @@ describe('F5b - raiz curta + branch sanitizada + backoff de lock (6.2.3)', () =>
   it('shortRunId: deterministico, 6-8 chars hex, clampado', () => {
     const a = shortRunId('20260614_010203-abc123');
     const b = shortRunId('20260614_010203-abc123');
-    expect(a).toBe(b); // deterministico
-    expect(a).toMatch(/^[0-9a-f]{7}$/); // default 7
+    expect(a).toBe(b);
+    expect(a).toMatch(/^[0-9a-f]{7}$/);
     expect(shortRunId('x', 6)).toMatch(/^[0-9a-f]{6}$/);
-    expect(shortRunId('x', 99)).toMatch(/^[0-9a-f]{8}$/); // clamp em 8
-    expect(shortRunId('x', 1)).toMatch(/^[0-9a-f]{6}$/); // clamp em 6
+    expect(shortRunId('x', 99)).toMatch(/^[0-9a-f]{8}$/);
+    expect(shortRunId('x', 1)).toMatch(/^[0-9a-f]{6}$/);
   });
 
   it('sanitizeBranchSegment: remove char invalido no Windows', () => {
@@ -1448,7 +1446,7 @@ describe('F5b - merge ORDENADO por sprint (closer, 8.6.2 / D-3)', () => {
       cmds.push(args);
       const ok = (stdout = ''): GitRunResult => ({ code: 0, stdout, stderr: '' });
       if (args[0] === 'rev-parse') return ok('basehead0000000000000000000000000000000');
-      if (args[0] === 'rev-list') return ok(opts.baseAdvanced ? '2' : '1'); // ahead count
+      if (args[0] === 'rev-list') return ok(opts.baseAdvanced ? '2' : '1');
       if (args[0] === 'branch') return ok('feedfacefeedfacefeedfacefeedfacefeedface');
       if (args[0] === 'checkout') return ok();
       if (args[0] === 'worktree') return ok();
@@ -1501,10 +1499,7 @@ describe('F5b - merge ORDENADO por sprint (closer, 8.6.2 / D-3)', () => {
     const { git } = makeFakeGit();
     const patches: Array<{ sprintId: string; patch: DynamicWorkflowSprintPatch }> = [];
     const cleaned: number[] = [];
-    const report = await mergeSprintsOrdered(
-      [target(2), target(0), target(1)],
-      makeDeps(git, patches, cleaned),
-    );
+    const report = await mergeSprintsOrdered([target(2), target(0), target(1)], makeDeps(git, patches, cleaned));
     expect(report.allMerged).toBe(true);
     expect(report.sprints.map((s) => s.sprintId)).toEqual(['s0', 's1', 's2']);
     expect(report.sprints.every((s) => s.mergeStatus === 'merged')).toBe(true);
@@ -1518,10 +1513,7 @@ describe('F5b - merge ORDENADO por sprint (closer, 8.6.2 / D-3)', () => {
     const { git } = makeFakeGit({ conflictBranches: new Set(['dynworkflow/run-1/s1']) });
     const patches: Array<{ sprintId: string; patch: DynamicWorkflowSprintPatch }> = [];
     const cleaned: number[] = [];
-    const report = await mergeSprintsOrdered(
-      [target(0), target(1), target(2)],
-      makeDeps(git, patches, cleaned),
-    );
+    const report = await mergeSprintsOrdered([target(0), target(1), target(2)], makeDeps(git, patches, cleaned));
     expect(report.allMerged).toBe(false);
     expect(report.conflictedSprintId).toBe('s1');
     const byId = Object.fromEntries(report.sprints.map((s) => [s.sprintId, s.mergeStatus]));
@@ -1542,8 +1534,8 @@ describe('F5b - merge ORDENADO por sprint (closer, 8.6.2 / D-3)', () => {
       makeDeps(git, patches, cleaned),
     );
     expect(report.sprints[0].mergeStatus).toBe('skipped');
-    expect(report.allMerged).toBe(true); // skipped conta como terminal sem conflito
-    expect(cleaned).toEqual([]); // nada a limpar
+    expect(report.allMerged).toBe(true);
+    expect(cleaned).toEqual([]);
     expect(patches.pop()?.patch.mergeStatus).toBe('skipped');
   });
 
@@ -1554,7 +1546,7 @@ describe('F5b - merge ORDENADO por sprint (closer, 8.6.2 / D-3)', () => {
     currentBranch: { name: string };
   } {
     const baseSha = 'base0000000000000000000000000000000000000';
-    let baseTip = baseSha; // tip da branch base; avanca no 1o commit-na-base
+    let baseTip = baseSha;
     let onBranch = 'main';
     const stagingBranches: string[] = [];
     const ffMerges: string[] = [];
@@ -1600,10 +1592,7 @@ describe('F5b - merge ORDENADO por sprint (closer, 8.6.2 / D-3)', () => {
     const { git, stagingBranches, ffMerges } = makeAdvancingBaseGit();
     const patches: Array<{ sprintId: string; patch: DynamicWorkflowSprintPatch }> = [];
     const cleaned: number[] = [];
-    const report = await mergeSprintsOrdered(
-      [target(0), target(1), target(2)],
-      makeDeps(git, patches, cleaned),
-    );
+    const report = await mergeSprintsOrdered([target(0), target(1), target(2)], makeDeps(git, patches, cleaned));
     expect(report.allMerged).toBe(true);
     expect(report.sprints.map((s) => s.mergeStatus)).toEqual(['merged', 'merged', 'merged']);
     expect(ffMerges.length).toBeGreaterThanOrEqual(2);
@@ -1626,17 +1615,16 @@ describe('F5b - merge ORDENADO por sprint (closer, 8.6.2 / D-3)', () => {
     expect(report.allMerged).toBe(false);
     expect(report.conflictedSprintId).toBe('s1');
     const byId = Object.fromEntries(report.sprints.map((s) => [s.sprintId, s.mergeStatus]));
-    expect(byId['s0']).toBe('merged'); // squashou direto
-    expect(byId['s1']).toBe('conflict'); // re-check vermelho
-    expect(byId['s2']).toBeUndefined(); // sequencia parou
+    expect(byId['s0']).toBe('merged');
+    expect(byId['s1']).toBe('conflict');
+    expect(byId['s2']).toBeUndefined();
     expect(ffMerges).toEqual([]);
     expect(cleaned).toEqual([0]);
   });
 });
 
-
 const MANUAL_PATH_PATTERNS: Array<{ label: string; re: RegExp }> = [
-  { label: '`${__dirname}/...`', re: /\$\{\s*__dirname\s*\}\//},
+  { label: '`${__dirname}/...`', re: /\$\{\s*__dirname\s*\}\// },
   {
     label: '`${<ident>Path|<ident>Dir}/...`',
     re: /\$\{\s*[A-Za-z_$][A-Za-z0-9_$]*(?:Path|Dir)\s*\}\//,
@@ -1671,14 +1659,14 @@ describe('FX cross-platform: sweep de construcao manual de path no dominio (SPEC
 
   it('nenhum arquivo do dominio constroi path a mao (template ${...}/, __dirname+/, *Path+/, *Dir+/)', () => {
     const files = collectDomainTsFiles(domainDir);
-    expect(files.length).toBeGreaterThan(10); // sanidade: achou o dominio
+    expect(files.length).toBeGreaterThan(10);
     const violations: string[] = [];
     for (const file of files) {
       const src = readFileSync(file, 'utf8');
       const lines = src.split('\n');
       lines.forEach((line, idx) => {
-        if (isCommentOnlyLine(line)) return; // comentario nao constroi path
-        if (line.includes('://')) return; // URL (protocolo://host) nao e path local
+        if (isCommentOnlyLine(line)) return;
+        if (line.includes('://')) return;
         for (const { label, re } of MANUAL_PATH_PATTERNS) {
           if (re.test(line)) {
             violations.push(`${file}:${idx + 1} [${label}] -> ${line.trim()}`);
@@ -1686,15 +1674,13 @@ describe('FX cross-platform: sweep de construcao manual de path no dominio (SPEC
         }
       });
     }
-    expect(violations, `construcao manual de path encontrada:\n${violations.join('\n')}`).toEqual(
-      [],
-    );
+    expect(violations, `construcao manual de path encontrada:\n${violations.join('\n')}`).toEqual([]);
   });
 
   it('o sweep DETECTA os padroes proibidos (guarda contra regex morta)', () => {
     const positives = [
       'return `${projectPath}/.lionclaw/workflows/${runId}`;',
-      "return `${__dirname}/${SANDBOX_CHILD_ENTRY_BASENAME}`;",
+      'return `${__dirname}/${SANDBOX_CHILD_ENTRY_BASENAME}`;',
       "const e = __dirname + '/' + base;",
       "const p = worktreePath + '/' + sub;",
       'const d = `${rootDir}/sub`;',
@@ -1704,13 +1690,13 @@ describe('FX cross-platform: sweep de construcao manual de path no dominio (SPEC
       expect(hit, `deveria detectar: ${sample}`).toBe(true);
     }
     const negatives = [
-      "const url = `https://api.example.com/${id}/x`;",
+      'const url = `https://api.example.com/${id}/x`;',
       "join(projectPath, '.lionclaw', 'workflows', runId);",
-      "resolveArtifactPath(runDir, `${CHECKPOINTS_SUBDIR}/${name}.json`);",
+      'resolveArtifactPath(runDir, `${CHECKPOINTS_SUBDIR}/${name}.json`);',
       'if (w.startsWith(`${p}/`)) return true;',
       "const mcp = 'lionclaw-dynamic-workflows/index';",
       "const glob = 'src/**/*.ts';",
-      "const branch = `dynworkflow/${runId}/s${i}`;",
+      'const branch = `dynworkflow/${runId}/s${i}`;',
     ];
     for (const sample of negatives) {
       const hit = MANUAL_PATH_PATTERNS.some((p) => p.re.test(sample));
@@ -1728,17 +1714,10 @@ describe('FX cross-platform: resolveSandboxChildEntry asar-aware (SPEC 6.2.1)', 
   });
 
   it('packaged asar-unpacked: deriva o candidato app.asar.unpacked quando o ao-lado nao existe', () => {
-    const root = join(__dirname, '__fx_fixture__'); // raiz absoluta deterministica
+    const root = join(__dirname, '__fx_fixture__');
     const insideAsar = join(root, 'Resources', 'app.asar', 'dist', 'main');
     const appPath = join(root, 'Resources', 'app.asar');
-    const unpacked = join(
-      root,
-      'Resources',
-      'app.asar.unpacked',
-      'dist',
-      'main',
-      'workflow-sandbox-child.js',
-    );
+    const unpacked = join(root, 'Resources', 'app.asar.unpacked', 'dist', 'main', 'workflow-sandbox-child.js');
     const exists = (p: string): boolean => p === unpacked;
     const entry = resolveSandboxChildEntry(insideAsar, appPath, exists);
     expect(entry).toBe(unpacked);
@@ -1749,14 +1728,7 @@ describe('FX cross-platform: resolveSandboxChildEntry asar-aware (SPEC 6.2.1)', 
     const insideAsar = join(root, 'Resources', 'app.asar', 'dist', 'main');
     const appPath = join(root, 'Resources', 'app.asar');
     const virtual = join(insideAsar, 'workflow-sandbox-child.js');
-    const unpacked = join(
-      root,
-      'Resources',
-      'app.asar.unpacked',
-      'dist',
-      'main',
-      'workflow-sandbox-child.js',
-    );
+    const unpacked = join(root, 'Resources', 'app.asar.unpacked', 'dist', 'main', 'workflow-sandbox-child.js');
     const entry = resolveSandboxChildEntry(
       insideAsar,
       appPath,
@@ -1766,7 +1738,7 @@ describe('FX cross-platform: resolveSandboxChildEntry asar-aware (SPEC 6.2.1)', 
   });
 
   it('packaged: cai no candidato derivado de app.getAppPath()/dist/main quando o ao-lado nao existe', () => {
-    const root = join(__dirname, '__fx_fixture__'); // raiz absoluta deterministica
+    const root = join(__dirname, '__fx_fixture__');
     const dir = join(root, 'some', 'weird', 'wrapper');
     const appPath = join(root, 'opt', 'lionclaw', 'resources', 'app');
     const target = join(appPath, 'dist', 'main', 'workflow-sandbox-child.js');
@@ -1788,7 +1760,7 @@ describe('FX cross-platform: normalizeLineEndings + compile (SPEC 6.2.4)', () =>
     expect(normalizeLineEndings('a\rb\rc')).toBe('a\nb\nc');
     expect(normalizeLineEndings('a\nb\nc')).toBe('a\nb\nc');
     const once = normalizeLineEndings('x\r\ny\rz');
-    expect(normalizeLineEndings(once)).toBe(once); // idempotente
+    expect(normalizeLineEndings(once)).toBe(once);
   });
 
   it('compileWorkflowJs aceita fonte CRLF (Windows) e emite transformedSource em LF', () => {
@@ -1802,7 +1774,7 @@ describe('FX cross-platform: normalizeLineEndings + compile (SPEC 6.2.4)', () =>
     const r = compileWorkflowJs(crlf);
     expect(r.ok).toBe(true);
     if (r.ok) {
-      expect(r.transformedSource.includes('\r')).toBe(false); // sem CR no vm source
+      expect(r.transformedSource.includes('\r')).toBe(false);
       expect(r.meta.name).toBe('wf');
     }
   });

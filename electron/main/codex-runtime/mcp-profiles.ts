@@ -1,4 +1,3 @@
-
 import { createLogger } from '../logger';
 import type { CodexMcpProfile, CodexSurface } from './types';
 
@@ -44,10 +43,7 @@ export function resolveMcpProfile(input: McpProfileInput): ResolvedMcpProfile {
 
   switch (input.profile) {
     case 'chat': {
-      const mcpServerIds = [
-        ...(input.chatActiveMcpServerIds ?? []),
-        ...(input.codexLionOnlyServerIds ?? []),
-      ];
+      const mcpServerIds = [...(input.chatActiveMcpServerIds ?? []), ...(input.codexLionOnlyServerIds ?? [])];
       return {
         profile: 'chat',
         useUserCodexConfig: true,
@@ -79,13 +75,9 @@ export function resolveMcpProfile(input: McpProfileInput): ResolvedMcpProfile {
       const serverIds = input.allowedMcpServerIds ?? [];
       const toolNames = input.allowedMcpToolNames ?? [];
       if (serverIds.length === 0 && toolNames.length === 0) {
-        const msg =
-          'agent-scoped profile resolved with an empty allowlist; run continues with ZERO MCP';
+        const msg = 'agent-scoped profile resolved with an empty allowlist; run continues with ZERO MCP';
         warnings.push(msg);
-        logger.warn(
-          { surface: input.surface, projectId: input.projectId },
-          msg,
-        );
+        logger.warn({ surface: input.surface, projectId: input.projectId }, msg);
       }
       return {
         profile: 'agent-scoped',

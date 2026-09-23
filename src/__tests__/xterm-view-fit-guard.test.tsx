@@ -1,14 +1,4 @@
-/**
- * @vitest-environment jsdom
- *
- * Fit guard do XtermView (SPEC terminal-chat, edge case "oculto via CSS"):
- * com o dock invisivel o container tem dimensao ZERO e NENHUM
- * terminal:resize pode ser enviado (mandaria 1x1 pro shell). Ao ficar
- * visivel, o refit dispara com as dimensoes reais do xterm.
- *
- * xterm/fit sao MOCKADOS (jsdom nao faz layout real); o alvo do teste e a
- * logica de guarda do componente, nao o xterm em si.
- */
+// @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';

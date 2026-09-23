@@ -1,4 +1,3 @@
-
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import type { StreamChunk } from '../../../../src/types';
 

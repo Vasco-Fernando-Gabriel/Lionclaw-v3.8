@@ -1,6 +1,8 @@
 import { lazy, Suspense, useState } from 'react';
-import { Check, Download, ExternalLink, FileText, Image, Paintbrush } from 'lucide-react';
+import { Check, Download, ExternalLink, FileCode, FileText, Image, PanelRight, Paintbrush } from 'lucide-react';
 import type { ArtifactData } from '../../types';
+import { useArtifactPanelStore } from '../../stores/artifact-panel-store';
+import { useChatStore } from '../../stores/chat-store';
 
 const ExcalidrawViewer = lazy(() => import('./ExcalidrawViewer'));
 const McpAppViewer = lazy(() => import('./McpAppViewer'));
@@ -20,6 +22,8 @@ export default function ArtifactRenderer({ artifact }: ArtifactRendererProps) {
             <Image size={14} className="text-emerald-500" />
           ) : artifact.type === 'document' ? (
             <FileText size={14} className="text-sky-500" />
+          ) : artifact.type === 'html' ? (
+            <FileCode size={14} className="text-amber-500" />
           ) : (
             <Paintbrush size={14} className="text-amber-500" />
           )}
@@ -31,17 +35,13 @@ export default function ArtifactRenderer({ artifact }: ArtifactRendererProps) {
       {/* Content */}
       <Suspense
         fallback={
-          <div className="flex items-center justify-center h-48 text-zinc-500 text-sm">
-            Carregando preview...
-          </div>
+          <div className="flex items-center justify-center h-48 text-zinc-500 text-sm">Carregando preview...</div>
         }
       >
         {artifact.type === 'mcp_app' && typeof artifact.data.viewId === 'string' && (
           <McpAppViewer viewId={artifact.data.viewId as string} />
         )}
-        {artifact.type === 'excalidraw' && (
-          <ExcalidrawViewer data={artifact.data} />
-        )}
+        {artifact.type === 'excalidraw' && <ExcalidrawViewer data={artifact.data} />}
         {artifact.type === 'image' && typeof artifact.data.imageBase64 === 'string' && (
           <ImageViewer
             imageBase64={artifact.data.imageBase64 as string}
@@ -65,7 +65,57 @@ export default function ArtifactRenderer({ artifact }: ArtifactRendererProps) {
             mimeType={artifact.data.mimeType as string | undefined}
           />
         )}
+        {artifact.type === 'html' && typeof artifact.data.filePath === 'string' && (
+          <HtmlArtifactCard artifact={artifact} filePath={artifact.data.filePath as string} />
+        )}
       </Suspense>
+    </div>
+  );
+}
+
+function HtmlArtifactCard({ artifact, filePath }: { artifact: ArtifactData; filePath: string }) {
+  const openPanel = useArtifactPanelStore((s) => s.open);
+  const currentSessionId = useChatStore((s) => s.currentSessionId);
+  const fileName = (artifact.data.fileName as string) || filePath.split(/[\\/]/).pop() || filePath;
+  const sizeLabel = formatDocumentSize(
+    typeof artifact.data.size === 'number' ? (artifact.data.size as number) : undefined,
+  );
+  const [openError, setOpenError] = useState<string | null>(null);
+
+  const openInBrowser = async () => {
+    const result = await window.lionclaw.shell.openFile(filePath);
+    setOpenError('error' in result ? result.error : null);
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 px-4 py-3" data-testid="html-artifact-card">
+      <FileCode size={20} className="text-amber-500 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <div className="text-sm text-zinc-200 truncate" title={filePath}>
+          {fileName}
+        </div>
+        <div className="text-xs text-zinc-500">{openError ?? sizeLabel ?? 'Pagina HTML'}</div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          onClick={() => openPanel(artifact, currentSessionId)}
+          className="flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300 hover:bg-amber-500/20 transition-colors"
+          data-testid="html-artifact-open-panel"
+        >
+          <PanelRight size={12} />
+          Abrir no painel
+        </button>
+        <button
+          type="button"
+          onClick={() => void openInBrowser()}
+          className="flex items-center gap-1.5 rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-800 transition-colors"
+          data-testid="html-artifact-open-browser"
+        >
+          <ExternalLink size={12} />
+          Abrir no navegador
+        </button>
+      </div>
     </div>
   );
 }
@@ -95,14 +145,8 @@ function DocumentViewer({ fileName, size, mimeType }: { fileName: string; size?:
 function ImageViewer({ imageBase64, mimeType, prompt }: { imageBase64: string; mimeType: string; prompt: string }) {
   return (
     <div className="relative">
-      <img
-        src={`data:${mimeType};base64,${imageBase64}`}
-        alt={prompt}
-        className="max-w-full h-auto"
-      />
-      <div className="px-3 py-2 bg-zinc-800/50 text-xs text-zinc-400">
-        {prompt}
-      </div>
+      <img src={`data:${mimeType};base64,${imageBase64}`} alt={prompt} className="max-w-full h-auto" />
+      <div className="px-3 py-2 bg-zinc-800/50 text-xs text-zinc-400">{prompt}</div>
     </div>
   );
 }
@@ -115,18 +159,22 @@ function ArtifactActions({ artifact }: { artifact: ArtifactData }) {
       return artifact.data.excalidrawFile;
     }
     if (artifact.type === 'excalidraw') {
-      return JSON.stringify({
-        type: 'excalidraw',
-        version: 2,
-        source: 'lionclaw',
-        elements: artifact.data.elements || [],
-        appState: {
-          gridSize: null,
-          viewBackgroundColor: '#ffffff',
-          ...(artifact.data.appState as Record<string, unknown> || {}),
+      return JSON.stringify(
+        {
+          type: 'excalidraw',
+          version: 2,
+          source: 'lionclaw',
+          elements: artifact.data.elements || [],
+          appState: {
+            gridSize: null,
+            viewBackgroundColor: '#ffffff',
+            ...((artifact.data.appState as Record<string, unknown>) || {}),
+          },
+          files: artifact.data.files || {},
         },
-        files: artifact.data.files || {},
-      }, null, 2);
+        null,
+        2,
+      );
     }
     return null;
   };

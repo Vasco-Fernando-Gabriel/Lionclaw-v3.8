@@ -1,6 +1,4 @@
-
 import { describe, it, expect, vi } from 'vitest';
-
 
 import { applyMigrationV106 } from '../db-migrations/v106-kimi-agent-runtime';
 
@@ -9,7 +7,6 @@ describe('applyMigrationV106 - structural', () => {
     expect(typeof applyMigrationV106).toBe('function');
   });
 });
-
 
 describe('applyMigrationV106 - SQL content', () => {
   function captureSql(): string {
@@ -51,12 +48,30 @@ describe('applyMigrationV106 - SQL content', () => {
     expect(sql).toMatch(/SELECT/i);
     expect(sql).toMatch(/FROM agents/i);
     const expectedCols = [
-      'id', 'name', 'description', 'system_prompt', 'model',
-      'allowed_tools', 'mcp_servers', 'is_active', 'sort_order',
-      'effort', 'thinking', 'thinking_budget', 'max_turns',
-      'skills', 'kb_enabled', 'runtime', 'local_config',
-      'external_config', 'codex_config', 'local_mode', 'max_tool_rounds',
-      'squad', 'created_at', 'updated_at',
+      'id',
+      'name',
+      'description',
+      'system_prompt',
+      'model',
+      'allowed_tools',
+      'mcp_servers',
+      'is_active',
+      'sort_order',
+      'effort',
+      'thinking',
+      'thinking_budget',
+      'max_turns',
+      'skills',
+      'kb_enabled',
+      'runtime',
+      'local_config',
+      'external_config',
+      'codex_config',
+      'local_mode',
+      'max_tool_rounds',
+      'squad',
+      'created_at',
+      'updated_at',
     ];
     for (const col of expectedCols) {
       expect(sql).toContain(col);
@@ -80,7 +95,6 @@ describe('applyMigrationV106 - SQL content', () => {
     expect(mockExec).toHaveBeenCalledTimes(1);
   });
 });
-
 
 describe('applyMigrationV106 - mock DB (normal execution)', () => {
   it('does not throw on a clean mock db', () => {

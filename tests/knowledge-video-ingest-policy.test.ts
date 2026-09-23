@@ -10,18 +10,15 @@ import {
 } from '../src/constants/knowledge-ingest-files';
 
 describe('política de ingestão da Base de Conhecimento v4', () => {
-  it.each([
-    'video.mp4',
-    'clip.WEBM',
-    '/tmp/a path/movie.mov',
-    'C:\\uploads\\capture.avi',
-    'archive.mkv',
-  ])('rejeita vídeo antes de criar job: %s', (file) => {
-    expect(isKnowledgeVideoFile(file)).toBe(true);
-    expect(() => assertKnowledgeIngestFileSupported(file)).toThrow(
-      'Ingestão de vídeo não é suportada na Base de Conhecimento v4',
-    );
-  });
+  it.each(['video.mp4', 'clip.WEBM', '/tmp/a path/movie.mov', 'C:\\uploads\\capture.avi', 'archive.mkv'])(
+    'rejeita vídeo antes de criar job: %s',
+    (file) => {
+      expect(isKnowledgeVideoFile(file)).toBe(true);
+      expect(() => assertKnowledgeIngestFileSupported(file)).toThrow(
+        'Ingestão de vídeo não é suportada na Base de Conhecimento v4',
+      );
+    },
+  );
 
   it.each(['audio.mp3', 'audio.m4a', 'audio.wav', 'audio.ogg', 'audio.flac'])(
     'preserva formatos normais de áudio: %s',
@@ -31,9 +28,7 @@ describe('política de ingestão da Base de Conhecimento v4', () => {
   );
 
   it('não deixa filename falso ocultar extensão de vídeo do path', () => {
-    expect(() =>
-      assertKnowledgeIngestFileSupported('/tmp/payload.mp4', 'anotacoes.txt'),
-    ).toThrow('(.mp4)');
+    expect(() => assertKnowledgeIngestFileSupported('/tmp/payload.mp4', 'anotacoes.txt')).toThrow('(.mp4)');
     expect(knowledgeIngestExtension('/tmp/SEM-EXTENSAO')).toBe('');
   });
 
@@ -69,16 +64,13 @@ describe('política de ingestão da Base de Conhecimento v4', () => {
 
   it('remove vídeo da UI e de todos os entrypoints backend sem tocar no áudio', () => {
     const root = process.cwd();
-    const upload = readFileSync(
-      join(root, 'src/components/graph-view/UploadDropZone.tsx'),
-      'utf8',
-    );
+    const upload = readFileSync(join(root, 'src/components/graph-view/UploadDropZone.tsx'), 'utf8');
     expect(upload).not.toContain("'.mp4'");
     expect(upload).not.toContain("'.webm'");
     expect(upload).not.toContain('Vídeo');
-    expect(Object.keys(KNOWLEDGE_UPLOAD_EXT_MIMES)).toEqual(expect.arrayContaining([
-      '.mp3', '.m4a', '.wav', '.ogg', '.flac',
-    ]));
+    expect(Object.keys(KNOWLEDGE_UPLOAD_EXT_MIMES)).toEqual(
+      expect.arrayContaining(['.mp3', '.m4a', '.wav', '.ogg', '.flac']),
+    );
     expect(upload).toContain('Imagens e Áudio');
 
     const ingest = readFileSync(join(root, 'electron/main/graph-ingest.ts'), 'utf8');
@@ -100,11 +92,7 @@ describe('política de ingestão da Base de Conhecimento v4', () => {
 
   it('mantém vídeo fora da Knowledge sem remover artifacts e Higgsfield', () => {
     const root = process.cwd();
-    expect(
-      readFileSync(join(root, 'electron/main/artifact-detector.ts'), 'utf8'),
-    ).toContain("'.mp4': 'video/mp4'");
-    expect(
-      readFileSync(join(root, 'electron/main/vault-registry.ts'), 'utf8'),
-    ).toContain('geracao de imagens, videos');
+    expect(readFileSync(join(root, 'electron/main/artifact-detector.ts'), 'utf8')).toContain("'.mp4': 'video/mp4'");
+    expect(readFileSync(join(root, 'electron/main/vault-registry.ts'), 'utf8')).toContain('geracao de imagens, videos');
   });
 });

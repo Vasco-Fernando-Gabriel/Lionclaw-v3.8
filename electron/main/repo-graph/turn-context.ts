@@ -1,129 +1,92 @@
-/**
- * repo-graph/turn-context.ts
- *
- * Contexto de execucao do TURNO do chat (Z2 — SPEC spec-chat-repo-codegraph.md,
- * secao 5.1). O hook ADITIVO F6 do orchestrator (executeQuery) SETA o sessionId
- * REAL do turno em execucao no inicio e LIMPA no finally, DEPOIS do dispatch do
- * runtime retornar. Subagents disparados dentro do turno herdam o mesmo
- * contexto (mesmo processo main).
- *
- * O caminho jsonrpc agent-facing (methods repo_graph_* em
- * local-ipc/jsonrpc-methods.ts) LE este contexto como fonte PRIMARIA da
- * resolucao de sessao -> repo; o fallback documentado e getActiveChatSession()
- * (ver resolveRepoGraphSessionId abaixo).
- *
- * Tambem carrega o estado por-turno da politica anti-ruido de emissao (secao
- * 8): runtime-limited emite NO MAXIMO 1 chunk por turno; o RepoChatContext do
- * turno alimenta a secao condicional de prompt (prompt-builder-repo-graph.ts).
- *
- * Estado em RAM, single-turn (a fila do chat processa 1 mensagem por vez na
- * lane desktop). Nao persiste nada; nao importa electron.
- */
-
-// Namespace import (e nao named): o fallback so toca db.getActiveChatSession
-// quando chamado, e mocks parciais de '../db' em testes de OUTROS modulos que
-// importam este arquivo nao quebram no import (ABI trap / vi.mock factory).
-import * as db from '../db';
 import { createLogger } from '../logger';
 import type { LocalRepositoryStatus } from './types';
 
 const logger = createLogger('repo-graph-turn-context');
 
-/**
- * RepoChatContext (secao 9): contexto compacto do repo ativo do turno, montado
- * pelo hook F6 SOMENTE quando o graph esta ready/stale. Alimenta a secao
- * condicional de prompt nos 4 runtimes e os campos runtime/source das metricas.
- */
 export interface RepoChatContext {
   repositoryId: string;
   canonicalRootPath: string;
   status: Extract<LocalRepositoryStatus, 'ready' | 'stale'>;
-  /** Resumo curto das stats do graph (ex: "142 arquivos, 3801 simbolos"). */
   statsResumo: string | null;
 }
 
 interface RepoGraphTurnState {
-  sessionId: string | null;
-  /** Runtime do turno em execucao (claude-sdk | claude-compat-sdk | codex-sdk | lion-sdk). */
   runtime: string | null;
   context: RepoChatContext | null;
-  /** Politica anti-ruido (8): runtime-limited ja emitido neste turno? */
   runtimeLimitedEmitted: boolean;
 }
 
-const state: RepoGraphTurnState = {
-  sessionId: null,
-  runtime: null,
-  context: null,
-  runtimeLimitedEmitted: false,
-};
+const turnStates = new Map<string, RepoGraphTurnState>();
 
-/** Seta o sessionId REAL do turno (inicio do executeQuery, hook F6). */
 export function setRepoGraphTurnSession(sessionId: string, runtime?: string): void {
-  state.sessionId = sessionId;
-  state.runtime = runtime ?? null;
-  state.context = null;
-  state.runtimeLimitedEmitted = false;
+  turnStates.set(sessionId, {
+    runtime: runtime ?? null,
+    context: null,
+    runtimeLimitedEmitted: false,
+  });
 }
 
-/**
- * Limpa o contexto do turno. Chamado no `finally` do executeQuery, DEPOIS do
- * dispatch do runtime retornar (Z2).
- */
-export function clearRepoGraphTurnSession(): void {
-  state.sessionId = null;
-  state.runtime = null;
-  state.context = null;
-  state.runtimeLimitedEmitted = false;
+export function clearRepoGraphTurnSession(sessionId?: string): void {
+  if (sessionId === undefined) {
+    turnStates.clear();
+    return;
+  }
+  turnStates.delete(sessionId);
 }
 
-/** Fonte PRIMARIA: sessionId setado pelo hook do turno (null fora de turno). */
-export function getRepoGraphTurnSession(): string | null {
-  return state.sessionId;
+export function hasRepoGraphTurnSession(sessionId: string): boolean {
+  return turnStates.has(sessionId);
 }
 
-/** Runtime do turno em execucao (null fora de turno). */
-export function getRepoGraphTurnRuntime(): string | null {
-  return state.runtime;
+export function getRepoGraphTurnRuntime(sessionId: string): string | null {
+  return turnStates.get(sessionId)?.runtime ?? null;
 }
 
-/** Guarda o RepoChatContext montado pelo hook F6 (graph ready/stale). */
-export function setRepoGraphTurnContext(context: RepoChatContext): void {
+export function setRepoGraphTurnContext(sessionId: string, context: RepoChatContext): void {
+  const state = turnStates.get(sessionId);
+  if (!state) {
+    logger.warn({ sessionId }, 'setRepoGraphTurnContext sem turno registrado para a sessao; ignorado');
+    return;
+  }
   state.context = context;
 }
 
-/** RepoChatContext do turno (null = sem repo ativo / graph nao consultavel). */
-export function getRepoGraphTurnContext(): RepoChatContext | null {
-  return state.context;
+export function getRepoGraphTurnContext(sessionId: string): RepoChatContext | null {
+  return turnStates.get(sessionId)?.context ?? null;
 }
 
-/**
- * Resolucao SERVER-SIDE da sessao em 2 camadas (Z2):
- *  1. contexto de execucao do turno (fonte primaria, setado pelo hook F6);
- *  2. fallback documentado abaixo.
- *
- * Limitacao do fallback: getActiveChatSession resolve por status='active' +
- * updated_at DESC (db.ts:~2919) e pode apontar a SESSAO ERRADA em chamada
- * longa, troca de conversa ou pos-compaction; e fallback, nunca fonte primaria.
- */
-export function resolveRepoGraphSessionId(): string | null {
-  if (state.sessionId) return state.sessionId;
-  try {
-    return db.getActiveChatSession()?.id ?? null;
-  } catch (err) {
-    logger.warn({ err }, 'fallback getActiveChatSession falhou (sem sessao resolvida)');
-    return null;
+export class RepoGraphTurnBindingError extends Error {
+  readonly code = 'turn_binding_required' as const;
+
+  constructor(detail: string) {
+    super(`turn_binding_required: ${detail}`);
+    this.name = 'RepoGraphTurnBindingError';
   }
 }
 
-/**
- * Politica anti-ruido (secao 8): chunk `source:'runtime-limited'` e emitido NO
- * MAXIMO 1x por turno. Retorna true SOMENTE na primeira chamada do turno (e
- * marca como emitido); fora de turno retorna false (nada a emitir).
- */
-export function shouldEmitRuntimeLimited(): boolean {
-  if (!state.sessionId) return false;
+export function resolveRepoGraphSessionId(binding: { sessionId?: string }): string {
+  if (!binding.sessionId) {
+    logger.warn('resolveRepoGraphSessionId sem sessionId no binding (turn_binding_required)');
+    throw new RepoGraphTurnBindingError('a chamada nao trouxe sessionId para resolver a sessao do repo-graph.');
+  }
+  if (!turnStates.has(binding.sessionId)) {
+    logger.warn(
+      { sessionId: binding.sessionId },
+      'resolveRepoGraphSessionId: sessao sem turno de chat registrado (turn_binding_required)',
+    );
+    throw new RepoGraphTurnBindingError(`nenhum turno de chat registrado para a sessao ${binding.sessionId}.`);
+  }
+  return binding.sessionId;
+}
+
+export function shouldEmitRuntimeLimited(sessionId: string): boolean {
+  const state = turnStates.get(sessionId);
+  if (!state) return false;
   if (state.runtimeLimitedEmitted) return false;
   state.runtimeLimitedEmitted = true;
   return true;
+}
+
+export function resetRepoGraphTurnContextForTests(): void {
+  turnStates.clear();
 }

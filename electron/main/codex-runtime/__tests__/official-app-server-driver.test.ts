@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../logger', () => ({
@@ -13,9 +12,7 @@ const bridge = vi.hoisted(() => ({
     appServerSupported: true,
     binaryPath: '/usr/local/bin/codex',
   }),
-  isCodexAvailable: vi
-    .fn()
-    .mockResolvedValue({ installed: true, version: '0.140.0', authenticated: true }),
+  isCodexAvailable: vi.fn().mockResolvedValue({ installed: true, version: '0.140.0', authenticated: true }),
   CodexUnavailableError: class CodexUnavailableError extends Error {
     constructor(m: string) {
       super(m);
@@ -162,7 +159,9 @@ const TEXT_TURN: AppServerEvent[] = [
   { method: 'item/agentMessage/delta', params: { delta: 'world' } },
   {
     method: 'thread/tokenUsage/updated',
-    params: { usage: { inputTokens: 100, cachedInputTokens: 10, outputTokens: 30, reasoningOutputTokens: 4, totalTokens: 130 } },
+    params: {
+      usage: { inputTokens: 100, cachedInputTokens: 10, outputTokens: 30, reasoningOutputTokens: 4, totalTokens: 130 },
+    },
   },
   { method: 'turn/completed', params: { status: 'completed' } },
 ];
@@ -186,11 +185,7 @@ describe('OfficialAppServerDriver - createRun + handshake', () => {
     expect(t.requests.map((r) => r.method)).toContain('initialize');
     expect(t.notifications.map((n) => n.method)).toContain('initialized');
     expect(t.requests.map((r) => r.method)).not.toContain('thread/start');
-    expect(preflight.runOfficialPreFlight).toHaveBeenCalledWith(
-      '/tmp/project',
-      'proj-1',
-      undefined,
-    );
+    expect(preflight.runOfficialPreFlight).toHaveBeenCalledWith('/tmp/project', 'proj-1', undefined);
   });
 
   it('(i) null binary -> CodexUnavailableError, no spawn', async () => {
@@ -224,7 +219,7 @@ describe('OfficialAppServerDriver - createRun + handshake', () => {
     vi.useFakeTimers();
     try {
       const t = new FakeTransport();
-      t.responder = (method) => method === 'initialize' ? new Promise(() => undefined) : {};
+      t.responder = (method) => (method === 'initialize' ? new Promise(() => undefined) : {});
       const { driver } = driverWith(t);
       const creation = driver.createRun(makeOpts());
       const assertion = expect(creation).rejects.toBeInstanceOf(CodexUnavailableError);
@@ -303,7 +298,6 @@ describe('OfficialAppServerDriver - turn lifecycle', () => {
     expect(res.commandsRun).toEqual([{ cmd: 'ls', exitCode: 0, durationMs: 12 }]);
   });
 
-
   it('P8a: turn/completed de thread FILHA nao finaliza o turno raiz; so o da raiz finaliza (fixture filho-antes-do-pai)', async () => {
     const t = new FakeTransport();
     t.turnScript = [
@@ -314,7 +308,15 @@ describe('OfficialAppServerDriver - turn lifecycle', () => {
       { method: 'item/agentMessage/delta', params: { delta: 'done' } },
       {
         method: 'thread/tokenUsage/updated',
-        params: { usage: { inputTokens: 100, cachedInputTokens: 0, outputTokens: 30, reasoningOutputTokens: 0, totalTokens: 130 } },
+        params: {
+          usage: {
+            inputTokens: 100,
+            cachedInputTokens: 0,
+            outputTokens: 30,
+            reasoningOutputTokens: 0,
+            totalTokens: 130,
+          },
+        },
       },
       { method: 'turn/completed', params: { turn: { status: 'completed' } } },
     ];
@@ -332,11 +334,28 @@ describe('OfficialAppServerDriver - turn lifecycle', () => {
       { method: 'turn/started', params: { turnId: 'turn-fake-1' } },
       {
         method: 'thread/tokenUsage/updated',
-        params: { usage: { inputTokens: 100, cachedInputTokens: 0, outputTokens: 30, reasoningOutputTokens: 0, totalTokens: 130 } },
+        params: {
+          usage: {
+            inputTokens: 100,
+            cachedInputTokens: 0,
+            outputTokens: 30,
+            reasoningOutputTokens: 0,
+            totalTokens: 130,
+          },
+        },
       },
       {
         method: 'thread/tokenUsage/updated',
-        params: { threadId: 'thread-child-9', usage: { inputTokens: 999_999, cachedInputTokens: 0, outputTokens: 999, reasoningOutputTokens: 0, totalTokens: 1_000_998 } },
+        params: {
+          threadId: 'thread-child-9',
+          usage: {
+            inputTokens: 999_999,
+            cachedInputTokens: 0,
+            outputTokens: 999,
+            reasoningOutputTokens: 0,
+            totalTokens: 1_000_998,
+          },
+        },
       },
       { method: 'turn/completed', params: { turn: { status: 'completed' } } },
     ];
@@ -371,16 +390,14 @@ describe('OfficialAppServerDriver - turn lifecycle', () => {
     t.turnScript = [{ method: 'turn/completed', params: { status: 'completed' } }];
     await handle.reply('second');
     const startsAfterReply = t.requests.filter((r) => r.method === 'thread/start').length;
-    expect(startsAfterReply).toBe(startsAfterFirst); // no new thread/start on reply
+    expect(startsAfterReply).toBe(startsAfterFirst);
   });
 
   it('ALLOWS approvalPolicy:never + sandbox:danger-full-access (LionClaw bypass = full autonomy)', async () => {
     const t = new FakeTransport();
     t.turnScript = TEXT_TURN;
     const { driver } = driverWith(t);
-    const handle = await driver.createRun(
-      makeOpts({ approvalPolicy: 'never', sandbox: 'danger-full-access' }),
-    );
+    const handle = await driver.createRun(makeOpts({ approvalPolicy: 'never', sandbox: 'danger-full-access' }));
     const res = await handle.send('x');
     expect(res.status).toBe('completed');
     expect(t.requests.map((r) => r.method)).toContain('thread/start');
@@ -395,11 +412,14 @@ describe('OfficialAppServerDriver - turn lifecycle', () => {
     const handle = await driver.createRun(makeOpts());
     const ac = new AbortController();
     const p = handle.send('long', {}, ac.signal);
-    await Promise.resolve();
+    await new Promise((r) => setTimeout(r, 0));
     ac.abort();
-    const res = await p;
+    await new Promise((r) => setTimeout(r, 0));
     expect(t.requests.some((r) => r.method === 'turn/interrupt')).toBe(true);
+    t.emit({ method: 'turn/completed', params: { turn: { status: 'interrupted' } } });
+    const res = await p;
     expect(res.status).toBe('failed');
+    expect(handle.status).toBe('interrupted');
   });
 
   it('(j) auth error event -> CodexAuthError', async () => {
@@ -436,9 +456,10 @@ describe('OfficialAppServerDriver - T4b timeout enforcement', () => {
     const handle = await driver.createRun(makeOpts({ idleTimeoutMs: 50, timeoutMs: 10_000 }));
     const p = handle.send('idle');
     await vi.advanceTimersByTimeAsync(60);
+    expect(t.requests.some((r) => r.method === 'turn/interrupt')).toBe(true);
+    t.emit({ method: 'turn/completed', params: { turn: { status: 'interrupted' } } });
     const res = await p;
     expect(res.status).toBe('timeout');
-    expect(t.requests.some((r) => r.method === 'turn/interrupt')).toBe(true);
     vi.useRealTimers();
   });
 
@@ -452,6 +473,8 @@ describe('OfficialAppServerDriver - T4b timeout enforcement', () => {
     await vi.advanceTimersByTimeAsync(40);
     t.emit({ method: 'item/agentMessage/delta', params: { delta: 'x' } });
     await vi.advanceTimersByTimeAsync(80);
+    expect(t.requests.some((r) => r.method === 'turn/interrupt')).toBe(true);
+    t.emit({ method: 'turn/completed', params: { turn: { status: 'interrupted' } } });
     const res = await p;
     expect(res.status).toBe('timeout');
     vi.useRealTimers();
@@ -465,9 +488,10 @@ describe('OfficialAppServerDriver - T4b timeout enforcement', () => {
     const handle = await driver.createRun(makeOpts({ idleTimeoutMs: undefined }));
     const p = handle.send('wedge');
     await vi.advanceTimersByTimeAsync(DEFAULT_IDLE_TIMEOUT_MS + 10);
+    expect(t.requests.some((r) => r.method === 'turn/interrupt')).toBe(true);
+    t.emit({ method: 'turn/completed', params: { turn: { status: 'interrupted' } } });
     const res = await p;
     expect(res.status).toBe('timeout');
-    expect(t.requests.some((r) => r.method === 'turn/interrupt')).toBe(true);
     expect(handle.status).not.toBe('running');
     vi.useRealTimers();
   });
@@ -479,7 +503,7 @@ describe('OfficialAppServerDriver - T4b timeout enforcement', () => {
     const { driver } = driverWith(t);
     const handle = await driver.createRun(makeOpts({ idleTimeoutMs: 1000, timeoutMs: 2000 }));
     const p = handle.send('quick');
-    await vi.advanceTimersByTimeAsync(1); // let the microtask-scripted events flush
+    await vi.advanceTimersByTimeAsync(1);
     const res = await p;
     expect(res.status).toBe('completed');
     await vi.advanceTimersByTimeAsync(5000);
@@ -504,10 +528,10 @@ describe('OfficialAppServerDriver - KI-3 ErrorNotification (the REAL turn-error 
     const { driver } = driverWith(t);
     const handle = await driver.createRun(makeOpts({}));
     const p = handle.send('huge prompt');
-    await vi.advanceTimersByTimeAsync(1); // flush scripted events only; NO long timer advance
+    await vi.advanceTimersByTimeAsync(1);
     const res = await p;
     expect(res.status).toBe('failed');
-    expect(handle.status).not.toBe('running'); // left 'running' -> the KI-2 reaper can reclaim it
+    expect(handle.status).not.toBe('running');
     vi.useRealTimers();
   });
 
@@ -516,12 +540,15 @@ describe('OfficialAppServerDriver - KI-3 ErrorNotification (the REAL turn-error 
     const t = new FakeTransport();
     t.turnScript = [
       { method: 'turn/started', params: { turnId: 'turn-retry' } },
-      { method: 'error', params: { error: 'serverOverloaded', threadId: 'thr', turnId: 'turn-retry', willRetry: true } },
+      {
+        method: 'error',
+        params: { error: 'serverOverloaded', threadId: 'thr', turnId: 'turn-retry', willRetry: true },
+      },
     ];
     const { driver } = driverWith(t);
     const handle = await driver.createRun(makeOpts({}));
     const p = handle.send('retry me');
-    await vi.advanceTimersByTimeAsync(1); // the willRetry error must NOT settle the turn
+    await vi.advanceTimersByTimeAsync(1);
     t.emit({ method: 'turn/completed', params: { turn: { status: 'completed' } } });
     const res = await p;
     expect(res.status).toBe('completed');
@@ -562,9 +589,9 @@ describe('OfficialAppServerDriver - close + leak check + sync adapter', () => {
 
     const methods = t.requests.map((r) => r.method);
     expect(methods).toContain('thread/unsubscribe');
-    expect(methods).toContain('thread/archive'); // pipeline ownerKind => ephemeral archive
+    expect(methods).toContain('thread/archive');
     expect(methods).toContain('thread/loaded/list');
-    expect(t.killed.length).toBeGreaterThan(0); // dedicated process killed at scope boundary
+    expect(t.killed.length).toBeGreaterThan(0);
     expect(handle.status).toBe('closed');
   });
 

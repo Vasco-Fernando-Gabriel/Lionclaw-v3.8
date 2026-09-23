@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import {
   openCloserSession,
@@ -13,10 +12,7 @@ import {
   type CloserAgentTurnRunner,
   type CloserSpawnContext,
 } from '../dynamic-workflows/workflow-closer';
-import type {
-  CloserGitAuditEvent,
-  CloserGitConfirmRequest,
-} from '../dynamic-workflows/closer-permission-guard';
+import type { CloserGitAuditEvent, CloserGitConfirmRequest } from '../dynamic-workflows/closer-permission-guard';
 import type {
   DynamicWorkflowRun,
   DynamicWorkflowMessage,
@@ -127,9 +123,7 @@ function makeDeps(
         unknownCostNodeRuns: 0,
       },
     resolveCloserRuntime: over?.resolveCloserRuntime,
-    runAgentTurn:
-      over?.runAgentTurn ??
-      (async () => ({ ok: true, output: 'walkthrough da entrega', costUsd: 0.25 })),
+    runAgentTurn: over?.runAgentTurn ?? (async () => ({ ok: true, output: 'walkthrough da entrega', costUsd: 0.25 })),
     emitEvent: (e) => state.events.push(e),
     releaseRunLock: (id) => state.lockReleased.push(id),
     newSessionId: () => 'sess-fixed',
@@ -151,9 +145,7 @@ describe('workflow-closer: openCloserSession (8.8 / AC-28)', () => {
     const res = await openCloserSession('run-1', DELIVERY_CTX, deps, { repoRoot: REPO_ROOT });
 
     expect(res.sessionId).toBe('sess-fixed');
-    const activated = state.patches.find(
-      (p) => p.closerStatus === 'active' && p.closerSessionId === 'sess-fixed',
-    );
+    const activated = state.patches.find((p) => p.closerStatus === 'active' && p.closerSessionId === 'sess-fixed');
     expect(activated).toBeDefined();
     expect(state.run.closerStatus).toBe('active');
     expect(state.run.closerSessionId).toBe('sess-fixed');
@@ -211,23 +203,23 @@ describe('workflow-closer: openCloserSession (8.8 / AC-28)', () => {
 
   it('run inexistente lanca CloserError run-not-found', async () => {
     const { deps } = makeDeps(makeRun());
-    await expect(
-      openCloserSession('outro', DELIVERY_CTX, deps, { repoRoot: REPO_ROOT }),
-    ).rejects.toMatchObject({ code: 'run-not-found' });
+    await expect(openCloserSession('outro', DELIVERY_CTX, deps, { repoRoot: REPO_ROOT })).rejects.toMatchObject({
+      code: 'run-not-found',
+    });
   });
 
   it('closer em runtime sandbox-capable (codex) e PERMITIDO (8.8 - sandbox = contenção)', async () => {
     const { deps } = makeDeps(makeRun(), { resolveCloserRuntime: () => 'codex' });
-    await expect(
-      openCloserSession('run-1', DELIVERY_CTX, deps, { repoRoot: REPO_ROOT }),
-    ).resolves.toMatchObject({ sessionId: expect.any(String) });
+    await expect(openCloserSession('run-1', DELIVERY_CTX, deps, { repoRoot: REPO_ROOT })).resolves.toMatchObject({
+      sessionId: expect.any(String),
+    });
   });
 
   it('closer em runtime sem canUseTool NEM sandbox (local) e bloqueado (8.8)', async () => {
     const { deps } = makeDeps(makeRun(), { resolveCloserRuntime: () => 'local' });
-    await expect(
-      openCloserSession('run-1', DELIVERY_CTX, deps, { repoRoot: REPO_ROOT }),
-    ).rejects.toMatchObject({ code: 'closer-not-guard-capable' });
+    await expect(openCloserSession('run-1', DELIVERY_CTX, deps, { repoRoot: REPO_ROOT })).rejects.toMatchObject({
+      code: 'closer-not-guard-capable',
+    });
   });
 });
 
@@ -268,9 +260,9 @@ describe('workflow-closer: sendCloserMessage (multi-turno)', () => {
 
   it('recusa quando a sessao nao esta ativa', async () => {
     const { deps } = makeDeps(makeRun({ closerStatus: 'idle' }));
-    await expect(
-      sendCloserMessage('run-1', 'oi', DELIVERY_CTX, deps, { repoRoot: REPO_ROOT }),
-    ).rejects.toMatchObject({ code: 'session-not-active' });
+    await expect(sendCloserMessage('run-1', 'oi', DELIVERY_CTX, deps, { repoRoot: REPO_ROOT })).rejects.toMatchObject({
+      code: 'session-not-active',
+    });
   });
 
   it('turno com falha do agente vira mensagem de indisponibilidade (nao derruba)', async () => {
@@ -281,7 +273,7 @@ describe('workflow-closer: sendCloserMessage (multi-turno)', () => {
     expect(res.message.source).toBe('closer');
     expect(res.message.content).toContain('closer indisponivel');
     expect(res.message.content).toContain('provider-limit');
-    expect(state.run.totalCostUsd).toBe(1.5); // sem custo somado em falha sem custo.
+    expect(state.run.totalCostUsd).toBe(1.5);
   });
 });
 
@@ -331,11 +323,42 @@ describe('workflow-closer: buildCloserTurnPrompt', () => {
       unknownCostNodeRuns: 0,
     };
     const events: DynamicWorkflowEvent[] = [
-      { id: 1, runId: 'run-1', nodeId: null, phaseId: null, seq: 41, type: 'gate-approved', payloadJson: '{}', createdAt: 'x' },
+      {
+        id: 1,
+        runId: 'run-1',
+        nodeId: null,
+        phaseId: null,
+        seq: 41,
+        type: 'gate-approved',
+        payloadJson: '{}',
+        createdAt: 'x',
+      },
     ];
     const history: DynamicWorkflowMessage[] = [
-      { id: 1, runId: 'run-1', nodeId: null, role: 'user', source: 'human', kind: 'text', content: 'primeira', toolCallsJson: null, agentId: null, createdAt: 'a' },
-      { id: 2, runId: 'run-1', nodeId: null, role: 'assistant', source: 'closer', kind: 'text', content: 'resposta', toolCallsJson: null, agentId: 'dynamic-workflow-closer', createdAt: 'b' },
+      {
+        id: 1,
+        runId: 'run-1',
+        nodeId: null,
+        role: 'user',
+        source: 'human',
+        kind: 'text',
+        content: 'primeira',
+        toolCallsJson: null,
+        agentId: null,
+        createdAt: 'a',
+      },
+      {
+        id: 2,
+        runId: 'run-1',
+        nodeId: null,
+        role: 'assistant',
+        source: 'closer',
+        kind: 'text',
+        content: 'resposta',
+        toolCallsJson: null,
+        agentId: 'dynamic-workflow-closer',
+        createdAt: 'b',
+      },
     ];
     const prompt = buildCloserTurnPrompt({ run, cost, recentEvents: events, context: DELIVERY_CTX, history });
     expect(prompt).toContain('run-1');
@@ -346,7 +369,6 @@ describe('workflow-closer: buildCloserTurnPrompt', () => {
     expect(prompt.indexOf('## Contexto')).toBeLessThan(prompt.indexOf('## Conversa'));
   });
 });
-
 
 describe('closer git wiring: confirmGitWrite + auditGit chegam ao guard (8.8/AC-26)', () => {
   const CWD = '/proj/repo/.lionclaw/workflows/run-1/worktree';
@@ -397,7 +419,7 @@ describe('closer git wiring: confirmGitWrite + auditGit chegam ao guard (8.8/AC-
       auditGit: (e) => audits.push(e),
     });
     const d = await canUseTool(bash('git push origin main'));
-    expect(d.behavior).toBe('deny'); // ...push nunca passa (allowlist do guard).
+    expect(d.behavior).toBe('deny');
     expect(audits.some((a) => a.decision === 'denied')).toBe(true);
   });
 });

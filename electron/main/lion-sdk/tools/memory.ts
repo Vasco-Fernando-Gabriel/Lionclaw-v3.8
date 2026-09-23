@@ -1,4 +1,3 @@
-
 import { searchSemanticMemories } from '../../memory-pipeline';
 
 export interface MemorySearchInput {
@@ -22,10 +21,7 @@ export interface MemoryDeps {
   search?: typeof searchSemanticMemories;
 }
 
-export async function lionMemorySearch(
-  input: MemorySearchInput,
-  deps: MemoryDeps = {},
-): Promise<MemorySearchResult> {
+export async function lionMemorySearch(input: MemorySearchInput, deps: MemoryDeps = {}): Promise<MemorySearchResult> {
   if (!input || typeof input.query !== 'string' || input.query.trim().length === 0) {
     return { ok: false, error: 'memory_search: query obrigatoria.' };
   }

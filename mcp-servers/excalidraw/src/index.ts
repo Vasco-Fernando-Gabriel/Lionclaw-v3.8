@@ -10,7 +10,6 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import crypto from 'crypto';
 
-
 interface ViewData {
   elements: unknown[];
   appState: Record<string, unknown>;
@@ -18,7 +17,6 @@ interface ViewData {
   title: string;
   createdAt: number;
 }
-
 
 const views = new Map<string, ViewData>();
 
@@ -30,7 +28,6 @@ function pruneViews(): void {
     views.delete(id);
   }
 }
-
 
 function buildViewHtml(view: ViewData): string {
   const sceneJson = JSON.stringify({
@@ -102,22 +99,24 @@ try{
 </html>`;
 }
 
-
 function buildExcalidrawFile(view: ViewData): string {
-  return JSON.stringify({
-    type: 'excalidraw',
-    version: 2,
-    source: 'lionclaw',
-    elements: view.elements,
-    appState: {
-      gridSize: null,
-      viewBackgroundColor: '#ffffff',
-      ...view.appState,
+  return JSON.stringify(
+    {
+      type: 'excalidraw',
+      version: 2,
+      source: 'lionclaw',
+      elements: view.elements,
+      appState: {
+        gridSize: null,
+        viewBackgroundColor: '#ffffff',
+        ...view.appState,
+      },
+      files: view.files,
     },
-    files: view.files,
-  }, null, 2);
+    null,
+    2,
+  );
 }
-
 
 const server = new Server(
   {
@@ -132,18 +131,19 @@ const server = new Server(
   },
 );
 
-
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: 'create_view',
-      description: 'Cria um diagrama Excalidraw e retorna um preview renderizado. Use para criar diagramas de arquitetura, fluxogramas, wireframes, mapas mentais e qualquer visualizacao. Os elementos seguem o formato nativo Excalidraw.',
+      description:
+        'Cria um diagrama Excalidraw e retorna um preview renderizado. Use para criar diagramas de arquitetura, fluxogramas, wireframes, mapas mentais e qualquer visualizacao. Os elementos seguem o formato nativo Excalidraw.',
       inputSchema: {
         type: 'object' as const,
         properties: {
           elements: {
             type: 'array',
-            description: 'Array de elementos Excalidraw. Cada elemento precisa de: type (rectangle, ellipse, diamond, text, arrow, line, freedraw), x, y, width, height. Opcionais: strokeColor, backgroundColor, fillStyle, strokeWidth, text, fontSize, points (para arrows/lines), roundness, label ({text, fontSize} para texto dentro de shapes).',
+            description:
+              'Array de elementos Excalidraw. Cada elemento precisa de: type (rectangle, ellipse, diamond, text, arrow, line, freedraw), x, y, width, height. Opcionais: strokeColor, backgroundColor, fillStyle, strokeWidth, text, fontSize, points (para arrows/lines), roundness, label ({text, fontSize} para texto dentro de shapes).',
             items: { type: 'object' },
           },
           title: {
@@ -160,7 +160,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'export_to_excalidraw',
-      description: 'Exporta um diagrama criado anteriormente como arquivo .excalidraw JSON. Use o viewId retornado por create_view.',
+      description:
+        'Exporta um diagrama criado anteriormente como arquivo .excalidraw JSON. Use o viewId retornado por create_view.',
       inputSchema: {
         type: 'object' as const,
         properties: {
@@ -256,7 +257,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   };
 });
 
-
 server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
   resourceTemplates: [
     {
@@ -302,7 +302,6 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     ],
   };
 });
-
 
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
@@ -221,10 +220,7 @@ describe('recreateWorktree no resume (8.6 / 10.3.5)', () => {
     rmSync(wtPath, { recursive: true, force: true });
     expect(existsSync(wtPath)).toBe(false);
 
-    await recreateWorktree(
-      { repoRoot: repo, worktreePath: wtPath, runId: 'run5', baseCommitSha: baseSha },
-      runGit,
-    );
+    await recreateWorktree({ repoRoot: repo, worktreePath: wtPath, runId: 'run5', baseCommitSha: baseSha }, runGit);
 
     expect(existsSync(join(wtPath, '.git'))).toBe(true);
     expect(await branchTipSha(repo, runBranchName('run5'), runGit)).toBeTruthy();
@@ -272,10 +268,7 @@ describe('cleanupWorktree pos-merge (8.6.2 passo 5) e abort (13.8)', () => {
     const handle = await prepareWorkspace({ runId: 'run6', projectPath: repo }, runGit);
     expect(await branchTipSha(repo, 'dynworkflow/run6', runGit)).toBeTruthy();
 
-    await cleanupWorktree(
-      { repoRoot: repo, worktreePath: handle.worktreePath!, runId: 'run6' },
-      runGit,
-    );
+    await cleanupWorktree({ repoRoot: repo, worktreePath: handle.worktreePath!, runId: 'run6' }, runGit);
 
     expect(existsSync(handle.worktreePath!)).toBe(false);
     expect(await branchTipSha(repo, 'dynworkflow/run6', runGit)).toBeNull();

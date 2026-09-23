@@ -1,14 +1,9 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { PT_BR_BLOCK } from './_shared/language-pt-br';
 
-export const DYNAMIC_WORKFLOW_PLAN_VALIDATOR_TOPOLOGY_ID =
-  'dynamic-workflow-plan-validator-topology';
+export const DYNAMIC_WORKFLOW_PLAN_VALIDATOR_TOPOLOGY_ID = 'dynamic-workflow-plan-validator-topology';
 
-export const dynamicWorkflowPlanValidatorTopology: Omit<
-  AgentConfig,
-  'sortOrder'
-> = {
+export const dynamicWorkflowPlanValidatorTopology: Omit<AgentConfig, 'sortOrder'> = {
   id: DYNAMIC_WORKFLOW_PLAN_VALIDATOR_TOPOLOGY_ID,
   name: 'Dynamic Workflow Plan Validator (Topologia)',
   description:

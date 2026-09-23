@@ -1,18 +1,18 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const PIPE2_DESIGN_PLAN_VALIDATOR_ID = 'pipe2-design-plan-validator';
 
 export const pipe2DesignPlanValidator: Omit<AgentConfig, 'sortOrder'> = {
   id: PIPE2_DESIGN_PLAN_VALIDATOR_ID,
-  name: "Pipe2 Design Plan Validator",
-  description: "Audita o plano de telas do Development V2 antes do LionDesign, detectando escopo inventado, copy generica e falta de cobertura.",
-  model: "claude-opus-4-8",
+  name: 'Pipe2 Design Plan Validator',
+  description:
+    'Audita o plano de telas do Development V2 antes do LionDesign, detectando escopo inventado, copy generica e falta de cobertura.',
+  model: 'claude-opus-5-5',
   effort: 'high' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,
   maxToolRounds: 0,
-  allowedTools: ["Read","Write","Edit","Grep","Glob","Bash"],
+  allowedTools: ['Read', 'Write', 'Edit', 'Grep', 'Glob', 'Bash'],
   mcpServers: [],
   isActive: true,
   skills: [],

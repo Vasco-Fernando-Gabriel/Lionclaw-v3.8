@@ -1,4 +1,3 @@
-
 import { describe, it, expect, afterEach } from 'vitest';
 import {
   getContextWindow,
@@ -95,9 +94,17 @@ describe('SA-1 — fonte unica de context window (D4, D5)', () => {
       expect(getModelContextWindow('claude-modelo-futuro')).toBe(200_000);
       expect(getModelContextWindow('modelo-inexistente-xyz')).toBeUndefined();
       for (const m of [
-        'claude-fable-5', 'opus', 'haiku', 'gpt-5.4-mini', 'glm-4.7',
-        'kimi-k2.6', 'MiniMax-M3', 'deepseek-chat', 'gemini-2.5-pro',
-        'qwen3-max', 'desconhecido-total',
+        'claude-fable-5',
+        'opus',
+        'haiku',
+        'gpt-5.4-mini',
+        'glm-4.7',
+        'kimi-k2.6',
+        'MiniMax-M3',
+        'deepseek-chat',
+        'gemini-2.5-pro',
+        'qwen3-max',
+        'desconhecido-total',
       ]) {
         expect(getModelContextWindow(m)).toBe(getContextWindow(m));
       }

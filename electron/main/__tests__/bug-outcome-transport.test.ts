@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -29,12 +28,7 @@ vi.mock('../ipc/repo-graph', () => ({
   }),
 }));
 
-import {
-  initDatabase,
-  getDb,
-  insertHarnessProject,
-  updateHarnessProject,
-} from '../db';
+import { initDatabase, getDb, insertHarnessProject, updateHarnessProject } from '../db';
 import { registerPipelineHandlers } from '../ipc/pipeline';
 import type { HarnessProject } from '../../../src/types';
 
@@ -92,13 +86,11 @@ beforeAll(() => {
 afterAll(() => {
   try {
     getDb().close();
-  } catch {
-  }
+  } catch {}
   for (const dir of [state.home, projectPath]) {
     try {
       fs.rmSync(dir, { recursive: true, force: true });
-    } catch {
-    }
+    } catch {}
   }
 });
 

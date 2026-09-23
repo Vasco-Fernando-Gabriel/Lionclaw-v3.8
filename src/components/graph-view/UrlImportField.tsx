@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Link, Loader2 } from 'lucide-react';
 import type { IngestJob } from '@/types';
 
-
 function isValidUrl(url: string): boolean {
   try {
     const u = new URL(url);
@@ -11,7 +10,6 @@ function isValidUrl(url: string): boolean {
     return false;
   }
 }
-
 
 interface UrlImportFieldProps {
   onJobCreated: (job: IngestJob) => void;

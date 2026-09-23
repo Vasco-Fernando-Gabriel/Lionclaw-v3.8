@@ -1,4 +1,3 @@
-
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -8,27 +7,20 @@ assertEndpointPresentOrExit();
 
 const server = new McpServer({ name: 'lionclaw-skills', version: '1.0.0' });
 
-server.tool(
-  'list_skills',
-  'List LionClaw skills available to the main chat.',
-  {},
-  async () => {
-    try {
-      const result = await callMethod('list_skills', {});
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result) },
-        ],
-      };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify({ error: msg }) }],
-        isError: true,
-      };
-    }
-  },
-);
+server.tool('list_skills', 'List LionClaw skills available to the main chat.', {}, async () => {
+  try {
+    const result = await callMethod('list_skills', {});
+    return {
+      content: [{ type: 'text' as const, text: JSON.stringify(result) }],
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      content: [{ type: 'text' as const, text: JSON.stringify({ error: msg }) }],
+      isError: true,
+    };
+  }
+});
 
 server.tool(
   'load_skill',
@@ -40,9 +32,7 @@ server.tool(
     try {
       const result = await callMethod('load_skill', { skill_name });
       return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify(result) },
-        ],
+        content: [{ type: 'text' as const, text: JSON.stringify(result) }],
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

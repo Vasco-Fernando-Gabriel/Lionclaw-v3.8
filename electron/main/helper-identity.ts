@@ -1,4 +1,3 @@
-
 import crypto from 'crypto';
 import { createLogger } from './logger';
 
@@ -9,6 +8,7 @@ export const LIONCLAW_HELPER_TOKEN_ENV = 'LIONCLAW_HELPER_TOKEN';
 export const CHAT_GATED_HELPER_IDS: ReadonlySet<string> = new Set([
   'lionclaw-pipeline-control',
   'lionclaw-dynamic-workflows',
+  'lionclaw-swarm',
 ]);
 
 export const ALWAYS_IDENTITY_HELPER_IDS: ReadonlySet<string> = new Set([
@@ -35,6 +35,7 @@ export const GATED_METHOD_PREFIXES: ReadonlyArray<{
   serverId: string;
 }> = [
   { prefix: 'pipeline_', serverId: 'lionclaw-pipeline-control' },
+  { prefix: 'swarm_', serverId: 'lionclaw-swarm' },
   { prefix: 'dynamic_workflow_', serverId: 'lionclaw-dynamic-workflows' },
 ];
 

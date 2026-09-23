@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -59,13 +58,9 @@ import {
 } from '../db';
 import { getBugContext, readBugManifest } from '../bug-paths';
 import { validateRepoRootPath } from '../repo-graph/validate-root';
-import {
-  buildBugGraphBlock,
-  handleBugPhase1DiscoveryMessage,
-} from '../pipeline-engine/handlers/bug';
+import { buildBugGraphBlock, handleBugPhase1DiscoveryMessage } from '../pipeline-engine/handlers/bug';
 import type { PipelineEngineContext, HandlerPhaseState, SpawnAgentResult } from '../pipeline-engine/handlers/context';
 import type { HarnessProject } from '../../../src/types';
-
 
 const BASE_CONFIG: HarnessProject['config'] = {
   maxRoundsPerSprint: 5,
@@ -88,8 +83,14 @@ function spawnResult(): SpawnAgentResult {
   return {
     output: 'ok',
     metrics: {
-      inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0,
-      toolUses: 0, apiRequests: 1, costUsd: 0, durationMs: 1,
+      inputTokens: 1,
+      outputTokens: 1,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      toolUses: 0,
+      apiRequests: 1,
+      costUsd: 0,
+      durationMs: 1,
     },
     model: 'claude-opus-5',
     runtime: 'cloud',
@@ -105,11 +106,13 @@ function makeCtx(): { ctx: PipelineEngineContext; prompts: string[] } {
       (opts.onText as (c: string) => void)('resposta do discovery');
       return spawnResult();
     },
-    accumulateMetrics: () => { /* noop */ },
+    accumulateMetrics: () => {
+      /* noop */
+    },
     buildPriorMessagesForPhase: () => undefined,
-    makeConversationOnText:
-      (_p: string, _ph: number, acc: { text: string; completed: boolean }) =>
-        (chunk: string) => { acc.text += chunk; },
+    makeConversationOnText: (_p: string, _ph: number, acc: { text: string; completed: boolean }) => (chunk: string) => {
+      acc.text += chunk;
+    },
     PHASE_COMPLETE_MARKER: '[PHASE_COMPLETE]',
   } as unknown as PipelineEngineContext;
   return { ctx, prompts };
@@ -142,7 +145,11 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  try { getDb().close(); } catch { /* handle ja invalido */ }
+  try {
+    getDb().close();
+  } catch {
+    /* handle ja invalido */
+  }
   fs.rmSync(state.home, { recursive: true, force: true });
 });
 
@@ -153,7 +160,6 @@ beforeEach(() => {
   projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'lionclaw-bug-graph-proj-'));
   initGitRepo(projectPath);
 });
-
 
 describe('TB-18 (a) — sem grafo, o bloco e o de degradacao com instrucao de grep', () => {
   it('buildBugGraphBlock devolve NAO DISPONIVEL + instrucao de Grep/Glob/Read', async () => {
@@ -168,7 +174,11 @@ describe('TB-18 (a) — sem grafo, o bloco e o de degradacao com instrucao de gr
 
   it('o user message da fase 1 carrega o bloco de degradacao', async () => {
     const project = insertHarnessProject({
-      name: 'bug sem grafo', projectPath, specPath: '', config: { ...BASE_CONFIG }, pipelineType: 'bug',
+      name: 'bug sem grafo',
+      projectPath,
+      specPath: '',
+      config: { ...BASE_CONFIG },
+      pipelineType: 'bug',
     });
     const { ctx, prompts } = makeCtx();
     await handleBugPhase1DiscoveryMessage(ctx, project.id, 'o botao trava', makeState(), project);
@@ -234,11 +244,14 @@ describe('TB-18 (b) — com grafo ready, o bloco e o do minimalContext', () => {
   });
 });
 
-
 describe('TB-18 (c) — aviso duravel em pipeline_messages e estado no manifest', () => {
   it('sem grafo: o aviso sobrevive a um refetch do historico e o manifest marca graphAvailable false', async () => {
     const project = insertHarnessProject({
-      name: 'bug aviso', projectPath, specPath: '', config: { ...BASE_CONFIG }, pipelineType: 'bug',
+      name: 'bug aviso',
+      projectPath,
+      specPath: '',
+      config: { ...BASE_CONFIG },
+      pipelineType: 'bug',
     });
     const { ctx } = makeCtx();
     await handleBugPhase1DiscoveryMessage(ctx, project.id, 'bug com aviso', makeState(), project);
@@ -250,10 +263,12 @@ describe('TB-18 (c) — aviso duravel em pipeline_messages e estado no manifest'
     expect(notice!.content).toContain('modo grep');
     expect(notice!.content).toContain('resposta do discovery');
 
-    const rows = getDb().prepare(
-      `SELECT role, content FROM pipeline_messages
+    const rows = getDb()
+      .prepare(
+        `SELECT role, content FROM pipeline_messages
        WHERE project_id = ? AND phase_number = 1 ORDER BY id ASC`,
-    ).all(project.id) as Array<{ role: string; content: string }>;
+      )
+      .all(project.id) as Array<{ role: string; content: string }>;
     expect(rows).toHaveLength(2);
     expect(rows[0].content).toContain('NAO DISPONIVEL neste run');
     expect(rows[0].content).not.toContain('resposta do discovery');
@@ -271,7 +286,11 @@ describe('TB-18 (c) — aviso duravel em pipeline_messages e estado no manifest'
     registerReadyRepo(canonical.canonicalRootPath, canonical.gitRoot);
 
     const project = insertHarnessProject({
-      name: 'bug com grafo', projectPath, specPath: '', config: { ...BASE_CONFIG }, pipelineType: 'bug',
+      name: 'bug com grafo',
+      projectPath,
+      specPath: '',
+      config: { ...BASE_CONFIG },
+      pipelineType: 'bug',
     });
     const { ctx, prompts } = makeCtx();
     await handleBugPhase1DiscoveryMessage(ctx, project.id, 'bug com grafo', makeState(), project);
@@ -286,7 +305,6 @@ describe('TB-18 (c) — aviso duravel em pipeline_messages e estado no manifest'
     expect(manifest.graphUnavailableReason).toBeUndefined();
   });
 });
-
 
 describe('TB-18 (d) — projeto em SUBDIRETORIO de repo git', () => {
   it('resolve o repositorio pelo canonical root (git toplevel), nao por path.resolve', async () => {
@@ -310,11 +328,14 @@ describe('TB-18 (d) — projeto em SUBDIRETORIO de repo git', () => {
   });
 });
 
-
 describe('TB-18 (e) — run dirigido pelo orquestrador com a PipelinePage fechada', () => {
   it('o handler registra o repositorio, degrada para grep e o aviso manda abrir a pagina', async () => {
     const project = insertHarnessProject({
-      name: 'bug dirigido', projectPath, specPath: '', config: { ...BASE_CONFIG }, pipelineType: 'bug',
+      name: 'bug dirigido',
+      projectPath,
+      specPath: '',
+      config: { ...BASE_CONFIG },
+      pipelineType: 'bug',
     });
     const { ctx, prompts } = makeCtx();
     await handleBugPhase1DiscoveryMessage(ctx, project.id, 'bug dirigido pelo orquestrador', makeState(), project);
@@ -350,7 +371,11 @@ describe('TB-18 (e) — run dirigido pelo orquestrador com a PipelinePage fechad
     };
 
     const project = insertHarnessProject({
-      name: 'bug dirigido com grafo', projectPath, specPath: '', config: { ...BASE_CONFIG }, pipelineType: 'bug',
+      name: 'bug dirigido com grafo',
+      projectPath,
+      specPath: '',
+      config: { ...BASE_CONFIG },
+      pipelineType: 'bug',
     });
     const { ctx, prompts } = makeCtx();
     await handleBugPhase1DiscoveryMessage(ctx, project.id, 'bug', makeState(), project);

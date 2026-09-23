@@ -1,9 +1,5 @@
-
 import { describe, it, expect } from 'vitest';
-import {
-  validateWorkflowPackage,
-  type ValidateWorkflowPackageInput,
-} from '../dynamic-workflows/workflow-validator';
+import { validateWorkflowPackage, type ValidateWorkflowPackageInput } from '../dynamic-workflows/workflow-validator';
 import type { DynamicWorkflowManifest } from '../dynamic-workflows/types';
 
 const VALID_WORKFLOW_JS = `export const meta = {
@@ -55,15 +51,9 @@ function graphManifest(): DynamicWorkflowManifest {
   };
 }
 
-const CATALOG = [
-  'dynamic-workflow-scout',
-  'dynamic-workflow-coder',
-  'dynamic-workflow-validator-spec',
-];
+const CATALOG = ['dynamic-workflow-scout', 'dynamic-workflow-coder', 'dynamic-workflow-validator-spec'];
 
-function baseInput(
-  over: Partial<ValidateWorkflowPackageInput> = {},
-): ValidateWorkflowPackageInput {
+function baseInput(over: Partial<ValidateWorkflowPackageInput> = {}): ValidateWorkflowPackageInput {
   return {
     workflowJsSource: VALID_WORKFLOW_JS,
     manifest: graphManifest(),
@@ -121,10 +111,7 @@ describe('workflow-validator: subset ESM / compiler (secao 15)', () => {
   });
 
   it('reprova Date.now() (quebra resume; nao deterministico)', () => {
-    const bad = VALID_WORKFLOW_JS.replace(
-      'return { plan, impl };',
-      'const t = Date.now(); return { plan, impl, t };',
-    );
+    const bad = VALID_WORKFLOW_JS.replace('return { plan, impl };', 'const t = Date.now(); return { plan, impl, t };');
     const report = validateWorkflowPackage(baseInput({ workflowJsSource: bad }), FIXED_NOW);
     expect(report.ok).toBe(false);
     expect(report.issues.some((i) => i.code === 'nondeterministic')).toBe(true);

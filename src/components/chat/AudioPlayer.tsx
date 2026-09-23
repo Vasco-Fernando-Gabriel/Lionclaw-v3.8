@@ -16,8 +16,11 @@ export function AudioPlayer({ audioBase64, mimeType = 'audio/mpeg', label }: Aud
     if (!audioRef.current) {
       const audio = new Audio(`data:${mimeType};base64,${audioBase64}`);
       audioRef.current = audio;
-      audio.ontimeupdate = () => setProgress(audio.currentTime / audio.duration * 100);
-      audio.onended = () => { setIsPlaying(false); setProgress(0); };
+      audio.ontimeupdate = () => setProgress((audio.currentTime / audio.duration) * 100);
+      audio.onended = () => {
+        setIsPlaying(false);
+        setProgress(0);
+      };
     }
     if (isPlaying) {
       audioRef.current.pause();
@@ -38,10 +41,7 @@ export function AudioPlayer({ audioBase64, mimeType = 'audio/mpeg', label }: Aud
       <div className="flex-1">
         {label && <span className="text-xs text-zinc-400 block mb-1">{label}</span>}
         <div className="w-full h-1.5 bg-zinc-700 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-amber-500 rounded-full transition-all"
-            style={{ width: `${progress}%` }}
-          />
+          <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${progress}%` }} />
         </div>
       </div>
       <Volume2 size={14} className="text-zinc-500" />

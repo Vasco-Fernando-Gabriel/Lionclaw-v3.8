@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import path from 'path';
 import type { SpawnOptions } from '@anthropic-ai/claude-agent-sdk';
@@ -25,17 +24,14 @@ vi.mock('fs', () => ({
 }));
 vi.mock('child_process', () => ({ spawn: (...args: unknown[]) => mocks.spawn(...args) }));
 vi.mock('../distribution-runtime', async () => {
-  const actual = await vi.importActual<typeof import('../distribution-runtime')>(
-    '../distribution-runtime',
-  );
+  const actual = await vi.importActual<typeof import('../distribution-runtime')>('../distribution-runtime');
   return {
     claudeAgentSdkEntryRelative: actual.claudeAgentSdkEntryRelative,
     distributionRuntimeTarget: actual.distributionRuntimeTarget,
     resolvePackagedClaudeCliEntry: () => mocks.resolvePackagedClaudeCliEntry(),
     resolveInternalNodeBinary: () => mocks.resolveInternalNodeBinary(),
     isPackagedDistributionRuntime: () => mocks.isPackagedDistributionRuntime(),
-    minimalInternalRuntimeEnv: (node: string, base: unknown) =>
-      mocks.minimalInternalRuntimeEnv(node, base),
+    minimalInternalRuntimeEnv: (node: string, base: unknown) => mocks.minimalInternalRuntimeEnv(node, base),
   };
 });
 vi.mock('module', async () => {

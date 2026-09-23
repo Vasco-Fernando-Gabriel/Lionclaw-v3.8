@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
@@ -22,10 +21,7 @@ export function hasParentTraversal(raw: string): boolean {
   return raw.split(/[\\/]+/).some((segment) => segment === '..');
 }
 
-export function validateRepoRootPath(
-  raw: string,
-  deps: ValidateRootDeps = defaultDeps,
-): ValidateRepoRootResult {
+export function validateRepoRootPath(raw: string, deps: ValidateRootDeps = defaultDeps): ValidateRepoRootResult {
   if (typeof raw !== 'string' || !raw.trim()) {
     return { error: 'caminho do repositorio vazio' };
   }
@@ -108,7 +104,6 @@ export function validateRepoRootAgainstCanonical(
   }
   return { canonicalRootPath: realCanonical };
 }
-
 
 export interface SubagentRepoRootDeps {
   getSessionActiveRepository: (sessionId: string) => { repositoryId: string } | null;

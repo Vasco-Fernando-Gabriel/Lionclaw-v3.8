@@ -8,17 +8,13 @@ import type { SprintJsonEntry } from './harness-planner';
 
 const logger = createLogger('harness-evaluator');
 
-export function buildEvaluatorPrompt(
-  sprintJson: SprintJsonEntry,
-  projectPath: string,
-  specPath: string,
-): string {
-  const criteriaBlock = sprintJson.features.map(f => {
-    const criteria = f.acceptance_criteria.map((c, i) =>
-      `  - ${f.id}-c${i + 1}: "${c}"`,
-    ).join('\n');
-    return `### ${f.name} (${f.id})\n${f.description}\n\nCriterios:\n${criteria}`;
-  }).join('\n\n');
+export function buildEvaluatorPrompt(sprintJson: SprintJsonEntry, projectPath: string, specPath: string): string {
+  const criteriaBlock = sprintJson.features
+    .map((f) => {
+      const criteria = f.acceptance_criteria.map((c, i) => `  - ${f.id}-c${i + 1}: "${c}"`).join('\n');
+      return `### ${f.name} (${f.id})\n${f.description}\n\nCriterios:\n${criteria}`;
+    })
+    .join('\n\n');
 
   return `## Diretorio do Projeto
 ${projectPath}
@@ -64,7 +60,9 @@ export function parseEvaluationOutput(
   let jsonStr = rawOutput.trim();
 
   if (!jsonStr) {
-    throw new Error('Evaluator returned empty output. The agent may have only used tools without producing a final JSON response.');
+    throw new Error(
+      'Evaluator returned empty output. The agent may have only used tools without producing a final JSON response.',
+    );
   }
 
   const jsonBlockMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
@@ -100,7 +98,7 @@ export function parseEvaluationOutput(
           logger.warn({ round: roundNumber }, 'JSON parsed via jsonrepair (3rd-layer fallback)');
         } catch (e3) {
           parseError = e3 as Error;
-          continue; // try next candidate
+          continue;
         }
       }
     }
@@ -115,16 +113,14 @@ export function parseEvaluationOutput(
       break;
     }
 
-    parseError = new Error(
-      `Candidate at index ${ci} parsed but missing sprint_id/verdict/criteria`,
-    );
+    parseError = new Error(`Candidate at index ${ci} parsed but missing sprint_id/verdict/criteria`);
   }
 
   if (!parsed) {
     throw new Error(
       `Evaluator output contains no valid JSON with sprint_id, verdict, and criteria. ` +
-      `Last error: ${parseError?.message ?? 'unknown'}. ` +
-      `Raw output (first 500 chars): ${rawOutput.slice(0, 500)}`,
+        `Last error: ${parseError?.message ?? 'unknown'}. ` +
+        `Raw output (first 500 chars): ${rawOutput.slice(0, 500)}`,
     );
   }
 
@@ -134,7 +130,7 @@ export function parseEvaluationOutput(
   };
 
   let sawCriterionVerdictFallback = false;
-  const criteria: EvaluationCriterion[] = (parsed['criteria'] as Array<Record<string, unknown>>).map(c => {
+  const criteria: EvaluationCriterion[] = (parsed['criteria'] as Array<Record<string, unknown>>).map((c) => {
     const id = (c['id'] as string) || '';
     const rawOutcome = (c['result'] ?? c['verdict']) as 'pass' | 'fail' | undefined;
     if (c['result'] === undefined && c['verdict'] !== undefined) {
@@ -156,7 +152,7 @@ export function parseEvaluationOutput(
     );
   }
 
-  const allPass = criteria.every(c => c.result === 'pass');
+  const allPass = criteria.every((c) => c.result === 'pass');
   const verdict: 'pass' | 'fail' = allPass ? 'pass' : 'fail';
 
   return {
@@ -169,10 +165,7 @@ export function parseEvaluationOutput(
   };
 }
 
-export function validateCriteria(
-  evaluation: EvaluationResult,
-  sprintJson: SprintJsonEntry,
-): EvaluationResult {
+export function validateCriteria(evaluation: EvaluationResult, sprintJson: SprintJsonEntry): EvaluationResult {
   const validIds = new Set<string>();
   for (const feature of sprintJson.features) {
     feature.acceptance_criteria.forEach((_, i) => {
@@ -192,7 +185,7 @@ export function validateCriteria(
     }
   }
 
-  const allPass = validCriteria.length > 0 && validCriteria.every(c => c.result === 'pass');
+  const allPass = validCriteria.length > 0 && validCriteria.every((c) => c.result === 'pass');
 
   return {
     ...evaluation,
@@ -221,12 +214,9 @@ export function updateSpecProgress(
     /## Status: \d+\/\d+ sprints concluidas/,
     `## Status: ${completedCount}/${totalSprints} sprints concluidas`,
   );
-  content = content.replace(
-    /Ultima atualizacao: .*/,
-    `Ultima atualizacao: ${new Date().toISOString()}`,
-  );
+  content = content.replace(/Ultima atualizacao: .*/, `Ultima atualizacao: ${new Date().toISOString()}`);
 
-  const features = sprintJson.features.map(f => `- ${f.name}: ${f.description}`).join('\n');
+  const features = sprintJson.features.map((f) => `- ${f.name}: ${f.description}`).join('\n');
   const sprintEntry = `\n## Sprint ${String(sprintJson.index + 1).padStart(3, '0')} - ${sprintJson.name} [CONCLUIDA]\n${features}\n`;
 
   content += sprintEntry;
@@ -236,12 +226,10 @@ export function updateSpecProgress(
 }
 
 export function buildFeedbackFromEvaluation(evaluation: EvaluationResult): string {
-  const failedCriteria = evaluation.criteria.filter(c => c.result === 'fail');
+  const failedCriteria = evaluation.criteria.filter((c) => c.result === 'fail');
   if (failedCriteria.length === 0) return '';
 
-  const lines = failedCriteria.map(c =>
-    `- [FAIL] ${c.description}: ${c.justification}`,
-  ).join('\n');
+  const lines = failedCriteria.map((c) => `- [FAIL] ${c.description}: ${c.justification}`).join('\n');
 
   return `${evaluation.summary}\n\nCriterios que falharam:\n${lines}`;
 }

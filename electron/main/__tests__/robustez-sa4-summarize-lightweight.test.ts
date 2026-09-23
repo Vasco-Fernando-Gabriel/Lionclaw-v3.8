@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -116,7 +115,6 @@ vi.mock('../secrets-vault', () => ({
 import { summarizeLightweight } from '../memory-pipeline';
 import { EmptyProviderResponseError } from '../agent-runtime/llm-error';
 
-
 const VALID_SUMMARY = {
   executive_summary: 'resumo executivo do ciclo',
   decisions: [],
@@ -170,7 +168,7 @@ beforeEach(() => {
     if (key === 'orchestrator_runtime') return 'claude-sdk';
     if (key === 'orchestrator_provider') return 'anthropic';
     if (key === 'orchestrator_model') return 'claude-sonnet-4-6';
-    return undefined; // compaction provider/model vazios -> Auto (subscription)
+    return undefined;
   });
   h.resolveOrchestratorSelectionMock.mockResolvedValue({
     runtime: 'claude-sdk',
@@ -190,12 +188,11 @@ beforeEach(() => {
   }
 });
 
-
 describe('AC-A8 — rota leve REAL (V2): so o summarize, nada do pipeline pesado', () => {
   it('AC-A8: roda EXATAMENTE 1 chamada LLM (o summarize) e retorna o executiveSummary', async () => {
     const result = await summarizeLightweight('sess-1');
 
-    expect(result).toEqual({ executiveSummary: 'resumo executivo do ciclo' });
+    expect(result).toEqual({ executiveSummary: 'resumo executivo do ciclo', warnings: [] });
     expect(h.events.filter((e) => e.startsWith('llm:'))).toEqual(['llm:summarize']);
   });
 
@@ -219,14 +216,11 @@ describe('AC-A8 — rota leve REAL (V2): so o summarize, nada do pipeline pesado
     expect(deltaQuery).toBeDefined();
     expect(deltaQuery!.args).toEqual(['sess-1', 7]);
 
-    const summarizePrompt = h.runSubscriptionMock.mock.calls
-      .map((c) => c[1] as string)
-      .find((p) => !isMapPrompt(p));
+    const summarizePrompt = h.runSubscriptionMock.mock.calls.map((c) => c[1] as string).find((p) => !isMapPrompt(p));
     expect(summarizePrompt).toBeDefined();
     expect(summarizePrompt).toContain('RESUMO-ANTERIOR-XYZ');
   });
 });
-
 
 describe('AC-A9b — delta vazio (V11)', () => {
   it('AC-A9b: sem mensagens no delta retorna undefined, ZERO chamadas LLM e ZERO escritas', async () => {
@@ -240,7 +234,6 @@ describe('AC-A9b — delta vazio (V11)', () => {
     expect(h.dbRuns).toHaveLength(0);
   });
 });
-
 
 describe('AC-A9 (backend) — falha do summarizer propaga (caller aborta sem re-seed)', () => {
   it('AC-A9: resposta vazia do provider lanca EmptyProviderResponseError (COMPACT-EMPTY), nao JSON cru', async () => {

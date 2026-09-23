@@ -1,15 +1,15 @@
+import { isSwarmAggregationTool } from '../swarm/aggregation-policy';
+import { persistSwarmResponse } from '../swarm/chat-persistence';
 
-import crypto from 'crypto';
 import type { BrowserWindow } from 'electron';
 import { createLogger } from '../logger';
 import { smokeAudit } from '../smoke-audit';
 import {
-  createSession,
   clearSessionPendingSeed,
-  getActiveChatSession,
   getAllAgents,
   getSession,
   getSessionMessages,
+  getSessionMessagesAfterFence,
   insertMessage,
   getTurnIndexForUserMessage,
   getLatestUserTurnIndex,
@@ -19,10 +19,7 @@ import {
 } from '../db';
 import { persistUserChatMessage } from '../user-attachments-meta';
 import { calculateCost } from '../pricing';
-import {
-  estimateRequestTokens,
-  reconcileActiveContext,
-} from '../agent-runtime/context-measure';
+import { estimateRequestTokens, reconcileActiveContext } from '../agent-runtime/context-measure';
 import { ensureInitialSessionTitle } from '../title-generator';
 import { listSkills } from '../skills';
 import { getMCPConfigForAgent, getMCPToolsFromRegistry } from '../mcp-manager';
@@ -30,7 +27,9 @@ import { setupMCPsForSession, teardownMCPsForSession } from '../mcp-tool-bridge'
 import type { McpServerSpec, McpSessionClient } from '../mcp-tool-bridge';
 import type { QueryOptions } from '../orchestrator';
 import type { OrchestratorSelection } from '../orchestrator-selection';
-import { type SdkLane, desktopLane } from '../sdk-lane';
+import type { SdkLane } from '../sdk-lane';
+import { resolveLaneForOptions, lanesOrAllDesktop } from '../desktop-lanes';
+import { SessionRequiredError } from '../lanes';
 import type { StreamChunk } from '../../../src/types';
 import { resolveLionContextWindowTokens } from '../chat-context-usage';
 
@@ -47,7 +46,27 @@ import type { LionMcpToolEntry } from './prompt';
 import { buildMcpToolIndex, buildDirectHelperCatalog } from '../mcp-tool-index';
 import { LION_TOOL_SCHEMAS, MCP_SCHEMA_TOOL_SCHEMA } from './tool-registry';
 import { createLionStreamTranslator, mcpToolLabel } from './stream-translator';
-import { MAX_TOOL_TURNS, runLionLoop, type LionToolDispatcher } from './runtime';
+import {
+  MAX_TOOL_TURNS,
+  runLionLoop,
+  type LionToolDispatcher,
+  type ToolDispatchResult,
+  type RunLionLoopResult,
+  type TranscriptPushMeta,
+} from './runtime';
+import {
+  getTimelineRuns,
+  groupRunsByAnchor,
+  beginTimelineTurn,
+  resolveTimelineAnchor,
+  computeTimelineMetrics,
+  logTimelineMetrics,
+  type TimelineMetricsEvent,
+  buildPersistedOutputBlock,
+  SPILL_BASH_THRESHOLD_BYTES,
+  SPILL_GREP_THRESHOLD_BYTES,
+  writeSpillFile,
+} from '../session-timeline';
 import type { LionChatMessage } from './adapters/types';
 import type { LionAdapter } from './adapters/types';
 import { createOllamaAdapter } from './adapters/ollama';
@@ -55,10 +74,16 @@ import { createLmStudioAdapter } from './adapters/lmstudio';
 import { createOpenAiCompatibleAdapter } from './adapters/openai-compatible';
 import { createGoogleGenAiAdapter } from './adapters/google-genai';
 import { compactIfNeeded } from './compaction';
-import { isChatAutoCompactionEnabled } from '../chat-compaction-trigger';
-import { buildSystemPrompt, buildPipelineControlSection, buildPipelineControlStub, getSubagentsPromptMode } from '../prompt-builder';
+import { buildLionTimelineHistory } from './history';
+import { isChatAutoCompactionEnabled, isChatTimelineReinjectEnabled } from '../chat-compaction-trigger';
 import {
-  getActiveChatTurnByLane,
+  buildSystemPrompt,
+  buildPipelineControlSection,
+  buildPipelineControlStub,
+  getSubagentsPromptMode,
+} from '../prompt-builder';
+import {
+  getActiveChatTurnBinding,
   getChatCapabilityTurn,
   computeEffectiveCapabilitiesForTurn,
 } from '../chat-capability-context';
@@ -70,14 +95,7 @@ import {
   resolveOnboardingCompletedFromState,
 } from '../onboarding';
 
-import {
-  createSessionFsState,
-  lionEdit,
-  lionGlob,
-  lionGrep,
-  lionRead,
-  lionWrite,
-} from './tools/filesystem';
+import { createSessionFsState, lionEdit, lionGlob, lionGrep, lionRead, lionWrite } from './tools/filesystem';
 import { lionBash } from './tools/bash';
 import { lionSkillLoad } from './tools/skill';
 import { lionAgentDispatch, PIPELINE_INTERNAL_SQUADS } from './tools/agent';
@@ -86,6 +104,7 @@ import { lionAskUserQuestion } from './tools/ask-user';
 import { lionMemorySearch } from './tools/memory';
 import { LionTodoStore, lionTodoWrite } from './tools/todo';
 import { maybeGenerateLionSessionTitle } from './title';
+
 import { recordCompletedMainChatTurn } from '../dreaming-turn-engine';
 import { getAgentCwd } from '../paths';
 import { getRepoGraphTurnContext } from '../repo-graph/turn-context';
@@ -100,51 +119,56 @@ import { resolveChatInheritedEffort } from '../agent-runtime/chat-effort-inherit
 
 const logger = createLogger('lion-sdk');
 
-export function stopLionSdkQuery(lane: SdkLane = desktopLane): void {
-  if (lane.currentAbortController) {
-    lane.currentAbortController.abort();
-    lane.currentAbortController = null;
+export async function spillIfNeeded(
+  sessionId: string,
+  toolName: string,
+  result: ToolDispatchResult,
+): Promise<ToolDispatchResult> {
+  const threshold =
+    toolName === 'Bash' ? SPILL_BASH_THRESHOLD_BYTES : toolName === 'Grep' ? SPILL_GREP_THRESHOLD_BYTES : null;
+  const originalBytes = Buffer.byteLength(result.content, 'utf8');
+  if (threshold === null || originalBytes <= threshold) return result;
+  const spillPath = await writeSpillFile(sessionId, result.content);
+  const meta = { originalBytes, spillPath };
+  if (spillPath === null) return { ...result, meta };
+  const newline = result.content.indexOf('\n');
+  const prefix = toolName === 'Bash' ? `${result.content.slice(0, newline < 0 ? undefined : newline)}\n` : '';
+  const preview = toolName === 'Bash' ? (newline < 0 ? '' : result.content.slice(newline + 1)) : result.content;
+  return { ...result, content: prefix + buildPersistedOutputBlock(originalBytes, spillPath, preview), meta };
+}
+
+export function stopLionSdkQuery(laneArg?: SdkLane): void {
+  for (const lane of lanesOrAllDesktop(laneArg)) {
+    if (lane.currentAbortController) {
+      lane.currentAbortController.abort();
+      lane.currentAbortController = null;
+    }
   }
 }
 
-export function isLionSdkQueryActive(lane: SdkLane = desktopLane): boolean {
-  return lane.currentAbortController !== null;
+export function isLionSdkQueryActive(laneArg?: SdkLane): boolean {
+  return lanesOrAllDesktop(laneArg).some((lane) => lane.currentAbortController !== null);
 }
 
-export function resetLionSdkSessionState(lane: SdkLane = desktopLane): void {
-  stopLionSdkQuery(lane);
+export function resetLionSdkSessionState(laneArg?: SdkLane): void {
+  for (const lane of lanesOrAllDesktop(laneArg)) {
+    stopLionSdkQuery(lane);
+  }
 }
 
-function sendStream(
-  getWindow: () => BrowserWindow | null,
-  silent: boolean | undefined,
-  chunk: StreamChunk,
-): void {
+function sendStream(getWindow: () => BrowserWindow | null, silent: boolean | undefined, chunk: StreamChunk): void {
   if (silent) return;
   try {
     const win = getWindow();
     if (win && !win.isDestroyed()) {
       win.webContents.send('chat:stream', chunk);
     }
-  } catch {
-  }
+  } catch {}
 }
 
-function resolveSessionId(
-  options: QueryOptions,
-  lane: SdkLane,
-): { sessionId: string; created: boolean } {
+function resolveSessionId(options: QueryOptions, lane: SdkLane): { sessionId: string; created: boolean } {
   if (options.sessionId) return { sessionId: options.sessionId, created: false };
-  if (lane !== desktopLane) {
-    throw new Error(
-      `Lane '${lane.name}' exige options.sessionId explicito (guard de sessao, SPEC 3.3)`,
-    );
-  }
-  const active = getActiveChatSession();
-  if (active) return { sessionId: active.id, created: false };
-  const sessionId = crypto.randomUUID();
-  createSession(sessionId, '');
-  return { sessionId, created: true };
+  throw new SessionRequiredError(lane.name, 'lion-sdk');
 }
 
 function resolveAdapter(selection: OrchestratorSelection): LionAdapter {
@@ -188,9 +212,10 @@ export async function executeLionSdkQuery(
   message: string,
   options: QueryOptions,
   getWindow: () => BrowserWindow | null,
-  lane: SdkLane = desktopLane,
+  laneArg: SdkLane | undefined,
   selection: OrchestratorSelection,
 ): Promise<void> {
+  const lane = laneArg ?? resolveLaneForOptions(options, 'lion-sdk');
   const { sessionId } = resolveSessionId(options, lane);
   const emit = (chunk: StreamChunk) => {
     options.onStreamChunk?.({ ...chunk, sessionId });
@@ -211,7 +236,10 @@ export async function executeLionSdkQuery(
 
   const displayContent = options.displayMessage ?? message;
   const skipUserPersistence =
-    options.origin === 'system-event' || options.skipUserMessagePersistence === true;
+    options._forceNewSession === true ||
+    options.origin === 'system-event' ||
+    options.skipUserMessagePersistence === true;
+  let persistedUserMessageId: number | null = null;
   let currentTurnIndex = 0;
   if (skipUserPersistence) {
     try {
@@ -222,6 +250,7 @@ export async function executeLionSdkQuery(
   } else {
     try {
       const userMessageId = persistUserChatMessage(sessionId, displayContent, options.attachmentsMeta);
+      persistedUserMessageId = userMessageId;
       currentTurnIndex = getTurnIndexForUserMessage(sessionId, userMessageId);
       ensureInitialSessionTitle(sessionId, displayContent);
     } catch (e) {
@@ -234,6 +263,20 @@ export async function executeLionSdkQuery(
     }
   }
 
+  const timelineOrigin = options._forceNewSession
+    ? 'retry'
+    : options.origin === 'system-event'
+      ? 'system-event'
+      : options.swarmDelivery
+        ? 'swarm'
+        : 'turn';
+  const timelineAnchor = resolveTimelineAnchor({
+    origin: timelineOrigin,
+    persistedUserMessageId,
+    answeredUserMessageId: options.answeredUserMessageId ?? null,
+  });
+  const retryWithoutPersistedUser = timelineOrigin === 'retry' && persistedUserMessageId === null;
+
   let adapter: LionAdapter;
   try {
     adapter = resolveAdapter(selection);
@@ -245,20 +288,14 @@ export async function executeLionSdkQuery(
   const abortController = new AbortController();
   lane.currentAbortController = abortController;
 
-  const mcpPromptMode: 'index' | 'full' =
-    getSetting('mcp_prompt_mode') === 'full' ? 'full' : 'index';
+  const mcpPromptMode: 'index' | 'full' = getSetting('mcp_prompt_mode') === 'full' ? 'full' : 'index';
 
-  const useLazyMcpSetup =
-    !isOnboarding && (mcpPromptMode === 'index' || selection.provider === 'vertex-ai');
+  const useLazyMcpSetup = !isOnboarding && (mcpPromptMode === 'index' || selection.provider === 'vertex-ai');
 
-  const chatLane = lane.name === 'desktop' || lane.name === 'telegram' || lane.name === 'cron'
-    ? lane.name
-    : undefined;
-  const activeChatTurn = chatLane ? getActiveChatTurnByLane(chatLane) : undefined;
+  const activeChatTurn = getActiveChatTurnBinding({ sessionId, lane: lane.kind });
   const chatTurnContext = activeChatTurn ? getChatCapabilityTurn(activeChatTurn) : undefined;
-  const chatCaps = lane.name === 'desktop' && chatTurnContext
-    ? computeEffectiveCapabilitiesForTurn(chatTurnContext)
-    : undefined;
+  const chatCaps =
+    lane.kind === 'desktop' && chatTurnContext ? computeEffectiveCapabilitiesForTurn(chatTurnContext) : undefined;
 
   let mcpConfig: Record<string, McpServerSpec> | undefined;
   let mcpClient: McpSessionClient = { connections: [] };
@@ -267,7 +304,12 @@ export async function executeLionSdkQuery(
     if (isOnboarding) {
       logger.info('Onboarding: text-only prompt, no tools');
     } else {
-      mcpConfig = await getMCPConfigForAgent(options.agentId, { surface: 'lion-sdk', capabilities: chatCaps });
+      mcpConfig = await getMCPConfigForAgent(options.agentId, {
+        surface: 'lion-sdk',
+        capabilities: chatCaps,
+        lane: lane.kind,
+        ...(activeChatTurn ? { turn: activeChatTurn } : {}),
+      });
       if (mcpConfig && Object.keys(mcpConfig).length > 0) {
         if (useLazyMcpSetup) {
           const activeServerIds = Object.keys(mcpConfig);
@@ -290,7 +332,10 @@ export async function executeLionSdkQuery(
             const parsed = parsePrefixedMcpName(t.function.name);
             if (!parsed) continue;
             const required = (t.function.parameters?.required ?? []) as string[];
-            const props = (t.function.parameters?.properties ?? {}) as Record<string, { type?: string; description?: string }>;
+            const props = (t.function.parameters?.properties ?? {}) as Record<
+              string,
+              { type?: string; description?: string }
+            >;
             rawEntries.push({
               serverId: parsed.serverId,
               toolName: parsed.toolName,
@@ -325,13 +370,14 @@ export async function executeLionSdkQuery(
   }
 
   const orchestratorToolSchemas =
-    mcpPromptMode === 'index'
-      ? [...LION_TOOL_SCHEMAS, MCP_SCHEMA_TOOL_SCHEMA]
-      : [...LION_TOOL_SCHEMAS];
-  const toolSchemas = isOnboarding ? [] : orchestratorToolSchemas;
+    mcpPromptMode === 'index' ? [...LION_TOOL_SCHEMAS, MCP_SCHEMA_TOOL_SCHEMA] : [...LION_TOOL_SCHEMAS];
+  const toolSchemas = isOnboarding
+    ? []
+    : options.swarmDelivery
+      ? orchestratorToolSchemas.filter((tool) => isSwarmAggregationTool(tool.name))
+      : orchestratorToolSchemas;
 
-  const p5ExplicitServerIds =
-    options.agentId && mcpConfig ? Object.keys(mcpConfig) : [];
+  const p5ExplicitServerIds = options.agentId && mcpConfig ? Object.keys(mcpConfig) : [];
   const useMcpIndexCatalog =
     mcpPromptMode === 'index' &&
     !isOnboarding &&
@@ -353,10 +399,8 @@ export async function executeLionSdkQuery(
           buildLionToolCatalogPrompt(
             orchestratorToolSchemas.map((t) => ({ name: t.name, description: t.description })),
           ),
-          chatCaps?.pipelineControl === false
-            ? buildPipelineControlStub()
-            : buildPipelineControlSection(),
-          getRepoGraphPromptSection(),
+          chatCaps?.pipelineControl === false ? buildPipelineControlStub() : buildPipelineControlSection(),
+          getRepoGraphPromptSection(sessionId),
           useMcpIndexCatalog
             ? [
                 '## Available MCP Tools',
@@ -385,29 +429,15 @@ export async function executeLionSdkQuery(
   const compactionRuntimeRaw = getSetting('orchestrator_compaction_runtime') || '';
   const compactionProviderRaw = getSetting('orchestrator_compaction_provider') || '';
   const compactionModelRaw = getSetting('orchestrator_compaction_model') || '';
-  const maxContextTokensRaw = parseInt(
-    getSetting('orchestrator_context_window_tokens') || '',
-    10,
-  );
-  const compactionThresholdPercentRaw = parseInt(
-    getSetting('orchestrator_compaction_threshold_percent') || '70',
-    10,
-  );
+  const maxContextTokensRaw = parseInt(getSetting('orchestrator_context_window_tokens') || '', 10);
+  const compactionThresholdPercentRaw = parseInt(getSetting('orchestrator_compaction_threshold_percent') || '70', 10);
   const maxContextTokens =
-    Number.isFinite(maxContextTokensRaw) && maxContextTokensRaw > 0
-      ? maxContextTokensRaw
-      : undefined;
-  const contextWindowTokens = resolveLionContextWindowTokens(
-    selection.model,
-    selection.provider,
-    maxContextTokens,
-  );
+    Number.isFinite(maxContextTokensRaw) && maxContextTokensRaw > 0 ? maxContextTokensRaw : undefined;
+  const contextWindowTokens = resolveLionContextWindowTokens(selection.model, selection.provider, maxContextTokens);
   const compactionThresholdPercent = Number.isFinite(compactionThresholdPercentRaw)
     ? Math.min(95, Math.max(50, compactionThresholdPercentRaw))
     : undefined;
-  const thresholdRatio = compactionThresholdPercent
-    ? compactionThresholdPercent / 100
-    : undefined;
+  const thresholdRatio = compactionThresholdPercent ? compactionThresholdPercent / 100 : undefined;
 
   let compactionAdapter: LionAdapter | undefined;
   let compactionModel: string | undefined;
@@ -459,21 +489,39 @@ export async function executeLionSdkQuery(
 
   let compactedHistory: LionChatMessage[] = [];
   if (compactionAdapterFailed || !isChatAutoCompactionEnabled()) {
-    const raw = getSessionMessages(sessionId);
-    const cut =
-      compactedUpToMessageId !== undefined
-        ? raw.filter((m) => m.id > compactedUpToMessageId)
-        : raw;
-    compactedHistory = cut
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .slice(0, -1)
-      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
-    compactedHistory.push({ role: 'user', content: seededUserMsg });
+    if (isChatTimelineReinjectEnabled()) {
+      const fence = compactedUpToMessageId ?? null;
+      compactedHistory = buildLionTimelineHistory({
+        messages: getSessionMessagesAfterFence(sessionId, fence),
+        runsByAnchor: groupRunsByAnchor(getTimelineRuns(sessionId, fence)),
+        excludeUserMessageId: timelineAnchor.excludeUserMessageId,
+        seededUserMsg,
+      });
+    } else {
+      const raw = getSessionMessages(sessionId);
+      const cut = compactedUpToMessageId !== undefined ? raw.filter((m) => m.id > compactedUpToMessageId) : raw;
+      const eligibleHistory = cut.filter((m) => m.role === 'user' || m.role === 'assistant');
+      compactedHistory = (retryWithoutPersistedUser ? eligibleHistory : eligibleHistory.slice(0, -1)).map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      }));
+      compactedHistory.push({ role: 'user', content: seededUserMsg });
+    }
   } else {
     try {
       const compactResult = await compactIfNeeded({
         sessionId,
         newUserMsg: seededUserMsg,
+        ...(isChatTimelineReinjectEnabled()
+          ? {
+              timeline: {
+                runs: getTimelineRuns(sessionId, compactedUpToMessageId ?? null),
+                excludeUserMessageId: timelineAnchor.excludeUserMessageId,
+                fence: compactedUpToMessageId ?? null,
+              },
+            }
+          : {}),
+        retryWithoutPersistedUser,
         systemPrompt,
         primaryAdapter: adapter,
         primaryModel: selection.model,
@@ -493,30 +541,28 @@ export async function executeLionSdkQuery(
     }
   }
 
-  const initialMessages: LionChatMessage[] = [
-    { role: 'system', content: systemPrompt },
-    ...compactedHistory,
-  ];
+  const initialMessages: LionChatMessage[] = [{ role: 'system', content: systemPrompt }, ...compactedHistory];
 
   const fsState = createSessionFsState();
   const todoStore = new LionTodoStore();
-  const repoContext = getRepoGraphTurnContext();
+  const repoContext = getRepoGraphTurnContext(sessionId);
   const subagentCwd = repoContext?.canonicalRootPath ?? getAgentCwd(isOnboarding);
-  const remoteSubagentLane = lane.name === 'telegram' || lane.name === 'cron';
-  const completeHostGrants = !remoteSubagentLane
-    && chatTurnContext?.cwd
-    && chatTurnContext.permissionProfile?.canUseTool
-    && Array.isArray(chatTurnContext.allowedTools)
-    && Array.isArray(chatTurnContext.allowedServerIds)
-    && Array.isArray(chatTurnContext.readRoots)
-    && Array.isArray(chatTurnContext.writeRoots)
+  const remoteSubagentLane = lane.kind === 'telegram' || lane.kind === 'cron';
+  const completeHostGrants =
+    !remoteSubagentLane &&
+    chatTurnContext?.cwd &&
+    chatTurnContext.permissionProfile?.canUseTool &&
+    Array.isArray(chatTurnContext.allowedTools) &&
+    Array.isArray(chatTurnContext.allowedServerIds) &&
+    Array.isArray(chatTurnContext.readRoots) &&
+    Array.isArray(chatTurnContext.writeRoots)
       ? chatTurnContext
       : undefined;
   const subagentContext = createSubagentDispatchContext({
     ownerKind: 'chat',
     ownerId: sessionId,
     sessionId,
-    lane: lane.name === 'telegram' || lane.name === 'cron' ? lane.name : 'desktop',
+    lane: lane.kind,
     surface: 'lion-sdk',
     cwd: completeHostGrants?.cwd ?? chatTurnContext?.cwd ?? subagentCwd,
     readRoots: completeHostGrants?.readRoots ?? [],
@@ -525,7 +571,7 @@ export async function executeLionSdkQuery(
     allowedMcpServerIds: completeHostGrants?.allowedServerIds ?? [],
     permission: completeHostGrants?.permissionProfile ?? PERM_DEFAULT_NO_BYPASS,
     parentAbortSignal: abortController.signal,
-    inheritedEffort: resolveChatInheritedEffort(),
+    inheritedEffort: resolveChatInheritedEffort(selection.runtime, selection.effort),
   });
 
   const translator = createLionStreamTranslator({
@@ -537,6 +583,9 @@ export async function executeLionSdkQuery(
   let shouldGenerateTitle = false;
 
   const dispatcher: LionToolDispatcher = async (call) => {
+    if (options.swarmDelivery && !isSwarmAggregationTool(call.name)) {
+      return { content: 'Agregação Swarm permite somente leitura e busca.', isError: true };
+    }
     if (isOnboarding) {
       return {
         content: 'Onboarding mode is text-only; tools are disabled.',
@@ -564,12 +613,16 @@ export async function executeLionSdkQuery(
       }
       case 'Grep': {
         const r = await lionGrep(raw as Parameters<typeof lionGrep>[0]);
-        return r.isError ? { content: r.message, isError: true } : { content: r.value };
+        return spillIfNeeded(
+          sessionId,
+          call.name,
+          r.isError ? { content: r.message, isError: true } : { content: r.value },
+        );
       }
       case 'Bash': {
-        const r = await lionBash(raw as Parameters<typeof lionBash>[0], { getWindow });
+        const r = await lionBash(raw as Parameters<typeof lionBash>[0], { getWindow, sessionId, isOnboarding });
         const text = `exit=${r.exitCode} duration=${r.durationMs}ms\n--- stdout ---\n${r.stdout}\n--- stderr ---\n${r.stderr}`;
-        return { content: text, isError: r.exitCode !== 0 || !!r.blocked };
+        return spillIfNeeded(sessionId, call.name, { content: text, isError: r.exitCode !== 0 || !!r.blocked });
       }
       case 'TodoWrite': {
         const r = lionTodoWrite(todoStore, raw as Parameters<typeof lionTodoWrite>[1]);
@@ -577,10 +630,7 @@ export async function executeLionSdkQuery(
         return { content: JSON.stringify({ todos: r.todos }) };
       }
       case 'AskUserQuestion': {
-        const r = await lionAskUserQuestion(
-          raw as Parameters<typeof lionAskUserQuestion>[0],
-          { getWindow },
-        );
+        const r = await lionAskUserQuestion(raw as Parameters<typeof lionAskUserQuestion>[0], { getWindow });
         if (!r.ok) return { content: r.error ?? 'AskUserQuestion falhou', isError: true };
         return { content: JSON.stringify({ answers: r.answers, annotations: r.annotations }) };
       }
@@ -600,6 +650,7 @@ export async function executeLionSdkQuery(
             sessionId,
             turnId: String(currentTurnIndex),
             allowedServerIds: mcpConfig ? Object.keys(mcpConfig) : [],
+            ...(activeChatTurn ? { binding: { ...activeChatTurn, lane: lane.kind } } : {}),
           });
         }
         const connected = await ensureMcpConnection(serverId);
@@ -609,10 +660,12 @@ export async function executeLionSdkQuery(
             isError: true,
           };
         }
-        const r = await lionMcpCall(mcpClient, input);
-        const label = r.prefixedName
-          ? mcpToolLabel(input.server_id ?? '', input.tool ?? '')
-          : 'mcp_call';
+        const r = await lionMcpCall(
+          mcpClient,
+          input,
+          activeChatTurn ? { ...activeChatTurn, lane: lane.kind } : undefined,
+        );
+        const label = r.prefixedName ? mcpToolLabel(input.server_id ?? '', input.tool ?? '') : 'mcp_call';
         if (!r.ok) return { content: r.error ?? 'mcp_call falhou', isError: true, displayName: label };
         return { content: r.content ?? '', displayName: label };
       }
@@ -632,10 +685,9 @@ export async function executeLionSdkQuery(
       }
       case 'Agent':
       case 'Task': {
-        const r = await lionAgentDispatch(
-          raw as Parameters<typeof lionAgentDispatch>[0],
-          { dispatchContext: subagentContext },
-        );
+        const r = await lionAgentDispatch(raw as Parameters<typeof lionAgentDispatch>[0], {
+          dispatchContext: subagentContext,
+        });
         if (!r.ok) return { content: r.error ?? 'Agent falhou', isError: true, displayName: 'Agent' };
         return {
           content: JSON.stringify({
@@ -663,11 +715,65 @@ export async function executeLionSdkQuery(
     }
   };
 
+  const handle = beginTimelineTurn({
+    sessionId,
+    turnIndex: currentTurnIndex,
+    anchorMessageId: timelineAnchor.anchorMessageId,
+    currentUserMessageId: timelineAnchor.currentUserMessageId,
+    origin: timelineOrigin,
+    runtime: 'lion-sdk',
+    fidelity: 'exact',
+    cwd: subagentCwd,
+  });
+  handle.user(seededUserMsg);
+  const timelineEvents: TimelineMetricsEvent[] = [
+    {
+      kind: 'user',
+      content: seededUserMsg,
+      toolUseId: null,
+      toolCallsJson: null,
+      reasoningContent: null,
+    },
+  ];
+  const onTranscriptPush = (msg: LionChatMessage, meta?: TranscriptPushMeta): void => {
+    const reasoningContent = msg.reasoning_content ?? null;
+    if (msg.role === 'assistant') {
+      const toolCallsJson = msg.tool_calls?.length ? JSON.stringify(msg.tool_calls) : null;
+      timelineEvents.push({
+        kind: toolCallsJson === null ? 'assistant_final' : 'assistant_step',
+        content: msg.content,
+        toolUseId: null,
+        toolCallsJson,
+        reasoningContent,
+      });
+      if (toolCallsJson !== null) handle.assistantStep({ content: msg.content, toolCallsJson, reasoningContent });
+      else handle.assistantFinal({ content: msg.content, reasoningContent });
+    } else if (msg.role === 'tool') {
+      timelineEvents.push({
+        kind: 'tool_result',
+        content: msg.content,
+        toolUseId: msg.tool_call_id ?? null,
+        toolCallsJson: null,
+        reasoningContent: null,
+      });
+      handle.toolResult({
+        toolUseId: msg.tool_call_id ?? null,
+        toolName: msg.name ?? 'unknown',
+        content: msg.content,
+        isError: meta?.isError ?? false,
+        originalBytes: meta?.originalBytes ?? null,
+        spillPath: meta?.spillPath ?? null,
+      });
+    }
+  };
+  let result: RunLionLoopResult | undefined;
+  let postLoopFailed = false;
   let assistantText = '';
   let turnOk = false;
   smokeAudit('turn_start', { lane: lane.name, runtime: 'lion-sdk', sessionId });
   try {
-    const result = await runLionLoop({
+    result = await runLionLoop({
+      onTranscriptPush,
       adapter,
       model: selection.model,
       initialMessages,
@@ -686,11 +792,13 @@ export async function executeLionSdkQuery(
     assistantText = result.finalText;
     turnOk = result.ok;
     if (assistantText.trim().length > 0) {
-      const cleaned = extractAndProcessOnboardingData(assistantText, {
-        sendStream: emit,
-      });
+      const cleaned = options.swarmDelivery
+        ? null
+        : extractAndProcessOnboardingData(assistantText, {
+            sendStream: emit,
+          });
       if (cleaned !== null) assistantText = cleaned;
-      if (cleaned === null && isOnboarding) {
+      if (cleaned === null && isOnboarding && !options.swarmDelivery) {
         const completedFromCurrentMessage = completeOnboardingFromUserProfileMessage(message, {
           sendStream: emit,
         });
@@ -707,7 +815,12 @@ export async function executeLionSdkQuery(
       }
 
       try {
-        insertMessage(sessionId, 'assistant', assistantText);
+        if (options.swarmDelivery && (!result.ok || abortController.signal.aborted))
+          throw new Error('Agregação Swarm interrompida.');
+        if (!persistSwarmResponse(options, sessionId, assistantText)) {
+          const assistantMessageId = insertMessage(sessionId, 'assistant', assistantText);
+          handle.assistantMessage(assistantMessageId);
+        }
         recordCompletedMainChatTurn(sessionId, getWindow);
         if (pendingSeed) {
           clearSessionPendingSeed(sessionId);
@@ -720,45 +833,57 @@ export async function executeLionSdkQuery(
             updateSessionTokens(sessionId, u.inputTokens, u.outputTokens, costUsd, {
               costStatus: 'known',
               tokenStatus: 'reported',
-              runtime: selection.provider === 'ollama' || selection.provider === 'lmstudio'
-                ? 'local'
-                : 'external',
+              runtime: selection.provider === 'ollama' || selection.provider === 'lmstudio' ? 'local' : 'external',
             });
           }
           const lionContextEstimate = estimateRequestTokens({
-            messageTexts: [
-              ...initialMessages.map((m) => m.content),
-              assistantText,
-            ],
+            messageTexts: [...initialMessages.map((m) => m.content), assistantText],
             toolSchemasJson: toolSchemas.length ? JSON.stringify(toolSchemas) : undefined,
           });
           setSessionActiveContextTokens(
             sessionId,
-            reconcileActiveContext(
-              result.lastContextTokens ?? 0,
-              0,
-              lionContextEstimate,
-            ),
+            reconcileActiveContext(result.lastContextTokens ?? 0, 0, lionContextEstimate),
           );
         } catch (e) {
+          postLoopFailed = true;
           logger.warn({ err: e, sessionId }, 'Lion-SDK: token persistence failed');
         }
         shouldGenerateTitle = result.ok && !isOnboarding;
       } catch (e) {
+        postLoopFailed = true;
         logger.warn({ err: e, sessionId }, 'failed to persist assistant message');
       }
     } else {
-      logger.debug({ sessionId, ok: result.ok, errorReason: result.errorReason }, 'skipped empty Lion-SDK assistant message');
+      logger.debug(
+        { sessionId, ok: result.ok, errorReason: result.errorReason },
+        'skipped empty Lion-SDK assistant message',
+      );
     }
   } catch (e) {
+    postLoopFailed = true;
     logger.error({ err: e, sessionId }, 'Lion-SDK runtime falhou');
     if (isSubagentProviderAuthError(e)) {
       emit({ type: 'error', sessionId, ...subagentAuthFailure(e) });
-      if (lane !== desktopLane) throw e;
+      if (lane.kind !== 'desktop') throw e;
     } else {
       emit({ type: 'error', error: (e as Error).message });
     }
   } finally {
+    const counters = computeTimelineMetrics('lion-sdk', timelineEvents);
+    handle.metrics(counters);
+    const complete =
+      !postLoopFailed &&
+      result?.ok === true &&
+      result.finalText.trim().length > 0 &&
+      !abortController.signal.aborted &&
+      !handle.persistFailed;
+    if (complete) handle.complete();
+    logTimelineMetrics({
+      runId: handle.runId,
+      runtime: 'lion-sdk',
+      status: complete && !handle.persistFailed ? 'complete' : 'interrupted',
+      ...counters,
+    });
     smokeAudit('turn_done', { lane: lane.name, runtime: 'lion-sdk', sessionId, ok: turnOk });
     if (mcpClient && mcpClient.connections.length > 0) {
       try {

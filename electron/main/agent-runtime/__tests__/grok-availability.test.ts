@@ -147,11 +147,13 @@ describe('Grok availability/isolation', () => {
       verified: true,
       pending: [],
     });
-    expect(isGrokRuntimeUsable({
-      supportedVersion: true,
-      subscriptionRouteVerified: true,
-      toolPolicyVerified: true,
-    })).toBe(true);
+    expect(
+      isGrokRuntimeUsable({
+        supportedVersion: true,
+        subscriptionRouteVerified: true,
+        toolPolicyVerified: true,
+      }),
+    ).toBe(true);
   });
 
   it.each([
@@ -187,12 +189,11 @@ describe('Grok availability/isolation', () => {
         throw new Error(`unexpected ${method}`);
       },
     });
-    await expect(probeGrokSubscription('/fake/grok', fakeGrokTransportFactory(transport)))
-      .resolves.toEqual({
-        authenticated: false,
-        cachedTokenAdvertised: true,
-        modelAvailable: false,
-      });
+    await expect(probeGrokSubscription('/fake/grok', fakeGrokTransportFactory(transport))).resolves.toEqual({
+      authenticated: false,
+      cachedTokenAdvertised: true,
+      modelAvailable: false,
+    });
     expect(transport.requests.map(({ method }) => method)).not.toContain('session/new');
   });
 
@@ -205,12 +206,11 @@ describe('Grok availability/isolation', () => {
         throw new Error(`unexpected ${method}`);
       },
     });
-    await expect(probeGrokSubscription('/fake/grok', fakeGrokTransportFactory(transport)))
-      .resolves.toEqual({
-        authenticated: true,
-        cachedTokenAdvertised: true,
-        modelAvailable: true,
-      });
+    await expect(probeGrokSubscription('/fake/grok', fakeGrokTransportFactory(transport))).resolves.toEqual({
+      authenticated: true,
+      cachedTokenAdvertised: true,
+      modelAvailable: true,
+    });
   });
 
   it('nao atesta modelo quando session/new retorna campos conflitantes', async () => {
@@ -224,24 +224,20 @@ describe('Grok availability/isolation', () => {
         throw new Error(`unexpected ${method}`);
       },
     });
-    await expect(probeGrokSubscription('/fake/grok', fakeGrokTransportFactory(transport)))
-      .resolves.toEqual({
-        authenticated: true,
-        cachedTokenAdvertised: true,
-        modelAvailable: false,
-      });
+    await expect(probeGrokSubscription('/fake/grok', fakeGrokTransportFactory(transport))).resolves.toEqual({
+      authenticated: true,
+      cachedTokenAdvertised: true,
+      modelAvailable: false,
+    });
   });
 
   it('limita e encerra o probe pendente em timeout ou abort', async () => {
     const timed = new FakeGrokAcpTransport({
       onRequest: async () => new Promise(() => undefined),
     });
-    await expect(probeGrokSubscription(
-      '/fake/grok',
-      fakeGrokTransportFactory(timed),
-      undefined,
-      { timeoutMs: 5 },
-    )).resolves.toEqual({
+    await expect(
+      probeGrokSubscription('/fake/grok', fakeGrokTransportFactory(timed), undefined, { timeoutMs: 5 }),
+    ).resolves.toEqual({
       authenticated: false,
       cachedTokenAdvertised: false,
       modelAvailable: false,
@@ -252,12 +248,9 @@ describe('Grok availability/isolation', () => {
       onRequest: async () => new Promise(() => undefined),
     });
     const controller = new AbortController();
-    const pending = probeGrokSubscription(
-      '/fake/grok',
-      fakeGrokTransportFactory(aborted),
-      undefined,
-      { signal: controller.signal },
-    );
+    const pending = probeGrokSubscription('/fake/grok', fakeGrokTransportFactory(aborted), undefined, {
+      signal: controller.signal,
+    });
     controller.abort();
     await expect(pending).resolves.toMatchObject({ authenticated: false, modelAvailable: false });
     expect(aborted.killed).toBe(true);

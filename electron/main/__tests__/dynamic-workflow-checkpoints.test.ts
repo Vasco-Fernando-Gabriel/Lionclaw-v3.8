@@ -1,13 +1,5 @@
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import {
-  existsSync,
-  mkdtempSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-} from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -92,9 +84,7 @@ describe('workflow-checkpoints: saveNodeCheckpoint', () => {
   });
 
   it('read-merge-write PRESERVA chaves extras do checkpoint_json (S17 scheduledResumeAt)', () => {
-    const { deps, current } = makeDeps(
-      JSON.stringify({ scheduledResumeAt: '2026-02-01T00:00:00.000Z', nodes: {} }),
-    );
+    const { deps, current } = makeDeps(JSON.stringify({ scheduledResumeAt: '2026-02-01T00:00:00.000Z', nodes: {} }));
     saveNodeCheckpoint(deps, {
       runId: 'run-9',
       runDir,

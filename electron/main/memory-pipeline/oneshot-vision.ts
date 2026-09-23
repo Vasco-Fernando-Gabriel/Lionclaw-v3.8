@@ -1,22 +1,13 @@
-
 import { createLogger } from '../logger';
 import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { OrchestratorSelection } from '../orchestrator-selection';
 import type { OrchestratorRuntime } from '../../../src/types';
-import {
-  RUNTIME_CAPABILITIES,
-  runtimeLabel,
-} from '../agent-runtime/runtime-capabilities';
+import { RUNTIME_CAPABILITIES, runtimeLabel } from '../agent-runtime/runtime-capabilities';
 import { resolveCompactionSelection } from '../memory-pipeline';
 
 const logger = createLogger('oneshot-vision');
 
-export const VISION_IMAGE_MEDIA_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-] as const;
+export const VISION_IMAGE_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const;
 export type VisionImageMediaType = (typeof VISION_IMAGE_MEDIA_TYPES)[number];
 
 export type VisionContentBlock =
@@ -50,9 +41,7 @@ export interface RunVisionPromptOptions {
   maxTokens?: number;
 }
 
-async function resolveVisionSelection(
-  modelOverride?: string,
-): Promise<OrchestratorSelection> {
+async function resolveVisionSelection(modelOverride?: string): Promise<OrchestratorSelection> {
   const selection = await resolveCompactionSelection();
 
   if (selection.kind === 'subscription') {
@@ -77,10 +66,7 @@ async function resolveVisionSelection(
   throw new VisionUnsupportedError('lion-sdk');
 }
 
-export async function runVisionPrompt(
-  blocks: VisionContentBlock[],
-  options?: RunVisionPromptOptions,
-): Promise<string> {
+export async function runVisionPrompt(blocks: VisionContentBlock[], options?: RunVisionPromptOptions): Promise<string> {
   const selection = await resolveVisionSelection(options?.modelOverride);
   const runtime = selection.runtime;
 
@@ -103,8 +89,7 @@ export async function runVisionPrompt(
   }
 }
 
-const VISION_SYSTEM_PROMPT =
-  'You are a vision OCR and extraction assistant. Respond only with the requested output.';
+const VISION_SYSTEM_PROMPT = 'You are a vision OCR and extraction assistant. Respond only with the requested output.';
 
 async function drainAgentSdkQuery(q: AsyncIterable<unknown>): Promise<string> {
   let text = '';
@@ -134,13 +119,9 @@ function visionPromptIterable(blocks: VisionContentBlock[]): AsyncIterable<SDKUs
   })();
 }
 
-async function runClaudeSdkVision(
-  selection: OrchestratorSelection,
-  blocks: VisionContentBlock[],
-): Promise<string> {
-  const { ensureAuthForSDK, ensureNodeInPath, getClaudeSdkProcessOptions } = await import(
-    '../pipeline-shared/sdk-bootstrap'
-  );
+async function runClaudeSdkVision(selection: OrchestratorSelection, blocks: VisionContentBlock[]): Promise<string> {
+  const { ensureAuthForSDK, ensureNodeInPath, getClaudeSdkProcessOptions } =
+    await import('../pipeline-shared/sdk-bootstrap');
   const { getBackgroundCwd } = await import('../paths');
   await ensureAuthForSDK();
   ensureNodeInPath();
@@ -166,13 +147,8 @@ async function runClaudeSdkVision(
   return drainAgentSdkQuery(q);
 }
 
-async function runClaudeCompatVision(
-  selection: OrchestratorSelection,
-  blocks: VisionContentBlock[],
-): Promise<string> {
-  const { ensureNodeInPath, getClaudeSdkProcessOptions } = await import(
-    '../pipeline-shared/sdk-bootstrap'
-  );
+async function runClaudeCompatVision(selection: OrchestratorSelection, blocks: VisionContentBlock[]): Promise<string> {
+  const { ensureNodeInPath, getClaudeSdkProcessOptions } = await import('../pipeline-shared/sdk-bootstrap');
   const { getBackgroundCwd } = await import('../paths');
   const { buildCompatEnv } = await import('../claude-compat-sdk');
   const { query } = await import('@anthropic-ai/claude-agent-sdk');

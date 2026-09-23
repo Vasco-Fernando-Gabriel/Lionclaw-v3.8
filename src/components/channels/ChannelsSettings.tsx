@@ -23,7 +23,9 @@ function ChannelCard({ name, icon, channel, onConfigure, onToggle, onTest, testi
     <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/50 p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-lg ${isActive && status === 'connected' ? 'bg-amber-500/10 text-amber-500' : 'bg-zinc-700/50 text-zinc-400'}`}>
+          <div
+            className={`p-2 rounded-lg ${isActive && status === 'connected' ? 'bg-amber-500/10 text-amber-500' : 'bg-zinc-700/50 text-zinc-400'}`}
+          >
             {icon}
           </div>
           <h3 className="text-sm font-medium text-zinc-200">{name}</h3>
@@ -36,9 +38,11 @@ function ChannelCard({ name, icon, channel, onConfigure, onToggle, onTest, testi
               isActive ? 'bg-amber-500' : 'bg-zinc-600'
             }`}
           >
-            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-              isActive ? 'translate-x-6' : 'translate-x-1'
-            }`} />
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                isActive ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
           </button>
         )}
       </div>
@@ -47,33 +51,38 @@ function ChannelCard({ name, icon, channel, onConfigure, onToggle, onTest, testi
         <div className="space-y-2 mb-3">
           <div className="flex items-center gap-2 text-xs">
             {status === 'connected' ? (
-              <><CheckCircle2 size={12} className="text-green-500" /><span className="text-green-400">Conectado</span></>
+              <>
+                <CheckCircle2 size={12} className="text-green-500" />
+                <span className="text-green-400">Conectado</span>
+              </>
             ) : status === 'error' ? (
-              <><XCircle size={12} className="text-red-400" /><span className="text-red-400">Erro</span></>
+              <>
+                <XCircle size={12} className="text-red-400" />
+                <span className="text-red-400">Erro</span>
+              </>
             ) : (
-              <><XCircle size={12} className="text-zinc-500" /><span className="text-zinc-500">Desconectado</span></>
+              <>
+                <XCircle size={12} className="text-zinc-500" />
+                <span className="text-zinc-500">Desconectado</span>
+              </>
             )}
           </div>
-          {channel?.errorMessage && (
-            <p className="text-[10px] text-red-400/80 truncate">{channel.errorMessage}</p>
-          )}
-          {channel?.config && (() => {
-            const cfg = channel.config as Record<string, unknown>;
-            const userName = cfg.allowedUserName as string | undefined;
-            const userId = cfg.allowedUserId as number | undefined;
+          {channel?.errorMessage && <p className="text-[10px] text-red-400/80 truncate">{channel.errorMessage}</p>}
+          {channel?.config &&
+            (() => {
+              const cfg = channel.config as Record<string, unknown>;
+              const userName = cfg.allowedUserName as string | undefined;
+              const userId = cfg.allowedUserId as number | undefined;
 
-            return userName || userId ? (
-              <p className="text-[10px] text-zinc-500">
-                {`Usuario: ${userName || userId}`}
-              </p>
-            ) : null;
-          })()}
+              return userName || userId ? (
+                <p className="text-[10px] text-zinc-500">{`Usuario: ${userName || userId}`}</p>
+              ) : null;
+            })()}
           {testResult && (
-            <div className={`text-[10px] px-2 py-1 rounded ${testResult.success ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
-              {testResult.success
-                ? `Bot: @${testResult.botUsername}`
-                : `Falha: ${testResult.error}`
-              }
+            <div
+              className={`text-[10px] px-2 py-1 rounded ${testResult.success ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}
+            >
+              {testResult.success ? `Bot: @${testResult.botUsername}` : `Falha: ${testResult.error}`}
             </div>
           )}
         </div>
@@ -106,7 +115,11 @@ export function ChannelsSettings() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [showTelegramSetup, setShowTelegramSetup] = useState(false);
   const [testingTelegram, setTestingTelegram] = useState(false);
-  const [telegramTestResult, setTelegramTestResult] = useState<{ success: boolean; botUsername?: string; error?: string } | null>(null);
+  const [telegramTestResult, setTelegramTestResult] = useState<{
+    success: boolean;
+    botUsername?: string;
+    error?: string;
+  } | null>(null);
 
   const loadChannels = useCallback(async () => {
     const list = await window.lionclaw.channels.list();
@@ -117,7 +130,7 @@ export function ChannelsSettings() {
     loadChannels();
   }, [loadChannels]);
 
-  const telegramChannel = channels.find(c => c.type === 'telegram');
+  const telegramChannel = channels.find((c) => c.type === 'telegram');
 
   const handleToggle = async (type: string, active: boolean) => {
     await window.lionclaw.channels.toggle(type, active);
@@ -162,7 +175,18 @@ export function ChannelsSettings() {
             loadChannels();
             setTelegramTestResult(null);
           }}
-          existingConfig={telegramChannel?.config as { allowedUserId?: number; allowedUserName?: string; allowedUsers?: Array<{ userId: number; name: string }>; allowedUserIds?: number[]; notifyOnSchedulerTasks?: boolean; notifyOnDriveHandoff?: boolean } | undefined}
+          existingConfig={
+            telegramChannel?.config as
+              | {
+                  allowedUserId?: number;
+                  allowedUserName?: string;
+                  allowedUsers?: Array<{ userId: number; name: string }>;
+                  allowedUserIds?: number[];
+                  notifyOnSchedulerTasks?: boolean;
+                  notifyOnDriveHandoff?: boolean;
+                }
+              | undefined
+          }
         />
       )}
     </div>

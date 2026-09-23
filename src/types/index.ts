@@ -20,21 +20,14 @@ import type {
   SecurityAgentStatus,
 } from './pipeline';
 
-
 export interface ChatAttachment {
   id: string;
   type: 'image' | 'audio';
   filename: string;
-  mimeType:
-    | 'image/jpeg'
-    | 'image/png'
-    | 'image/gif'
-    | 'image/webp'
-    | 'audio/webm'
-    | 'audio/mpeg';
-  data: string; // base64
-  size: number; // bytes
-  preview?: string; // thumbnail base64 (images) or transcription text (audio)
+  mimeType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' | 'audio/webm' | 'audio/mpeg';
+  data: string;
+  size: number;
+  preview?: string;
 }
 
 export interface ChatMessage {
@@ -47,6 +40,52 @@ export interface ChatMessage {
   messageType?: 'text' | 'ask_question' | 'confirm_action';
   metadata?: MessageMetadata;
   createdAt: string;
+}
+
+export type TimelineRuntime = 'lion-sdk' | 'grok' | 'kimi' | 'codex' | 'cursor';
+export type TimelineFidelity = 'exact' | 'observed';
+export type TimelineTurnStatus = 'interrupted' | 'complete';
+export type TimelineTurnOrigin = 'turn' | 'retry' | 'system-event' | 'swarm' | 'cron' | 'telegram';
+export type TimelineEventKind =
+  'user' | 'assistant_step' | 'tool_call' | 'tool_call_args' | 'tool_result' | 'assistant_final';
+
+export interface TimelineTurn {
+  seqId: number;
+  runId: string;
+  sessionId: string;
+  turnIndex: number;
+  anchorMessageId: number | null;
+  currentUserMessageId: number | null;
+  assistantMessageId: number | null;
+  origin: TimelineTurnOrigin;
+  runtime: TimelineRuntime;
+  fidelity: TimelineFidelity;
+  status: TimelineTurnStatus;
+  cwd: string | null;
+  textTokensEst: number | null;
+  toolTokensEst: number | null;
+  createdAt: string;
+}
+
+export interface TimelineEvent {
+  id: number;
+  runId: string;
+  sessionId: string;
+  seq: number;
+  kind: TimelineEventKind;
+  toolUseId: string | null;
+  toolName: string | null;
+  content: string;
+  toolCallsJson: string | null;
+  reasoningContent: string | null;
+  isError: boolean;
+  originalBytes: number | null;
+  spillPath: string | null;
+  createdAt: string;
+}
+
+export interface TimelineTurnWithEvents extends TimelineTurn {
+  events: TimelineEvent[];
 }
 
 export interface MessageMetadata {
@@ -109,9 +148,117 @@ export interface ChatSession {
   activeContextTokensEst?: number;
   agenticContextTokensEst?: number;
   threadResetMessageId?: number;
+  laneBadge?: number | null;
+  orchestrator?: SessionOrchestrator | null;
+  sdkThreadHistory?: string[];
+  dreamingStartedAt?: string;
+  dreamingTurnCount?: number;
+  messageCount?: number;
+  lastUserMessageAt?: string | null;
+  state?: LaneSessionState;
 }
 
-export type LiveActivityKind = 'subagent' | 'tool' | 'pipeline' | 'workflow'; // 'pipeline' reservado p/ v2
+export interface SessionOrchestrator {
+  runtime: OrchestratorRuntime;
+  provider: OrchestratorProvider;
+  model: string;
+  effort?: string;
+}
+
+export type LaneSessionState = 'idle' | 'streaming' | 'queued' | 'clearing' | 'interrupted' | 'drive';
+
+export interface OpenChatSession {
+  id: string;
+  laneBadge: number;
+  title: string;
+  orchestrator: SessionOrchestrator | null;
+  messageCount: number;
+  lastUserMessageAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  state: LaneSessionState;
+  drive: { projectId: string; name: string; status: DriveState['status'] } | null;
+}
+
+export interface ChatSessionUpdatedEvent {
+  sessionId: string;
+  laneBadge: number | null;
+  orchestrator: SessionOrchestrator | null;
+  messageCount: number;
+  state: LaneSessionState;
+}
+
+export type ChatLaneErrorCode =
+  | 'session_required'
+  | 'session_not_found'
+  | 'session_not_active'
+  | 'lane_required'
+  | 'lanes_full'
+  | 'provider_locked'
+  | 'invalid_selection'
+  | 'model_not_in_provider'
+  | 'effort_not_supported'
+  | 'turn_binding_required'
+  | 'session_clearing'
+  | 'orchestrator_unconfigured'
+  | 'lane_busy'
+  | 'drive_owned_by_other_lane'
+  | 'drive_scope_violation'
+  | 'drive_uniqueness_violated'
+  | 'drive_turn_in_flight';
+
+export interface ChatSendOptions {
+  sessionId?: string;
+  agentId?: string;
+  model?: string;
+  effort?: string;
+  attachments?: ChatAttachment[];
+  featureToggles?: ChatFeatureToggles;
+}
+
+export type ChatClearErrorCode =
+  | 'session_required'
+  | 'session_not_found'
+  | 'session_not_active'
+  | 'session_busy'
+  | 'session_clearing'
+  | 'drive_active'
+  | 'empty_session'
+  | 'turn_did_not_settle'
+  | 'clear_cancelled'
+  | 'clear_not_queued'
+  | 'COMPACT-SUMMARY-FAILED'
+  | 'COMPACT-MEMORY-FAILED'
+  | 'clear_failed';
+
+export interface ChatClearWarning {
+  step: 'embeddings' | 'graph' | 'transcript' | 'report' | 'compaction_log';
+  detail: string;
+}
+
+export type ChatClearResult =
+  | {
+      ok: true;
+      sessionId: string;
+      newSessionId: string | null;
+      warnings: ChatClearWarning[];
+      pausedDriveProjectIds: string[];
+    }
+  | { ok: false; code: ChatClearErrorCode; error: string };
+
+export type ChatClearCancelResult =
+  { ok: true; sessionId: string } | { ok: false; code: 'clear_not_queued' | 'session_required'; error: string };
+
+export interface CompactionActivePayload {
+  isActive: boolean;
+  sessionId?: string;
+  phase?: 'queued' | 'running';
+  modelLabel?: string;
+  title?: string;
+  source?: 'lionclaw';
+}
+
+export type LiveActivityKind = 'subagent' | 'tool' | 'pipeline' | 'workflow';
 export type LiveActivityPhase = 'start' | 'update' | 'end';
 export type LiveActivityStatus = 'running' | 'done' | 'error' | 'stopped';
 
@@ -120,7 +267,7 @@ export interface LiveActivityEvent {
   parentId?: string;
   kind: LiveActivityKind;
   phase: LiveActivityPhase;
-  label: string; // nome do agente, nome da tool, etc.
+  label: string;
   status?: LiveActivityStatus;
   agentId?: string | null;
   model?: string;
@@ -129,7 +276,7 @@ export interface LiveActivityEvent {
   costUsd?: number;
   durationMs?: number;
   summary?: string;
-  startedAt?: string; // ISO, gerado no main
+  startedAt?: string;
   endedAt?: string;
   turnIndex?: number;
   description?: string;
@@ -273,8 +420,10 @@ export interface ConfirmAction {
   description: string;
   input: unknown;
   risk: 'medium' | 'high' | 'critical';
+  sessionId?: string;
+  title?: string;
+  laneBadge?: number | null;
 }
-
 
 export interface AskQuestionOption {
   label: string;
@@ -292,6 +441,9 @@ export interface AskQuestion {
 export interface AskQuestionRequest {
   id: string;
   questions: AskQuestion[];
+  sessionId?: string;
+  title?: string;
+  laneBadge?: number | null;
 }
 
 export interface AskQuestionResponse {
@@ -305,7 +457,6 @@ export interface AskQuestionResponse {
     }
   >;
 }
-
 
 export type LocalLLMProvider = 'ollama' | 'lmstudio' | 'openai-compatible';
 
@@ -345,6 +496,12 @@ export interface CodexConfig {
 
 export type CodexChatReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
 
+export type AgentUpdatePayload = Omit<Partial<AgentConfig>, 'localConfig' | 'externalConfig' | 'codexConfig'> & {
+  localConfig?: AgentConfig['localConfig'] | null;
+  externalConfig?: AgentConfig['externalConfig'] | null;
+  codexConfig?: AgentConfig['codexConfig'] | null;
+};
+
 export interface AgentConfig {
   id: string;
   name: string;
@@ -380,7 +537,6 @@ export interface AgentConfig {
   allowNetwork?: boolean;
 }
 
-
 export interface Skill {
   name: string;
   description: string;
@@ -410,7 +566,6 @@ export interface SkillInput {
   context?: 'fork';
   agent?: string;
 }
-
 
 export interface MCPServerConfig {
   id: string;
@@ -446,7 +601,6 @@ export interface SDKMcpServer {
   isDisabledLocally: boolean;
 }
 
-
 export interface ScheduledTask {
   id: string;
   name: string;
@@ -479,11 +633,7 @@ export interface TaskRun {
   reviewedAt?: string;
 }
 
-export type TaskInput = Omit<
-  ScheduledTask,
-  'id' | 'lastRun' | 'nextRun' | 'runCount'
->;
-
+export type TaskInput = Omit<ScheduledTask, 'id' | 'lastRun' | 'nextRun' | 'runCount'>;
 
 export interface ActivityItem {
   runId: number;
@@ -516,7 +666,6 @@ export interface ActivityStats {
   error: number;
 }
 
-
 export interface PersonalTask {
   id: string;
   title: string;
@@ -546,7 +695,6 @@ export interface PersonalTaskFilters {
   period?: 'last30' | 'last90' | 'all';
 }
 
-
 export interface SemanticMemory {
   id: number;
   content: string;
@@ -570,7 +718,6 @@ export interface DailySummary {
   costUsd: number;
 }
 
-
 export interface Channel {
   id: string;
   type: 'telegram' | 'slack' | 'discord' | 'whatsapp';
@@ -591,20 +738,13 @@ export interface TelegramSaveConfig {
   notifyOnDriveHandoff: boolean;
 }
 
-
 export type AuditSource = 'chat' | 'pipeline' | 'harness' | 'enrich' | 'workflow';
 
 export interface AuditEntry {
   id: number;
   sessionId?: string;
   subagent?: string;
-  eventType:
-    | 'tool_call'
-    | 'tool_result'
-    | 'tool_blocked'
-    | 'error'
-    | 'confirm_request'
-    | 'confirm_response';
+  eventType: 'tool_call' | 'tool_result' | 'tool_blocked' | 'error' | 'confirm_request' | 'confirm_response';
   toolName?: string;
   input?: string;
   output?: string;
@@ -614,23 +754,15 @@ export interface AuditEntry {
   createdAt: string;
 }
 
-
-
 export type SdkChoice = 'claude-anthropic' | 'codex' | 'claude-compat' | 'lion-sdk';
 
 export type SdkCompleteHandler = (
   patch: Partial<AppSettings>,
-  providerConnect?: () => Promise<{ ok: true } | { error: string }>
+  providerConnect?: () => Promise<{ ok: true } | { error: string }>,
 ) => Promise<{ ok: true } | { error: string }>;
 
 export type OrchestratorRuntime =
-  | 'claude-sdk'
-  | 'claude-compat-sdk'
-  | 'codex-sdk'
-  | 'lion-sdk'
-  | 'kimi-sdk'
-  | 'grok-sdk'
-  | 'cursor-sdk';
+  'claude-sdk' | 'claude-compat-sdk' | 'codex-sdk' | 'lion-sdk' | 'kimi-sdk' | 'grok-sdk' | 'cursor-sdk';
 
 export type OrchestratorProvider =
   | 'anthropic'
@@ -646,22 +778,16 @@ export type OrchestratorProvider =
   | 'openai-compatible'
   | 'vertex-ai';
 
-export type OpenAiCompatiblePreset =
-  | 'kimi' // Moonshot global
-  | 'kimi-cn' // Moonshot China
-  | 'qwen' // Aliyun
-  | 'deepseek'
-  | 'minimax'
-  | 'custom';
+export type OpenAiCompatiblePreset = 'kimi' | 'kimi-cn' | 'qwen' | 'deepseek' | 'minimax' | 'custom';
 
-export type VoiceTranscriptionModel =
-  | 'whisper-1'
-  | 'gpt-4o-mini-transcribe'
-  | 'gpt-4o-transcribe';
+export type VoiceTranscriptionModel = 'whisper-1' | 'gpt-4o-mini-transcribe' | 'gpt-4o-transcribe';
 
 export interface ProviderModelEntry {
   id: string;
   displayName: string;
+  label: string;
+  reasoningOptions: string[];
+  defaultReasoning: string | null;
   contextWindow?: number;
 }
 
@@ -669,6 +795,7 @@ export interface ProviderStatusEntry {
   runtime: OrchestratorRuntime;
   provider: OrchestratorProvider;
   connected: boolean;
+  available: boolean;
   authenticated?: boolean;
   subscriptionRouteVerified?: boolean;
   isolationVerified?: boolean;
@@ -681,7 +808,6 @@ export interface ProviderStatusEntry {
 
 export const CHAT_WIDTH_MODES = ['compacto', 'amplo', 'full-width'] as const;
 export type ChatWidthMode = (typeof CHAT_WIDTH_MODES)[number];
-
 
 export type UsageLimitsProvider = 'claude' | 'codex' | 'glm' | 'minimax' | 'kimi';
 
@@ -720,6 +846,7 @@ export interface AppSettings {
   orchestratorGrokEffort?: import('../constants/grok-models').GrokReasoningEffort;
 
   chatWidthMode?: ChatWidthMode;
+  chatStaleLaneDays?: number;
 
   grokBinaryPath?: string;
   grokMaxConcurrency?: number;
@@ -729,15 +856,15 @@ export interface AppSettings {
 
   orchestratorOpenAiCompatPreset?: OpenAiCompatiblePreset;
   orchestratorOpenAiCompatBaseUrl?: string;
-  orchestratorOpenAiCompatApiKeyRef?: string; // vault key reference, not raw value
+  orchestratorOpenAiCompatApiKeyRef?: string;
 
-  orchestratorZaiApiKeyRef?: string; // vault key reference for Z.ai
-  orchestratorMinimaxApiKeyRef?: string; // vault key reference for MiniMax Token Plan (NOT pay-as-you-go)
+  orchestratorZaiApiKeyRef?: string;
+  orchestratorMinimaxApiKeyRef?: string;
 
-  orchestratorVertexApiKeyRef?: string;       // vault key ref (ORCHESTRATOR_VERTEX_API_KEY)
-  orchestratorVertexLocation?: string;        // legacy; unused in API-key mode
-  orchestratorVertexProjectId?: string;       // legacy; unused in API-key mode
-  orchestratorVertexAuthMode?: 'api-key';     // reserved for future, only one value now
+  orchestratorVertexApiKeyRef?: string;
+  orchestratorVertexLocation?: string;
+  orchestratorVertexProjectId?: string;
+  orchestratorVertexAuthMode?: 'api-key';
 
   orchestratorCompactionRuntime?: OrchestratorRuntime;
   orchestratorCompactionProvider?: OrchestratorProvider;
@@ -746,9 +873,9 @@ export interface AppSettings {
   orchestratorCompactionThresholdPercent?: number;
   chatCompactionTargetTokens?: number;
   chatAutoCompactionEnabled?: boolean;
+  chatTimelineReinjectEnabled?: boolean;
 
   orchestratorSetupCompleted: boolean;
-
 
   language: 'pt-BR';
   sessionTimeoutMinutes: number;
@@ -782,27 +909,20 @@ export interface AppSettings {
 
   chatCapabilityGateMode?: 'shadow' | 'enforce';
 
-  toolScriptEnabled?: boolean;             // setting tool_script_enabled (default true)
-  toolScriptAvailable?: boolean;           // read-only: python3 detectado
-  toolScriptAvailabilityReason?: string;   // read-only: razao quando indisponivel
-  toolScriptTools?: string[];              // read-only: tools habilitadas efetivas
-  toolScriptTimeoutMs?: number;            // read-only: limite efetivo
-  toolScriptMaxStdoutBytes?: number;       // read-only: limite efetivo
-  toolScriptMaxStderrBytes?: number;       // read-only: limite efetivo
-  toolScriptMaxToolCalls?: number;         // read-only: limite efetivo
+  toolScriptEnabled?: boolean;
+  toolScriptAvailable?: boolean;
+  toolScriptAvailabilityReason?: string;
+  toolScriptTools?: string[];
+  toolScriptTimeoutMs?: number;
+  toolScriptMaxStdoutBytes?: number;
+  toolScriptMaxStderrBytes?: number;
+  toolScriptMaxToolCalls?: number;
 }
 
 export interface SettingsUpdateResult {
   success?: boolean;
   error?: string;
-  compaction?: {
-    success: boolean;
-    newSessionId?: string;
-    reason?: string;
-    error?: string;
-  };
 }
-
 
 export interface LogFilters {
   sessionId?: string;
@@ -816,15 +936,14 @@ export interface LogFilters {
   offset?: number;
 }
 
-
 export interface SystemLogEntry {
   seq: number;
-  time: number; // epoch ms
-  level: number; // nivel numerico do pino (20 debug, 30 info, 40 warn, 50 error, 60 fatal)
+  time: number;
+  level: number;
   levelLabel: string;
   module?: string;
   msg?: string;
-  extra?: string; // JSON dos campos estruturados restantes, truncado
+  extra?: string;
 }
 
 export interface SystemLogFilters {
@@ -839,7 +958,6 @@ export interface SystemLogQueryResult {
   modules: string[];
   logFilePath: string;
 }
-
 
 export const TOOL_CATALOG = [
   {
@@ -953,13 +1071,13 @@ export const TOOL_CATEGORY_LABELS: Record<ToolCategory, string> = {
   interaction: 'Interacao',
 };
 
-
 export type HarnessProjectStatus = HarnessProject['status'];
 
 export interface OrchestratorSelectionSnapshot {
   runtime: OrchestratorRuntime;
   provider: OrchestratorProvider;
   model: string;
+  effort?: string;
   baseUrl?: string;
 }
 
@@ -980,6 +1098,7 @@ export interface SyncAgentsToOrchestratorRequest {
   agentIds?: string[];
   dryRun?: boolean;
   mode?: 'initial-onboarding' | 'manual-button';
+  selection?: SessionOrchestrator;
 }
 
 export interface AgentSyncResult {
@@ -1008,24 +1127,17 @@ export interface AgentSyncBlockedResponse {
   };
 }
 
-export type SyncAgentsToOrchestratorResponse =
-  | AgentSyncSuccessResponse
-  | AgentSyncBlockedResponse;
+export type SyncAgentsToOrchestratorResponse = AgentSyncSuccessResponse | AgentSyncBlockedResponse;
 
 export interface AgentSyncIpcError {
   error: string;
 }
 
-export type SyncAgentsToOrchestratorIpcResult =
-  | SyncAgentsToOrchestratorResponse
-  | AgentSyncIpcError;
+export type SyncAgentsToOrchestratorIpcResult = SyncAgentsToOrchestratorResponse | AgentSyncIpcError;
 
-export function isAgentSyncIpcError(
-  result: SyncAgentsToOrchestratorIpcResult,
-): result is AgentSyncIpcError {
+export function isAgentSyncIpcError(result: SyncAgentsToOrchestratorIpcResult): result is AgentSyncIpcError {
   return 'error' in result && typeof result.error === 'string';
 }
-
 
 export interface KimiAvailability {
   installed: boolean;
@@ -1056,9 +1168,7 @@ export interface PipelineAuditAgentSnapshot {
   toolCallsCount: number;
 }
 
-export type PipelineAuditAgentsStateResponse =
-  | { agents: PipelineAuditAgentSnapshot[] }
-  | { error: string };
+export type PipelineAuditAgentsStateResponse = { agents: PipelineAuditAgentSnapshot[] } | { error: string };
 
 export interface LionClawAPI {
   app: {
@@ -1067,14 +1177,9 @@ export interface LionClawAPI {
   chat: {
     send: (
       message: string,
-      options?: {
-        sessionId?: string;
-        agentId?: string;
-        attachments?: ChatAttachment[];
-        featureToggles?: ChatFeatureToggles;
-      },
-    ) => Promise<{ accepted: boolean }>;
-    stop: () => Promise<void>;
+      options?: ChatSendOptions,
+    ) => Promise<{ accepted: boolean; code?: ChatLaneErrorCode; error?: string }>;
+    stop: (sessionId?: string) => Promise<void>;
     onStream: (cb: (chunk: StreamChunk) => void) => () => void;
     onConfirmRequest: (cb: (action: ConfirmAction) => void) => () => void;
     confirmResponse: (id: string, approved: boolean) => Promise<void>;
@@ -1082,40 +1187,36 @@ export interface LionClawAPI {
     askResponse: (response: AskQuestionResponse) => Promise<void>;
     getSessions: () => Promise<ChatSession[]>;
     getMessages: (sessionId: string) => Promise<ChatMessage[]>;
-    deleteSession: (
-      sessionId: string,
-    ) => Promise<{ success: boolean; error?: string }>;
+    deleteSession: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
     archiveSession: (sessionId: string) => Promise<boolean>;
-    getActiveSession: () => Promise<{
-      id: string;
-      createdAt: string;
-      inputTokens: number;
-      outputTokens: number;
-    } | null>;
-    getContextUsage: (
-      sessionId: string,
-    ) => Promise<NonNullable<StreamChunk['contextUsage']> | null>;
+    getContextUsage: (sessionId: string) => Promise<NonNullable<StreamChunk['contextUsage']> | null>;
     getFeatureToggles: (sessionId: string) => Promise<ChatFeatureTogglesResult>;
-    setFeatureToggles: (
-      sessionId: string,
-      patch: Partial<ChatFeatureToggles>,
-    ) => Promise<ChatFeatureTogglesResult>;
+    setFeatureToggles: (sessionId: string, patch: Partial<ChatFeatureToggles>) => Promise<ChatFeatureTogglesResult>;
     ensureSession: (
       preferredSessionId?: string,
-    ) => Promise<{ sessionId: string } | { error: string }>;
-    compactSession: () => Promise<{
+    ) => Promise<{ sessionId: string } | { error: string; code?: ChatLaneErrorCode }>;
+    createSession: () => Promise<{ session: OpenChatSession } | { error: string; code: ChatLaneErrorCode }>;
+    listOpenSessions: () => Promise<OpenChatSession[] | { error: string }>;
+    setSessionOrchestrator: (
+      sessionId: string,
+      selection: { runtime: OrchestratorRuntime; provider: OrchestratorProvider; model: string; effort?: string },
+    ) => Promise<{ ok: true; orchestrator: SessionOrchestrator } | { error: string; code: ChatLaneErrorCode }>;
+    onSessionUpdated: (cb: (event: ChatSessionUpdatedEvent) => void) => () => void;
+    clear: (sessionId: string, opts?: { force?: boolean }) => Promise<ChatClearResult>;
+    clearCancel: (sessionId: string) => Promise<ChatClearCancelResult>;
+    compactSession: (sessionId?: string) => Promise<{
       success: boolean;
       newSessionId?: string;
       reason?: string;
       error?: string;
     }>;
-    clearSession: () => Promise<{
+    clearSession: (sessionId?: string) => Promise<{
       success: boolean;
       newSessionId?: string;
       reason?: string;
     }>;
     onSessionsUpdated: (cb: () => void) => () => void;
-    onCompactionActive: (cb: (payload: { isActive: boolean; modelLabel?: string; source?: 'lionclaw' }) => void) => () => void;
+    onCompactionActive: (cb: (payload: CompactionActivePayload) => void) => () => void;
   };
   activity: {
     getBlocks: (sessionId: string) => Promise<ActivityTurnBlock[]>;
@@ -1124,11 +1225,9 @@ export interface LionClawAPI {
     list: () => Promise<AgentConfig[]>;
     get: (id: string) => Promise<AgentConfig>;
     create: (agent: Omit<AgentConfig, 'sortOrder'>) => Promise<AgentConfig>;
-    update: (id: string, agent: Partial<AgentConfig>) => Promise<AgentConfig>;
+    update: (id: string, agent: AgentUpdatePayload) => Promise<AgentConfig>;
     delete: (id: string) => Promise<void>;
-    syncToOrchestrator: (
-      req?: SyncAgentsToOrchestratorRequest,
-    ) => Promise<SyncAgentsToOrchestratorIpcResult>;
+    syncToOrchestrator: (req?: SyncAgentsToOrchestratorRequest) => Promise<SyncAgentsToOrchestratorIpcResult>;
   };
   skills: {
     list: () => Promise<Skill[]>;
@@ -1140,13 +1239,8 @@ export interface LionClawAPI {
   };
   mcp: {
     list: () => Promise<MCPServerConfig[]>;
-    create: (
-      config: Omit<MCPServerConfig, 'status'>,
-    ) => Promise<MCPServerConfig>;
-    update: (
-      id: string,
-      config: Partial<MCPServerConfig>,
-    ) => Promise<MCPServerConfig>;
+    create: (config: Omit<MCPServerConfig, 'status'>) => Promise<MCPServerConfig>;
+    update: (id: string, config: Partial<MCPServerConfig>) => Promise<MCPServerConfig>;
     delete: (id: string) => Promise<void>;
     test: (id: string) => Promise<{ success: boolean; error?: string }>;
     restart: (id: string) => Promise<void>;
@@ -1155,31 +1249,22 @@ export interface LionClawAPI {
     refreshSDK: () => Promise<SDKMcpServer[]>;
     toggleSDK: (name: string, enabled: boolean) => Promise<void>;
     onStatusChanged: (
-      cb: (payload: {
-        id: string;
-        status: 'running' | 'stopped' | 'error';
-        error?: string;
-      }) => void,
+      cb: (payload: { id: string; status: 'running' | 'stopped' | 'error'; error?: string }) => void,
     ) => () => void;
+    getDistStale: () => Promise<{ servers: string[]; command: string } | null>;
+    onDistStale: (cb: (payload: { servers: string[]; command: string }) => void) => () => void;
   };
   scheduler: {
     list: () => Promise<ScheduledTask[]>;
     create: (
       task: Omit<ScheduledTask, 'id' | 'lastRun' | 'nextRun' | 'runCount' | 'scheduleError'>,
     ) => Promise<ScheduledTask | { error: string }>;
-    update: (
-      id: string,
-      task: Partial<ScheduledTask>,
-    ) => Promise<ScheduledTask | { error: string }>;
+    update: (id: string, task: Partial<ScheduledTask>) => Promise<ScheduledTask | { error: string }>;
     delete: (id: string) => Promise<void>;
     pause: (id: string) => Promise<void>;
     resume: (id: string) => Promise<void>;
     getRuns: (taskId: string) => Promise<TaskRun[]>;
-    reviewRun: (
-      runId: number,
-      status: 'validated' | 'rejected',
-      note?: string,
-    ) => Promise<void>;
+    reviewRun: (runId: number, status: 'validated' | 'rejected', note?: string) => Promise<void>;
     getPendingReviewCount: () => Promise<number>;
     getSessions: () => Promise<ChatSession[]>;
     deleteSession: (sessionId: string) => Promise<void>;
@@ -1192,10 +1277,7 @@ export interface LionClawAPI {
     list: (filters?: PersonalTaskFilters) => Promise<PersonalTask[]>;
     get: (id: string) => Promise<PersonalTask>;
     create: (task: PersonalTaskInput) => Promise<PersonalTask>;
-    update: (
-      id: string,
-      updates: Partial<PersonalTask>,
-    ) => Promise<PersonalTask>;
+    update: (id: string, updates: Partial<PersonalTask>) => Promise<PersonalTask>;
     delete: (id: string) => Promise<void>;
     getCategories: () => Promise<string[]>;
     getPendingDueCount: () => Promise<number>;
@@ -1203,12 +1285,9 @@ export interface LionClawAPI {
   memory: {
     getWorkingMemory: () => Promise<string>;
     updateWorkingMemory: (content: string) => Promise<void>;
-    searchSemantic: (
-      query: string,
-      limit?: number,
-    ) => Promise<SemanticMemory[]>;
+    searchSemantic: (query: string, limit?: number) => Promise<SemanticMemory[]>;
     getDailySummaries: (from?: string, to?: string) => Promise<DailySummary[]>;
-    triggerCompaction: () => Promise<void>;
+    triggerCompaction: (sessionId?: string) => Promise<ChatClearResult | undefined>;
   };
   logs: {
     query: (filters: LogFilters) => Promise<AuditEntry[]>;
@@ -1223,10 +1302,7 @@ export interface LionClawAPI {
   };
   tools: {
     getSettings: () => Promise<Record<string, boolean>>;
-    setEnabled: (
-      tool: string,
-      enabled: boolean,
-    ) => Promise<Record<string, boolean>>;
+    setEnabled: (tool: string, enabled: boolean) => Promise<Record<string, boolean>>;
     getEnabled: () => Promise<string[]>;
     getBypass: () => Promise<boolean>;
     setBypass: (enabled: boolean) => Promise<boolean>;
@@ -1249,17 +1325,12 @@ export interface LionClawAPI {
     onLocked: (cb: () => void) => () => void;
   };
   codeburn: {
-    spawn: (
-      cols: number,
-      rows: number,
-    ) => Promise<{ ok: true } | { ok: false; error: string }>;
+    spawn: (cols: number, rows: number) => Promise<{ ok: true } | { ok: false; error: string }>;
     write: (data: string) => Promise<void>;
     resize: (cols: number, rows: number) => Promise<void>;
     kill: () => Promise<void>;
     onData: (cb: (chunk: string) => void) => () => void;
-    onExit: (
-      cb: (info: { exitCode: number; signal: number | null }) => void,
-    ) => () => void;
+    onExit: (cb: (info: { exitCode: number; signal: number | null }) => void) => () => void;
   };
   soul: {
     get: () => Promise<string>;
@@ -1369,7 +1440,7 @@ export interface LionClawAPI {
       apiKey: string;
       preset?: OpenAiCompatiblePreset | 'custom';
     }) => Promise<{ ok: true; models: number } | { ok: false; error: string }>;
-    listStatuses: () => Promise<ProviderStatusEntry[] | { error: string }>;
+    listStatuses: (opts?: { refresh?: boolean }) => Promise<ProviderStatusEntry[] | { error: string }>;
     check: (payload: {
       runtime: OrchestratorRuntime;
       provider: OrchestratorProvider;
@@ -1380,9 +1451,7 @@ export interface LionClawAPI {
       baseUrl?: string;
       preset?: OpenAiCompatiblePreset | 'custom';
     }) => Promise<{ ok: true } | { error: string }>;
-    disconnect: (payload: {
-      provider: OrchestratorProvider;
-    }) => Promise<{ ok: true } | { error: string }>;
+    disconnect: (payload: { provider: OrchestratorProvider }) => Promise<{ ok: true } | { error: string }>;
     testVertexAi: (payload: {
       apiKey?: string;
       model?: string;
@@ -1402,18 +1471,11 @@ export interface LionClawAPI {
   };
   voice: {
     transcribe: (audioBase64: string) => Promise<string>;
-    speak: (
-      text: string,
-      voiceId?: string,
-    ) => Promise<{ base64: string; format: 'mp3' | 'opus' }>;
+    speak: (text: string, voiceId?: string) => Promise<{ base64: string; format: 'mp3' | 'opus' }>;
     speakLive: (
       text: string,
     ) => Promise<{ base64: string; format: 'mp3' | 'opus'; provider: 'elevenlabs' | 'cartesia' }>;
-    speakCartesia: (
-      text: string,
-      voiceId?: string,
-      language?: string,
-    ) => Promise<{ base64: string; format: 'mp3' }>;
+    speakCartesia: (text: string, voiceId?: string, language?: string) => Promise<{ base64: string; format: 'mp3' }>;
     readAudioFile: (path: string) => Promise<string>;
     listVoices: () => Promise<
       Array<{
@@ -1424,11 +1486,7 @@ export interface LionClawAPI {
         preview_url: string;
       }>
     >;
-    listCartesiaVoices: (options?: {
-      q?: string;
-      language?: string;
-      limit?: number;
-    }) => Promise<
+    listCartesiaVoices: (options?: { q?: string; language?: string; limit?: number }) => Promise<
       Array<{
         id: string;
         name: string;
@@ -1457,10 +1515,7 @@ export interface LionClawAPI {
   };
 
   google: {
-    setup: (config: {
-      clientId: string;
-      clientSecret: string;
-    }) => Promise<{ success: boolean }>;
+    setup: (config: { clientId: string; clientSecret: string }) => Promise<{ success: boolean }>;
     authenticate: () => Promise<{
       success: boolean;
       error?: string;
@@ -1477,15 +1532,8 @@ export interface LionClawAPI {
     }>;
   };
   ollama: {
-    check: (
-      baseUrl: string,
-      model: string,
-      provider?: string,
-    ) => Promise<{ available: boolean; models: string[] }>;
-    listModels: (
-      provider: string,
-      baseUrl: string,
-    ) => Promise<{ models: string[]; error?: string }>;
+    check: (baseUrl: string, model: string, provider?: string) => Promise<{ available: boolean; models: string[] }>;
+    listModels: (provider: string, baseUrl: string) => Promise<{ models: string[]; error?: string }>;
   };
   knowledge: {
     upload: (payload: {
@@ -1506,10 +1554,7 @@ export interface LionClawAPI {
     }) => Promise<KnowledgeSource>;
     delete: (payload: { sourceId: string }) => Promise<{ success: boolean }>;
     list: (payload: { agentId: string }) => Promise<KnowledgeSource[]>;
-    search: (payload: {
-      agentId: string;
-      query: string;
-    }) => Promise<KBSearchResult>;
+    search: (payload: { agentId: string; query: string }) => Promise<KBSearchResult>;
     benchmark: {
       start: (payload: {
         sourceIds: string[];
@@ -1529,10 +1574,7 @@ export interface LionClawAPI {
     };
     config: {
       get: (payload: { agentId: string }) => Promise<KnowledgeAgentConfig>;
-      update: (payload: {
-        agentId: string;
-        config: Partial<KnowledgeAgentConfig>;
-      }) => Promise<KnowledgeAgentConfig>;
+      update: (payload: { agentId: string; config: Partial<KnowledgeAgentConfig> }) => Promise<KnowledgeAgentConfig>;
     };
     onIngestionProgress: (cb: (data: IngestionProgress) => void) => () => void;
     onBenchmarkProgress: (cb: (data: BenchmarkProgress) => void) => () => void;
@@ -1548,15 +1590,10 @@ export interface LionClawAPI {
     }) => Promise<{ projectId: string } | { error: string }>;
     plan: (projectId: string) => Promise<void | { error: string }>;
     approveSprints: (projectId: string) => Promise<void | { error: string }>;
-    regenerateSprints: (
-      projectId: string,
-      feedback: string,
-    ) => Promise<void | { error: string }>;
+    regenerateSprints: (projectId: string, feedback: string) => Promise<void | { error: string }>;
     run: (projectId: string) => Promise<void | { error: string }>;
     pause: (projectId: string) => Promise<void | { error: string }>;
-    resume: (
-      projectId: string,
-    ) => Promise<{ ok: true } | { ok: false; message: string } | { error: string }>;
+    resume: (projectId: string) => Promise<{ ok: true } | { ok: false; message: string } | { error: string }>;
     resumeAfterAuth: (
       projectId: string,
       provider: 'grok' | 'codex' | 'kimi',
@@ -1566,16 +1603,10 @@ export interface LionClawAPI {
     getProject: (projectId: string) => Promise<HarnessProject | null>;
     listProjects: () => Promise<HarnessProject[]>;
     getSprints: (projectId: string) => Promise<HarnessSprint[]>;
-    getSprintJson: (
-      projectId: string,
-      sprintJsonId: string,
-    ) => Promise<SprintJsonDetail | null>;
+    getSprintJson: (projectId: string, sprintJsonId: string) => Promise<SprintJsonDetail | null>;
     getSprintsJson: (projectId: string) => Promise<unknown>;
     getRounds: (sprintId: string) => Promise<HarnessRound[]>;
-    getEvaluation: (
-      projectId: string,
-      sprintId: string,
-    ) => Promise<EvaluationResult | null>;
+    getEvaluation: (projectId: string, sprintId: string) => Promise<EvaluationResult | null>;
     getMetrics: (projectId: string) => Promise<HarnessProjectMetrics>;
     getStreamLog: (
       projectId: string,
@@ -1598,14 +1629,10 @@ export interface LionClawAPI {
         feedbackInjectedIntoCoder: string;
       }[]
     >;
-    onProjectUpdate: (
-      cb: (data: Record<string, unknown>) => void,
-    ) => () => void;
+    onProjectUpdate: (cb: (data: Record<string, unknown>) => void) => () => void;
     onSprintUpdate: (cb: (data: Record<string, unknown>) => void) => () => void;
     onAgentStream: (cb: (data: Record<string, unknown>) => void) => () => void;
-    onMetricsUpdate: (
-      cb: (data: Record<string, unknown>) => void,
-    ) => () => void;
+    onMetricsUpdate: (cb: (data: Record<string, unknown>) => void) => () => void;
     onPlanningDone: (cb: (data: Record<string, unknown>) => void) => () => void;
     onError: (cb: (data: Record<string, unknown>) => void) => () => void;
   };
@@ -1613,9 +1640,7 @@ export interface LionClawAPI {
     graph: () => Promise<GraphData>;
     read: (path: string) => Promise<string>;
     search: (query: string) => Promise<MgraphSearchResult[]>;
-    seed: (
-      forceReseed?: boolean,
-    ) => Promise<{ notes: number; connections: number } | { error: string }>;
+    seed: (forceReseed?: boolean) => Promise<{ notes: number; connections: number } | { error: string }>;
     stats: () => Promise<MgraphStats>;
     listNotes: (type: string) => Promise<NoteListItem[]>;
     deleteNote: (
@@ -1627,13 +1652,7 @@ export interface LionClawAPI {
       error?: string;
     }>;
     noteBacklinks: (notePath: string) => Promise<BacklinkResult[]>;
-    onSeedProgress: (
-      cb: (data: {
-        processed: number;
-        total: number;
-        notesCreated: number;
-      }) => void,
-    ) => () => void;
+    onSeedProgress: (cb: (data: { processed: number; total: number; notesCreated: number }) => void) => () => void;
     onUpdated: (cb: () => void) => () => void;
     ingestFile: (filePath: string, fileName: string) => Promise<IngestJob | { error: string }>;
     ingestUrl: (url: string) => Promise<IngestJob>;
@@ -1651,72 +1670,48 @@ export interface LionClawAPI {
   shell: {
     showInFolder: (filePath: string) => Promise<void>;
     openPath: (dirPath: string) => Promise<void>;
+    openFile: (filePath: string) => Promise<{ ok: true } | { error: string }>;
     selectDirectory: () => Promise<string | null>;
+  };
+  artifact: {
+    getState: (storageKey: string) => Promise<{ state: unknown } | { error: string }>;
+    setState: (storageKey: string, state: unknown) => Promise<{ ok: true } | { error: string }>;
   };
   utils: {
     getPathForFile: (file: File) => string;
   };
   enrich: {
-    start: (
-      config: CreateEnrichConfig,
-    ) => Promise<{ sessionId: string } | { error: string }>;
-    send: (
-      sessionId: string,
-      message: string,
-    ) => Promise<{ ok: true } | { error: string }>;
-    approvePhase: (
-      sessionId: string,
-    ) => Promise<{ ok: true } | { error: string }>;
+    start: (config: CreateEnrichConfig) => Promise<{ sessionId: string } | { error: string }>;
+    send: (sessionId: string, message: string) => Promise<{ ok: true } | { error: string }>;
+    approvePhase: (sessionId: string) => Promise<{ ok: true } | { error: string }>;
     resumeAfterAuth: (
       sessionId: string,
       provider?: 'grok' | 'codex' | 'kimi',
     ) => Promise<{ ok: true } | { error: string }>;
-    finalize: (
-      sessionId: string,
-    ) => Promise<{ ok: true; finalSpecPath: string } | { error: string }>;
+    finalize: (sessionId: string) => Promise<{ ok: true; finalSpecPath: string } | { error: string }>;
     abort: (sessionId: string) => Promise<{ ok: true } | { error: string }>;
     delete: (sessionId: string) => Promise<{ ok: true } | { error: string }>;
-    getSpec: (
-      sessionId: string,
-    ) => Promise<{ finalSpecPath: string | null } | { error: string }>;
+    getSpec: (sessionId: string) => Promise<{ finalSpecPath: string | null } | { error: string }>;
     listSessions: () => Promise<EnrichSession[]>;
-    getMessages: (
-      sessionId: string,
-      phase?: string,
-    ) => Promise<EnrichMessage[]>;
+    getMessages: (sessionId: string, phase?: string) => Promise<EnrichMessage[]>;
     openSpec: (sessionId: string) => Promise<{ ok: true } | { error: string }>;
     onStream: (cb: (chunk: unknown) => void) => () => void;
     onMetrics: (cb: (data: unknown) => void) => () => void;
     onStatus: (cb: (status: unknown) => void) => () => void;
   };
   pipeline: {
-    start: (
-      projectId: string,
-      startPhase: number,
-    ) => Promise<{ ok: true } | { error: string }>;
+    start: (projectId: string, startPhase: number) => Promise<{ ok: true } | { error: string }>;
     advance: (projectId: string) => Promise<{ ok: true } | { error: string }>;
     abort: (projectId: string) => Promise<{ ok: true } | { error: string }>;
     pause: (projectId: string) => Promise<{ ok: true } | { error: string }>;
     resume: (projectId: string) => Promise<{ ok: true } | { error: string }>;
-    send: (
-      projectId: string,
-      message: string,
-      attachments?: ChatAttachment[],
-    ) => Promise<{ ok: true } | { error: string }>;
+    send: (projectId: string, message: string, attachments?: ChatAttachment[]) => Promise<PipelineSendResult>;
     getConversationPhases: () => Promise<PipelineConversationPhases>;
-    approve: (
-      projectId: string,
-      metadata?: Record<string, unknown>,
-    ) => Promise<{ ok: true } | { error: string }>;
-    decided: (
-      projectId: string,
-      blockId: string,
-    ) => Promise<{ ok: true } | { error: string }>;
+    approve: (projectId: string, metadata?: Record<string, unknown>) => Promise<{ ok: true } | { error: string }>;
+    decided: (projectId: string, blockId: string) => Promise<{ ok: true } | { error: string }>;
     conclude: (projectId: string) => Promise<{ ok: true } | { error: string }>;
     retry: (projectId: string) => Promise<{ ok: true } | { error: string }>;
-    confirmDevelopment: (
-      projectId: string,
-    ) => Promise<{ ok: true } | { error: string }>;
+    confirmDevelopment: (projectId: string) => Promise<{ ok: true } | { error: string }>;
     createProject: (data: {
       name: string;
       description: string;
@@ -1726,72 +1721,31 @@ export interface LionClawAPI {
       prdPath?: string;
       pipelineType?: string;
     }) => Promise<{ id: string } | { error: string }>;
-    getSecurityAgentStatus: (
-      projectId: string,
-    ) => Promise<SecurityAgentStatus[]>;
+    getSecurityAgentStatus: (projectId: string) => Promise<SecurityAgentStatus[]>;
     getAuditAgentsState: (projectId: string) => Promise<PipelineAuditAgentsStateResponse>;
-    deleteProject: (
-      projectId: string,
-    ) => Promise<{ ok: true } | { error: string }>;
+    deleteProject: (projectId: string) => Promise<{ ok: true } | { error: string }>;
     listProjects: () => Promise<PipelineProject[]>;
-    getProject: (
-      projectId: string,
-    ) => Promise<PipelineProject | { error: string }>;
-    getPhaseMessages: (
-      projectId: string,
-      phase: number,
-    ) => Promise<PipelineMessage[]>;
+    getProject: (projectId: string) => Promise<PipelineProject | { error: string }>;
+    getPhaseMessages: (projectId: string, phase: number) => Promise<PipelineMessage[]>;
     readPhaseDocument: (
       projectId: string,
       phase: number,
     ) => Promise<{ path: string; content: string } | { error: string }>;
-    getMetrics: (
-      projectId: string,
-    ) => Promise<PipelineMetricsResult | { error: string }>;
-    getReport: (
-      projectId: string,
-    ) => Promise<{ report: string } | { error: string }>;
-    exportReport: (
-      projectId: string,
-      format: 'md',
-    ) => Promise<{ ok: true; reportPath: string } | { error: string }>;
-    openProjectFile: (
-      projectId: string,
-      relativePath: string,
-    ) => Promise<{ ok: true } | { error: string }>;
-    openSmokeTest: (
-      projectId: string,
-    ) => Promise<{ ok: true } | { error: string }>;
-    getSmokeTestPath: (
-      projectId: string,
-    ) => Promise<{ exists: boolean; path?: string }>;
+    getMetrics: (projectId: string) => Promise<PipelineMetricsResult | { error: string }>;
+    getReport: (projectId: string) => Promise<{ report: string } | { error: string }>;
+    exportReport: (projectId: string, format: 'md') => Promise<{ ok: true; reportPath: string } | { error: string }>;
+    openProjectFile: (projectId: string, relativePath: string) => Promise<{ ok: true } | { error: string }>;
+    openSmokeTest: (projectId: string) => Promise<{ ok: true } | { error: string }>;
+    getSmokeTestPath: (projectId: string) => Promise<{ exists: boolean; path?: string }>;
     onStream: (cb: (chunk: PipelineStreamChunk) => void) => () => void;
-    onPhaseChanged: (
-      cb: (event: PipelinePhaseChangedEvent) => void,
-    ) => () => void;
-    onProjectUpdated: (
-      cb: (event: PipelineProjectUpdatedEvent) => void,
-    ) => () => void;
-    onNotesUpdated: (
-      cb: (event: PipelineNotesUpdatedEvent) => void,
-    ) => () => void;
-    onMessagesUpdated: (
-      cb: (data: { projectId: string; phase: number }) => void,
-    ) => () => void;
-    onSprintComplete: (
-      cb: (event: PipelineSprintCompleteEvent) => void,
-    ) => () => void;
-    onSprintUpdated: (
-      cb: (data: {
-        sprintIndex: number;
-        status: string;
-        round: number;
-      }) => void,
-    ) => () => void;
+    onPhaseChanged: (cb: (event: PipelinePhaseChangedEvent) => void) => () => void;
+    onProjectUpdated: (cb: (event: PipelineProjectUpdatedEvent) => void) => () => void;
+    onNotesUpdated: (cb: (event: PipelineNotesUpdatedEvent) => void) => () => void;
+    onMessagesUpdated: (cb: (data: { projectId: string; phase: number }) => void) => () => void;
+    onSprintComplete: (cb: (event: PipelineSprintCompleteEvent) => void) => () => void;
+    onSprintUpdated: (cb: (data: { sprintIndex: number; status: string; round: number }) => void) => () => void;
     onAgentCompleted: (cb: (data: { projectId: string }) => void) => () => void;
-    onDocumentUpdated: (
-      cb: (data: { projectId: string; path: string; content: string }) => void,
-    ) => () => void;
+    onDocumentUpdated: (cb: (data: { projectId: string; path: string; content: string }) => void) => () => void;
     onSprintsLoaded: (
       cb: (data: {
         projectId: string;
@@ -1807,21 +1761,10 @@ export interface LionClawAPI {
       }) => void,
     ) => () => void;
     onSprintRound: (
-      cb: (data: {
-        projectId: string;
-        sprintIndex: number;
-        round: number;
-        agent: string;
-      }) => void,
+      cb: (data: { projectId: string; sprintIndex: number; round: number; agent: string }) => void,
     ) => () => void;
-    resetPhase: (
-      projectId: string,
-      phase: number,
-    ) => Promise<{ ok: boolean; error?: string }>;
-    resetSprint: (
-      projectId: string,
-      sprintIndex: number,
-    ) => Promise<{ ok: boolean; error?: string }>;
+    resetPhase: (projectId: string, phase: number) => Promise<{ ok: boolean; error?: string }>;
+    resetSprint: (projectId: string, sprintIndex: number) => Promise<{ ok: boolean; error?: string }>;
     getResetPreview: (
       projectId: string,
       target: { phase?: number; sprintIndex?: number },
@@ -1831,26 +1774,11 @@ export interface LionClawAPI {
       metricsToDelete: number;
       sprintsAffected: number[];
     }>;
-    readPhaseArtifact: (
-      projectId: string,
-      phase: number,
-    ) => Promise<PipelinePhaseArtifact>;
-    getSprintHistory: (
-      projectId: string,
-      sprintIndex: number,
-    ) => Promise<PipelineSprintMessage[]>;
+    readPhaseArtifact: (projectId: string, phase: number) => Promise<PipelinePhaseArtifact>;
+    getSprintHistory: (projectId: string, sprintIndex: number) => Promise<PipelineSprintMessage[]>;
     listSprints: (projectId: string) => Promise<HarnessSprint[]>;
-    getSprintDetail: (
-      projectId: string,
-      sprintIndex: number,
-    ) => Promise<{ sprint: HarnessSprint } | { error: string }>;
-    onResetComplete: (
-      cb: (data: {
-        projectId: string;
-        phase?: number;
-        sprintIndex?: number;
-      }) => void,
-    ) => () => void;
+    getSprintDetail: (projectId: string, sprintIndex: number) => Promise<{ sprint: HarnessSprint } | { error: string }>;
+    onResetComplete: (cb: (data: { projectId: string; phase?: number; sprintIndex?: number }) => void) => () => void;
     onSecurityAgentStatus: (
       cb: (data: {
         projectId: string;
@@ -1861,21 +1789,10 @@ export interface LionClawAPI {
         error?: string;
       }) => void,
     ) => () => void;
-    onAuditAgentProgress: (
-      cb: (event: import('./pipeline').PipelineAuditAgentProgressEvent) => void,
-    ) => () => void;
-    onResolutionTrackerComplete: (
-      cb: (data: { projectId: string }) => void,
-    ) => () => void;
-    readManifest: (
-      projectId: string,
-    ) => Promise<import('./pipeline').RepoManifest | null>;
-    onManifest: (
-      cb: (data: {
-        projectId: string;
-        manifest: import('./pipeline').RepoManifest;
-      }) => void,
-    ) => () => void;
+    onAuditAgentProgress: (cb: (event: import('./pipeline').PipelineAuditAgentProgressEvent) => void) => () => void;
+    onResolutionTrackerComplete: (cb: (data: { projectId: string }) => void) => () => void;
+    readManifest: (projectId: string) => Promise<import('./pipeline').RepoManifest | null>;
+    onManifest: (cb: (data: { projectId: string; manifest: import('./pipeline').RepoManifest }) => void) => () => void;
     onStalled: (
       cb: (data: {
         projectId: string;
@@ -1907,26 +1824,19 @@ export interface LionClawAPI {
     start: (
       projectId: string,
       mode: 'semi' | 'full',
-    ) => Promise<{ ok: true; drive: DriveState } | { error: string }>;
-    assumir: (
-      projectId: string,
-    ) => Promise<{ ok: true; drive: DriveState } | { error: string }>;
+      sessionId: string,
+    ) => Promise<{ ok: true; drive: DriveState; sessionId: string } | { error: string; code?: ChatLaneErrorCode }>;
+    assumir: (projectId: string) => Promise<{ ok: true; drive: DriveState } | { error: string }>;
     stop: (projectId: string) => Promise<{ ok: true } | { error: string }>;
     resume: (
       projectId: string,
-    ) => Promise<{ ok: true; drive: DriveState } | { error: string }>;
-    setMode: (
-      projectId: string,
-      mode: 'semi' | 'full',
-    ) => Promise<{ ok: true; drive: DriveState } | { error: string }>;
-    onStateChanged: (
-      cb: (payload: { projectId: string; drive: DriveState | null }) => void,
-    ) => () => void;
+      sessionId: string,
+    ) => Promise<{ ok: true; drive: DriveState; sessionId: string } | { error: string; code?: ChatLaneErrorCode }>;
+    setMode: (projectId: string, mode: 'semi' | 'full') => Promise<{ ok: true; drive: DriveState } | { error: string }>;
+    onStateChanged: (cb: (payload: DriveStateChangedEvent) => void) => () => void;
   };
   dialog: {
-    openFile: (
-      filters?: Array<{ name: string; extensions: string[] }>,
-    ) => Promise<string | null>;
+    openFile: (filters?: Array<{ name: string; extensions: string[] }>) => Promise<string | null>;
     openDirectory: () => Promise<string | null>;
   };
   codex: {
@@ -1953,18 +1863,10 @@ export interface LionClawAPI {
     }>;
     checkPrepNeeded: (projectPath: string) => Promise<CodexPrepCheckResult>;
     applyPrep: (repoRoot: string) => Promise<CodexPrepApplyResult>;
-    grantSkipConsent: (
-      repoRoot: string,
-    ) => Promise<{ ok: boolean; error?: string }>;
-    onWindowsHealthWarning: (
-      handler: (payload: CodexWindowsHealthWarning) => void,
-    ) => () => void;
-    onPatchFailureWarning: (
-      handler: (payload: CodexPatchFailureWarning) => void,
-    ) => () => void;
-    onWindowsPrepSkipped: (
-      handler: (payload: CodexWindowsPrepSkipped) => void,
-    ) => () => void;
+    grantSkipConsent: (repoRoot: string) => Promise<{ ok: boolean; error?: string }>;
+    onWindowsHealthWarning: (handler: (payload: CodexWindowsHealthWarning) => void) => () => void;
+    onPatchFailureWarning: (handler: (payload: CodexPatchFailureWarning) => void) => () => void;
+    onWindowsPrepSkipped: (handler: (payload: CodexWindowsPrepSkipped) => void) => () => void;
   };
   kimi: {
     status: () => Promise<KimiAvailability>;
@@ -1994,11 +1896,7 @@ export interface LionClawAPI {
     setBinaryPath: (path: string) => Promise<{ ok: boolean }>;
   };
   terminal: {
-    open: (
-      sessionId: string,
-      cols: number,
-      rows: number,
-    ) => Promise<{ ok: true } | { ok: false; error: string }>;
+    open: (sessionId: string, cols: number, rows: number) => Promise<{ ok: true } | { ok: false; error: string }>;
     write: (sessionId: string, data: string) => Promise<void>;
     resize: (sessionId: string, cols: number, rows: number) => Promise<void>;
     close: (sessionId: string) => Promise<void>;
@@ -2018,24 +1916,11 @@ export interface LionClawAPI {
     setBinaryPath: (path: string) => Promise<{ ok: boolean }>;
   };
   openDesign: {
-    preflight: (
-      projectId: string,
-    ) => Promise<import('./open-design').PreflightResult>;
-    setup: (
-      projectId: string,
-      config: Record<string, unknown>,
-    ) => Promise<{ ok: true } | { error: string }>;
-    start: (
-      projectId: string,
-    ) => Promise<
-      { ok: true; daemonUrl: string; webUrl: string } | { error: string }
-    >;
+    preflight: (projectId: string) => Promise<import('./open-design').PreflightResult>;
+    setup: (projectId: string, config: Record<string, unknown>) => Promise<{ ok: true } | { error: string }>;
+    start: (projectId: string) => Promise<{ ok: true; daemonUrl: string; webUrl: string } | { error: string }>;
     stop: (projectId: string) => Promise<{ ok: true } | { error: string }>;
-    restart: (
-      projectId: string,
-    ) => Promise<
-      { ok: true; daemonUrl: string; webUrl: string } | { error: string }
-    >;
+    restart: (projectId: string) => Promise<{ ok: true; daemonUrl: string; webUrl: string } | { error: string }>;
     status: (projectId: string) => Promise<
       | {
           running: boolean;
@@ -2050,15 +1935,8 @@ export interface LionClawAPI {
     injectInitialPrompt: (projectId: string) => Promise<{ error: string }>;
     snapshot: (projectId: string) => Promise<{ error: string }>;
     getLockedSnapshot: (projectId: string) => Promise<{ error: string }>;
-    readLockedHtml: (
-      projectId: string,
-    ) => Promise<
-      { ok: true; html: string; htmlPath: string } | { error: string }
-    >;
-    destructiveUnlock: (
-      projectId: string,
-      confirmation: string,
-    ) => Promise<{ ok: true } | { error: string }>;
+    readLockedHtml: (projectId: string) => Promise<{ ok: true; html: string; htmlPath: string } | { error: string }>;
+    destructiveUnlock: (projectId: string, confirmation: string) => Promise<{ ok: true } | { error: string }>;
     openArtifact: (projectId: string) => Promise<{ error: string }>;
     setViewBounds: (bounds: {
       x: number;
@@ -2073,27 +1951,17 @@ export interface LionClawAPI {
     hideView: () => Promise<{ ok: true } | { error: string }>;
     bootInstallStatus: () => Promise<import('./open-design').BootInstallStatus>;
     bootInstallRetry: () => Promise<import('./open-design').BootInstallStatus>;
-    onBootInstallStream: (
-      handler: (event: import('./open-design').BootInstallStreamEvent) => void,
-    ) => () => void;
+    onBootInstallStream: (handler: (event: import('./open-design').BootInstallStreamEvent) => void) => () => void;
     onBootstrapProgress: (
-      handler: (
-        event: import('./open-design').OpenDesignBootstrapProgressEvent,
-      ) => void,
+      handler: (event: import('./open-design').OpenDesignBootstrapProgressEvent) => void,
     ) => () => void;
-    getSessionConfig: (
-      projectId: string,
-    ) => Promise<import('./open-design').OpenDesignSessionConfig | null>;
+    getSessionConfig: (projectId: string) => Promise<import('./open-design').OpenDesignSessionConfig | null>;
     setSessionConfig: (
       projectId: string,
       cfg: import('./open-design').OpenDesignSessionConfig,
     ) => Promise<{ ok: true } | { error: string }>;
-    ensureSession: (
-      projectId: string,
-    ) => Promise<import('./open-design').OpenDesignEnsureResult>;
-    getStartStatus: (
-      projectId: string,
-    ) => Promise<import('./open-design').OpenDesignStartStatus>;
+    ensureSession: (projectId: string) => Promise<import('./open-design').OpenDesignEnsureResult>;
+    getStartStatus: (projectId: string) => Promise<import('./open-design').OpenDesignStartStatus>;
   };
   pricing: {
     calculate: (input: {
@@ -2108,8 +1976,8 @@ export interface LionClawAPI {
     }) => Promise<{ costUsd: number | null }>;
   };
   dynamicWorkflow: DynamicWorkflowAPI;
+  swarm: import('./swarm').SwarmAPI;
 }
-
 
 export interface PipelineConversationPhases {
   security: number[];
@@ -2119,6 +1987,9 @@ export interface PipelineConversationPhases {
   developmentV2: number[];
   bug: number[];
 }
+
+export type PipelineSendResult =
+  { ok: true; resumedInSessionId?: string; laneBadge?: number | null } | { error: string; code?: string };
 
 export type PipelinePhaseArtifact =
   | { type: 'markdown'; content: string }
@@ -2131,12 +2002,7 @@ export type PipelinePhaseArtifact =
     }
   | { error: string };
 
-
-export type CodexWindowsIssueType =
-  | 'autocrlf-true'
-  | 'no-gitattributes'
-  | 'mixed-line-endings'
-  | 'powershell-5.1';
+export type CodexWindowsIssueType = 'autocrlf-true' | 'no-gitattributes' | 'mixed-line-endings' | 'powershell-5.1';
 
 export interface CodexWindowsIssue {
   type: CodexWindowsIssueType;
@@ -2171,12 +2037,7 @@ export type CodexPrepApplyResult =
   | { applied: true; filesAffected: number }
   | {
       applied: false;
-      reason:
-        | 'not-windows'
-        | 'no-git-repo'
-        | 'has-submodules'
-        | 'dirty-tree'
-        | 'error';
+      reason: 'not-windows' | 'no-git-repo' | 'has-submodules' | 'dirty-tree' | 'error';
       message?: string;
     };
 
@@ -2211,13 +2072,7 @@ declare global {
   }
 }
 
-
-export type ChunkStrategy =
-  | 'recursive'
-  | 'semantic'
-  | 'page'
-  | 'csv'
-  | 'agentic';
+export type ChunkStrategy = 'recursive' | 'semantic' | 'page' | 'csv' | 'agentic';
 
 export interface KnowledgeSource {
   id: string;
@@ -2293,13 +2148,7 @@ export interface BenchmarkResult {
 
 export interface IngestionProgress {
   sourceId: string;
-  stage:
-    | 'parsing'
-    | 'chunking'
-    | 'embedding'
-    | 'indexing'
-    | 'completed'
-    | 'failed';
+  stage: 'parsing' | 'chunking' | 'embedding' | 'indexing' | 'completed' | 'failed';
   progress: number;
 }
 
@@ -2313,15 +2162,8 @@ export interface BenchmarkProgress {
   done?: boolean;
 }
 
-
 export type EnrichPhase = 'validator' | 'enricher' | 'done';
-export type EnrichStatus =
-  | 'idle'
-  | 'running'
-  | 'paused'
-  | 'waiting'
-  | 'finalizing'
-  | 'done';
+export type EnrichStatus = 'idle' | 'running' | 'paused' | 'waiting' | 'finalizing' | 'done';
 
 export interface EnrichMetrics {
   inputTokens: number;
@@ -2393,21 +2235,13 @@ export interface EnrichMessage {
   createdAt: string;
 }
 
-
 export interface IngestJob {
   id: string;
   fileName: string;
   sourceType: string;
   originalPath?: string;
   fileHash?: string;
-  status:
-    | 'extracting'
-    | 'estimating'
-    | 'waiting_confirm'
-    | 'processing'
-    | 'completed'
-    | 'failed'
-    | 'partial';
+  status: 'extracting' | 'estimating' | 'waiting_confirm' | 'processing' | 'completed' | 'failed' | 'partial';
   totalChunks: number;
   processedChunks: number;
   lastProcessedChunk: number;
@@ -2457,7 +2291,6 @@ export interface BacklinkResult {
   linkContext: string;
 }
 
-
 export interface VaultOperation {
   action: 'create' | 'update';
   path: string;
@@ -2500,7 +2333,6 @@ export interface GraphData {
   edges: GraphEdge[];
 }
 
-
 export interface HarnessProject {
   id: string;
   name: string;
@@ -2509,16 +2341,7 @@ export interface HarnessProject {
   specPath: string;
   sprintsJsonPath?: string;
   status:
-    | 'idle'
-    | 'planning'
-    | 'reviewing'
-    | 'ready'
-    | 'running'
-    | 'paused'
-    | 'done'
-    | 'failed'
-    | 'aborted'
-    | 'interrupted';
+    'idle' | 'planning' | 'reviewing' | 'ready' | 'running' | 'paused' | 'done' | 'failed' | 'aborted' | 'interrupted';
   config: HarnessConfig;
   currentSprintIndex: number;
   totalSprints: number;
@@ -2589,6 +2412,16 @@ export interface DriveState {
   sessionId?: string;
   requiresHumanPhases: number[];
   startedAt?: string;
+  stoppedReason?: string;
+  rebindFrom?: string;
+  lastEscalation?: string;
+}
+
+export interface DriveStateChangedEvent {
+  projectId: string;
+  drive: DriveState | null;
+  sessionId: string | null;
+  laneBadge: number | null;
 }
 
 export interface HarnessSprint {
@@ -2597,14 +2430,7 @@ export interface HarnessSprint {
   sprintIndex: number;
   sprintJsonId: string;
   name: string;
-  status:
-    | 'pending'
-    | 'running'
-    | 'passed'
-    | 'rejected'
-    | 'failed'
-    | 'interrupted'
-    | 'skipped';
+  status: 'pending' | 'running' | 'passed' | 'rejected' | 'failed' | 'interrupted' | 'skipped';
   verdict?: string | null;
   coderAgentId?: string;
   evaluatorAgentId?: string;
@@ -2638,11 +2464,7 @@ export interface SprintJsonDetail {
   estimated_rounds: number;
 }
 
-export type CostSource =
-  | 'sdk_anthropic'
-  | 'reported'
-  | 'calculated'
-  | 'fallback_zero';
+export type CostSource = 'sdk_anthropic' | 'reported' | 'calculated' | 'fallback_zero';
 
 export interface HarnessRound {
   id: string;
@@ -2742,31 +2564,26 @@ export interface EvaluationCriterion {
   justification: string;
 }
 
-
 export interface ChatFeatureToggles {
   pipelineControl: boolean;
   dynamicWorkflows: boolean;
+  swarm?: boolean;
 }
 
-export const CHAT_CAPABILITIES_LEGACY_ON: Readonly<ChatFeatureToggles> =
-  Object.freeze({
-    pipelineControl: true,
-    dynamicWorkflows: true,
-  });
+export const CHAT_CAPABILITIES_LEGACY_ON: Readonly<ChatFeatureToggles> = Object.freeze({
+  pipelineControl: true,
+  dynamicWorkflows: true,
+  swarm: false,
+});
 
-export const CHAT_CAPABILITIES_DEFAULT_OFF: Readonly<ChatFeatureToggles> =
-  Object.freeze({
-    pipelineControl: false,
-    dynamicWorkflows: false,
-  });
+export const CHAT_CAPABILITIES_DEFAULT_OFF: Readonly<ChatFeatureToggles> = Object.freeze({
+  pipelineControl: false,
+  dynamicWorkflows: false,
+  swarm: false,
+});
 
 export type ChatFeatureTogglesErrorCode =
-  | 'session_not_found'
-  | 'session_not_desktop'
-  | 'session_not_active'
-  | 'invalid_patch'
-  | 'internal_error';
+  'session_not_found' | 'session_not_desktop' | 'session_not_active' | 'invalid_patch' | 'internal_error';
 
 export type ChatFeatureTogglesResult =
-  | { ok: true; toggles: ChatFeatureToggles }
-  | { ok: false; code: ChatFeatureTogglesErrorCode; error: string };
+  { ok: true; toggles: ChatFeatureToggles } | { ok: false; code: ChatFeatureTogglesErrorCode; error: string };

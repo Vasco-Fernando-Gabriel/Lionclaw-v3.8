@@ -26,7 +26,8 @@ export function GraphSidebar({ nodeId, nodeType, onClose }: GraphSidebarProps) {
     setContent(null);
     const subdir = TYPE_TO_SUBDIR[nodeType] || nodeType;
     const notePath = `${subdir}/${nodeId}.md`;
-    window.lionclaw.mgraph.read(notePath)
+    window.lionclaw.mgraph
+      .read(notePath)
       .then((result: unknown) => {
         if (result && typeof result === 'object' && 'error' in result) {
           setContent(`*Erro: ${(result as { error: string }).error}*`);
@@ -60,17 +61,17 @@ export function GraphSidebar({ nodeId, nodeType, onClose }: GraphSidebarProps) {
             <Loader2 size={20} className="animate-spin text-zinc-500" />
           </div>
         ) : (
-          <div className="prose prose-invert prose-sm max-w-none
+          <div
+            className="prose prose-invert prose-sm max-w-none
             prose-headings:text-zinc-200 prose-headings:font-mono prose-headings:text-sm
             prose-p:text-zinc-400 prose-p:text-xs prose-p:leading-relaxed
             prose-a:text-amber-500 prose-a:no-underline hover:prose-a:underline
             prose-code:text-amber-400 prose-code:text-xs
             prose-li:text-zinc-400 prose-li:text-xs
             prose-strong:text-zinc-200
-          ">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {content || ''}
-            </ReactMarkdown>
+          "
+          >
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || ''}</ReactMarkdown>
           </div>
         )}
       </div>

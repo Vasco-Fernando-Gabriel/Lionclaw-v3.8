@@ -1,10 +1,8 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: () => {
-    const iter = (async function* () {
-    })();
+    const iter = (async function* () {})();
     return Object.assign(iter, { toggleMcpServer: vi.fn(async () => undefined) });
   },
 }));
@@ -159,7 +157,13 @@ beforeEach(() => {
   getAllAgentsMock.mockReturnValue([
     { id: 'com-todo', description: 'Agente com TodoWrite', model: 'default', isActive: true, runtime: 'cloud' },
     { id: 'sem-todo', description: 'Agente sem TodoWrite', model: 'default', isActive: true, runtime: 'cloud' },
-    { id: 'livre', description: 'Agente sem allowlist (herda tudo)', model: 'default', isActive: true, runtime: 'cloud' },
+    {
+      id: 'livre',
+      description: 'Agente sem allowlist (herda tudo)',
+      model: 'default',
+      isActive: true,
+      runtime: 'cloud',
+    },
   ]);
 });
 

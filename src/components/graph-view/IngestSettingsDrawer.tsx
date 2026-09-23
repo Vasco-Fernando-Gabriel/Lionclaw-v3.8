@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { X, Settings } from 'lucide-react';
 import type { IngestSettings } from '@/types';
 
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
@@ -15,7 +14,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const INPUT_CLS =
   'w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-200 outline-none focus:border-amber-500/50';
 
-
 interface IngestSettingsDrawerProps {
   open: boolean;
   onClose: () => void;
@@ -26,7 +24,10 @@ export function IngestSettingsDrawer({ open, onClose }: IngestSettingsDrawerProp
 
   useEffect(() => {
     if (!open) return;
-    window.lionclaw.mgraph.ingestSettings().then(setSettings).catch(() => {});
+    window.lionclaw.mgraph
+      .ingestSettings()
+      .then(setSettings)
+      .catch(() => {});
   }, [open]);
 
   const update = async (key: keyof IngestSettings, raw: string) => {
@@ -170,9 +171,7 @@ export function IngestSettingsDrawer({ open, onClose }: IngestSettingsDrawerProp
                       }`}
                     />
                   </div>
-                  <span className="text-xs text-zinc-400">
-                    {settings.autoConfirm ? 'Ativado' : 'Desativado'}
-                  </span>
+                  <span className="text-xs text-zinc-400">{settings.autoConfirm ? 'Ativado' : 'Desativado'}</span>
                 </button>
               </Field>
             </>

@@ -1,4 +1,3 @@
-
 import { spawn } from 'child_process';
 import type { BrowserWindow } from 'electron';
 import { createLogger } from '../../logger';
@@ -26,8 +25,12 @@ export interface BashResult {
 
 export interface BashRuntimeOptions {
   getWindow: () => BrowserWindow | null;
+  sessionId: string;
   isOnboarding?: boolean;
-  permissionGuard?: (toolName: string, toolInput: Record<string, unknown>) => Promise<{ behavior: 'allow' | 'deny'; message?: string; updatedInput?: Record<string, unknown> }>;
+  permissionGuard?: (
+    toolName: string,
+    toolInput: Record<string, unknown>,
+  ) => Promise<{ behavior: 'allow' | 'deny'; message?: string; updatedInput?: Record<string, unknown> }>;
   resolveDefaultCwd?: () => string;
 }
 
@@ -42,8 +45,9 @@ export async function lionBash(input: BashInput, opts: BashRuntimeOptions): Prom
     };
   }
 
-  const guard = opts.permissionGuard
-    ?? createPermissionGuard(opts.getWindow, { isOnboarding: opts.isOnboarding });
+  const guard =
+    opts.permissionGuard ??
+    createPermissionGuard(opts.getWindow, { isOnboarding: opts.isOnboarding, sessionId: opts.sessionId });
 
   const decision = await guard('Bash', {
     command: input.command,
@@ -61,9 +65,12 @@ export async function lionBash(input: BashInput, opts: BashRuntimeOptions): Prom
     };
   }
 
-  const cwd = input.cwd && input.cwd.length > 0
-    ? input.cwd
-    : (opts.resolveDefaultCwd ? opts.resolveDefaultCwd() : getAgentCwd(opts.isOnboarding ?? false));
+  const cwd =
+    input.cwd && input.cwd.length > 0
+      ? input.cwd
+      : opts.resolveDefaultCwd
+        ? opts.resolveDefaultCwd()
+        : getAgentCwd(opts.isOnboarding ?? false);
 
   const timeoutMs = input.timeout_ms && input.timeout_ms > 0 ? input.timeout_ms : DEFAULT_TIMEOUT_MS;
   const started = Date.now();
@@ -97,9 +104,17 @@ export async function lionBash(input: BashInput, opts: BashRuntimeOptions): Prom
 
     const timer = setTimeout(() => {
       if (resolved) return;
-      try { proc.kill('SIGTERM'); } catch { /* noop */ }
+      try {
+        proc.kill('SIGTERM');
+      } catch {
+        /* noop */
+      }
       setTimeout(() => {
-        try { proc.kill('SIGKILL'); } catch { /* noop */ }
+        try {
+          proc.kill('SIGKILL');
+        } catch {
+          /* noop */
+        }
       }, 2_000).unref();
       logger.warn({ command: input.command.slice(0, 80), timeoutMs }, 'Bash timeout');
     }, timeoutMs);
@@ -133,7 +148,7 @@ export async function lionBash(input: BashInput, opts: BashRuntimeOptions): Prom
       if (resolved) return;
       resolved = true;
       clearTimeout(timer);
-      const exitCode = typeof code === 'number' ? code : (signal ? 130 : 1);
+      const exitCode = typeof code === 'number' ? code : signal ? 130 : 1;
       resolve({
         stdout: stdoutBuf,
         stderr: stderrBuf,

@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const SPEC_VALIDATOR_ID = 'spec-validator';

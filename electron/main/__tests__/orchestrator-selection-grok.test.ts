@@ -29,13 +29,18 @@ describe('Grok Build orchestrator selection', () => {
   });
 
   it('resolves the exact subscription triple and snapshots effort', async () => {
-    getSettingMock.mockImplementation((key: string) => ({
-      orchestrator_runtime: 'grok-sdk',
-      orchestrator_provider: 'grok',
-      orchestrator_model: 'grok-4.5',
-      orchestrator_grok_effort: 'low',
-    } as Record<string, string>)[key]);
-    await expect(resolveOrchestratorSelection({ surface: 'main-chat' })).resolves.toEqual({
+    getSettingMock.mockImplementation(
+      (key: string) =>
+        (
+          ({
+            orchestrator_runtime: 'grok-sdk',
+            orchestrator_provider: 'grok',
+            orchestrator_model: 'grok-4.5',
+            orchestrator_grok_effort: 'low',
+          }) as Record<string, string>
+        )[key],
+    );
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).resolves.toEqual({
       runtime: 'grok-sdk',
       provider: 'grok',
       model: 'grok-4.5',
@@ -45,27 +50,39 @@ describe('Grok Build orchestrator selection', () => {
   });
 
   it('rejects a provider or model outside the curated Grok triple', async () => {
-    getSettingMock.mockImplementation((key: string) => ({
-      orchestrator_runtime: 'grok-sdk',
-      orchestrator_provider: 'grok',
-      orchestrator_model: 'grok-future',
-    } as Record<string, string>)[key]);
-    await expect(resolveOrchestratorSelection({ surface: 'main-chat' }))
-      .rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    getSettingMock.mockImplementation(
+      (key: string) =>
+        (
+          ({
+            orchestrator_runtime: 'grok-sdk',
+            orchestrator_provider: 'grok',
+            orchestrator_model: 'grok-future',
+          }) as Record<string, string>
+        )[key],
+    );
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 
   it('rejects an agent-model override outside the curated Grok catalog', async () => {
-    getSettingMock.mockImplementation((key: string) => ({
-      orchestrator_runtime: 'grok-sdk',
-      orchestrator_provider: 'grok',
-      orchestrator_model: 'grok-4.5',
-    } as Record<string, string>)[key]);
-    await expect(resolveOrchestratorSelection({ surface: 'main-chat', agentModel: 'grok-future' }))
-      .rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    getSettingMock.mockImplementation(
+      (key: string) =>
+        (
+          ({
+            orchestrator_runtime: 'grok-sdk',
+            orchestrator_provider: 'grok',
+            orchestrator_model: 'grok-4.5',
+          }) as Record<string, string>
+        )[key],
+    );
+    await expect(
+      resolveOrchestratorSelection({ surface: 'default', agentModel: 'grok-future' }),
+    ).rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
   });
 
   it('supports an explicit Grok compaction selection without API key', async () => {
-    getSettingMock.mockImplementation((key: string) => key === 'orchestrator_grok_effort' ? 'medium' : undefined);
+    getSettingMock.mockImplementation((key: string) => (key === 'orchestrator_grok_effort' ? 'medium' : undefined));
     await expect(resolveSubscriptionSelectionFor('grok-sdk', 'grok', 'grok-4.5')).resolves.toEqual({
       runtime: 'grok-sdk',
       provider: 'grok',
@@ -76,7 +93,8 @@ describe('Grok Build orchestrator selection', () => {
   });
 
   it('rejects a mismatched provider in explicit Grok compaction', async () => {
-    await expect(resolveSubscriptionSelectionFor('grok-sdk', 'kimi', 'grok-4.5'))
-      .rejects.toBeInstanceOf(InvalidOrchestratorSelectionError);
+    await expect(resolveSubscriptionSelectionFor('grok-sdk', 'kimi', 'grok-4.5')).rejects.toBeInstanceOf(
+      InvalidOrchestratorSelectionError,
+    );
   });
 });

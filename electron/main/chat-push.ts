@@ -14,8 +14,7 @@ function resolveWindow(getWindow?: () => BrowserWindow | null): BrowserWindow | 
   if (getWindow) {
     try {
       return getWindow();
-    } catch {
-    }
+    } catch {}
   }
   const wins = BrowserWindow.getAllWindows();
   return wins.length > 0 ? wins[0] : null;
@@ -29,13 +28,7 @@ export function pushAssistantMessage(
   try {
     const metadata: MessageMetadata = { source: 'pipeline-drive', ...opts?.metadata };
 
-    const messageId = insertMessage(
-      sessionId,
-      'assistant',
-      content,
-      undefined,
-      JSON.stringify(metadata),
-    );
+    const messageId = insertMessage(sessionId, 'assistant', content, undefined, JSON.stringify(metadata));
 
     const message: ChatMessage = {
       id: messageId,
@@ -64,10 +57,7 @@ export function pushAssistantMessage(
   }
 }
 
-export function pushDrivePaused(
-  sessionId: string,
-  opts?: { getWindow?: () => BrowserWindow | null },
-): void {
+export function pushDrivePaused(sessionId: string, opts?: { getWindow?: () => BrowserWindow | null }): void {
   try {
     const chunk: StreamChunk = { type: 'drive_paused', sessionId };
     const win = resolveWindow(opts?.getWindow);

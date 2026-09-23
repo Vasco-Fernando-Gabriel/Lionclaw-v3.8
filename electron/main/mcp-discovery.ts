@@ -96,8 +96,7 @@ async function _runDiscovery(): Promise<void> {
     try {
       for await (const _ of q) {
       }
-    } catch {
-    }
+    } catch {}
   } catch (error) {
     logger.error({ error, code: 'MCP-DISCOVERY-FAIL' }, 'MCP discovery failed');
   }

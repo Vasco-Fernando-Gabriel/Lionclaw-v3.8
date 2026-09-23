@@ -1,5 +1,3 @@
-
-
 import type { RepoGraphRunKind } from '../../../src/types/repo-graph';
 
 export type {
@@ -18,7 +16,6 @@ export type {
   RepoGraphSavingsGroup,
   RepoGraphSavingsMetrics,
 } from '../../../src/types/repo-graph';
-
 
 export interface RepoGraphProviderStats {
   files?: number;
@@ -134,7 +131,6 @@ export interface RepoGraphRunResult {
   durationMs: number;
 }
 
-
 export interface RepoGraphReader {
   detect(rootPath: string): Promise<RepoGraphProviderStatus>;
   search(input: RepoGraphSearchInput): Promise<RepoGraphSearchResult>;
@@ -150,14 +146,12 @@ export interface RepoGraphWriter {
   update(input: RepoGraphBuildInput): Promise<RepoGraphRunResult>;
 }
 
-
 export interface RepoStalenessInput {
   repositoryId: string;
   canonicalRootPath: string;
   indexedCommit: string | null;
   lastIndexedAt: string | null;
 }
-
 
 export type ValidateRepoRootResult =
   | {

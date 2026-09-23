@@ -1,13 +1,8 @@
-
 import { spawn } from 'node:child_process';
 import { statSync } from 'node:fs';
 import { createLogger } from '../logger';
 import { resolveCodexBinary } from './binary';
-import {
-  CODEX_EFFORT_ORDER,
-  staticEffortsFor,
-  clampCodexEffortToSupported,
-} from '../../../src/constants/codex-models';
+import { CODEX_EFFORT_ORDER, staticEffortsFor, clampCodexEffortToSupported } from '../../../src/constants/codex-models';
 import type { CodexChatReasoningEffort } from '../../../src/types';
 
 const logger = createLogger('codex-model-capabilities');
@@ -82,9 +77,7 @@ export function peekCodexModelCapabilities(): CodexModelCapability[] | null {
 export function notifyObservedCodexCliUserAgent(userAgent: string | null): void {
   if (!userAgent) return;
   if (store.state === 'ready' && store.cliUserAgent && store.cliUserAgent !== userAgent) {
-    invalidateCodexModelCapabilities(
-      `cli userAgent changed: ${store.cliUserAgent} -> ${userAgent}`,
-    );
+    invalidateCodexModelCapabilities(`cli userAgent changed: ${store.cliUserAgent} -> ${userAgent}`);
     store.cliUserAgent = userAgent;
   } else if (!store.cliUserAgent) {
     store.cliUserAgent = userAgent;
@@ -105,16 +98,11 @@ export function normalizeCapability(rawModel: Record<string, unknown>): CodexMod
     .map((e) => (typeof e['reasoningEffort'] === 'string' ? e['reasoningEffort'] : null))
     .filter((e): e is string => e !== null);
   const known = CODEX_EFFORT_ORDER.filter((e) => announced.includes(e));
-  const unknown = announced.filter(
-    (e) => !(CODEX_EFFORT_ORDER as readonly string[]).includes(e),
-  );
+  const unknown = announced.filter((e) => !(CODEX_EFFORT_ORDER as readonly string[]).includes(e));
   if (unknown.length > 0) {
     logger.warn({ model: id, unknown }, 'model/list anunciou efforts fora do union conhecido; filtrados');
   }
-  const rawDefault =
-    typeof rawModel['defaultReasoningEffort'] === 'string'
-      ? rawModel['defaultReasoningEffort']
-      : '';
+  const rawDefault = typeof rawModel['defaultReasoningEffort'] === 'string' ? rawModel['defaultReasoningEffort'] : '';
   const supported = known.length > 0 ? known : staticEffortsFor(id);
   const defaultEffort = (CODEX_EFFORT_ORDER as readonly string[]).includes(rawDefault)
     ? clampCodexEffortToSupported(rawDefault as CodexChatReasoningEffort, supported)
@@ -153,8 +141,7 @@ async function runProbe(binaryPath: string): Promise<{
       c.once('close', done);
       try {
         c.kill('SIGKILL');
-      } catch {
-      }
+      } catch {}
       setTimeout(done, 500);
     };
     const timer = setTimeout(() => {
@@ -240,9 +227,7 @@ async function runProbe(binaryPath: string): Promise<{
             settle(null);
             return;
           }
-          const data = Array.isArray(result['data'])
-            ? (result['data'] as Array<Record<string, unknown>>)
-            : [];
+          const data = Array.isArray(result['data']) ? (result['data'] as Array<Record<string, unknown>>) : [];
           for (const raw of data) {
             const cap = normalizeCapability(raw);
             if (cap) models.push(cap);
@@ -338,9 +323,7 @@ export function findDiscoveredCodexModel(model: string): CodexModelCapability | 
   return peekCodexModelCapabilities()?.find((c) => c.id.toLowerCase() === slug);
 }
 
-export function resolveSupportedCodexEfforts(
-  model: string,
-): readonly CodexChatReasoningEffort[] {
+export function resolveSupportedCodexEfforts(model: string): readonly CodexChatReasoningEffort[] {
   return findDiscoveredCodexModel(model)?.supportedEfforts ?? staticEffortsFor(model);
 }
 

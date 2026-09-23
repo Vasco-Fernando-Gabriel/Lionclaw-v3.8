@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -21,7 +20,6 @@ import {
 } from './db';
 
 const logger = createLogger('knowledge-engine');
-
 
 export type ChunkStrategy = 'recursive' | 'semantic' | 'page' | 'csv' | 'agentic' | 'markdown';
 
@@ -72,7 +70,6 @@ export interface KnowledgeAgentConfig {
   searchTopK: number;
 }
 
-
 let enc: Tiktoken | null = null;
 
 function getEncoder(): Tiktoken {
@@ -87,7 +84,6 @@ export function countTokens(text: string): number {
     return Math.ceil(text.length / 3.8);
   }
 }
-
 
 function getKnowledgeDir(agentId: string, sourceId: string): string {
   return path.join(getLionClawHome(), 'knowledge', agentId, sourceId);
@@ -105,7 +101,6 @@ export function loadRawDocument(agentId: string, sourceId: string): RawDocument 
   return JSON.parse(content) as RawDocument;
 }
 
-
 interface PdfTextResult {
   text: string;
 }
@@ -119,10 +114,7 @@ interface ModernPdfParser {
 
 type ModernPdfParserConstructor = new (options: { data: Buffer }) => ModernPdfParser;
 
-export async function extractPdfText(
-  buffer: Buffer,
-  pdfParseModule: unknown,
-): Promise<PdfTextResult> {
+export async function extractPdfText(buffer: Buffer, pdfParseModule: unknown): Promise<PdfTextResult> {
   if (typeof pdfParseModule === 'function') {
     return (pdfParseModule as LegacyPdfParse)(buffer);
   }
@@ -219,11 +211,7 @@ async function parseCsv(filePath: string): Promise<RawDocument> {
   }) as Array<Record<string, string>>;
 
   const headers = records.length > 0 ? Object.keys(records[0]) : [];
-  const text = records
-    .map((row) =>
-      headers.map((h) => `${h}: ${row[h] ?? ''}`).join(', '),
-    )
-    .join('\n');
+  const text = records.map((row) => headers.map((h) => `${h}: ${row[h] ?? ''}`).join(', ')).join('\n');
 
   return {
     text,
@@ -251,7 +239,6 @@ export async function parseFile(filePath: string, fileType: string): Promise<Raw
       throw new Error(`Unsupported file type: ${fileType}`);
   }
 }
-
 
 const SAFETY_TOKEN_LIMIT = 1500;
 const SAFETY_CHAR_LIMIT = 5500;
@@ -345,7 +332,6 @@ function applySafetyValve(chunks: ChunkResult[]): ChunkResult[] {
   }
   return result;
 }
-
 
 function chunkRecursive(text: string, chunkSize: number, chunkOverlap: number): ChunkResult[] {
   const texts = recursiveSplit(text, chunkSize, chunkOverlap);
@@ -454,7 +440,6 @@ function chunkByPage(raw: RawDocument): ChunkResult[] {
     }));
 }
 
-
 function chunkCsv(raw: RawDocument): ChunkResult[] {
   if (!raw.rows || raw.rows.length === 0) {
     return [{ content: raw.text, metadata: { row_index: 0 }, token_count: 0 }];
@@ -493,7 +478,10 @@ async function chunkAgentic(text: string): Promise<ChunkResult[]> {
         `Você receberá um trecho de texto. Segmente-o em partes semânticas independentes.\nCada parte deve ser autocontida - um leitor sem contexto anterior deve entendê-la.\nRetorne APENAS JSON, sem markdown:\n{ "chunks": [{ "topic": "título curto do tema", "content": "texto completo da parte" }] }\n\nSe o texto já for curto o suficiente para ser um chunk único, retorne como array de 1 elemento.\n\nTexto:\n${window}`,
         { maxTokens: 4096 },
       );
-      const jsonText = rawText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+      const jsonText = rawText
+        .replace(/^```json\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
       const parsed = JSON.parse(jsonText) as { chunks: Array<{ topic: string; content: string }> };
 
       for (const c of parsed.chunks) {
@@ -527,7 +515,6 @@ async function chunkAgentic(text: string): Promise<ChunkResult[]> {
   return chunks;
 }
 
-
 export async function chunkDocument(
   raw: RawDocument,
   strategy: ChunkStrategy,
@@ -559,7 +546,6 @@ export async function chunkDocument(
   return applySafetyValve(chunks);
 }
 
-
 const EMBEDDING_BATCH_SIZE = 100;
 
 export async function generateEmbeddingsBatch(texts: string[]): Promise<(number[] | null)[]> {
@@ -569,9 +555,7 @@ export async function generateEmbeddingsBatch(texts: string[]): Promise<(number[
     const batchEnd = Math.min(batchStart + EMBEDDING_BATCH_SIZE, texts.length);
     const batch = texts.slice(batchStart, batchEnd);
 
-    const batchResults = await Promise.allSettled(
-      batch.map((text) => generateEmbedding(text)),
-    );
+    const batchResults = await Promise.allSettled(batch.map((text) => generateEmbedding(text)));
 
     for (let i = 0; i < batchResults.length; i++) {
       const r = batchResults[i];
@@ -598,7 +582,6 @@ export async function generateEmbeddingsBatch(texts: string[]): Promise<(number[
 
   return results;
 }
-
 
 const COHERE_RATE_LIMIT_MS = 650;
 let lastCohereCallAt = 0;
@@ -643,7 +626,6 @@ async function cohereRerank(
   }
 }
 
-
 async function generateHypotheticalDocument(query: string): Promise<string | null> {
   try {
     const text = await runStructuredMemoryLlm(
@@ -657,7 +639,6 @@ async function generateHypotheticalDocument(query: string): Promise<string | nul
     return null;
   }
 }
-
 
 interface BM25Row {
   chunk_id: string;
@@ -676,9 +657,7 @@ export function buildKnowledgeFtsQuery(query: string): string {
 
   if (terms.length === 0) return '';
 
-  return terms
-    .map((term) => `"${term.replace(/"/g, '""')}"`)
-    .join(' OR ');
+  return terms.map((term) => `"${term.replace(/"/g, '""')}"`).join(' OR ');
 }
 
 function searchKnowledgeBM25(agentId: string, query: string, topK: number): BM25Row[] {
@@ -687,7 +666,9 @@ function searchKnowledgeBM25(agentId: string, query: string, topK: number): BM25
 
   const db = getDb();
   try {
-    return db.prepare(`
+    return db
+      .prepare(
+        `
       SELECT chunk_id, agent_id,
              bm25(knowledge_chunks_fts) AS bm25_score
       FROM knowledge_chunks_fts
@@ -695,13 +676,14 @@ function searchKnowledgeBM25(agentId: string, query: string, topK: number): BM25
         AND agent_id = ?
       ORDER BY bm25_score ASC
       LIMIT ?
-    `).all(ftsQuery, agentId, topK) as BM25Row[];
+    `,
+      )
+      .all(ftsQuery, agentId, topK) as BM25Row[];
   } catch (err) {
     logger.warn({ err, query, ftsQuery }, 'BM25 knowledge search failed');
     return [];
   }
 }
-
 
 interface VecRow {
   chunk_id: string;
@@ -713,7 +695,9 @@ function searchKnowledgeVector(agentId: string, embedding: number[], topK: numbe
   const db = getDb();
   const buf = Buffer.from(new Float32Array(embedding).buffer);
   try {
-    return db.prepare(`
+    return db
+      .prepare(
+        `
       SELECT kc.id AS chunk_id, kc.agent_id,
              vec_distance_cosine(kcv.embedding, ?) AS distance
       FROM knowledge_chunks_vec kcv
@@ -721,13 +705,14 @@ function searchKnowledgeVector(agentId: string, embedding: number[], topK: numbe
       WHERE kc.agent_id = ?
       ORDER BY distance ASC
       LIMIT ?
-    `).all(buf, agentId, topK) as VecRow[];
+    `,
+      )
+      .all(buf, agentId, topK) as VecRow[];
   } catch (err) {
     logger.warn({ err }, 'Vector knowledge search failed');
     return [];
   }
 }
-
 
 interface RRFEntry {
   chunk_id: string;
@@ -752,7 +737,6 @@ function rrfMerge(bm25Rows: BM25Row[], vecRows: VecRow[], k: number): RRFEntry[]
     .sort((a, b) => b.score - a.score);
 }
 
-
 interface ChunkDetail {
   id: string;
   source_id: string;
@@ -767,13 +751,17 @@ function fetchChunkDetails(chunkIds: string[]): ChunkDetail[] {
   if (chunkIds.length === 0) return [];
   const db = getDb();
   const placeholders = chunkIds.map(() => '?').join(',');
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT kc.id, kc.source_id, ks.file_name AS source_name,
            kc.content, kc.chunk_index, kc.token_count, kc.metadata
     FROM knowledge_chunks kc
     JOIN knowledge_sources ks ON ks.id = kc.source_id
     WHERE kc.id IN (${placeholders})
-  `).all(...chunkIds) as Array<Record<string, unknown>>;
+  `,
+    )
+    .all(...chunkIds) as Array<Record<string, unknown>>;
 
   return rows.map((r) => ({
     id: r['id'] as string,
@@ -785,7 +773,6 @@ function fetchChunkDetails(chunkIds: string[]): ChunkDetail[] {
     metadata: JSON.parse((r['metadata'] as string) || '{}'),
   }));
 }
-
 
 async function runRetrievalPipeline(
   agentId: string,
@@ -863,11 +850,7 @@ async function runRetrievalPipeline(
   }
 }
 
-
-export async function hybridKnowledgeSearch(
-  agentId: string,
-  query: string,
-): Promise<KBSearchResult> {
+export async function hybridKnowledgeSearch(agentId: string, query: string): Promise<KBSearchResult> {
   const startMs = Date.now();
 
   const dbConfig = getKnowledgeAgentConfig(agentId);
@@ -965,7 +948,6 @@ export async function hybridKnowledgeSearch(
   }
 }
 
-
 export type ProgressEmitter = (data: { sourceId: string; stage: string; progress: number }) => void;
 
 export async function ingestDocument(
@@ -984,7 +966,7 @@ export async function ingestDocument(
   const { agentId, filePath, config } = payload;
   const ext = path.extname(filePath).toLowerCase().replace('.', '') as KnowledgeSourceRow['fileType'];
   const validTypes = ['pdf', 'docx', 'txt', 'md', 'csv'] as const;
-  type ValidType = typeof validTypes[number];
+  type ValidType = (typeof validTypes)[number];
 
   if (!(validTypes as readonly string[]).includes(ext)) {
     throw new Error(`Unsupported file type: ${ext}`);
@@ -1069,12 +1051,14 @@ export async function ingestDocument(
         insertKnowledgeChunkFts(chunkId, agentId, chunks[i].content);
       }
 
-      db.prepare(`
+      db.prepare(
+        `
         UPDATE knowledge_sources
         SET status = 'completed', chunks_count = ?, processed_at = datetime('now'),
             updated_at = datetime('now')
         WHERE id = ?
-      `).run(chunks.length, sourceId);
+      `,
+      ).run(chunks.length, sourceId);
     });
     insertAll();
 
@@ -1086,17 +1070,20 @@ export async function ingestDocument(
     const errMsg = err instanceof Error ? err.message : String(err);
     logger.error({ err, sourceId }, 'Document ingestion failed');
 
-    getDb().prepare(`
+    getDb()
+      .prepare(
+        `
       UPDATE knowledge_sources
       SET status = 'failed', error_message = ?, updated_at = datetime('now')
       WHERE id = ?
-    `).run(errMsg, sourceId);
+    `,
+      )
+      .run(errMsg, sourceId);
 
     emitProgress({ sourceId, stage: 'failed', progress: 0 });
     throw err;
   }
 }
-
 
 export async function reprocessDocument(
   sourceId: string,
@@ -1110,12 +1097,16 @@ export async function reprocessDocument(
 
   const { agentId } = source;
 
-  getDb().prepare(`
+  getDb()
+    .prepare(
+      `
     UPDATE knowledge_sources
     SET status = 'processing', chunk_strategy = ?, chunk_size = ?,
         chunk_overlap = ?, updated_at = datetime('now')
     WHERE id = ?
-  `).run(newStrategy, chunkSize, chunkOverlap, sourceId);
+  `,
+    )
+    .run(newStrategy, chunkSize, chunkOverlap, sourceId);
 
   emitProgress({ sourceId, stage: 'parsing', progress: 10 });
 
@@ -1137,9 +1128,9 @@ export async function reprocessDocument(
     emitProgress({ sourceId, stage: 'indexing', progress: 85 });
 
     const swapChunks = getDb().transaction(() => {
-      const oldChunkIds = getDb().prepare(
-        'SELECT id FROM knowledge_chunks WHERE source_id = ?',
-      ).all(sourceId) as Array<{ id: string }>;
+      const oldChunkIds = getDb()
+        .prepare('SELECT id FROM knowledge_chunks WHERE source_id = ?')
+        .all(sourceId) as Array<{ id: string }>;
 
       for (const { id: cid } of oldChunkIds) {
         getDb().prepare('DELETE FROM knowledge_chunks_fts WHERE chunk_id = ?').run(cid);
@@ -1167,12 +1158,16 @@ export async function reprocessDocument(
         insertKnowledgeChunkFts(chunkId, agentId, chunks[i].content);
       }
 
-      getDb().prepare(`
+      getDb()
+        .prepare(
+          `
         UPDATE knowledge_sources
         SET status = 'completed', chunks_count = ?, processed_at = datetime('now'),
             updated_at = datetime('now')
         WHERE id = ?
-      `).run(chunks.length, sourceId);
+      `,
+        )
+        .run(chunks.length, sourceId);
     });
 
     swapChunks();
@@ -1182,11 +1177,15 @@ export async function reprocessDocument(
     const errMsg = err instanceof Error ? err.message : String(err);
     logger.error({ err, sourceId }, 'Reprocess failed');
 
-    getDb().prepare(`
+    getDb()
+      .prepare(
+        `
       UPDATE knowledge_sources
       SET status = 'failed', error_message = ?, updated_at = datetime('now')
       WHERE id = ?
-    `).run(errMsg, sourceId);
+    `,
+      )
+      .run(errMsg, sourceId);
 
     emitProgress({ sourceId, stage: 'failed', progress: 0 });
     throw err;

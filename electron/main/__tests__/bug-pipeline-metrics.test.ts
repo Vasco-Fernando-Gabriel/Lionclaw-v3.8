@@ -1,4 +1,3 @@
-
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -32,8 +31,7 @@ beforeAll(() => {
 afterAll(() => {
   try {
     getDb().close();
-  } catch {
-  }
+  } catch {}
   fs.rmSync(state.root, { recursive: true, force: true });
 });
 
@@ -80,7 +78,6 @@ function sprintPhaseNumbers(projectId: string): number[] {
     .sort((a, b) => a - b);
 }
 
-
 const SITE5_FIXTURE: Record<string, number[]> = {
   development: [10, 11, 13, 14],
   feature: [10, 11, 13, 14],
@@ -96,7 +93,6 @@ const SITE4_FIXTURE: Record<string, number[]> = {
   'architecture-review': [10, 11, 13, 14],
   'development-v2': [13, 14, 16, 17],
 };
-
 
 const BASELINE_SITE4: Record<string, { coderModel: string; evaluatorModel: string }> = {
   development: {
@@ -137,14 +133,7 @@ const DELTA_SITE5_REMOVED: Record<string, number[]> = {
   'development-v2': [10, 11], // Frontend Tecnico + Security
 };
 
-const EXISTING_TYPES = [
-  'development',
-  'feature',
-  'security',
-  'architecture-review',
-  'development-v2',
-] as const;
-
+const EXISTING_TYPES = ['development', 'feature', 'security', 'architecture-review', 'development-v2'] as const;
 
 describe('TB-25a — security: fases 8/9 fora de sprintPhases', () => {
   it('projeto security com linhas 8, 9, 10 e 11 classifica so 10 e 11', () => {
@@ -166,20 +155,16 @@ describe('TB-25a — security: fases 8/9 fora de sprintPhases', () => {
   });
 });
 
-
 describe('TB-25b — sprintPhases por tipo: so o delta da secao 4.11', () => {
   for (const type of EXISTING_TYPES) {
     it(`${type}: baseline flat menos o delta declarado`, () => {
       const projectId = mkProject(type);
       for (const n of SITE5_FIXTURE[type]) seedPhaseRow(projectId, type, n);
-      const expected = BASELINE_SITE5[type].filter(
-        (n) => !DELTA_SITE5_REMOVED[type].includes(n),
-      );
+      const expected = BASELINE_SITE5[type].filter((n) => !DELTA_SITE5_REMOVED[type].includes(n));
       expect(sprintPhaseNumbers(projectId)).toEqual(expected);
     });
   }
 });
-
 
 describe('TB-25c — linha agregada fora de reportablePhases', () => {
   function insertLegacyAggregateRow(projectId: string, durationMs: number): void {
@@ -208,9 +193,7 @@ describe('TB-25c — linha agregada fora de reportablePhases', () => {
       });
     }
     const m = getPipelineMetrics(projectId);
-    const aggregate = m.phases.filter(
-      (p) => p.agentId === 'multi-agent' && p.sprintIndex === -1,
-    );
+    const aggregate = m.phases.filter((p) => p.agentId === 'multi-agent' && p.sprintIndex === -1);
     expect(aggregate).toEqual([]);
     expect(m.phases.filter((p) => p.phaseNumber === 2)).toHaveLength(7);
     expect(m.totals.durationMs).toBe(7000);
@@ -263,7 +246,6 @@ describe('TB-25c — linha agregada fora de reportablePhases', () => {
   });
 });
 
-
 describe('TB-25d — bug: fase 2 contada UMA vez', () => {
   it('a linha bug-analysis-multi sai; as 3 por analista ficam', () => {
     const projectId = mkProject('bug');
@@ -296,7 +278,6 @@ describe('TB-25d — bug: fase 2 contada UMA vez', () => {
     expect(m.totals.durationMs).toBe(6000);
   });
 });
-
 
 describe('TB-25f metade 1 — site 4 (getRoundDetailsForSprint): DELTA ZERO nos 5 tipos', () => {
   for (const type of EXISTING_TYPES) {

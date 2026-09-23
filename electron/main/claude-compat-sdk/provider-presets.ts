@@ -1,4 +1,3 @@
-
 import type { OrchestratorProvider } from '../../../src/types';
 import {
   CLAUDE_COMPAT_PRESETS as RENDERER_CLAUDE_COMPAT_PRESETS,
@@ -9,9 +8,7 @@ export type ClaudeCompatPreset = RendererClaudeCompatPreset;
 
 export const CLAUDE_COMPAT_PRESETS: ClaudeCompatPreset[] = RENDERER_CLAUDE_COMPAT_PRESETS;
 
-export function getClaudeCompatPreset(
-  provider: OrchestratorProvider,
-): ClaudeCompatPreset {
+export function getClaudeCompatPreset(provider: OrchestratorProvider): ClaudeCompatPreset {
   const preset = CLAUDE_COMPAT_PRESETS.find((p) => p.id === provider);
   if (!preset) {
     throw new Error(

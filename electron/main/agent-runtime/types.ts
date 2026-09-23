@@ -7,8 +7,7 @@ import type { AgentExecutionError } from './llm-error';
 import type { ChatInheritedEffort } from './chat-effort-inheritance';
 
 export type ToolDecision =
-  | { behavior: 'allow'; updatedInput?: Record<string, unknown> }
-  | { behavior: 'deny'; message: string };
+  { behavior: 'allow'; updatedInput?: Record<string, unknown> } | { behavior: 'deny'; message: string };
 
 export interface AgentPermissionProfile {
   mode: PermissionMode;
@@ -47,6 +46,16 @@ export interface SubagentDispatchContext {
 }
 
 export interface AgentExecutionRequest {
+  executionAgent?: AgentConfig;
+  swarmFindingsMcpArgs?: string[];
+  swarmFindingsMcpEnv?: Record<string, string>;
+  swarmOwnerDirectory?: string;
+  swarmLifecycle?: {
+    idleTimeoutMs: number;
+    hardTimeoutMs: number;
+    onTimeout: (reason: 'timeout-idle' | 'timeout-hard') => void;
+  };
+  swarmToolDispatch?: (name: string, input: Record<string, unknown>) => Promise<{ result: string; isError: boolean }>;
   agentId: string;
   prompt: string;
   cwd: string;
@@ -100,11 +109,7 @@ export interface AgentExecutionResult {
     };
     costEstimationKind?: 'subscription-equivalent-payg';
     sessionIds?: string[];
-    costSource?:
-      | 'sdk_total_cost_usd'
-      | 'sdk_model_usage'
-      | 'calculated'
-      | 'provider-reported-equivalent';
+    costSource?: 'sdk_total_cost_usd' | 'sdk_model_usage' | 'calculated' | 'provider-reported-equivalent';
     sdkReportedCostUsd?: number;
     costReconciliationRelativeDelta?: number;
     pricingSnapshot?: {
@@ -119,16 +124,19 @@ export interface AgentExecutionResult {
         longContext?: { thresholdTokens: number; inputMultiplier: number; outputMultiplier: number };
       } | null;
     };
-    modelUsage?: Record<string, {
-      inputTokens: number;
-      outputTokens: number;
-      cacheReadInputTokens: number;
-      cacheCreationInputTokens: number;
-      costUSD: number;
-      reasoningTokens?: number;
-      modelCalls?: number;
-      costUsdTicks?: number;
-    }>;
+    modelUsage?: Record<
+      string,
+      {
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadInputTokens: number;
+        cacheCreationInputTokens: number;
+        costUSD: number;
+        reasoningTokens?: number;
+        modelCalls?: number;
+        costUsdTicks?: number;
+      }
+    >;
     grok?: {
       reasoningTokens?: number;
       modelCalls?: number;

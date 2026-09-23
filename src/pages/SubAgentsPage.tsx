@@ -51,11 +51,7 @@ function RuntimeBadge({ agent }: { agent: AgentConfig }) {
     const cwText = cw !== null ? ` (${formatContextWindow(cw)})` : '';
     const tooltipText = `${model}${cwText}`;
     return (
-      <span
-        title={tooltipText}
-        style={{ backgroundColor: BADGE_BG, color: BADGE_FG }}
-        className={BADGE_CLASS}
-      >
+      <span title={tooltipText} style={{ backgroundColor: BADGE_BG, color: BADGE_FG }} className={BADGE_CLASS}>
         {label}
       </span>
     );
@@ -71,9 +67,7 @@ function RuntimeBadge({ agent }: { agent: AgentConfig }) {
         >
           Z.ai
         </span>
-        <span className="px-1.5 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400">
-          {agent.model}
-        </span>
+        <span className="px-1.5 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400">{agent.model}</span>
       </div>
     );
   }
@@ -88,9 +82,7 @@ function RuntimeBadge({ agent }: { agent: AgentConfig }) {
         >
           MiniMax TokenPlan
         </span>
-        <span className="px-1.5 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400">
-          {agent.model}
-        </span>
+        <span className="px-1.5 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400">{agent.model}</span>
       </div>
     );
   }
@@ -106,9 +98,7 @@ function RuntimeBadge({ agent }: { agent: AgentConfig }) {
         >
           Codex
         </span>
-        <span className="px-1.5 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400">
-          {model}
-        </span>
+        <span className="px-1.5 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400">{model}</span>
       </div>
     );
   }
@@ -123,9 +113,7 @@ function RuntimeBadge({ agent }: { agent: AgentConfig }) {
         >
           Kimi
         </span>
-        <span className="px-1.5 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400">
-          {agent.model}
-        </span>
+        <span className="px-1.5 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400">{agent.model}</span>
       </div>
     );
   }
@@ -133,7 +121,10 @@ function RuntimeBadge({ agent }: { agent: AgentConfig }) {
   if (agent.runtime === 'grok') {
     return (
       <div className="flex items-center gap-1">
-        <span title={`Grok Build / ${agent.model}`} className={`${BADGE_CLASS} bg-cyan-600/20 text-cyan-400 border border-cyan-600/30`}>
+        <span
+          title={`Grok Build / ${agent.model}`}
+          className={`${BADGE_CLASS} bg-cyan-600/20 text-cyan-400 border border-cyan-600/30`}
+        >
           Grok Build
         </span>
         <span className="px-1.5 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400">{agent.model}</span>
@@ -160,10 +151,15 @@ export function SubAgentsPage() {
     [agents],
   );
   const kindCounts = useMemo(() => {
-    let workflow = 0, library = 0;
+    let workflow = 0,
+      library = 0;
     for (const a of agents) {
-      if (!a.squad) { library++; continue; }
-      if (categoryKind(a.squad) === 'workflow') workflow++; else library++;
+      if (!a.squad) {
+        library++;
+        continue;
+      }
+      if (categoryKind(a.squad) === 'workflow') workflow++;
+      else library++;
     }
     return { workflow, library };
   }, [agents]);
@@ -196,8 +192,7 @@ export function SubAgentsPage() {
       .filter((a) => {
         if (!trimmedQuery) return true;
         return (
-          a.name.toLowerCase().includes(trimmedQuery) ||
-          (a.description ?? '').toLowerCase().includes(trimmedQuery)
+          a.name.toLowerCase().includes(trimmedQuery) || (a.description ?? '').toLowerCase().includes(trimmedQuery)
         );
       });
   }, [agents, activeKind, activeSquad, filterModel, searchName]);
@@ -220,7 +215,12 @@ export function SubAgentsPage() {
 
   const handleSave = async (agentData: Omit<AgentConfig, 'sortOrder'>) => {
     if (formModal?.mode === 'edit' && formModal.agent) {
-      await window.lionclaw.agents.update(formModal.agent.id, agentData);
+      await window.lionclaw.agents.update(formModal.agent.id, {
+        ...agentData,
+        localConfig: agentData.localConfig ?? null,
+        externalConfig: agentData.externalConfig ?? null,
+        codexConfig: agentData.codexConfig ?? null,
+      });
     } else {
       await window.lionclaw.agents.create(agentData);
     }
@@ -273,10 +273,7 @@ export function SubAgentsPage() {
         {/* Filters: name search + model dropdown */}
         <div className="flex flex-col sm:flex-row gap-2 mb-4">
           <div className="relative flex-1">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"
-            />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
             <input
               type="text"
               value={searchName}
@@ -304,11 +301,13 @@ export function SubAgentsPage() {
           <div className="mb-5">
             {/* Nivel 1: tipo (Todos / Workflow / Biblioteca) */}
             <div className="flex items-center gap-1 border-b border-zinc-800">
-              {([
-                { key: 'all', label: 'Todos', count: agents.length },
-                { key: 'workflow', label: 'Workflow', count: kindCounts.workflow },
-                { key: 'library', label: 'Biblioteca', count: kindCounts.library },
-              ] as const).map((tab) => (
+              {(
+                [
+                  { key: 'all', label: 'Todos', count: agents.length },
+                  { key: 'workflow', label: 'Workflow', count: kindCounts.workflow },
+                  { key: 'library', label: 'Biblioteca', count: kindCounts.library },
+                ] as const
+              ).map((tab) => (
                 <button
                   key={tab.key}
                   onClick={() => selectKind(tab.key)}
@@ -365,95 +364,94 @@ export function SubAgentsPage() {
             Nenhum agente encontrado com esses filtros
           </div>
         ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filtered.map((agent) => (
-            <div
-              key={agent.id}
-              className={`bg-zinc-900 border rounded-xl p-4 transition-colors ${
-                agent.isActive ? 'border-zinc-800' : 'border-zinc-800/50 opacity-60'
-              }`}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                    <Bot size={18} className="text-amber-500" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-semibold text-zinc-200">{agent.name}</h3>
-                      <RuntimeBadge agent={agent} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filtered.map((agent) => (
+              <div
+                key={agent.id}
+                className={`bg-zinc-900 border rounded-xl p-4 transition-colors ${
+                  agent.isActive ? 'border-zinc-800' : 'border-zinc-800/50 opacity-60'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                      <Bot size={18} className="text-amber-500" />
                     </div>
-                    <p className="text-xs text-zinc-500">
-                      {agent.runtime === 'local' ? (
-                        <span className="text-green-400">{agent.localConfig?.provider} - {agent.localConfig?.model}</span>
-                      ) : agent.runtime === 'external' ? (
-                        <span style={{ color: '#C2410C' }}>{agent.externalConfig?.model}</span>
-                      ) : agent.runtime === 'zai' ? (
-                        <span className="text-cyan-400">{agent.model}</span>
-                      ) : (
-                        agent.model
-                      )}
-                    </p>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-zinc-200">{agent.name}</h3>
+                        <RuntimeBadge agent={agent} />
+                      </div>
+                      <p className="text-xs text-zinc-500">
+                        {agent.runtime === 'local' ? (
+                          <span className="text-green-400">
+                            {agent.localConfig?.provider} - {agent.localConfig?.model}
+                          </span>
+                        ) : agent.runtime === 'external' ? (
+                          <span style={{ color: '#C2410C' }}>{agent.externalConfig?.model}</span>
+                        ) : agent.runtime === 'zai' ? (
+                          <span className="text-cyan-400">{agent.model}</span>
+                        ) : (
+                          agent.model
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => toggleActive(agent)}
+                      className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+                      title={agent.isActive ? 'Desativar' : 'Ativar'}
+                    >
+                      {agent.isActive ? <Power size={14} /> : <PowerOff size={14} />}
+                    </button>
+                    <button
+                      onClick={() => setFormModal({ mode: 'edit', agent })}
+                      className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
+                      title="Editar"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget(agent)}
+                      className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-red-400 transition-colors"
+                      title="Excluir"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => toggleActive(agent)}
-                    className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
-                    title={agent.isActive ? 'Desativar' : 'Ativar'}
-                  >
-                    {agent.isActive ? <Power size={14} /> : <PowerOff size={14} />}
-                  </button>
-                  <button
-                    onClick={() => setFormModal({ mode: 'edit', agent })}
-                    className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors"
-                    title="Editar"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget(agent)}
-                    className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-red-400 transition-colors"
-                    title="Excluir"
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                <p className="text-xs text-zinc-400 mb-3">{agent.description}</p>
+
+                {/* Tools */}
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {agent.allowedTools.slice(0, 5).map((tool) => (
+                    <span key={tool} className="px-2 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400">
+                      {tool}
+                    </span>
+                  ))}
+                  {agent.allowedTools.length > 5 && (
+                    <span className="px-2 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400">
+                      +{agent.allowedTools.length - 5}
+                    </span>
+                  )}
+                </div>
+
+                {/* Skills + Effort/Thinking */}
+                <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+                  <span>Effort: {agent.effort}</span>
+                  <span>|</span>
+                  <span>Thinking: {agent.thinking}</span>
+                  {agent.skills.length > 0 && (
+                    <>
+                      <span>|</span>
+                      <span>Skills: {agent.skills.join(', ')}</span>
+                    </>
+                  )}
                 </div>
               </div>
-              <p className="text-xs text-zinc-400 mb-3">{agent.description}</p>
-
-              {/* Tools */}
-              <div className="flex flex-wrap gap-1 mb-2">
-                {agent.allowedTools.slice(0, 5).map((tool) => (
-                  <span
-                    key={tool}
-                    className="px-2 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400"
-                  >
-                    {tool}
-                  </span>
-                ))}
-                {agent.allowedTools.length > 5 && (
-                  <span className="px-2 py-0.5 bg-zinc-800 rounded text-[10px] text-zinc-400">
-                    +{agent.allowedTools.length - 5}
-                  </span>
-                )}
-              </div>
-
-              {/* Skills + Effort/Thinking */}
-              <div className="flex items-center gap-2 text-[10px] text-zinc-500">
-                <span>Effort: {agent.effort}</span>
-                <span>|</span>
-                <span>Thinking: {agent.thinking}</span>
-                {agent.skills.length > 0 && (
-                  <>
-                    <span>|</span>
-                    <span>Skills: {agent.skills.join(', ')}</span>
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
         )}
       </div>
 

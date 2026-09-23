@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const h = vi.hoisted(() => {
@@ -67,7 +66,6 @@ vi.mock('../ask-question', () => ({ resolveAskQuestion: vi.fn() }));
 vi.mock('../ipc/_shared/chat-compaction', () => ({
   compactActiveChatSession: vi.fn(),
   clearSDKSessionFiles: vi.fn(),
-  getTelegramActiveThreadIds: vi.fn(() => []),
 }));
 
 import { registerChatHandlers } from '../ipc/chat';
@@ -87,7 +85,7 @@ function mockOrchestrator(model = 'claude-fable-5', provider = 'anthropic'): voi
   h.getSettingMock.mockImplementation((key) => {
     if (key === 'orchestrator_model') return model;
     if (key === 'orchestrator_provider') return provider;
-    return undefined; // threshold ausente -> default unificado (80)
+    return undefined;
   });
 }
 
@@ -101,7 +99,11 @@ beforeEach(() => {
 describe('UX-CTX-2 (main) — chat:get-context-usage hidrata a barrinha ao abrir sessao', () => {
   it('sessao com tokens + modelo conhecido -> shape do chunk context_usage (source estimate)', () => {
     mockOrchestrator();
-    h.getSessionMock.mockReturnValue({ id: 's1', activeContextTokensEst: 123_456 });
+    h.getSessionMock.mockReturnValue({
+      id: 's1',
+      activeContextTokensEst: 123_456,
+      orchestrator: { runtime: 'claude-sdk', provider: 'anthropic', model: 'claude-fable-5' },
+    });
 
     const result = invokeGetContextUsage('s1');
 
@@ -144,7 +146,7 @@ describe('UX-CTX-2 (main) — chat:get-context-usage hidrata a barrinha ao abrir
   });
 
   it('orchestrator_model ausente -> null (buildChatContextUsage sem modelo)', () => {
-    h.getSettingMock.mockReturnValue(undefined); // nenhum modelo configurado
+    h.getSettingMock.mockReturnValue(undefined);
     h.getSessionMock.mockReturnValue({ id: 's1', activeContextTokensEst: 5000 });
 
     expect(invokeGetContextUsage('s1')).toBeNull();

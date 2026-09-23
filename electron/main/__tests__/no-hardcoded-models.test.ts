@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -69,8 +68,7 @@ function listTsFiles(absDir: string): string[] {
   return out;
 }
 
-const STRING_LITERAL =
-  /'([^'\\]*(?:\\.[^'\\]*)*)'|"([^"\\]*(?:\\.[^"\\]*)*)"|`([^`\\$]*)`?/g;
+const STRING_LITERAL = /'([^'\\]*(?:\\.[^'\\]*)*)'|"([^"\\]*(?:\\.[^"\\]*)*)"|`([^`\\$]*)`?/g;
 
 interface Violation {
   file: string;
@@ -126,8 +124,7 @@ function scanFile(absPath: string, relPath: string): { violations: Violation[]; 
       const normalized = lit.endsWith('-') ? lit.slice(0, -1) : lit;
       if (RUNTIME_EXCLUSIONS.has(lit) || RUNTIME_EXCLUSIONS.has(normalized)) continue;
       const before = line.slice(0, m.index);
-      const inExecContext =
-        /\bmodel\s*[:=]\s*$/i.test(before) || /\|\|\s*$/.test(before) || /\?\?\s*$/.test(before);
+      const inExecContext = /\bmodel\s*[:=]\s*$/i.test(before) || /\|\|\s*$/.test(before) || /\?\?\s*$/.test(before);
       if (!inExecContext) continue;
       violations.push({ file: relPath, line: i + 1, reason: `model literal '${lit}'`, text: raw.trim() });
     }
@@ -152,9 +149,7 @@ describe('gate anti-hardcode de modelos (SPEC orquestrador-fonte-unica secao 6, 
 
   it('nao ha literal de modelo hardcoded fora da allowlist (AC-2)', () => {
     if (allViolations.length > 0) {
-      const report = allViolations
-        .map((v) => `  ${v.file}:${v.line}  [${v.reason}]  ${v.text}`)
-        .join('\n');
+      const report = allViolations.map((v) => `  ${v.file}:${v.line}  [${v.reason}]  ${v.text}`).join('\n');
       throw new Error(
         `Gate anti-hardcode: ${allViolations.length} violacao(oes) de literal de modelo em ` +
           `contexto de execucao fora da allowlist.\n` +

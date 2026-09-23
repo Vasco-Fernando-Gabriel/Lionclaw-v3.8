@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../db', () => ({ insertAuditEntry: vi.fn() }));
-import {
-  createGrokAccumulator,
-  translateGrokSessionUpdate,
-  type GrokAcpResponse,
-} from '../grok-acp/acp-translator';
+import { createGrokAccumulator, translateGrokSessionUpdate, type GrokAcpResponse } from '../grok-acp/acp-translator';
 import { buildGrokUsageSnapshot, createGrokStreamTranslator } from '../grok-sdk/stream-translator';
 import type { AuditEntry, StreamChunk } from '../../../src/types';
 
@@ -30,47 +26,62 @@ describe('Grok authoritative stream usage', () => {
       onAuditEntry: (entry) => audits.push(entry),
     });
     const accumulator = createGrokAccumulator();
-    translateGrokSessionUpdate({
-      sessionUpdate: 'tool_call',
-      toolCallId: 'tool-1',
-      title: 'Read',
-      rawInput: { file_path: '/repo/a.ts' },
-    }, accumulator, translator.callbacks);
-    translateGrokSessionUpdate({
-      sessionUpdate: 'tool_call_update',
-      toolCallId: 'tool-1',
-      status: 'completed',
-      rawOutput: 'conteudo real',
-    }, accumulator, translator.callbacks);
+    translateGrokSessionUpdate(
+      {
+        sessionUpdate: 'tool_call',
+        toolCallId: 'tool-1',
+        title: 'Read',
+        rawInput: { file_path: '/repo/a.ts' },
+      },
+      accumulator,
+      translator.callbacks,
+    );
+    translateGrokSessionUpdate(
+      {
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 'tool-1',
+        status: 'completed',
+        rawOutput: 'conteudo real',
+      },
+      accumulator,
+      translator.callbacks,
+    );
 
-    expect(chunks).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: 'tool_result', tool: 'Read', result: 'conteudo real' }),
-    ]));
-    expect(chunks).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: 'tool_result', result: '{"file_path":"/repo/a.ts"}' }),
-    ]));
-    expect(audits).toEqual(expect.arrayContaining([
-      expect.objectContaining({ eventType: 'tool_result', toolName: 'Read', output: 'conteudo real' }),
-    ]));
+    expect(chunks).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'tool_result', tool: 'Read', result: 'conteudo real' })]),
+    );
+    expect(chunks).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'tool_result', result: '{"file_path":"/repo/a.ts"}' })]),
+    );
+    expect(audits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ eventType: 'tool_result', toolName: 'Read', output: 'conteudo real' }),
+      ]),
+    );
   });
 
   it('emits one honest estimated snapshot when provider usage is absent', () => {
-    expect(buildGrokUsageSnapshot(response(), 'grok-4.5', { inputTokens: 12, outputTokens: 3 }))
-      .toMatchObject({
-        inputTokens: 12,
-        outputTokens: 3,
-        estimated: true,
-        costUsd: null,
-        costStatus: 'unknown',
-        tokenStatus: 'not_reported',
-      });
+    expect(buildGrokUsageSnapshot(response(), 'grok-4.5', { inputTokens: 12, outputTokens: 3 })).toMatchObject({
+      inputTokens: 12,
+      outputTokens: 3,
+      estimated: true,
+      costUsd: null,
+      costStatus: 'unknown',
+      tokenStatus: 'not_reported',
+    });
   });
 
   it('mantem usage unilateral como estimado e custo desconhecido', () => {
-    expect(buildGrokUsageSnapshot(response({
-      usage: { inputTokens: 100, outputTokens: 0, cacheReadTokens: 10, cacheCreationTokens: 0 },
-      metadata: { costUsdTicks: 1_250_000_000 },
-    }), 'grok-4.5', { inputTokens: 12, outputTokens: 3 })).toMatchObject({
+    expect(
+      buildGrokUsageSnapshot(
+        response({
+          usage: { inputTokens: 100, outputTokens: 0, cacheReadTokens: 10, cacheCreationTokens: 0 },
+          metadata: { costUsdTicks: 1_250_000_000 },
+        }),
+        'grok-4.5',
+        { inputTokens: 12, outputTokens: 3 },
+      ),
+    ).toMatchObject({
       inputTokens: 12,
       outputTokens: 3,
       estimated: true,
@@ -81,10 +92,16 @@ describe('Grok authoritative stream usage', () => {
   });
 
   it('uses provider ticks as the authoritative PAYG-equivalent cost', () => {
-    expect(buildGrokUsageSnapshot(response({
-      usage: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 10, cacheCreationTokens: 0 },
-      metadata: { costUsdTicks: 1_250_000_000 },
-    }), 'grok-4.5', { inputTokens: 1, outputTokens: 1 })).toMatchObject({
+    expect(
+      buildGrokUsageSnapshot(
+        response({
+          usage: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 10, cacheCreationTokens: 0 },
+          metadata: { costUsdTicks: 1_250_000_000 },
+        }),
+        'grok-4.5',
+        { inputTokens: 1, outputTokens: 1 },
+      ),
+    ).toMatchObject({
       inputTokens: 100,
       outputTokens: 20,
       costUsd: 0.125,
@@ -94,9 +111,15 @@ describe('Grok authoritative stream usage', () => {
   });
 
   it('nao usa ticks como custo conhecido quando tokens nao foram reportados', () => {
-    expect(buildGrokUsageSnapshot(response({
-      metadata: { costUsdTicks: 1_250_000_000 },
-    }), 'grok-4.5', { inputTokens: 12, outputTokens: 3 })).toMatchObject({
+    expect(
+      buildGrokUsageSnapshot(
+        response({
+          metadata: { costUsdTicks: 1_250_000_000 },
+        }),
+        'grok-4.5',
+        { inputTokens: 12, outputTokens: 3 },
+      ),
+    ).toMatchObject({
       inputTokens: 12,
       outputTokens: 3,
       estimated: true,
@@ -108,10 +131,16 @@ describe('Grok authoritative stream usage', () => {
   });
 
   it('keeps aggregate cost unknown without per-call breakdown', () => {
-    expect(buildGrokUsageSnapshot(response({
-      usage: { inputTokens: 300_000, outputTokens: 10, cacheReadTokens: 0, cacheCreationTokens: 0 },
-      metadata: { modelCalls: 2 },
-    }), 'grok-4.5', { inputTokens: 1, outputTokens: 1 })).toMatchObject({
+    expect(
+      buildGrokUsageSnapshot(
+        response({
+          usage: { inputTokens: 300_000, outputTokens: 10, cacheReadTokens: 0, cacheCreationTokens: 0 },
+          metadata: { modelCalls: 2 },
+        }),
+        'grok-4.5',
+        { inputTokens: 1, outputTokens: 1 },
+      ),
+    ).toMatchObject({
       costUsd: null,
       costStatus: 'unknown',
       costUnknownReason: 'insufficient-per-call-pricing-breakdown',
@@ -119,49 +148,61 @@ describe('Grok authoritative stream usage', () => {
   });
 
   it('keeps cost unknown when modelUsage covers fewer calls than the aggregate', () => {
-    expect(buildGrokUsageSnapshot(response({
-      usage: { inputTokens: 200_000, outputTokens: 20, cacheReadTokens: 0, cacheCreationTokens: 0 },
-      metadata: {
-        modelCalls: 3,
-        modelUsage: {
-          'grok-4.5': {
-            inputTokens: 100_000,
-            outputTokens: 10,
-            cachedReadTokens: 0,
-            reasoningTokens: 0,
-            modelCalls: 1,
+    expect(
+      buildGrokUsageSnapshot(
+        response({
+          usage: { inputTokens: 200_000, outputTokens: 20, cacheReadTokens: 0, cacheCreationTokens: 0 },
+          metadata: {
+            modelCalls: 3,
+            modelUsage: {
+              'grok-4.5': {
+                inputTokens: 100_000,
+                outputTokens: 10,
+                cachedReadTokens: 0,
+                reasoningTokens: 0,
+                modelCalls: 1,
+              },
+              'grok-4.5-fast': {
+                inputTokens: 100_000,
+                outputTokens: 10,
+                cachedReadTokens: 0,
+                reasoningTokens: 0,
+                modelCalls: 1,
+              },
+            },
           },
-          'grok-4.5-fast': {
-            inputTokens: 100_000,
-            outputTokens: 10,
-            cachedReadTokens: 0,
-            reasoningTokens: 0,
-            modelCalls: 1,
-          },
-        },
-      },
-    }), 'grok-4.5', { inputTokens: 1, outputTokens: 1 })).toMatchObject({
+        }),
+        'grok-4.5',
+        { inputTokens: 1, outputTokens: 1 },
+      ),
+    ).toMatchObject({
       costUsd: null,
       costStatus: 'unknown',
     });
   });
 
   it('keeps cost unknown when a detailed model has no known pricing', () => {
-    expect(buildGrokUsageSnapshot(response({
-      usage: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 0, cacheCreationTokens: 0 },
-      metadata: {
-        modelCalls: 1,
-        modelUsage: {
-          'grok-internal-unknown': {
-            inputTokens: 100,
-            outputTokens: 20,
-            cachedReadTokens: 0,
-            reasoningTokens: 0,
+    expect(
+      buildGrokUsageSnapshot(
+        response({
+          usage: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 0, cacheCreationTokens: 0 },
+          metadata: {
             modelCalls: 1,
+            modelUsage: {
+              'grok-internal-unknown': {
+                inputTokens: 100,
+                outputTokens: 20,
+                cachedReadTokens: 0,
+                reasoningTokens: 0,
+                modelCalls: 1,
+              },
+            },
           },
-        },
-      },
-    }), 'grok-4.5', { inputTokens: 1, outputTokens: 1 })).toMatchObject({
+        }),
+        'grok-4.5',
+        { inputTokens: 1, outputTokens: 1 },
+      ),
+    ).toMatchObject({
       costUsd: null,
       costStatus: 'unknown',
     });

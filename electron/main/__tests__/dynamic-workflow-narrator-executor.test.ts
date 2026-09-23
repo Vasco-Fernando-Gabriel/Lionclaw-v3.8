@@ -1,11 +1,6 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import type { AgentConfig } from '../../../src/types';
-import type {
-  AgentExecutionRequest,
-  AgentExecutionResult,
-  RuntimeExecutor,
-} from '../agent-runtime/types';
+import type { AgentExecutionRequest, AgentExecutionResult, RuntimeExecutor } from '../agent-runtime/types';
 
 vi.mock('../agent-runtime/cloud-executor', () => ({ cloudExecutor: { run: vi.fn() } }));
 vi.mock('../agent-runtime/zai-executor', () => ({ zaiExecutor: { run: vi.fn() } }));
@@ -24,8 +19,7 @@ vi.mock('../agent-runtime/watchdog', () => ({
     wrapOnText: (cb?: (c: string) => void) => cb ?? ((): void => {}),
     wrapOnThinking: (cb?: (c: string) => void) => cb ?? ((): void => {}),
     wrapOnToolUse: (cb?: (t: string) => void) => cb ?? ((): void => {}),
-    wrapOnToolUseComplete: (cb?: (t: string, i: unknown) => void) =>
-      cb ?? ((): void => {}),
+    wrapOnToolUseComplete: (cb?: (t: string, i: unknown) => void) => cb ?? ((): void => {}),
     wrapOnActivity: (cb?: () => void) => cb ?? ((): void => {}),
   }),
 }));
@@ -35,10 +29,7 @@ vi.mock('../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
 
-import {
-  buildNarratorQueryConfig,
-  executeNarrator,
-} from '../dynamic-workflows/workflow-narrator-executor';
+import { buildNarratorQueryConfig, executeNarrator } from '../dynamic-workflows/workflow-narrator-executor';
 import { DYNAMIC_WORKFLOW_MAESTRO_ID } from '../seed-agents/dynamic-workflow-builder';
 
 function narratorSeed(overrides: Partial<AgentConfig> = {}): AgentConfig {
@@ -83,8 +74,7 @@ describe('buildNarratorQueryConfig - leanness + zero poder (fechamento S2)', () 
 
   it('config de narracao NAO contem nenhuma tool de escrita/controle do dominio', () => {
     const config = buildNarratorQueryConfig(narratorSeed());
-    const forbidden =
-      /approve|intervene|author|edit_coordinator|abort|reply|inspect|Write|Edit|Bash/;
+    const forbidden = /approve|intervene|author|edit_coordinator|abort|reply|inspect|Write|Edit|Bash/;
     for (const tool of config.allowedTools) {
       expect(tool, `tool proibida num turno de narracao: ${tool}`).not.toMatch(forbidden);
     }
@@ -93,9 +83,7 @@ describe('buildNarratorQueryConfig - leanness + zero poder (fechamento S2)', () 
 
   it('model = o model configurado no agent (editavel em SubAgents, nunca hardcoded)', () => {
     expect(buildNarratorQueryConfig(narratorSeed()).model).toBe('claude-sonnet-4-6');
-    expect(
-      buildNarratorQueryConfig(narratorSeed({ model: 'claude-opus-4-8' })).model,
-    ).toBe('claude-opus-4-8');
+    expect(buildNarratorQueryConfig(narratorSeed({ model: 'claude-opus-4-8' })).model).toBe('claude-opus-4-8');
   });
 
   it('o codigo morto do Maestro-controlador nao existe mais no modulo (exports honestos)', async () => {
@@ -184,8 +172,8 @@ describe('executeNarrator - despacho dedicado (sem executeAgent)', () => {
   });
 
   it('lanca se o seed do narrador nao existir', async () => {
-    await expect(
-      executeNarrator({ prompt: 'p', cwd: '/tmp' }, { getAgent: () => undefined }),
-    ).rejects.toThrow(/Narrador seed nao encontrado/);
+    await expect(executeNarrator({ prompt: 'p', cwd: '/tmp' }, { getAgent: () => undefined })).rejects.toThrow(
+      /Narrador seed nao encontrado/,
+    );
   });
 });

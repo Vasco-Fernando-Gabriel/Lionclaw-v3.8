@@ -1,4 +1,3 @@
-
 import { ChildProcess, spawn } from 'child_process';
 import { Readable } from 'stream';
 import { createLogger } from './logger';
@@ -34,9 +33,7 @@ export function classifyMcpStderr(stderr: string): 'debug' | 'warn' {
   const text = stderr.trim();
   if (!text) return 'debug';
   if (ERRORISH_STDERR_PATTERN.test(text)) return 'warn';
-  return BENIGN_STDERR_PATTERNS.some((pattern) => pattern.test(text))
-    ? 'debug'
-    : 'warn';
+  return BENIGN_STDERR_PATTERNS.some((pattern) => pattern.test(text)) ? 'debug' : 'warn';
 }
 
 function logMcpStderr(serverId: string, data: Buffer): void {
@@ -50,7 +47,6 @@ function logMcpStderr(serverId: string, data: Buffer): void {
   }
   logger.warn({ serverId, stderr }, 'MCP server stderr');
 }
-
 
 export interface McpServerSpec {
   command: string;
@@ -87,10 +83,8 @@ export interface McpSetupFailure {
   error: string;
 }
 
-
 const JSONRPC_TIMEOUT_MS = 10_000;
 const INIT_TIMEOUT_MS = 8_000;
-
 
 function attachStdoutListener(conn: McpServerConnection, readable: Readable): void {
   (readable as Readable).on('data', (chunk: Buffer) => {
@@ -163,8 +157,14 @@ function sendJsonRpc(
     }, timeoutMs);
 
     conn.pending.set(id, {
-      resolve: (value) => { cleanup(); resolve(value); },
-      reject: (err) => { cleanup(); reject(err); },
+      resolve: (value) => {
+        cleanup();
+        resolve(value);
+      },
+      reject: (err) => {
+        cleanup();
+        reject(err);
+      },
     });
 
     signal?.addEventListener('abort', onAbort, { once: true });
@@ -177,11 +177,17 @@ async function initializeAndDiscoverTools(
   conn: McpServerConnection,
   signal?: AbortSignal,
 ): Promise<McpToolDescriptor[]> {
-  await sendJsonRpc(conn, 'initialize', {
-    protocolVersion: '2024-11-05',
-    capabilities: {},
-    clientInfo: { name: 'lionclaw', version: getAppVersion() },
-  }, undefined, signal);
+  await sendJsonRpc(
+    conn,
+    'initialize',
+    {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'lionclaw', version: getAppVersion() },
+    },
+    undefined,
+    signal,
+  );
 
   conn.stdin?.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }) + '\n');
 
@@ -191,21 +197,19 @@ async function initializeAndDiscoverTools(
 
   if (!Array.isArray(rawTools)) return [];
 
-  return rawTools.map((t: unknown) => {
-    const tool = t as Record<string, unknown>;
-    return {
-      name: (tool['name'] as string) ?? '',
-      description: (tool['description'] as string) ?? undefined,
-      inputSchema: tool['inputSchema'] as McpToolDescriptor['inputSchema'] ?? undefined,
-    };
-  }).filter((t) => t.name !== '');
+  return rawTools
+    .map((t: unknown) => {
+      const tool = t as Record<string, unknown>;
+      return {
+        name: (tool['name'] as string) ?? '',
+        description: (tool['description'] as string) ?? undefined,
+        inputSchema: (tool['inputSchema'] as McpToolDescriptor['inputSchema']) ?? undefined,
+      };
+    })
+    .filter((t) => t.name !== '');
 }
 
-
-export function mcpToolToOpenAISchema(
-  serverId: string,
-  mcpTool: McpToolDescriptor,
-): OllamaToolSchema {
+export function mcpToolToOpenAISchema(serverId: string, mcpTool: McpToolDescriptor): OllamaToolSchema {
   const properties = mcpTool.inputSchema?.properties ?? {};
   const required = mcpTool.inputSchema?.required;
 
@@ -224,7 +228,6 @@ export function mcpToolToOpenAISchema(
 
   return schema;
 }
-
 
 async function spawnTemporaryMCPServer(
   serverId: string,
@@ -327,8 +330,6 @@ async function spawnTemporaryMCPServer(
   return conn;
 }
 
-
-
 export async function setupMCPsForSession(
   servers: Record<string, McpServerSpec>,
   opts?: { signal?: AbortSignal },
@@ -365,7 +366,11 @@ export async function setupMCPsForSession(
       const message = err instanceof Error ? err.message : String(err);
       failures.push({ serverId, error: message });
       if (conn) {
-        try { conn.proc?.kill(); } catch { /* processo já encerrou */ }
+        try {
+          conn.proc?.kill();
+        } catch {
+          /* processo já encerrou */
+        }
         for (const [, pending] of conn.pending) {
           pending.reject(new Error(`MCP server ${serverId} indisponível: ${message}`));
         }
@@ -375,14 +380,10 @@ export async function setupMCPsForSession(
   }
 
   const client: McpSessionClient = { connections };
-  logger.debug(
-    { serverCount: connections.length, toolCount: allTools.length },
-    'MCP session setup complete',
-  );
+  logger.debug({ serverCount: connections.length, toolCount: allTools.length }, 'MCP session setup complete');
 
   return { client, tools: allTools, failures };
 }
-
 
 export async function teardownMCPsForSession(client: McpSessionClient): Promise<void> {
   for (const conn of client.connections) {
@@ -405,12 +406,15 @@ export async function teardownMCPsForSession(client: McpSessionClient): Promise<
   logger.debug({ count: client.connections.length }, 'MCP session teardown complete');
 }
 
-
 export async function callMCPTool(
   client: McpSessionClient,
   toolName: string,
   args: unknown,
-  opts?: { timeoutMs?: number; signal?: AbortSignal },
+  opts?: {
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    binding?: { sessionId: string; turnId: string; lane?: string };
+  },
 ): Promise<unknown> {
   const parts = toolName.split('__');
   if (parts.length < 3 || parts[0] !== 'mcp') {
@@ -433,6 +437,7 @@ export async function callMCPTool(
     {
       name: actualToolName,
       arguments: args ?? {},
+      ...(opts?.binding ? { _meta: { lionclaw: { ...opts.binding } } } : {}),
     },
     opts?.timeoutMs,
     opts?.signal,
@@ -442,7 +447,6 @@ export async function callMCPTool(
 
   return normalizeMcpToolCallResult(result, { serverId, toolName: actualToolName });
 }
-
 
 export interface McpEmptyErrorResult {
   isError: true;
@@ -459,10 +463,7 @@ export function isMcpEmptyErrorResult(value: unknown): value is McpEmptyErrorRes
   );
 }
 
-export function normalizeMcpToolCallResult(
-  result: unknown,
-  ctx: { serverId: string; toolName: string },
-): unknown {
+export function normalizeMcpToolCallResult(result: unknown, ctx: { serverId: string; toolName: string }): unknown {
   if (result !== null && result !== undefined) return result;
   const empty: McpEmptyErrorResult = {
     isError: true,
@@ -474,6 +475,9 @@ export function normalizeMcpToolCallResult(
       },
     ],
   };
-  logger.warn({ serverId: ctx.serverId, toolName: ctx.toolName, code: 'MCP-EMPTY' }, 'MCP tools/call returned empty result');
+  logger.warn(
+    { serverId: ctx.serverId, toolName: ctx.toolName, code: 'MCP-EMPTY' },
+    'MCP tools/call returned empty result',
+  );
   return empty;
 }

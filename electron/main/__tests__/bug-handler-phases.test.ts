@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -56,7 +55,6 @@ import type { HarnessProject } from '../../../src/types';
 
 const repoRoot = path.resolve(__dirname, '../../..');
 
-
 let projectPath = '';
 
 function makeState(): HandlerPhaseState {
@@ -97,7 +95,11 @@ interface CtxRecord {
 }
 
 function makeCtx(
-  onSpawn: (agentId: string, prompt: string, opts: Record<string, unknown>) => SpawnAgentResult | Promise<SpawnAgentResult>,
+  onSpawn: (
+    agentId: string,
+    prompt: string,
+    opts: Record<string, unknown>,
+  ) => SpawnAgentResult | Promise<SpawnAgentResult>,
   analysisOutputs?: Record<string, string>,
 ): CtxRecord {
   const spawns: CtxRecord['spawns'] = [];
@@ -130,8 +132,9 @@ function makeCtx(
     },
     buildPriorMessagesForPhase: () => undefined,
     makeConversationOnText:
-      (_projectId: string, _phase: number, acc: { text: string; completed: boolean }) =>
-        (chunk: string) => { acc.text += chunk; },
+      (_projectId: string, _phase: number, acc: { text: string; completed: boolean }) => (chunk: string) => {
+        acc.text += chunk;
+      },
     createBugAnalysisRunner: () => new BugAnalysisRunner(fakeEngine),
     PHASE_COMPLETE_MARKER: '[PHASE_COMPLETE]',
   } as unknown as PipelineEngineContext;
@@ -163,7 +166,11 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  try { getDb().close(); } catch { /* handle ja invalido */ }
+  try {
+    getDb().close();
+  } catch {
+    /* handle ja invalido */
+  }
   fs.rmSync(state.home, { recursive: true, force: true });
 });
 
@@ -172,7 +179,6 @@ beforeEach(() => {
   projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'lionclaw-bug-proj-'));
   execFileSync('git', ['init', '-q'], { cwd: projectPath, stdio: 'ignore' });
 });
-
 
 describe('Fase 1 — gating write do runId (TB-7)', () => {
   it('grava config.bug.runId preservando o resto de config E o resto de config.bug', async () => {
@@ -227,7 +233,6 @@ describe('Fase 1 — gating write do runId (TB-7)', () => {
   });
 });
 
-
 describe('Fase 2 — metricas e estado dos agentes (secao 4.7.2)', () => {
   it('3 linhas por agente (sprint_index 1/2/3) + 1 agregada (sprint_index -1, aggregateOnly)', async () => {
     const project = createBugProject({ ...BASE_CONFIG });
@@ -253,12 +258,14 @@ describe('Fase 2 — metricas e estado dos agentes (secao 4.7.2)', () => {
     expect(fs.readFileSync(bugCtx.analise02Path, 'utf-8')).toBe('# Historico');
     expect(fs.readFileSync(bugCtx.analise03Path, 'utf-8')).toBe('# Refutacao');
 
-    const rows = getDb().prepare(
-      `SELECT agent_id, sprint_index, metadata, cost_usd, duration_ms, model, runtime
+    const rows = getDb()
+      .prepare(
+        `SELECT agent_id, sprint_index, metadata, cost_usd, duration_ms, model, runtime
        FROM pipeline_phase_metrics
        WHERE project_id = ? AND phase_number = 2
        ORDER BY sprint_index ASC`,
-    ).all(project.id) as Array<{
+      )
+      .all(project.id) as Array<{
       agent_id: string;
       sprint_index: number;
       metadata: string | null;
@@ -312,14 +319,13 @@ describe('Fase 2 — metricas e estado dos agentes (secao 4.7.2)', () => {
     const bugCtx = getBugContext(withRun)!;
     const rec2 = makeCtx(() => spawnResult('x'));
 
-    await expect(
-      runBugPhase2ParallelAnalysis(rec2.ctx, project.id, withRun, st),
-    ).rejects.toThrow(bugCtx.diagnosticoPath);
+    await expect(runBugPhase2ParallelAnalysis(rec2.ctx, project.id, withRun, st)).rejects.toThrow(
+      bugCtx.diagnosticoPath,
+    );
     expect(rec2.engineSpawns).toHaveLength(0);
     expect(fs.existsSync(bugCtx.analise01Path)).toBe(false);
   });
 });
-
 
 describe('Fase 3 — consolidacao', () => {
   it('usa o bug-solution-consolidator com os 4 paths absolutos e o gate de 2 saidas', async () => {
@@ -343,7 +349,13 @@ describe('Fase 3 — consolidacao', () => {
     expect(rec.spawns).toHaveLength(1);
     expect(rec.spawns[0].agentId).toBe('bug-solution-consolidator');
     const prompt = rec.spawns[0].prompt;
-    for (const p of [bugCtx.analise01Path, bugCtx.analise02Path, bugCtx.analise03Path, bugCtx.diagnosticoPath, bugCtx.planoPath]) {
+    for (const p of [
+      bugCtx.analise01Path,
+      bugCtx.analise02Path,
+      bugCtx.analise03Path,
+      bugCtx.diagnosticoPath,
+      bugCtx.planoPath,
+    ]) {
       expect(prompt).toContain(p);
     }
     expect(prompt).toContain('Aprovar');
@@ -356,7 +368,6 @@ describe('Fase 3 — consolidacao', () => {
     expect(rec.accumulated).toEqual([{ phase: 3 }]);
   });
 });
-
 
 describe('Fase 4 — spec-builder reusado (TB-15, TB-16, TB-33b)', () => {
   async function setupUpToPhase4() {
@@ -439,7 +450,6 @@ describe('Fase 4 — spec-builder reusado (TB-15, TB-16, TB-33b)', () => {
   });
 });
 
-
 describe('Fase 5 — bug-spec-validator', () => {
   it('audita a SPEC do runDir e emite document-updated so quando o arquivo muda', async () => {
     const project = createBugProject({ ...BASE_CONFIG });
@@ -463,9 +473,7 @@ describe('Fase 5 — bug-spec-validator', () => {
     expect(recNoEdit.spawns[0].agentId).toBe('bug-spec-validator');
     expect(recNoEdit.spawns[0].prompt).toContain(bugCtx.specPath);
     expect(recNoEdit.spawns[0].prompt).toContain(bugCtx.planoPath);
-    expect(
-      emitted.filter((e) => e.channel === 'pipeline:document-updated'),
-    ).toHaveLength(0);
+    expect(emitted.filter((e) => e.channel === 'pipeline:document-updated')).toHaveLength(0);
 
     emitted.length = 0;
     const stEdit = makeState();
@@ -481,19 +489,15 @@ describe('Fase 5 — bug-spec-validator', () => {
   });
 });
 
-
 describe('TB-22 / B-AC9 — permission profile e ausencia do spec builder proprio', () => {
-  const handlerSrc = fs.readFileSync(
-    path.join(repoRoot, 'electron/main/pipeline-engine/handlers/bug.ts'),
-    'utf-8',
-  );
-  const runnerSrc = fs.readFileSync(
-    path.join(repoRoot, 'electron/main/bug-analysis-runner.ts'),
-    'utf-8',
-  );
+  const handlerSrc = fs.readFileSync(path.join(repoRoot, 'electron/main/pipeline-engine/handlers/bug.ts'), 'utf-8');
+  const runnerSrc = fs.readFileSync(path.join(repoRoot, 'electron/main/bug-analysis-runner.ts'), 'utf-8');
 
   it('TB-22: nenhum dos dois arquivos chama executeAgent nem passa `permission`', () => {
-    for (const [label, src] of [['handlers/bug.ts', handlerSrc], ['bug-analysis-runner.ts', runnerSrc]] as const) {
+    for (const [label, src] of [
+      ['handlers/bug.ts', handlerSrc],
+      ['bug-analysis-runner.ts', runnerSrc],
+    ] as const) {
       expect(src, label).not.toContain('executeAgent(');
       expect(src, label).not.toContain('permission:');
       expect(src, label).not.toContain('permissionMode');
@@ -505,10 +509,7 @@ describe('TB-22 / B-AC9 — permission profile e ausencia do spec builder propri
   it('TB-22: todo spawn do Bug Pipe passa pelo spawnAgent do engine (PERM_BYPASS_NO_GUARD)', () => {
     expect(handlerSrc).toContain('ctx.spawnAgent(');
     expect(runnerSrc).toContain('this.pipelineEngine.spawnAgent(');
-    const engineSrc = fs.readFileSync(
-      path.join(repoRoot, 'electron/main/pipeline-engine/index.ts'),
-      'utf-8',
-    );
+    const engineSrc = fs.readFileSync(path.join(repoRoot, 'electron/main/pipeline-engine/index.ts'), 'utf-8');
     expect(engineSrc.split('executeAgent({').length - 1).toBe(1);
     expect(engineSrc).toContain('permission: PERM_BYPASS_NO_GUARD');
   });
@@ -532,14 +533,8 @@ describe('TB-22 / B-AC9 — permission profile e ausencia do spec builder propri
   });
 
   it('DECISAO 8: a interface do ctx declara createBugAnalysisRunner e o builder implementa', () => {
-    const ctxSrc = fs.readFileSync(
-      path.join(repoRoot, 'electron/main/pipeline-engine/handlers/context.ts'),
-      'utf-8',
-    );
-    const engineSrc = fs.readFileSync(
-      path.join(repoRoot, 'electron/main/pipeline-engine/index.ts'),
-      'utf-8',
-    );
+    const ctxSrc = fs.readFileSync(path.join(repoRoot, 'electron/main/pipeline-engine/handlers/context.ts'), 'utf-8');
+    const engineSrc = fs.readFileSync(path.join(repoRoot, 'electron/main/pipeline-engine/index.ts'), 'utf-8');
     expect(ctxSrc).toContain('createBugAnalysisRunner(): BugAnalysisRunner;');
     expect(engineSrc).toContain('createBugAnalysisRunner: () => new BugAnalysisRunner(this),');
   });

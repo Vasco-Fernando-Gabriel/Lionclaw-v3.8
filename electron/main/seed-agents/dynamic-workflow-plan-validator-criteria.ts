@@ -1,14 +1,9 @@
-
 import type { AgentConfig } from '../../../src/types';
 import { PT_BR_BLOCK } from './_shared/language-pt-br';
 
-export const DYNAMIC_WORKFLOW_PLAN_VALIDATOR_CRITERIA_ID =
-  'dynamic-workflow-plan-validator-criteria';
+export const DYNAMIC_WORKFLOW_PLAN_VALIDATOR_CRITERIA_ID = 'dynamic-workflow-plan-validator-criteria';
 
-export const dynamicWorkflowPlanValidatorCriteria: Omit<
-  AgentConfig,
-  'sortOrder'
-> = {
+export const dynamicWorkflowPlanValidatorCriteria: Omit<AgentConfig, 'sortOrder'> = {
   id: DYNAMIC_WORKFLOW_PLAN_VALIDATOR_CRITERIA_ID,
   name: 'Dynamic Workflow Plan Validator (Criterios)',
   description:

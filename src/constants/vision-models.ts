@@ -1,4 +1,3 @@
-
 export interface VisionModelOption {
   provider: 'openai' | 'anthropic';
   id: string;
@@ -6,8 +5,8 @@ export interface VisionModelOption {
 }
 
 export const VISION_MODELS: VisionModelOption[] = [
-  { provider: 'openai',    id: 'gpt-5.5',         displayName: 'GPT-5.5' },
-  { provider: 'openai',    id: 'gpt-5.4-mini',    displayName: 'GPT-5.4 Mini' },
+  { provider: 'openai', id: 'gpt-5.5', displayName: 'GPT-5.5' },
+  { provider: 'openai', id: 'gpt-5.4-mini', displayName: 'GPT-5.4 Mini' },
   { provider: 'anthropic', id: 'claude-opus-4-8', displayName: 'Claude Opus 4.8' },
   { provider: 'anthropic', id: 'claude-sonnet-5', displayName: 'Claude Sonnet 5' },
 ];

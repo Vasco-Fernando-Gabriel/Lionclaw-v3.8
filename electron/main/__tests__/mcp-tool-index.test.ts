@@ -1,10 +1,8 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
 }));
-
 
 interface StubServer {
   id: string;
@@ -97,10 +95,7 @@ describe('buildMcpToolIndex: formato por server', () => {
   });
 
   it('tool sem description (transicao pos-V126) lista so o nome', () => {
-    state.entries = [
-      entry('gmail', 'send_email', 'Envia um email'),
-      entry('gmail', 'tool_sem_descricao', null),
-    ];
+    state.entries = [entry('gmail', 'send_email', 'Envia um email'), entry('gmail', 'tool_sem_descricao', null)];
     const out = buildMcpToolIndex(OPTS);
     expect(out).toContain('- tool_sem_descricao');
     expect(out).not.toContain('- tool_sem_descricao:');
@@ -187,7 +182,7 @@ describe('buildMcpToolIndex: REGRA DURA (sem tokens mcp__server__tool)', () => {
       schemaToolName: 'mcp__gateway__mcp_schema',
     });
     const tokens = out.match(MCP_TOKEN_RE) ?? [];
-    expect(tokens.length).toBeGreaterThan(0); // a instrucao usa o nome real
+    expect(tokens.length).toBeGreaterThan(0);
     const whitelist = new Set(['mcp__gateway__mcp_invoke', 'mcp__gateway__mcp_schema']);
     for (const token of tokens) {
       expect(whitelist.has(token)).toBe(true);

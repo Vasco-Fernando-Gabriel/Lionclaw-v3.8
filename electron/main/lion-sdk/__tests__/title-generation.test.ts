@@ -43,7 +43,10 @@ vi.mock('../../logger', () => ({
 
 import { maybeGenerateLionSessionTitle } from '../title';
 
-function makeAdapter(events: LionStreamEvent[], name: LionAdapter['name'] = 'lmstudio'): {
+function makeAdapter(
+  events: LionStreamEvent[],
+  name: LionAdapter['name'] = 'lmstudio',
+): {
   adapter: LionAdapter;
   requests: LionStreamRequest[];
 } {
@@ -77,10 +80,7 @@ describe('Lion-SDK title generation', () => {
   });
 
   it('uses the same Lion-SDK model selected for chat to generate the first title', async () => {
-    const { adapter, requests } = makeAdapter([
-      { type: 'text', delta: '"Excalidraw MCP Preview."' },
-      { type: 'done' },
-    ]);
+    const { adapter, requests } = makeAdapter([{ type: 'text', delta: '"Excalidraw MCP Preview."' }, { type: 'done' }]);
     const win = makeWindow();
 
     await maybeGenerateLionSessionTitle({
@@ -99,10 +99,10 @@ describe('Lion-SDK title generation', () => {
   });
 
   it('uses temperature 1 for Kimi title generation', async () => {
-    const { adapter, requests } = makeAdapter([
-      { type: 'text', delta: 'Onboarding LionClaw' },
-      { type: 'done' },
-    ], 'openai-compatible');
+    const { adapter, requests } = makeAdapter(
+      [{ type: 'text', delta: 'Onboarding LionClaw' }, { type: 'done' }],
+      'openai-compatible',
+    );
 
     await maybeGenerateLionSessionTitle({
       sessionId: 'sess-title',
@@ -133,10 +133,7 @@ describe('Lion-SDK title generation', () => {
         createdAt: '2026-05-18T10:00:03.000Z',
       },
     ];
-    const { adapter, requests } = makeAdapter([
-      { type: 'text', delta: 'Novo titulo' },
-      { type: 'done' },
-    ]);
+    const { adapter, requests } = makeAdapter([{ type: 'text', delta: 'Novo titulo' }, { type: 'done' }]);
 
     await maybeGenerateLionSessionTitle({
       sessionId: 'sess-title',

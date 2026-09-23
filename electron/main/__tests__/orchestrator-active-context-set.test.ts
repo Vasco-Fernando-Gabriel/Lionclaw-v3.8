@@ -1,6 +1,4 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-
 
 const h = {
   queryMock: vi.fn(),
@@ -40,6 +38,8 @@ vi.mock('../lion-sdk', () => ({
 }));
 
 vi.mock('../db', () => ({
+  threadIdOf: (s: { id: string; sdkSessionId?: string | null }) => s.sdkSessionId ?? s.id,
+  getSessionOrchestrator: () => null,
   getAllAgents: () => [],
   getAgent: () => undefined,
   insertMessage: vi.fn(() => 1),
@@ -108,7 +108,6 @@ vi.mock('../prompt-builder-repo-graph', () => ({
 import { executeTelegramLaneQuery, resetTelegramSessionState } from '../orchestrator';
 
 const getWindow = () => null;
-
 
 function messageStart(usage: Record<string, number>, parentToolUseId?: string) {
   return {
@@ -199,9 +198,9 @@ describe('claude-sdk: contador ativo por SET absoluto (contexto vivo, nao acumul
       throw new Error('SDK caiu');
     });
 
-    await expect(
-      executeTelegramLaneQuery('oi', { sessionId: 't-fail', silent: true }, getWindow),
-    ).rejects.toThrow('SDK caiu');
+    await expect(executeTelegramLaneQuery('oi', { sessionId: 't-fail', silent: true }, getWindow)).rejects.toThrow(
+      'SDK caiu',
+    );
 
     expect(h.setActiveMock).not.toHaveBeenCalled();
   });

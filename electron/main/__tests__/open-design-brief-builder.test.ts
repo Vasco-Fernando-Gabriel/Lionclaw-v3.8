@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import type { DesignContract } from '../../../src/types/open-design';
 import { buildBrief } from '../open-design/brief-builder';
 
-
 const MINIMAL_CONTRACT: DesignContract = {
   version: '1.0',
   source: { artifactPath: 'artifact/index.html' },
@@ -75,7 +74,6 @@ const CONTRACT_EMPTY_TOKENS: DesignContract = {
   navigation: { primary: [] },
   components: [],
 };
-
 
 describe('buildBrief', () => {
   it('returns a non-empty Markdown string', () => {

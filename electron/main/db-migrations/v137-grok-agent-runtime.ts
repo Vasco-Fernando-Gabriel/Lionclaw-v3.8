@@ -8,18 +8,12 @@ interface ForeignKeyViolation {
 }
 
 function foreignKeyViolationKey(violation: ForeignKeyViolation): string {
-  return JSON.stringify([
-    violation.table,
-    violation.rowid,
-    violation.parent,
-    violation.fkid,
-  ]);
+  return JSON.stringify([violation.table, violation.rowid, violation.parent, violation.fkid]);
 }
 
 export function applyMigrationV137(db: Database.Database): void {
   const violationsBefore = new Set(
-    (db.pragma('foreign_key_check') as ForeignKeyViolation[])
-      .map(foreignKeyViolationKey),
+    (db.pragma('foreign_key_check') as ForeignKeyViolation[]).map(foreignKeyViolationKey),
   );
   const migrate = db.transaction(() => {
     db.exec(`
@@ -79,9 +73,7 @@ export function applyMigrationV137(db: Database.Database): void {
         ('grok_max_concurrency', '3');
     `);
     const violationsAfter = db.pragma('foreign_key_check') as ForeignKeyViolation[];
-    const introduced = violationsAfter.filter(
-      (violation) => !violationsBefore.has(foreignKeyViolationKey(violation)),
-    );
+    const introduced = violationsAfter.filter((violation) => !violationsBefore.has(foreignKeyViolationKey(violation)));
     if (introduced.length > 0) {
       throw new Error(`Migration v137 deixou ${introduced.length} violacoes novas de foreign key`);
     }

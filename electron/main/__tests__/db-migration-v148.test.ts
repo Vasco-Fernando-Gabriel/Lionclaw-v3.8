@@ -19,9 +19,8 @@ function makeDb(orchestratorModel?: string, agentModels: string[] = []): Databas
 }
 
 function readOrchestrator(db: Database.Database): string | undefined {
-  const row = db
-    .prepare("SELECT value FROM settings WHERE key = 'orchestrator_model'")
-    .get() as { value: string } | undefined;
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'orchestrator_model'").get() as
+    { value: string } | undefined;
   return row?.value;
 }
 

@@ -1,18 +1,18 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const DATA_ANALYST_ID = 'data-analyst';
 
 export const dataAnalyst: Omit<AgentConfig, 'sortOrder'> = {
   id: DATA_ANALYST_ID,
-  name: "Analista de Dados",
-  description: "Use quando precisar de análise de dados, business intelligence, queries SQL avançadas e visualizações que transformam dados em insights de negócio",
-  model: "claude-opus-4-8",
+  name: 'Analista de Dados',
+  description:
+    'Use quando precisar de análise de dados, business intelligence, queries SQL avançadas e visualizações que transformam dados em insights de negócio',
+  model: 'claude-opus-5-5',
   effort: 'medium' as const,
   thinking: 'adaptive' as const,
   maxTurns: 80,
   maxToolRounds: 5,
-  allowedTools: ["Read","Write","Edit","Bash","Glob","Grep","WebSearch"],
+  allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebSearch'],
   mcpServers: [],
   isActive: true,
   skills: [],

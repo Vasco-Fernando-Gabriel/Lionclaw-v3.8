@@ -24,16 +24,18 @@ describe('migration v139 provider metrics and security resume', () => {
     applyMigrationV139(db);
     expect(() => applyMigrationV139(db)).not.toThrow();
     const columns = db.prepare('PRAGMA table_info(enrich_sessions)').all() as Array<{ name: string }>;
-    expect(columns.map((column) => column.name)).toEqual(expect.arrayContaining([
-      'validator_cost_status',
-      'validator_token_status',
-      'validator_cost_source',
-      'validator_unknown_cost_count',
-      'enricher_cost_status',
-      'enricher_token_status',
-      'enricher_cost_source',
-      'enricher_unknown_cost_count',
-    ]));
+    expect(columns.map((column) => column.name)).toEqual(
+      expect.arrayContaining([
+        'validator_cost_status',
+        'validator_token_status',
+        'validator_cost_source',
+        'validator_unknown_cost_count',
+        'enricher_cost_status',
+        'enricher_token_status',
+        'enricher_cost_source',
+        'enricher_unknown_cost_count',
+      ]),
+    );
   });
 
   it('keeps completed checkpoint and enforces one row per project/agent', () => {
@@ -45,13 +47,19 @@ describe('migration v139 provider metrics and security resume', () => {
         VALUES ('p1', 'a1', 'Agent', 'pending');
     `);
     applyMigrationV139(db);
-    const rows = db.prepare(
-      "SELECT status FROM security_agent_status WHERE project_id='p1' AND agent_id='a1'",
-    ).all() as Array<{ status: string }>;
+    const rows = db
+      .prepare("SELECT status FROM security_agent_status WHERE project_id='p1' AND agent_id='a1'")
+      .all() as Array<{ status: string }>;
     expect(rows).toEqual([{ status: 'completed' }]);
-    expect(() => db.prepare(`
+    expect(() =>
+      db
+        .prepare(
+          `
       INSERT INTO security_agent_status(project_id, agent_id, agent_name, status)
       VALUES ('p1', 'a1', 'Agent', 'pending')
-    `).run()).toThrow();
+    `,
+        )
+        .run(),
+    ).toThrow();
   });
 });

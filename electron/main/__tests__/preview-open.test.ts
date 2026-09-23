@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import fs from 'fs';
 import os from 'os';
@@ -57,8 +56,7 @@ afterAll(() => {
   for (const dir of [projectRoot, outsideDir, lionHome]) {
     try {
       fs.rmSync(dir, { recursive: true, force: true });
-    } catch {
-    }
+    } catch {}
   }
 });
 

@@ -20,10 +20,5 @@ export function applyMigrationV123(db: Database.Database): void {
 
 export const __V123_INTERNAL = {
   TABLE_NAME: 'sessions',
-  COLUMN_NAMES: [
-    'compacted_up_to_message_id',
-    'rolling_summary',
-    'pending_seed',
-    'active_context_tokens_est',
-  ],
+  COLUMN_NAMES: ['compacted_up_to_message_id', 'rolling_summary', 'pending_seed', 'active_context_tokens_est'],
 };

@@ -1,15 +1,5 @@
-
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import {
-  Network,
-  AlertTriangle,
-  CheckCircle2,
-  GitBranch,
-  Lightbulb,
-  Layers,
-  Workflow,
-  ArrowRight,
-} from 'lucide-react';
+import { Network, AlertTriangle, CheckCircle2, GitBranch, Lightbulb, Layers, Workflow, ArrowRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -20,7 +10,6 @@ interface ArchitectureReviewArtifactViewProps {
   onSelectCandidate?: (candidateId: string) => void;
   selectedCandidateId?: string | null;
 }
-
 
 type Layer = 'frontend' | 'ipc' | 'main' | 'data' | 'external' | 'shared';
 
@@ -48,12 +37,15 @@ interface MapJson {
 
 const LAYER_ORDER: Layer[] = ['frontend', 'ipc', 'main', 'data', 'external', 'shared'];
 
-const LAYER_META: Record<Layer, {
-  label: string;
-  band: string;
-  pill: string;
-  chip: string;
-}> = {
+const LAYER_META: Record<
+  Layer,
+  {
+    label: string;
+    band: string;
+    pill: string;
+    chip: string;
+  }
+> = {
   frontend: {
     label: 'Frontend / Renderer',
     band: 'border-sky-700/40 bg-sky-950/15',
@@ -108,14 +100,27 @@ function inferLayer(m: MapModule): Layer {
   if (path.endsWith('.db') || /(?:^|\/)sqlite/.test(path) || /(?:^|\/)migrations?(?:\/|-|\.)/.test(path)) {
     return 'data';
   }
-  if (/(?:^|\/)db(?:\.ts|-migration|-handlers|\/)/.test(path) || /\b(?:database|persistence|repository|sqlite)\b/.test(role)) {
+  if (
+    /(?:^|\/)db(?:\.ts|-migration|-handlers|\/)/.test(path) ||
+    /\b(?:database|persistence|repository|sqlite)\b/.test(role)
+  ) {
     return 'data';
   }
 
-  if (path.includes('mcp-server') || path.includes('/mcp-') || path.includes('/mcp/') || /(?:^|\/)mcp(?:\/|-)/.test(path)) {
+  if (
+    path.includes('mcp-server') ||
+    path.includes('/mcp-') ||
+    path.includes('/mcp/') ||
+    /(?:^|\/)mcp(?:\/|-)/.test(path)
+  ) {
     return 'external';
   }
-  if (path.includes('telegram') || path.includes('ollama') || path.includes('elevenlabs') || path.includes('google-auth')) {
+  if (
+    path.includes('telegram') ||
+    path.includes('ollama') ||
+    path.includes('elevenlabs') ||
+    path.includes('google-auth')
+  ) {
     return 'external';
   }
   if (/\b(?:integration|provider|external|api client|http client)\b/.test(role)) {
@@ -125,7 +130,12 @@ function inferLayer(m: MapModule): Layer {
   if (path.includes('electron/main') || path.includes('main process') || /(?:^|\/)main(?:\/|\.ts|\.js)/.test(path)) {
     return 'main';
   }
-  if (path.includes('ipc-handlers') || path.includes('pipeline-engine') || path.includes('harness-engine') || path.includes('orchestrator')) {
+  if (
+    path.includes('ipc-handlers') ||
+    path.includes('pipeline-engine') ||
+    path.includes('harness-engine') ||
+    path.includes('orchestrator')
+  ) {
     return 'main';
   }
   if (path.includes('seed-agents/') || path.includes('agent-runtime/') || path.includes('knowledge-engine')) {
@@ -135,7 +145,12 @@ function inferLayer(m: MapModule): Layer {
     return 'main';
   }
 
-  if (path.startsWith('src/') || path.includes('/components/') || path.includes('/pages/') || path.includes('/renderer/')) {
+  if (
+    path.startsWith('src/') ||
+    path.includes('/components/') ||
+    path.includes('/pages/') ||
+    path.includes('/renderer/')
+  ) {
     return 'frontend';
   }
   if (/\b(?:react|vue|angular|ui|component|page|view|renderer)\b/.test(role)) {
@@ -159,13 +174,18 @@ function MapView({ data }: { data: MapJson }) {
   const moduleRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [lines, setLines] = useState<Array<{ x1: number; y1: number; x2: number; y2: number; kind: 'in' | 'out' }>>([]);
 
-  const selectedModule = selectedId ? moduleById.get(selectedId) ?? null : null;
+  const selectedModule = selectedId ? (moduleById.get(selectedId) ?? null) : null;
   const callerSet = useMemo(() => new Set(selectedModule?.callers ?? []), [selectedModule]);
   const depSet = useMemo(() => new Set(selectedModule?.dependencies ?? []), [selectedModule]);
 
   const byLayer = useMemo(() => {
     const acc: Record<Layer, MapModule[]> = {
-      frontend: [], ipc: [], main: [], data: [], external: [], shared: [],
+      frontend: [],
+      ipc: [],
+      main: [],
+      data: [],
+      external: [],
+      shared: [],
     };
     for (const m of modules) acc[inferLayer(m)].push(m);
     return acc;
@@ -293,15 +313,28 @@ function MapView({ data }: { data: MapJson }) {
 
           <div className="overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950/40">
             <div ref={containerRef} className="relative min-w-fit p-3 space-y-2">
-              <svg
-                className="absolute inset-0 pointer-events-none"
-                style={{ width: '100%', height: '100%' }}
-              >
+              <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%' }}>
                 <defs>
-                  <marker id="arch-map-arrow-out" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                  <marker
+                    id="arch-map-arrow-out"
+                    viewBox="0 0 10 10"
+                    refX="9"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto"
+                  >
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="#38bdf8" />
                   </marker>
-                  <marker id="arch-map-arrow-in" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                  <marker
+                    id="arch-map-arrow-in"
+                    viewBox="0 0 10 10"
+                    refX="9"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto"
+                  >
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="#34d399" />
                   </marker>
                 </defs>
@@ -328,7 +361,9 @@ function MapView({ data }: { data: MapJson }) {
                 return (
                   <div key={layerId} className={`relative rounded-lg border p-2 ${meta.band}`}>
                     <div className="flex items-center gap-2 mb-2">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${meta.pill}`}>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${meta.pill}`}
+                      >
                         {meta.label}
                       </span>
                       <span className="text-[10px] text-zinc-500">{items.length}</span>
@@ -360,18 +395,21 @@ function MapView({ data }: { data: MapJson }) {
                           >
                             <div className="flex items-center gap-1.5 min-w-0">
                               <span className="font-mono text-xs font-semibold truncate flex-1">{m.name}</span>
-                              {m.risk === 'high' && <span title="risk: high" className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />}
-                              {m.risk === 'medium' && <span title="risk: medium" className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0" />}
+                              {m.risk === 'high' && (
+                                <span title="risk: high" className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                              )}
+                              {m.risk === 'medium' && (
+                                <span
+                                  title="risk: medium"
+                                  className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0"
+                                />
+                              )}
                             </div>
                             {m.kind && (
                               <div className="text-[8px] text-zinc-500 uppercase tracking-wide mt-0.5">{m.kind}</div>
                             )}
-                            {m.role && (
-                              <div className="text-[10px] text-zinc-300/80 mt-0.5 line-clamp-2">{m.role}</div>
-                            )}
-                            {m.path && (
-                              <div className="font-mono text-[9px] text-zinc-500 mt-1 truncate">{m.path}</div>
-                            )}
+                            {m.role && <div className="text-[10px] text-zinc-300/80 mt-0.5 line-clamp-2">{m.role}</div>}
+                            {m.path && <div className="font-mono text-[9px] text-zinc-500 mt-1 truncate">{m.path}</div>}
                           </div>
                         );
                       })}
@@ -398,7 +436,9 @@ function MapView({ data }: { data: MapJson }) {
                     <div className="text-zinc-600 italic">nenhum mapeado</div>
                   )}
                   {(selectedModule.callers ?? []).map((c) => (
-                    <div key={c} className="font-mono text-zinc-400">&larr; {c}</div>
+                    <div key={c} className="font-mono text-zinc-400">
+                      &larr; {c}
+                    </div>
                   ))}
                 </div>
                 <div>
@@ -407,7 +447,9 @@ function MapView({ data }: { data: MapJson }) {
                     <div className="text-zinc-600 italic">nenhuma mapeada</div>
                   )}
                   {(selectedModule.dependencies ?? []).map((d) => (
-                    <div key={d} className="font-mono text-zinc-400">&rarr; {d}</div>
+                    <div key={d} className="font-mono text-zinc-400">
+                      &rarr; {d}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -438,9 +480,7 @@ function MapView({ data }: { data: MapJson }) {
                           <span className="text-zinc-500 font-mono mr-1">{i + 1}.</span>
                           {s}
                         </div>
-                        {i < (f.steps?.length ?? 0) - 1 && (
-                          <ArrowRight size={14} className="text-zinc-600 shrink-0" />
-                        )}
+                        {i < (f.steps?.length ?? 0) - 1 && <ArrowRight size={14} className="text-zinc-600 shrink-0" />}
                       </Fragment>
                     ))}
                   </div>
@@ -464,7 +504,9 @@ function MapView({ data }: { data: MapJson }) {
                 {h.paths && h.paths.length > 0 && (
                   <div className="mt-2 space-y-0.5">
                     {h.paths.slice(0, 4).map((p, i) => (
-                      <div key={i} className="font-mono text-[10px] text-zinc-500 truncate">{p}</div>
+                      <div key={i} className="font-mono text-[10px] text-zinc-500 truncate">
+                        {p}
+                      </div>
                     ))}
                     {h.paths.length > 4 && (
                       <div className="text-[10px] text-zinc-600 italic">+{h.paths.length - 4} mais</div>
@@ -481,14 +523,15 @@ function MapView({ data }: { data: MapJson }) {
         <section>
           <h3 className="text-sm font-semibold text-zinc-300 mb-2">O que nao foi mapeado</h3>
           <ul className="text-xs text-zinc-400 space-y-1 list-disc list-inside bg-zinc-900/50 rounded-lg border border-zinc-800 p-3">
-            {data.unknowns.map((u, i) => <li key={i}>{u}</li>)}
+            {data.unknowns.map((u, i) => (
+              <li key={i}>{u}</li>
+            ))}
           </ul>
         </section>
       )}
     </div>
   );
 }
-
 
 interface CandidatesJson {
   recommendedCandidateId?: string;
@@ -580,20 +623,31 @@ function CandidatesView({
             {c.benefits && (
               <div className="grid grid-cols-3 gap-2 text-[11px] text-zinc-400 mt-2">
                 {c.benefits.locality && (
-                  <div><span className="text-zinc-500 block">Locality</span>{c.benefits.locality}</div>
+                  <div>
+                    <span className="text-zinc-500 block">Locality</span>
+                    {c.benefits.locality}
+                  </div>
                 )}
                 {c.benefits.leverage && (
-                  <div><span className="text-zinc-500 block">Leverage</span>{c.benefits.leverage}</div>
+                  <div>
+                    <span className="text-zinc-500 block">Leverage</span>
+                    {c.benefits.leverage}
+                  </div>
                 )}
                 {c.benefits.testing && (
-                  <div><span className="text-zinc-500 block">Testing</span>{c.benefits.testing}</div>
+                  <div>
+                    <span className="text-zinc-500 block">Testing</span>
+                    {c.benefits.testing}
+                  </div>
                 )}
               </div>
             )}
             {c.files && c.files.length > 0 && (
               <div className="mt-2 space-y-0.5">
                 {c.files.slice(0, 5).map((f, i) => (
-                  <div key={i} className="font-mono text-[10px] text-zinc-500 truncate">{f}</div>
+                  <div key={i} className="font-mono text-[10px] text-zinc-500 truncate">
+                    {f}
+                  </div>
                 ))}
                 {c.files.length > 5 && (
                   <div className="text-[10px] text-zinc-600 italic">+{c.files.length - 5} mais</div>
@@ -628,7 +682,6 @@ function CandidatesView({
   );
 }
 
-
 interface DiagnosisJson {
   candidateId?: string;
   rootCause?: string;
@@ -660,7 +713,10 @@ function DiagnosisView({ data }: { data: DiagnosisJson }) {
           <div className="space-y-2">
             {data.evidence.map((e, i) => (
               <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
-                <div className="font-mono text-xs text-zinc-400">{e.path}{e.lines ? `:${e.lines}` : ''}</div>
+                <div className="font-mono text-xs text-zinc-400">
+                  {e.path}
+                  {e.lines ? `:${e.lines}` : ''}
+                </div>
                 {e.finding && <div className="text-sm text-zinc-200 mt-1">{e.finding}</div>}
                 {e.impact && <div className="text-xs text-orange-300 mt-1">Impact: {e.impact}</div>}
               </div>
@@ -676,7 +732,11 @@ function DiagnosisView({ data }: { data: DiagnosisJson }) {
               <GitBranch size={14} /> Seams atuais
             </h4>
             <ul className="text-xs text-zinc-300 space-y-1">
-              {data.currentSeams?.map((s, i) => <li key={i} className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1">{s}</li>)}
+              {data.currentSeams?.map((s, i) => (
+                <li key={i} className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1">
+                  {s}
+                </li>
+              ))}
             </ul>
           </div>
           <div>
@@ -684,7 +744,11 @@ function DiagnosisView({ data }: { data: DiagnosisJson }) {
               <GitBranch size={14} className="text-red-400" /> Seams ausentes
             </h4>
             <ul className="text-xs text-zinc-300 space-y-1">
-              {data.missingSeams?.map((s, i) => <li key={i} className="bg-red-950/10 border border-red-900/30 rounded px-2 py-1">{s}</li>)}
+              {data.missingSeams?.map((s, i) => (
+                <li key={i} className="bg-red-950/10 border border-red-900/30 rounded px-2 py-1">
+                  {s}
+                </li>
+              ))}
             </ul>
           </div>
         </section>
@@ -699,7 +763,6 @@ function DiagnosisView({ data }: { data: DiagnosisJson }) {
     </div>
   );
 }
-
 
 interface ParsedDecision {
   n: number;
@@ -738,7 +801,9 @@ function DecisionsView({ md }: { md: string }) {
       {decisions.map((d) => (
         <div key={d.n} className="border-l-2 border-blue-700 pl-3">
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-blue-900/40 text-blue-300">D{d.n}</span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-blue-900/40 text-blue-300">
+              D{d.n}
+            </span>
             <span className="text-sm font-medium text-zinc-200">{d.title}</span>
           </div>
           <pre className="text-xs text-zinc-400 whitespace-pre-wrap font-sans bg-zinc-900 border border-zinc-800 rounded p-2 mt-1">
@@ -749,7 +814,6 @@ function DecisionsView({ md }: { md: string }) {
     </div>
   );
 }
-
 
 export function ArchitectureReviewArtifactView({
   phase,
@@ -814,9 +878,5 @@ export function ArchitectureReviewArtifactView({
       </div>
     );
   }
-  return (
-    <div className="p-4 text-sm text-zinc-500 italic">
-      Sem conteudo disponivel para esta fase ainda.
-    </div>
-  );
+  return <div className="p-4 text-sm text-zinc-500 italic">Sem conteudo disponivel para esta fase ainda.</div>;
 }

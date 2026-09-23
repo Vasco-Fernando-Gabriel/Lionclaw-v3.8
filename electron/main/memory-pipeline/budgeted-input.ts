@@ -1,17 +1,12 @@
-
 import { getSetting } from '../db';
 import { createLogger } from '../logger';
 import { estimateTokens, excerptStartEnd } from '../token-estimator';
 
 const logger = createLogger('memory');
 
-
 export type CompactionSelectionKind = 'lion-sdk' | 'subscription' | 'claude';
 
-export type PlainPromptInvoker = (
-  prompt: string,
-  opts: { maxTokens: number },
-) => Promise<string>;
+export type PlainPromptInvoker = (prompt: string, opts: { maxTokens: number }) => Promise<string>;
 
 const DEFAULT_BUDGET_TOKENS: Record<CompactionSelectionKind, number> = {
   subscription: 48000,
@@ -48,16 +43,12 @@ export function resolveLocalInputWarnTokens(): number {
   return readPositiveIntSetting('compaction_local_input_warn_tokens') ?? DEFAULT_LOCAL_INPUT_WARN_TOKENS;
 }
 
-
-export function legacyCompactionAssembly(
-  messages: Array<{ role: string; content: string }>,
-): string {
+export function legacyCompactionAssembly(messages: Array<{ role: string; content: string }>): string {
   return messages
     .map((m) => `[${String(m.role)}] ${String(m.content ?? '').substring(0, 2000)}`)
     .join('\n\n')
     .substring(0, 50000);
 }
-
 
 export interface SummarizePlainBlockOptions {
   invoker: PlainPromptInvoker;
@@ -105,7 +96,8 @@ async function invokeWithTimeout(
       invoker(prompt, { maxTokens }),
       new Promise<never>((_, reject) => {
         timer = setTimeout(
-          () => reject(new Error(`map do summarizer estourou o timeout de ${timeoutMs}ms (resposta tardia descartada)`)),
+          () =>
+            reject(new Error(`map do summarizer estourou o timeout de ${timeoutMs}ms (resposta tardia descartada)`)),
           timeoutMs,
         );
       }),
@@ -150,7 +142,6 @@ export async function summarizePlainBlock(o: SummarizePlainBlockOptions): Promis
   }
   return out;
 }
-
 
 export interface BudgetedInputStats {
   rawChars: number;
@@ -239,12 +230,7 @@ async function mapWithCaps(
           'compaction reduce (lion-sdk): input excede compaction_local_input_warn_tokens',
         );
       }
-      let out = await invokeWithTimeout(
-        o.invoker,
-        prompt,
-        Math.max(256, args.targetTokens * 2),
-        limits.mapTimeoutMs,
-      );
+      let out = await invokeWithTimeout(o.invoker, prompt, Math.max(256, args.targetTokens * 2), limits.mapTimeoutMs);
       out = (out ?? '').trim();
       if (out.length === 0) throw new Error('reduce do summarizer retornou resposta vazia');
       if (o.kind === 'subscription' && estimateTokens(out) > args.targetTokens * 2) {
@@ -361,7 +347,7 @@ async function buildInner(
   let tailTok = 0;
   let tailStart = blocks.length;
   for (let i = blocks.length - 1; i >= 0; i--) {
-    const cost = estimateTokens(formatBlock(blocks[i])) + 1; // +1 pela folga do separador
+    const cost = estimateTokens(formatBlock(blocks[i])) + 1;
     if (tailTok + cost > tailLimit) break;
     tailTok += cost;
     tailStart = i;

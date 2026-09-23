@@ -1,4 +1,3 @@
-
 import { randomBytes } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -47,19 +46,12 @@ import {
   type NodeFailureHookOutcome,
   type PendingGateResolution,
 } from './workflow-host-api';
-import {
-  resolveGateChecks,
-  type GateCheckResolutionContext,
-} from './workflow-gate-resolver';
+import { resolveGateChecks, type GateCheckResolutionContext } from './workflow-gate-resolver';
 import { runGateChecks, type GateCheckSpec, type CommandRunner } from './workflow-gates';
 import { readNodeCheckpoint } from './workflow-checkpoints';
 import type { runNodeAgent, WorkflowAdapterDeps } from './workflow-agent-adapter';
 import { buildSnapshot, type SnapshotDeps } from './workflow-snapshot';
-import {
-  emitWorkflowEvent,
-  broadcastWorkflowStreamChunk,
-  type WorkflowEventsDeps,
-} from './workflow-events';
+import { emitWorkflowEvent, broadcastWorkflowStreamChunk, type WorkflowEventsDeps } from './workflow-events';
 import { WorkflowNarrator, type WorkflowNarratorDeps } from './workflow-narrator';
 import { compileWorkflowJs } from './workflow-js-compiler';
 import { validateWorkflowPackage } from './workflow-validator';
@@ -137,7 +129,7 @@ export function digestCoordinatorValue(value: unknown): {
   if (value === undefined || value === null) return { value: null, valueTruncated: false, valueChars: 0 };
   let serialized: string;
   try {
-    serialized = typeof value === 'string' ? value : JSON.stringify(value) ?? String(value);
+    serialized = typeof value === 'string' ? value : (JSON.stringify(value) ?? String(value));
   } catch {
     serialized = String(value);
   }
@@ -152,19 +144,15 @@ import type { DynamicWorkflowFailureClass, DynamicWorkflowRetryPolicy } from './
 
 const logger = createLogger('dynamic-workflow-runner');
 
-
 const STALL_WATCHDOG_FLOOR_MS = 3 * 60 * 1000;
 
 const STALL_WATCHDOG_GRACE_MS = 60 * 1000;
 
 export function stallDelayFor(nodeTimeoutMs: number | undefined): number {
   const t =
-    typeof nodeTimeoutMs === 'number' && Number.isFinite(nodeTimeoutMs) && nodeTimeoutMs > 0
-      ? nodeTimeoutMs
-      : 0;
+    typeof nodeTimeoutMs === 'number' && Number.isFinite(nodeTimeoutMs) && nodeTimeoutMs > 0 ? nodeTimeoutMs : 0;
   return Math.max(STALL_WATCHDOG_FLOOR_MS, t > 0 ? t + STALL_WATCHDOG_GRACE_MS : 0);
 }
-
 
 const activeRunLocks = new Set<string>();
 
@@ -188,7 +176,6 @@ export function _resetRunLocksForTesting(): void {
   }
   activeRunLocks.clear();
 }
-
 
 export const IN_PROGRESS_RUN_STATUSES: readonly DynamicWorkflowRunStatus[] = [
   'running',
@@ -214,7 +201,6 @@ export function assertNoOtherActiveRun(
   return null;
 }
 
-
 export interface WorkflowRunnerCrud {
   getRun: (runId: string) => DynamicWorkflowRun | null;
   getDefinition: (definitionId: string) => DynamicWorkflowDefinition | null;
@@ -227,33 +213,18 @@ export interface WorkflowRunnerCrud {
   insertEvent: (input: DynamicWorkflowEventInsertInput) => DynamicWorkflowEvent;
   recentEvents: (runId: string, limit: number) => DynamicWorkflowEvent[];
   listEventsSince?: (runId: string, afterSeq: number) => DynamicWorkflowEvent[];
-  insertGateDecision: (
-    input: DynamicWorkflowGateDecisionInsertInput,
-  ) => DynamicWorkflowGateDecision;
-  registerArtifact: (
-    input: DynamicWorkflowArtifactInsertInput,
-  ) => DynamicWorkflowArtifact;
+  insertGateDecision: (input: DynamicWorkflowGateDecisionInsertInput) => DynamicWorkflowGateDecision;
+  registerArtifact: (input: DynamicWorkflowArtifactInsertInput) => DynamicWorkflowArtifact;
   insertMessage: (input: DynamicWorkflowMessageInsertInput) => DynamicWorkflowMessage;
   listMessages: (runId: string) => DynamicWorkflowMessage[];
   costAggregate: (runId: string) => DynamicWorkflowRunCostAggregate;
   createNodes?: (definitionId: string, nodes: DynamicWorkflowNodeCreateInput[]) => void;
   updateDefinition?: (definitionId: string, patch: DynamicWorkflowDefinitionPatch) => void;
   persistSprints?: (sprints: DynamicWorkflowSprintUpsertInput[]) => void;
-  setNodeSprintMeta?: (
-    definitionId: string,
-    nodeId: string,
-    patch: DynamicWorkflowNodeSprintPatch,
-  ) => void;
+  setNodeSprintMeta?: (definitionId: string, nodeId: string, patch: DynamicWorkflowNodeSprintPatch) => void;
   materializeSprintPlan?: (input: MaterializeDynamicWorkflowSprintPlanInput) => void;
-  getPriorMaterialization?: (
-    runId: string,
-    definitionId: string,
-  ) => DynamicWorkflowPriorMaterialization | null;
-  updateSprintMerge?: (
-    runId: string,
-    sprintId: string,
-    patch: DynamicWorkflowSprintPatch,
-  ) => void;
+  getPriorMaterialization?: (runId: string, definitionId: string) => DynamicWorkflowPriorMaterialization | null;
+  updateSprintMerge?: (runId: string, sprintId: string, patch: DynamicWorkflowSprintPatch) => void;
   listSprints?: (runId: string) => DynamicWorkflowSprintRow[];
   appendJournalEntry?: (input: DynamicWorkflowJournalAppendInput) => void;
   listJournalEntries?: (runId: string) => DynamicWorkflowJournalEntry[];
@@ -349,15 +320,9 @@ export type EditCoordinatorResult =
     }
   | { ok: false; error: string };
 
-
 export type RunnerResult = { ok: true } | { error: string };
 
-const QUIESCENT_EVENT_TYPES = new Set<string>([
-  'run-paused',
-  'run-blocked-snapshot',
-  'run-aborted',
-  'run-failed',
-]);
+const QUIESCENT_EVENT_TYPES = new Set<string>(['run-paused', 'run-blocked-snapshot', 'run-aborted', 'run-failed']);
 
 export const RERUN_QUIESCE_TIMEOUT_MS = 60_000;
 
@@ -367,7 +332,6 @@ function ok(): RunnerResult {
 function err(message: string): RunnerResult {
   return { error: message };
 }
-
 
 function defaultNow(): string {
   return new Date().toISOString();
@@ -384,7 +348,6 @@ function defaultScheduleTimer(delayMs: number, cb: () => void): WorkflowTimerHan
   return { cancel: () => clearTimeout(handle) };
 }
 
-
 interface ActiveRunState {
   runId: string;
   abortController: AbortController;
@@ -399,7 +362,6 @@ interface ActiveRunState {
   sprintWorktrees: Map<number, SprintWorktreeHandle>;
   gitTransientPaths: string[];
 }
-
 
 export class WorkflowRunner {
   private readonly deps: WorkflowRunnerDeps;
@@ -431,7 +393,6 @@ export class WorkflowRunner {
     this.narrator = deps.narratorDeps ? new WorkflowNarrator(deps.narratorDeps) : null;
   }
 
-
   private eventsDeps(): WorkflowEventsDeps {
     return {
       insertEvent: this.deps.crud.insertEvent,
@@ -452,21 +413,11 @@ export class WorkflowRunner {
       const waiters = this.quiesceWaiters.get(input.runId);
       if (waiters) for (const w of waiters) w(input.type);
     }
-    this.syncStallWatchdogFromEvent(
-      input.runId,
-      input.type,
-      input.nodeId ?? null,
-      input.payload,
-    );
+    this.syncStallWatchdogFromEvent(input.runId, input.type, input.nodeId ?? null, input.payload);
     this.feedNarrator(input.runId, input.type, input.nodeId ?? null, input.payload);
   }
 
-  private feedNarrator(
-    runId: string,
-    eventType: string,
-    nodeId: string | null,
-    payload: unknown,
-  ): void {
+  private feedNarrator(runId: string, eventType: string, nodeId: string | null, payload: unknown): void {
     const narrator = this.narrator;
     if (!narrator || !narrator.enabled) return;
     try {
@@ -501,15 +452,10 @@ export class WorkflowRunner {
         },
         abortSignal,
       );
-    } catch {
-    }
+    } catch {}
   }
 
-  private captureNodeStreamExcerpt(
-    runId: string,
-    type: string,
-    content: string | undefined,
-  ): void {
+  private captureNodeStreamExcerpt(runId: string, type: string, content: string | undefined): void {
     if (!this.narrator || type !== 'text' || !content) return;
     const MAX = 1200;
     const prev = this.nodeStreamExcerpt.get(runId) ?? '';
@@ -522,33 +468,19 @@ export class WorkflowRunner {
     this.narrator?.forget(runId);
   }
 
-  private syncStallWatchdogFromEvent(
-    runId: string,
-    type: string,
-    nodeId: string | null,
-    payload?: unknown,
-  ): void {
+  private syncStallWatchdogFromEvent(runId: string, type: string, nodeId: string | null, payload?: unknown): void {
     if (type === 'node-started' && nodeId) {
       const nodeTimeoutMs =
         payload && typeof payload === 'object' && 'timeoutMs' in payload
           ? (payload as { timeoutMs?: unknown }).timeoutMs
           : undefined;
-      this.startStallWatchdog(
-        runId,
-        nodeId,
-        typeof nodeTimeoutMs === 'number' ? nodeTimeoutMs : undefined,
-      );
+      this.startStallWatchdog(runId, nodeId, typeof nodeTimeoutMs === 'number' ? nodeTimeoutMs : undefined);
       return;
     }
-    if (
-      type === 'node-completed' ||
-      type === 'node-failed' ||
-      type === 'node-cache-hit'
-    ) {
+    if (type === 'node-completed' || type === 'node-failed' || type === 'node-cache-hit') {
       this.cancelStallWatchdog(runId);
     }
   }
-
 
   async start(runId: string): Promise<RunnerResult> {
     const run = this.deps.crud.getRun(runId);
@@ -692,15 +624,11 @@ export class WorkflowRunner {
       definitionId: state.definition.id,
       projectPath: state.definition.projectPath,
       sprintPlanConfig: this.readSprintPlanConfig(state),
-      priorMaterialized:
-        this.deps.crud.getPriorMaterialization?.(runId, state.definition.id) ??
-        undefined,
+      priorMaterialized: this.deps.crud.getPriorMaterialization?.(runId, state.definition.id) ?? undefined,
       catalogAgentIds: this.deps.loadActiveAgentIds?.(),
       schemaFileNames: this.schemaFileNamesForRun(state.definition),
-      buildSprintNodes: (plan, cfg) =>
-        buildDevSprintNodes(plan, cfg, this.generateId),
-      resolveSchemaRef: (schemaRef) =>
-        this.resolveSchemaRefForRun(state.definition, schemaRef),
+      buildSprintNodes: (plan, cfg) => buildDevSprintNodes(plan, cfg, this.generateId),
+      resolveSchemaRef: (schemaRef) => this.resolveSchemaRefForRun(state.definition, schemaRef),
       workspaceRoot: workspace?.workspaceDir ?? state.definition.projectPath,
       resolveSprintCwd: (sprintIndex) => this.resolveSprintCwd(state, sprintIndex),
       prepareSprintWorktrees: async (sprintIndexes) => {
@@ -714,10 +642,8 @@ export class WorkflowRunner {
       protectedPaths: this.loadBundleProtectedPaths(state.definition),
       hasBuildScript: this.loadBundle(state.definition)?.hasBuildScript ?? false,
       abortSignal: state.abortController.signal,
-      resolveGateChecks: (checks) =>
-        resolveGateChecks(checks, this.buildGateResolutionContext(state)),
-      onFinalGateApproved: (gateId, approvedBy) =>
-        this.handleFinalGateApproved(state, gateId, approvedBy),
+      resolveGateChecks: (checks) => resolveGateChecks(checks, this.buildGateResolutionContext(state)),
+      onFinalGateApproved: (gateId, approvedBy) => this.handleFinalGateApproved(state, gateId, approvedBy),
       onWriterNodeCompleted: (input) => this.commitWriterNode(state, input),
       onNodeFailed: (input) => this.handleNodeFailed(state, input),
       onWriterNodeFailed: (input) => this.commitFailedWriterWip(state, input),
@@ -895,10 +821,7 @@ export class WorkflowRunner {
     this.failRun(runId, `execucao falhou (${result.reason}): ${result.message}`);
   }
 
-
-  private async awaitCompletionBoundaryIfNotGreen(
-    state: ActiveRunState,
-  ): Promise<'continue' | 'paused'> {
+  private async awaitCompletionBoundaryIfNotGreen(state: ActiveRunState): Promise<'continue' | 'paused'> {
     const { runId } = state;
     const listEventsSince = this.deps.crud.listEventsSince;
     if (!listEventsSince) return 'continue';
@@ -1000,7 +923,6 @@ export class WorkflowRunner {
     });
     return 'continue';
   }
-
 
   private shouldInjectCcDeliveryGate(state: ActiveRunState, _value: unknown): boolean {
     return this.ccRunWroteCode(state);
@@ -1132,10 +1054,7 @@ export class WorkflowRunner {
     }
   }
 
-
-  private resolveProjectSpec(
-    definition: DynamicWorkflowDefinition,
-  ): { specAbs: string; rel: string } | null {
+  private resolveProjectSpec(definition: DynamicWorkflowDefinition): { specAbs: string; rel: string } | null {
     const specPath = definition.specPath;
     if (!specPath) return null;
     const projectPath = definition.projectPath;
@@ -1145,10 +1064,7 @@ export class WorkflowRunner {
     return { specAbs, rel };
   }
 
-  private copySpecIntoWorktree(
-    definition: DynamicWorkflowDefinition,
-    worktreePath: string,
-  ): void {
+  private copySpecIntoWorktree(definition: DynamicWorkflowDefinition, worktreePath: string): void {
     const spec = this.resolveProjectSpec(definition);
     if (!spec) return;
     const target = join(worktreePath, spec.rel);
@@ -1185,24 +1101,15 @@ export class WorkflowRunner {
         );
         return paths;
       }
-      const inBase = await git(
-        ['cat-file', '-e', `${workspace.baseCommitSha}:${rel}`],
-        workspace.repoRoot,
-      );
+      const inBase = await git(['cat-file', '-e', `${workspace.baseCommitSha}:${rel}`], workspace.repoRoot);
       if (inBase.code !== 0) paths.push(rel);
     } catch (err) {
-      logger.warn(
-        { err, specRel: rel },
-        'check de SPEC-na-base inconclusivo; SPEC NAO tratada como transitoria',
-      );
+      logger.warn({ err, specRel: rel }, 'check de SPEC-na-base inconclusivo; SPEC NAO tratada como transitoria');
     }
     return paths;
   }
 
-  private ensureSpecInWorkspace(
-    definition: DynamicWorkflowDefinition,
-    workspace: WorkspaceHandle,
-  ): void {
+  private ensureSpecInWorkspace(definition: DynamicWorkflowDefinition, workspace: WorkspaceHandle): void {
     if (workspace.mode !== 'run-worktree' || !workspace.worktreePath) return;
     const spec = this.resolveProjectSpec(definition);
     if (!spec) return;
@@ -1283,10 +1190,7 @@ export class WorkflowRunner {
     }
   }
 
-  async mergeSprintsForRun(
-    state: ActiveRunState,
-    gateId?: string,
-  ): Promise<OrderedMergeReport | null> {
+  async mergeSprintsForRun(state: ActiveRunState, gateId?: string): Promise<OrderedMergeReport | null> {
     const workspace = state.workspace;
     if (!workspace || workspace.mode !== 'run-worktree') return null;
     const updateSprintMerge = this.deps.crud.updateSprintMerge;
@@ -1330,7 +1234,6 @@ export class WorkflowRunner {
     const n = Number(m[1]);
     return Number.isInteger(n) && n >= 0 ? n : null;
   }
-
 
   private async commitWriterNode(
     state: ActiveRunState,
@@ -1406,7 +1309,6 @@ export class WorkflowRunner {
     }
   }
 
-
   private loadBundle(definition: DynamicWorkflowDefinition): {
     protectedPaths: string[];
     baselineMaxErrorsByCommand: Record<string, number>;
@@ -1479,9 +1381,7 @@ export class WorkflowRunner {
     const repoRoot =
       opts?.cwdBase === 'repo-root'
         ? (state.workspace?.repoRoot ?? state.definition.projectPath)
-        : (state.workspace?.workspaceDir ??
-          state.workspace?.repoRoot ??
-          state.definition.projectPath);
+        : (state.workspace?.workspaceDir ?? state.workspace?.repoRoot ?? state.definition.projectPath);
     return {
       repoRoot,
       protectedPaths: bundle?.protectedPaths ?? [],
@@ -1501,9 +1401,8 @@ export class WorkflowRunner {
         try {
           const env = JSON.parse(r.outputJson) as { output?: unknown };
           const raw = typeof env.output === 'string' ? env.output : '';
-          out[r.nodeId] = raw ? parseNodeOutput(raw) : env.output ?? {};
-        } catch {
-        }
+          out[r.nodeId] = raw ? parseNodeOutput(raw) : (env.output ?? {});
+        } catch {}
       }
     } catch (e) {
       logger.warn({ err: e, runId }, 'falha ao coletar outputs de node para resolucao de gate (degrada)');
@@ -1519,7 +1418,13 @@ export class WorkflowRunner {
     if (!cwd) return null;
     try {
       const commit = await commitFailedWip(
-        { runId: state.runId, nodeId: input.nodeId, attempt: input.attempt, cwd, transientPaths: state.gitTransientPaths },
+        {
+          runId: state.runId,
+          nodeId: input.nodeId,
+          attempt: input.attempt,
+          cwd,
+          transientPaths: state.gitTransientPaths,
+        },
         this.deps.git ?? runGit,
       );
       if (commit.sha) {
@@ -1532,7 +1437,10 @@ export class WorkflowRunner {
       }
       return { sha: commit.sha };
     } catch (e) {
-      logger.warn({ err: e, runId: state.runId, nodeId: input.nodeId }, 'falha no WIP commit do writer falho (ignorado)');
+      logger.warn(
+        { err: e, runId: state.runId, nodeId: input.nodeId },
+        'falha no WIP commit do writer falho (ignorado)',
+      );
       return null;
     }
   }
@@ -1572,12 +1480,7 @@ export class WorkflowRunner {
     }
   }
 
-
-  private async handleFinalGateApproved(
-    state: ActiveRunState,
-    gateId: string,
-    approvedBy: string,
-  ): Promise<void> {
+  private async handleFinalGateApproved(state: ActiveRunState, gateId: string, approvedBy: string): Promise<void> {
     const { runId, workspace } = state;
     if (!workspace) {
       this.failRun(runId, 'gate final aprovado sem workspace preparado');
@@ -1692,10 +1595,7 @@ export class WorkflowRunner {
     }
 
     try {
-      await cleanupWorktree(
-        { repoRoot: workspace.repoRoot, worktreePath: workspace.worktreePath ?? '', runId },
-        git,
-      );
+      await cleanupWorktree({ repoRoot: workspace.repoRoot, worktreePath: workspace.worktreePath ?? '', runId }, git);
     } catch (e) {
       logger.warn({ err: e, runId }, 'cleanup da worktree pos-merge falhou (ignorado)');
     }
@@ -1723,7 +1623,10 @@ export class WorkflowRunner {
           git,
         );
       } catch (e) {
-        logger.debug({ err: e, runId: state.runId, sprintIndex: idx }, 'cleanup de worktree de sprint falhou (ignorado)');
+        logger.debug(
+          { err: e, runId: state.runId, sprintIndex: idx },
+          'cleanup de worktree de sprint falhou (ignorado)',
+        );
       }
     }
     state.sprintWorktrees.clear();
@@ -1735,8 +1638,7 @@ export class WorkflowRunner {
       const parsed = JSON.parse(run?.inputJson || '{}') as { recheckOverride?: 'green' | 'red' };
       if (parsed.recheckOverride === 'red') return false;
       if (parsed.recheckOverride === 'green') return true;
-    } catch {
-    }
+    } catch {}
 
     const symbolic = this.finalGateChecks(state, gateId);
     if (symbolic.length === 0) {
@@ -1829,7 +1731,6 @@ export class WorkflowRunner {
     };
   }
 
-
   async pause(runId: string): Promise<RunnerResult> {
     const state = this.active.get(runId);
     if (!state) {
@@ -1847,9 +1748,11 @@ export class WorkflowRunner {
 
   async pauseAllForAuthorizationLoss(): Promise<number> {
     const runIds = [...this.active.keys()];
-    await Promise.all(runIds.map(async (runId) => {
-      await this.pause(runId);
-    }));
+    await Promise.all(
+      runIds.map(async (runId) => {
+        await this.pause(runId);
+      }),
+    );
     return runIds.length;
   }
 
@@ -1858,8 +1761,7 @@ export class WorkflowRunner {
     if (!run) return err(`run nao encontrado: ${runId}`);
 
     if (opts?.scheduledAt !== undefined || opts?.delayMs !== undefined) {
-      const atIso =
-        opts.scheduledAt ?? this.isoAfter(Math.max(0, opts.delayMs ?? 0));
+      const atIso = opts.scheduledAt ?? this.isoAfter(Math.max(0, opts.delayMs ?? 0));
       return this.scheduleResume(runId, atIso);
     }
 
@@ -1958,7 +1860,6 @@ export class WorkflowRunner {
     return this.resume(runId);
   }
 
-
   async approveGate(
     runId: string,
     gateId: string,
@@ -2011,8 +1912,7 @@ export class WorkflowRunner {
     decision: { decision: 'approve' | 'reject'; reason?: string; payload?: Record<string, unknown> },
     decidedBy: string,
   ): PendingGateResolution {
-    const wantsReplan =
-      decision.decision === 'reject' || decision.payload?.['action'] === 'replan';
+    const wantsReplan = decision.decision === 'reject' || decision.payload?.['action'] === 'replan';
     const replanOnPlanReview = gateKind === 'plan-review' && wantsReplan;
     const wantsRedev =
       decision.decision === 'reject' ||
@@ -2192,10 +2092,7 @@ export class WorkflowRunner {
     return { action };
   }
 
-  private resolveGateKindFromManifest(
-    run: DynamicWorkflowRun,
-    gateId: string,
-  ): 'plan-review' | 'delivery' | undefined {
+  private resolveGateKindFromManifest(run: DynamicWorkflowRun, gateId: string): 'plan-review' | 'delivery' | undefined {
     if (gateId === CC_DELIVERY_GATE_ID) return 'delivery';
     try {
       const definition = this.deps.crud.getDefinition(run.definitionId);
@@ -2208,10 +2105,7 @@ export class WorkflowRunner {
     }
   }
 
-  private resolveGateKind(
-    state: ActiveRunState,
-    gateId: string,
-  ): 'plan-review' | 'delivery' | undefined {
+  private resolveGateKind(state: ActiveRunState, gateId: string): 'plan-review' | 'delivery' | undefined {
     if (gateId === CC_DELIVERY_GATE_ID) return 'delivery';
     const gates = Array.isArray(state.manifest.gates) ? state.manifest.gates : [];
     return gates.find((g) => g.id === gateId)?.kind;
@@ -2271,20 +2165,13 @@ export class WorkflowRunner {
         return ok();
       case 'switch-agent':
         await this.recordIntervention(runId, intervention, source);
-        return this.switchAgent(
-          runId,
-          intervention.nodeId,
-          intervention.newAgentId,
-          intervention.reason,
-          source,
-        );
+        return this.switchAgent(runId, intervention.nodeId, intervention.newAgentId, intervention.reason, source);
       case 'request-replan':
         return err('request-replan e tratado pela IPC request-replan (S14), nao por intervene');
       default:
         return err('intervencao desconhecida');
     }
   }
-
 
   async rerunNode(
     runId: string,
@@ -2302,9 +2189,7 @@ export class WorkflowRunner {
     let run = this.deps.crud.getRun(runId);
     if (!run) return err(`run nao encontrado: ${runId}`);
     if (run.status === 'completed' || run.status === 'delivered') {
-      return err(
-        `rerun-node: o run "${runId}" esta "${run.status}" (ciclo cumprido); nao ha o que re-executar`,
-      );
+      return err(`rerun-node: o run "${runId}" esta "${run.status}" (ciclo cumprido); nao ha o que re-executar`);
     }
 
     if (run.status === 'blocked') {
@@ -2444,11 +2329,15 @@ export class WorkflowRunner {
     }
     const gotEvent = await stopped;
     if (!gotEvent) {
-      return { error: `rerun-node: o run "${runId}" nao quiesceu em ${timeoutMs} ms (child ainda vivo); nada foi truncado` };
+      return {
+        error: `rerun-node: o run "${runId}" nao quiesceu em ${timeoutMs} ms (child ainda vivo); nada foi truncado`,
+      };
     }
     const gone = await this.waitActiveGone(runId, timeoutMs);
     if (!gone) {
-      return { error: `rerun-node: o run "${runId}" parou mas o estado ativo nao foi liberado em ${timeoutMs} ms; nada foi truncado` };
+      return {
+        error: `rerun-node: o run "${runId}" parou mas o estado ativo nao foi liberado em ${timeoutMs} ms; nada foi truncado`,
+      };
     }
     return { ok: true, resolvedGates };
   }
@@ -2470,8 +2359,6 @@ export class WorkflowRunner {
       return null;
     }
   }
-
-
 
   private async handleNodeFailed(
     state: ActiveRunState,
@@ -2514,9 +2401,7 @@ export class WorkflowRunner {
     }
   }
 
-  private coerceCanonicalFailureClass(
-    value: string | null,
-  ): DynamicWorkflowFailureClass | null {
+  private coerceCanonicalFailureClass(value: string | null): DynamicWorkflowFailureClass | null {
     if (value && FAILURE_CLASSES.has(value as DynamicWorkflowFailureClass)) {
       return value as DynamicWorkflowFailureClass;
     }
@@ -2526,9 +2411,7 @@ export class WorkflowRunner {
   private durableAttemptsMade(runId: string, nodeId: string): number {
     const failedAttempts = this.deps.crud
       .listNodeRuns(runId)
-      .filter(
-        (nr) => nr.nodeId === nodeId && (nr.status === 'failed' || nr.status === 'interrupted'),
-      ).length;
+      .filter((nr) => nr.nodeId === nodeId && (nr.status === 'failed' || nr.status === 'interrupted')).length;
     return Math.max(1, failedAttempts);
   }
 
@@ -2551,9 +2434,7 @@ export class WorkflowRunner {
 
     if (failureClass === 'cancelled') {
       const active = this.active.get(runId);
-      const corroborated =
-        (active?.stopReason ?? null) !== null ||
-        active?.abortController.signal.aborted === true;
+      const corroborated = (active?.stopReason ?? null) !== null || active?.abortController.signal.aborted === true;
       if (corroborated) {
         logger.info(
           { runId, nodeId, failureClass },
@@ -2569,11 +2450,7 @@ export class WorkflowRunner {
 
     const rawNodeErr: unknown = failureInput.error;
     const nodeError =
-      rawNodeErr instanceof Error
-        ? rawNodeErr.message
-        : typeof rawNodeErr === 'string'
-          ? rawNodeErr
-          : null;
+      rawNodeErr instanceof Error ? rawNodeErr.message : typeof rawNodeErr === 'string' ? rawNodeErr : null;
 
     const decision = decideRetry(failureClass, attemptsMade, policy);
 
@@ -2622,9 +2499,7 @@ export class WorkflowRunner {
     }
 
     const isProviderClass =
-      failureClass === 'provider-limit' ||
-      failureClass === 'provider-error' ||
-      failureClass === 'timeout';
+      failureClass === 'provider-limit' || failureClass === 'provider-error' || failureClass === 'timeout';
     const retriesExhausted = isProviderClass && attemptsMade > 0;
     this.blockProvider(runId, nodeId, failureClass, {
       instruction: isProviderClass
@@ -2701,7 +2576,7 @@ export class WorkflowRunner {
     failureClass: DynamicWorkflowFailureClass,
     error: unknown,
   ): void {
-    const message = error instanceof Error ? error.message : (typeof error === 'string' ? error : null);
+    const message = error instanceof Error ? error.message : typeof error === 'string' ? error : null;
     const runs = this.deps.crud
       .listNodeRuns(runId)
       .filter((nr) => nr.nodeId === nodeId && nr.status === 'running')
@@ -2769,9 +2644,7 @@ export class WorkflowRunner {
       this.pendingTimers.delete(runId);
       this.clearScheduledResumeAt(runId);
       this.emit({ runId, type: 'scheduled-resume-fired', payload: {} });
-      void this.resume(runId).catch((e) =>
-        logger.warn({ err: e, runId }, 'retomada agendada falhou (ignorado)'),
-      );
+      void this.resume(runId).catch((e) => logger.warn({ err: e, runId }, 'retomada agendada falhou (ignorado)'));
     });
     this.pendingTimers.set(runId, handle);
   }
@@ -2936,9 +2809,7 @@ export class WorkflowRunner {
         nodeAbort.abort();
         return;
       }
-      void this.pause(runId).catch((e) =>
-        logger.warn({ err: e, runId }, 'pause por stall falhou (ignorado)'),
-      );
+      void this.pause(runId).catch((e) => logger.warn({ err: e, runId }, 'pause por stall falhou (ignorado)'));
     });
     this.stallTimers.set(runId, handle);
   }
@@ -3046,7 +2917,6 @@ export class WorkflowRunner {
     return ok();
   }
 
-
   async editCoordinator(
     runId: string,
     input: EditCoordinatorInput,
@@ -3083,9 +2953,7 @@ export class WorkflowRunner {
           'nao entra no journal reutilizavel.',
       };
     }
-    const inFlightAttempts = this.deps.crud
-      .listNodeRuns(runId)
-      .filter((nr) => nr.status === 'running');
+    const inFlightAttempts = this.deps.crud.listNodeRuns(runId).filter((nr) => nr.status === 'running');
     if (inFlightAttempts.length > 0) {
       const ids = inFlightAttempts.map((nr) => nr.nodeId).join(', ');
       return {
@@ -3122,10 +2990,7 @@ export class WorkflowRunner {
     const manifest: DynamicWorkflowManifest = {
       ...deriveClaudeCodeManifest({
         name: definition.name || compiled.meta.name,
-        description:
-          typeof compiled.meta.description === 'string'
-            ? compiled.meta.description
-            : undefined,
+        description: typeof compiled.meta.description === 'string' ? compiled.meta.description : undefined,
         phases: compiled.meta.phases,
       }),
       nodes: prevNodes,
@@ -3249,7 +3114,6 @@ export class WorkflowRunner {
     }
   }
 
-
   finalize(runId: string): RunnerResult {
     const run = this.deps.crud.getRun(runId);
     if (run?.status === 'completed') {
@@ -3282,7 +3146,6 @@ export class WorkflowRunner {
     };
   }
 
-
   getSnapshot(runId: string): import('./types').DynamicWorkflowSnapshot | null {
     const run = this.deps.crud.getRun(runId);
     if (!run) return null;
@@ -3296,7 +3159,6 @@ export class WorkflowRunner {
     };
     return buildSnapshot(runId, repoPath, snapDeps);
   }
-
 
   recoverInterrupted(): { recovered: number; rearmed: number } {
     const running = this.deps.crud.listRunsByStatus('running');
@@ -3336,13 +3198,16 @@ export class WorkflowRunner {
         if (Number.isNaN(at)) continue;
         const delayMs = Math.max(0, at - Date.parse(this.now()));
         this.armResumeTimer(run.id, delayMs);
-        this.emit({ runId: run.id, type: 'resume-rearmed', payload: { scheduledResumeAt: cp.scheduledResumeAt, delayMs } });
+        this.emit({
+          runId: run.id,
+          type: 'resume-rearmed',
+          payload: { scheduledResumeAt: cp.scheduledResumeAt, delayMs },
+        });
         rearmed += 1;
       }
     }
     return rearmed;
   }
-
 
   private markRunningAttempts(runId: string, status: 'interrupted' | 'cancelled'): void {
     for (const nr of this.deps.crud.listNodeRuns(runId)) {
@@ -3400,8 +3265,7 @@ export class WorkflowRunner {
       insertMessage: this.deps.crud.insertMessage,
       listEventsSince: this.deps.crud.listEventsSince,
       getRunCheckpoint: (runId) => this.deps.crud.getRun(runId)?.checkpointJson ?? null,
-      persistRunCheckpoint: (runId, checkpointJson) =>
-        this.deps.crud.updateRun(runId, { checkpointJson }),
+      persistRunCheckpoint: (runId, checkpointJson) => this.deps.crud.updateRun(runId, { checkpointJson }),
       addRunCost: (runId, addUsd, addDurationMs) => {
         const run = this.deps.crud.getRun(runId);
         if (!run) return;
@@ -3575,11 +3439,7 @@ export function resolveSandboxChildEntry(
 ): string {
   const candidates: string[] = [];
   const pushUnpackedVariant = (p: string): void => {
-    if (
-      p.includes(ASAR_SEGMENT_POSIX) ||
-      p.includes(ASAR_SEGMENT_WIN) ||
-      p.endsWith(ASAR_SEGMENT)
-    ) {
+    if (p.includes(ASAR_SEGMENT_POSIX) || p.includes(ASAR_SEGMENT_WIN) || p.endsWith(ASAR_SEGMENT)) {
       candidates.push(p.replace(ASAR_SEGMENT, ASAR_UNPACKED_SEGMENT));
     }
     candidates.push(p);
@@ -3623,16 +3483,11 @@ const FAILURE_RUNTIMES: ReadonlySet<WorkflowFailureRuntime> = new Set([
   'cursor',
 ]);
 
-const FAILURE_CLASSES: ReadonlySet<DynamicWorkflowFailureClass> = new Set(
-  DYNAMIC_WORKFLOW_FAILURE_CLASSES,
-);
+const FAILURE_CLASSES: ReadonlySet<DynamicWorkflowFailureClass> = new Set(DYNAMIC_WORKFLOW_FAILURE_CLASSES);
 
 function coerceFailureRuntime(runtime: string): WorkflowFailureRuntime {
-  return FAILURE_RUNTIMES.has(runtime as WorkflowFailureRuntime)
-    ? (runtime as WorkflowFailureRuntime)
-    : 'cloud';
+  return FAILURE_RUNTIMES.has(runtime as WorkflowFailureRuntime) ? (runtime as WorkflowFailureRuntime) : 'cloud';
 }
-
 
 let singleton: WorkflowRunner | null = null;
 

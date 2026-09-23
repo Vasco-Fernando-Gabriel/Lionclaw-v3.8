@@ -1,12 +1,6 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
-import {
-  createAccumulator,
-  translateSessionUpdate,
-  finalizeResponse,
-  stopReasonToOutcome,
-} from '../acp-translator';
+import { createAccumulator, translateSessionUpdate, finalizeResponse, stopReasonToOutcome } from '../acp-translator';
 import type { AcpSessionUpdate } from '../types';
 
 const GOLDEN_UPDATES: AcpSessionUpdate[] = [
@@ -53,9 +47,9 @@ describe('acp-translator golden (D1) - OBSERVED ACP session/update mapping', () 
 
     expect(onText.mock.calls).toEqual([['Analyzing '], ['the request.']]);
     expect(onThinking.mock.calls).toEqual([['I should read the file first.']]);
-    expect(onToolUse.mock.calls).toEqual([['Bash']]);
+    expect(onToolUse.mock.calls).toEqual([['Bash', 'tc_1']]);
     expect(onToolUseComplete).toHaveBeenCalledTimes(1);
-    expect(onToolUseComplete).toHaveBeenCalledWith('Bash', { command: 'echo hi' });
+    expect(onToolUseComplete).toHaveBeenCalledWith('Bash', { command: 'echo hi' }, 'tc_1');
 
     expect(onActivity).not.toHaveBeenCalled();
 
@@ -92,9 +86,9 @@ describe('acp-translator golden (D1) - OBSERVED ACP session/update mapping', () 
       { callbacks: { onToolUse, onToolUseComplete } },
     );
 
-    expect(onToolUse.mock.calls).toEqual([['Read']]);
+    expect(onToolUse.mock.calls).toEqual([['Read', 'tc_x']]);
     expect(onToolUseComplete).toHaveBeenCalledTimes(1);
-    expect(onToolUseComplete).toHaveBeenCalledWith('Read', { path: 'a.ts' });
+    expect(onToolUseComplete).toHaveBeenCalledWith('Read', { path: 'a.ts' }, 'tc_x');
     expect(acc.toolUses).toBe(1);
   });
 
@@ -102,18 +96,16 @@ describe('acp-translator golden (D1) - OBSERVED ACP session/update mapping', () 
     const onToolUseComplete = vi.fn();
     const acc = createAccumulator(null);
 
-    translateSessionUpdate(
-      { sessionUpdate: 'tool_call', toolCallId: 'tc_y', title: 'Grep', status: 'pending' },
-      acc,
-      { callbacks: { onToolUseComplete } },
-    );
+    translateSessionUpdate({ sessionUpdate: 'tool_call', toolCallId: 'tc_y', title: 'Grep', status: 'pending' }, acc, {
+      callbacks: { onToolUseComplete },
+    });
     translateSessionUpdate(
       { sessionUpdate: 'tool_call_update', toolCallId: 'tc_y', status: 'completed', rawOutput: { matches: 3 } },
       acc,
       { callbacks: { onToolUseComplete } },
     );
 
-    expect(onToolUseComplete).toHaveBeenCalledWith('Grep', { matches: 3 });
+    expect(onToolUseComplete).toHaveBeenCalledWith('Grep', { matches: 3 }, 'tc_y');
   });
 
   it('an agent_thought_chunk never lands in content; an unknown update has no content impact', () => {

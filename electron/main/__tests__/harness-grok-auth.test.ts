@@ -127,38 +127,44 @@ import { KimiAuthError } from '../agent-runtime/kimi-availability';
 import { PipelinePausedError } from '../agent-runtime/types';
 
 function configureSingleSprintRun(): void {
-  state.sprints = [{
-    id: 'sprint-db-1',
-    projectId: 'project-1',
-    sprintIndex: 0,
-    sprintJsonId: 'sprint-1',
-    name: 'Sprint 1',
-    status: 'pending',
-    coderAgentId: 'harness-coder',
-    evaluatorAgentId: 'harness-evaluator',
-    roundsUsed: 0,
-    maxRounds: 1,
-  }];
+  state.sprints = [
+    {
+      id: 'sprint-db-1',
+      projectId: 'project-1',
+      sprintIndex: 0,
+      sprintJsonId: 'sprint-1',
+      name: 'Sprint 1',
+      status: 'pending',
+      coderAgentId: 'harness-coder',
+      evaluatorAgentId: 'harness-evaluator',
+      roundsUsed: 0,
+      maxRounds: 1,
+    },
+  ];
   state.sprintsJson = {
     metadata: { version: 1, total_sprints: 1, total_features: 1 },
-    sprints: [{
-      id: 'sprint-1',
-      index: 0,
-      name: 'Sprint 1',
-      description: 'Implementar',
-      coder_agent_id: 'harness-coder',
-      stack: [],
-      features: [{
-        id: 'feature-1',
-        name: 'Feature',
-        description: 'Feature',
-        acceptance_criteria: ['feito'],
-      }],
-      hints: { existing_files: [], key_interfaces: [], architecture_notes: '' },
-      dependencies: [],
-      complexity: 'low',
-      estimated_rounds: 1,
-    }],
+    sprints: [
+      {
+        id: 'sprint-1',
+        index: 0,
+        name: 'Sprint 1',
+        description: 'Implementar',
+        coder_agent_id: 'harness-coder',
+        stack: [],
+        features: [
+          {
+            id: 'feature-1',
+            name: 'Feature',
+            description: 'Feature',
+            acceptance_criteria: ['feito'],
+          },
+        ],
+        hints: { existing_files: [], key_interfaces: [], architecture_notes: '' },
+        dependencies: [],
+        complexity: 'low',
+        estimated_rounds: 1,
+      },
+    ],
   };
 }
 
@@ -245,14 +251,15 @@ function seedClaimedEvaluatorCheckpoint(kind: 'run' | 'pipeline-run'): void {
     resume: {
       kind,
       provider: 'grok',
-      checkpoint: kind === 'run'
-        ? baseCheckpoint
-        : {
-            ...baseCheckpoint,
-            totalRounds: 1,
-            aggCoder: { ...emptyMetrics },
-            aggEvaluator: { ...emptyMetrics },
-          },
+      checkpoint:
+        kind === 'run'
+          ? baseCheckpoint
+          : {
+              ...baseCheckpoint,
+              totalRounds: 1,
+              aggCoder: { ...emptyMetrics },
+              aggEvaluator: { ...emptyMetrics },
+            },
     },
   };
   if (state.project) state.project.status = 'running';
@@ -297,35 +304,33 @@ describe('HarnessEngine Grok auth e contexto estrutural', () => {
       state.authCheckpoint = { ...state.authCheckpoint, claimState: 'claimed' };
       return structuredClone(state.authCheckpoint);
     });
-    state.advanceAuthCheckpoint.mockImplementation((
-      _projectId: string,
-      checkpointId: string,
-      resume: unknown,
-    ) => {
-      if (state.authCheckpoint?.checkpointId !== checkpointId
-        || state.authCheckpoint?.claimState !== 'claimed') return undefined;
+    state.advanceAuthCheckpoint.mockImplementation((_projectId: string, checkpointId: string, resume: unknown) => {
+      if (state.authCheckpoint?.checkpointId !== checkpointId || state.authCheckpoint?.claimState !== 'claimed')
+        return undefined;
       state.authCheckpoint = { ...state.authCheckpoint, resume: structuredClone(resume) };
       return structuredClone(state.authCheckpoint);
     });
-    state.persistEvaluatorCompletion.mockImplementation((data: {
-      checkpointId: string;
-      roundId: string;
-      resume: unknown;
-      round: Record<string, unknown>;
-      pipelineMessage?: Record<string, unknown>;
-    }) => {
-      if (state.authCheckpoint?.checkpointId !== data.checkpointId
-        || state.authCheckpoint?.claimState !== 'claimed') return undefined;
-      const currentStage = persistedCheckpointStage();
-      if (currentStage === 'evaluator-completed') return structuredClone(state.authCheckpoint);
-      state.roundUpdate(data.roundId, data.round);
-      if (data.pipelineMessage) state.persistMessage(data.pipelineMessage);
-      state.authCheckpoint = { ...state.authCheckpoint, resume: structuredClone(data.resume) };
-      return structuredClone(state.authCheckpoint);
-    });
+    state.persistEvaluatorCompletion.mockImplementation(
+      (data: {
+        checkpointId: string;
+        roundId: string;
+        resume: unknown;
+        round: Record<string, unknown>;
+        pipelineMessage?: Record<string, unknown>;
+      }) => {
+        if (state.authCheckpoint?.checkpointId !== data.checkpointId || state.authCheckpoint?.claimState !== 'claimed')
+          return undefined;
+        const currentStage = persistedCheckpointStage();
+        if (currentStage === 'evaluator-completed') return structuredClone(state.authCheckpoint);
+        state.roundUpdate(data.roundId, data.round);
+        if (data.pipelineMessage) state.persistMessage(data.pipelineMessage);
+        state.authCheckpoint = { ...state.authCheckpoint, resume: structuredClone(data.resume) };
+        return structuredClone(state.authCheckpoint);
+      },
+    );
     state.completeAuthCheckpoint.mockImplementation((_projectId: string, checkpointId: string) => {
-      if (state.authCheckpoint?.checkpointId !== checkpointId
-        || state.authCheckpoint?.claimState !== 'claimed') return false;
+      if (state.authCheckpoint?.checkpointId !== checkpointId || state.authCheckpoint?.claimState !== 'claimed')
+        return false;
       state.authCheckpoint = null;
       return true;
     });
@@ -434,7 +439,8 @@ describe('HarnessEngine Grok auth e contexto estrutural', () => {
     configureSingleSprintRun();
     const engine = new HarnessEngine(() => null);
     const spawnCoder = vi.fn().mockResolvedValue(coderMetrics);
-    const spawnEvaluator = vi.fn()
+    const spawnEvaluator = vi
+      .fn()
       .mockRejectedValueOnce(new GrokAuthError('login Grok necessario'))
       .mockResolvedValueOnce(evaluatorMetrics);
     Object.assign(engine, { spawnCoder, spawnEvaluator });
@@ -447,10 +453,12 @@ describe('HarnessEngine Grok auth e contexto estrutural', () => {
     expect(state.roundInsert).toHaveBeenCalledTimes(1);
 
     const checkpointId = String(state.authCheckpoint?.checkpointId);
-    expect(state.claimAuthCheckpoint('project-1', checkpointId)).toEqual(expect.objectContaining({
-      checkpointId,
-      claimState: 'claimed',
-    }));
+    expect(state.claimAuthCheckpoint('project-1', checkpointId)).toEqual(
+      expect.objectContaining({
+        checkpointId,
+        claimState: 'claimed',
+      }),
+    );
 
     const restartedEngine = new HarnessEngine(() => null);
     Object.assign(restartedEngine, { spawnCoder, spawnEvaluator });
@@ -463,12 +471,16 @@ describe('HarnessEngine Grok auth e contexto estrutural', () => {
     expect(spawnCoder).toHaveBeenCalledTimes(1);
     expect(spawnEvaluator).toHaveBeenCalledTimes(2);
     expect(state.roundInsert).toHaveBeenCalledTimes(1);
-    expect(state.roundUpdate.mock.calls.filter(([, patch]) => (
-      patch as Record<string, unknown>
-    ).coderCostUsd === coderMetrics.costUsd)).toHaveLength(1);
-    expect(state.roundUpdate.mock.calls.filter(([, patch]) => (
-      patch as Record<string, unknown>
-    ).evaluatorCostUsd === evaluatorMetrics.costUsd)).toHaveLength(1);
+    expect(
+      state.roundUpdate.mock.calls.filter(
+        ([, patch]) => (patch as Record<string, unknown>).coderCostUsd === coderMetrics.costUsd,
+      ),
+    ).toHaveLength(1);
+    expect(
+      state.roundUpdate.mock.calls.filter(
+        ([, patch]) => (patch as Record<string, unknown>).evaluatorCostUsd === evaluatorMetrics.costUsd,
+      ),
+    ).toHaveLength(1);
     await vi.waitFor(() => expect(state.authCheckpoint).toBeNull());
   });
 
@@ -498,16 +510,19 @@ describe('HarnessEngine Grok auth e contexto estrutural', () => {
     expect(spawnCoder).not.toHaveBeenCalled();
     expect(spawnEvaluator).toHaveBeenCalledTimes(1);
     expect(state.roundInsert).not.toHaveBeenCalled();
-    expect(state.roundUpdate.mock.calls.filter(([, patch]) => (
-      patch as Record<string, unknown>
-    ).evaluatorCostUsd === evaluatorMetrics.costUsd)).toHaveLength(1);
+    expect(
+      state.roundUpdate.mock.calls.filter(
+        ([, patch]) => (patch as Record<string, unknown>).evaluatorCostUsd === evaluatorMetrics.costUsd,
+      ),
+    ).toHaveLength(1);
     await vi.waitFor(() => expect(state.authCheckpoint).toBeNull());
   });
 
   it('retoma no mesmo round do coder sem repetir evaluator nem custo concluido', async () => {
     configureSingleSprintRun();
     const engine = new HarnessEngine(() => null);
-    const spawnCoder = vi.fn()
+    const spawnCoder = vi
+      .fn()
       .mockRejectedValueOnce(new GrokAuthError('login Grok necessario'))
       .mockResolvedValueOnce(coderMetrics);
     const spawnEvaluator = vi.fn().mockResolvedValue(evaluatorMetrics);
@@ -531,18 +546,23 @@ describe('HarnessEngine Grok auth e contexto estrutural', () => {
     expect(spawnCoder).toHaveBeenCalledTimes(2);
     expect(spawnEvaluator).toHaveBeenCalledTimes(1);
     expect(state.roundInsert).toHaveBeenCalledTimes(1);
-    expect(state.roundUpdate.mock.calls.filter(([, patch]) => (
-      patch as Record<string, unknown>
-    ).coderCostUsd === coderMetrics.costUsd)).toHaveLength(1);
-    expect(state.roundUpdate.mock.calls.filter(([, patch]) => (
-      patch as Record<string, unknown>
-    ).evaluatorCostUsd === evaluatorMetrics.costUsd)).toHaveLength(1);
+    expect(
+      state.roundUpdate.mock.calls.filter(
+        ([, patch]) => (patch as Record<string, unknown>).coderCostUsd === coderMetrics.costUsd,
+      ),
+    ).toHaveLength(1);
+    expect(
+      state.roundUpdate.mock.calls.filter(
+        ([, patch]) => (patch as Record<string, unknown>).evaluatorCostUsd === evaluatorMetrics.costUsd,
+      ),
+    ).toHaveLength(1);
   });
 
   it('pipeline retoma checkpoint do coder no mesmo round sem duplicar round ou custo', async () => {
     configureSingleSprintRun();
     const engine = new HarnessEngine(() => null);
-    const spawnCoder = vi.fn()
+    const spawnCoder = vi
+      .fn()
       .mockRejectedValueOnce(new GrokAuthError('login Grok necessario'))
       .mockResolvedValueOnce(coderMetrics);
     const spawnEvaluator = vi.fn().mockResolvedValue(evaluatorMetrics);
@@ -575,9 +595,11 @@ describe('HarnessEngine Grok auth e contexto estrutural', () => {
     expect(spawnCoder).toHaveBeenCalledTimes(2);
     expect(spawnEvaluator).toHaveBeenCalledTimes(1);
     expect(state.roundInsert).toHaveBeenCalledTimes(1);
-    expect(state.roundUpdate.mock.calls.filter(([, patch]) => (
-      patch as Record<string, unknown>
-    ).coderCostUsd === coderMetrics.costUsd)).toHaveLength(1);
+    expect(
+      state.roundUpdate.mock.calls.filter(
+        ([, patch]) => (patch as Record<string, unknown>).coderCostUsd === coderMetrics.costUsd,
+      ),
+    ).toHaveLength(1);
     expect(result.coderMetrics.costUsd).toBe(coderMetrics.costUsd);
     expect(state.authCheckpoint).toBeNull();
   });
@@ -586,7 +608,8 @@ describe('HarnessEngine Grok auth e contexto estrutural', () => {
     configureSingleSprintRun();
     const engine = new HarnessEngine(() => null);
     const spawnCoder = vi.fn().mockResolvedValue(coderMetrics);
-    const spawnEvaluator = vi.fn()
+    const spawnEvaluator = vi
+      .fn()
       .mockRejectedValueOnce(new GrokAuthError('login Grok necessario'))
       .mockResolvedValueOnce(evaluatorMetrics);
     Object.assign(engine, { spawnCoder, spawnEvaluator });
@@ -610,9 +633,11 @@ describe('HarnessEngine Grok auth e contexto estrutural', () => {
     expect(spawnEvaluator).toHaveBeenCalledTimes(2);
     expect(state.roundInsert).toHaveBeenCalledTimes(1);
     expect(state.persistMessage).toHaveBeenCalledTimes(3);
-    expect(state.roundUpdate.mock.calls.filter(([, patch]) => (
-      patch as Record<string, unknown>
-    ).coderCostUsd === coderMetrics.costUsd)).toHaveLength(1);
+    expect(
+      state.roundUpdate.mock.calls.filter(
+        ([, patch]) => (patch as Record<string, unknown>).coderCostUsd === coderMetrics.costUsd,
+      ),
+    ).toHaveLength(1);
     expect(result.coderMetrics.costUsd).toBe(coderMetrics.costUsd);
   });
 
@@ -630,7 +655,9 @@ describe('HarnessEngine Grok auth e contexto estrutural', () => {
       throw new Error('crash imediatamente apos commit do evaluator');
     });
 
-    await expect(engine.runSingleSprint('project-1', 0)).rejects.toThrow('crash imediatamente apos commit do evaluator');
+    await expect(engine.runSingleSprint('project-1', 0)).rejects.toThrow(
+      'crash imediatamente apos commit do evaluator',
+    );
     expect(persistedCheckpointStage()).toBe('evaluator-completed');
     expect(state.authCheckpoint).toMatchObject({ claimState: 'claimed' });
 
@@ -648,31 +675,31 @@ describe('HarnessEngine Grok auth e contexto estrutural', () => {
     expect(spawnCoder).not.toHaveBeenCalled();
     expect(spawnEvaluator).toHaveBeenCalledTimes(1);
     expect(state.persistMessage).toHaveBeenCalledTimes(1);
-    expect(state.roundUpdate.mock.calls.filter(([, patch]) => (
-      patch as Record<string, unknown>
-    ).evaluatorCostUsd === evaluatorMetrics.costUsd)).toHaveLength(1);
+    expect(
+      state.roundUpdate.mock.calls.filter(
+        ([, patch]) => (patch as Record<string, unknown>).evaluatorCostUsd === evaluatorMetrics.costUsd,
+      ),
+    ).toHaveLength(1);
     expect(result.evaluatorMetrics.costUsd).toBe(evaluatorMetrics.costUsd);
     expect(state.authCheckpoint).toBeNull();
   });
 
   it('pausa e retoma enrich no checkpoint Grok sem duplicar mensagem ou metricas', async () => {
     const engine = new HarnessEngine(() => null);
-    state.executeAgent
-      .mockRejectedValueOnce(new GrokAuthError('login Grok necessario'))
-      .mockResolvedValueOnce({
-        output: 'validacao concluida',
-        runtime: 'grok',
-        metrics: {
-          inputTokens: 3,
-          outputTokens: 4,
-          cacheReadTokens: 0,
-          cacheCreationTokens: 0,
-          costUsd: 0.25,
-          durationMs: 10,
-          toolUses: 0,
-          apiRequests: 1,
-        },
-      });
+    state.executeAgent.mockRejectedValueOnce(new GrokAuthError('login Grok necessario')).mockResolvedValueOnce({
+      output: 'validacao concluida',
+      runtime: 'grok',
+      metrics: {
+        inputTokens: 3,
+        outputTokens: 4,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        costUsd: 0.25,
+        durationMs: 10,
+        toolUses: 0,
+        apiRequests: 1,
+      },
+    });
 
     await engine.startEnrichSession({
       sessionId: 'enrich-1',

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../db', () => ({
@@ -70,9 +69,7 @@ function fakeConfig(over: Partial<AgentQueryConfig> = {}): AgentQueryConfig {
   };
 }
 
-function fakeRunNode(
-  capture?: (input: ClaudeCompatExecInput) => void,
-): typeof runClaudeCompatNode {
+function fakeRunNode(capture?: (input: ClaudeCompatExecInput) => void): typeof runClaudeCompatNode {
   return (async (input: ClaudeCompatExecInput): Promise<ClaudeCompatExecResult> => {
     capture?.(input);
     return {
@@ -99,9 +96,7 @@ function compatInput(over: Partial<ClaudeCompatRunInput> = {}): ClaudeCompatRunI
     cwd: '/repo',
     allowedTools: ['Read', 'Grep'],
     mcpServers: [],
-    canUseTool: ((): ToolDecision => ({ behavior: 'allow' })) as unknown as (
-      input: ComposedToolInput,
-    ) => ToolDecision,
+    canUseTool: ((): ToolDecision => ({ behavior: 'allow' })) as unknown as (input: ComposedToolInput) => ToolDecision,
     abortSignal: new AbortController().signal,
     timeoutMs: 60_000,
     ...over,
@@ -211,8 +206,7 @@ describe('SPEC-010 painel-final: executor dedicado particiona o allowedTools no 
       return opts;
     };
 
-    async function* fakeStream(): AsyncIterable<Record<string, unknown>> {
-    }
+    async function* fakeStream(): AsyncIterable<Record<string, unknown>> {}
 
     const res = await runClaudeCompatNode(
       {
@@ -248,8 +242,7 @@ describe('SPEC-010 painel-final: executor dedicado particiona o allowedTools no 
 
   it('runClaudeCompatNode emite stream ao vivo do node (texto em lote + tool_call)', async () => {
     const chunks: Array<{ type: string; content?: string; toolName?: string }> = [];
-    async function* fakeStream(): AsyncIterable<Record<string, unknown>> {
-    }
+    async function* fakeStream(): AsyncIterable<Record<string, unknown>> {}
     const res = await runClaudeCompatNode(
       {
         runtime: 'cloud',

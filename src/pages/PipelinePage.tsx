@@ -17,7 +17,18 @@ import {
 import { usePipelineStore } from '@/stores/pipeline-store';
 import { useActiveProjectState } from '@/hooks/useActiveProjectState';
 import { shortenModel } from '@/utils/model-display';
-import { PIPELINE_PHASES, SECURITY_PIPELINE_PHASES, FEATURE_PIPELINE_PHASES, ARCHITECTURE_REVIEW_PIPELINE_PHASES, DEVELOPMENT_V2_PIPELINE_PHASES, BUG_PIPELINE_PHASES, autoPhasesOf, loopPhasesOf, conversationPhasesOf, readBugOutcome } from '@/types/pipeline';
+import {
+  PIPELINE_PHASES,
+  SECURITY_PIPELINE_PHASES,
+  FEATURE_PIPELINE_PHASES,
+  ARCHITECTURE_REVIEW_PIPELINE_PHASES,
+  DEVELOPMENT_V2_PIPELINE_PHASES,
+  BUG_PIPELINE_PHASES,
+  autoPhasesOf,
+  loopPhasesOf,
+  conversationPhasesOf,
+  readBugOutcome,
+} from '@/types/pipeline';
 import type { PhaseDefinition } from '@/types/pipeline';
 import type { PipelinePhaseType } from '@/types';
 import OpenDesignStudioPage from '@/pages/OpenDesignStudioPage';
@@ -51,11 +62,7 @@ import { useCodexWindowsPrep } from '@/hooks/useCodexWindowsPrep';
 import { ArchitectureReviewArtifactView } from '@/components/pipeline/ArchitectureReviewArtifactView';
 import { DriveControls } from '@/components/pipeline/DriveControls';
 
-
-type ResetTarget =
-  | { phase: number; phaseName: string }
-  | { sprintIndex: number; sprintTitle: string };
-
+type ResetTarget = { phase: number; phaseName: string } | { sprintIndex: number; sprintTitle: string };
 
 function getPhaseName(phaseNumber: number, phases: readonly PhaseDefinition[] = PIPELINE_PHASES): string {
   return phases.find((p) => p.number === phaseNumber)?.name ?? `Fase ${phaseNumber}`;
@@ -64,7 +71,6 @@ function getPhaseName(phaseNumber: number, phases: readonly PhaseDefinition[] = 
 function getPhaseType(phaseNumber: number, phases: readonly PhaseDefinition[] = PIPELINE_PHASES): PipelinePhaseType {
   return phases.find((p) => p.number === phaseNumber)?.type ?? 'auto';
 }
-
 
 type ViewMode = 'chat' | 'sprints' | 'metrics';
 
@@ -84,9 +90,7 @@ function ViewTab({ mode, active, label, icon, onClick, disabled = false }: ViewT
       onClick={() => onClick(mode)}
       disabled={disabled}
       className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-        isActive
-          ? 'bg-amber-600 text-white'
-          : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+        isActive ? 'bg-amber-600 text-white' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
       }`}
     >
       {icon}
@@ -94,7 +98,6 @@ function ViewTab({ mode, active, label, icon, onClick, disabled = false }: ViewT
     </button>
   );
 }
-
 
 interface HistoricalPhaseViewProps {
   phaseNumber: number;
@@ -116,9 +119,9 @@ function formatCost(usd: number): string {
 }
 
 function HistoricalPhaseView({ phaseNumber, projectId, phases, onClose, onRequestReset }: HistoricalPhaseViewProps) {
-  const metrics = useActiveProjectState(s => s.metrics) ?? null;
-  const loadPhaseHistory = usePipelineStore(s => s.loadPhaseHistory);
-  const projects = usePipelineStore(s => s.projects);
+  const metrics = useActiveProjectState((s) => s.metrics) ?? null;
+  const loadPhaseHistory = usePipelineStore((s) => s.loadPhaseHistory);
+  const projects = usePipelineStore((s) => s.projects);
   const [loading, setLoading] = useState(true);
 
   const phaseName = getPhaseName(phaseNumber, phases);
@@ -136,8 +139,7 @@ function HistoricalPhaseView({ phaseNumber, projectId, phases, onClose, onReques
   useEffect(() => {
     setLoading(true);
     usePipelineStore.setState({ viewingPhase: phaseNumber });
-    loadPhaseHistory(projectId, phaseNumber)
-      .finally(() => setLoading(false));
+    loadPhaseHistory(projectId, phaseNumber).finally(() => setLoading(false));
     return () => {
       usePipelineStore.setState({ viewingPhase: null });
     };
@@ -209,86 +211,70 @@ function HistoricalPhaseView({ phaseNumber, projectId, phases, onClose, onReques
           Carregando historico...
         </div>
       ) : isConversation ? (
-        <PipelineChatView
-          showInput={false}
-          readOnly={true}
-        />
+        <PipelineChatView showInput={false} readOnly={true} />
       ) : artifactAutoPhases.has(phaseNumber) ? (
-        <PhaseHistoryView
-          phase={phaseNumber as import('@/types').PipelinePhaseNumber}
-          projectId={projectId}
-        />
+        <PhaseHistoryView phase={phaseNumber as import('@/types').PipelinePhaseNumber} projectId={projectId} />
       ) : (
-        <PipelineStreamView
-          phaseName={`${phaseName} (concluida)`}
-        />
+        <PipelineStreamView phaseName={`${phaseName} (concluida)`} />
       )}
-
     </div>
   );
 }
-
 
 interface ActivePipelineViewProps {
   projectId: string;
 }
 
 function ActivePipelineView({ projectId }: ActivePipelineViewProps) {
-  const projects = usePipelineStore(s => s.projects);
-  const closeProject = usePipelineStore(s => s.closeProject);
+  const projects = usePipelineStore((s) => s.projects);
+  const closeProject = usePipelineStore((s) => s.closeProject);
   const sidecarRunning = useOpenDesignStore((s) => s.sidecarStatus?.running ?? false);
-  const pausePipeline = usePipelineStore(s => s.pausePipeline);
-  const resumePipeline = usePipelineStore(s => s.resumePipeline);
-  const loadMetrics = usePipelineStore(s => s.loadMetrics);
-  const closeDocument = usePipelineStore(s => s.closeDocument);
-  const loadSecurityAgentStatuses = usePipelineStore(s => s.loadSecurityAgentStatuses);
-  const loadPhaseHistory = usePipelineStore(s => s.loadPhaseHistory);
+  const pausePipeline = usePipelineStore((s) => s.pausePipeline);
+  const resumePipeline = usePipelineStore((s) => s.resumePipeline);
+  const loadMetrics = usePipelineStore((s) => s.loadMetrics);
+  const closeDocument = usePipelineStore((s) => s.closeDocument);
+  const loadSecurityAgentStatuses = usePipelineStore((s) => s.loadSecurityAgentStatuses);
+  const loadPhaseHistory = usePipelineStore((s) => s.loadPhaseHistory);
 
-  const currentPhase = useActiveProjectState(s => s.currentPhase) ?? null;
-  const phaseStatus = useActiveProjectState(s => s.phaseStatus) ?? '';
+  const currentPhase = useActiveProjectState((s) => s.currentPhase) ?? null;
+  const phaseStatus = useActiveProjectState((s) => s.phaseStatus) ?? '';
   const rawStatus = phaseStatus;
-  const awaitingUser = useActiveProjectState(s => s.awaitingUser) ?? false;
-  const isStreaming = useActiveProjectState(s => s.isStreaming) ?? false;
-  const error = useActiveProjectState(s => s.error) ?? null;
-  const metrics = useActiveProjectState(s => s.metrics) ?? null;
-  const sprints = useActiveProjectState(s => s.sprints) ?? [];
-  const pipelineSprintIndex = useActiveProjectState(s => s.pipelineSprintIndex) ?? null;
-  const activeDocument = useActiveProjectState(s => s.activeDocument) ?? null;
-  const streamContent = useActiveProjectState(s => s.streamContent) ?? '';
-  const repoManifest = useActiveProjectState(s => s.repoManifest) ?? null;
-  const currentModel = useActiveProjectState(s => s.currentModel) ?? null;
-  const auditAgents = useActiveProjectState(s => s.auditAgents) ?? new Map();
+  const awaitingUser = useActiveProjectState((s) => s.awaitingUser) ?? false;
+  const isStreaming = useActiveProjectState((s) => s.isStreaming) ?? false;
+  const error = useActiveProjectState((s) => s.error) ?? null;
+  const metrics = useActiveProjectState((s) => s.metrics) ?? null;
+  const sprints = useActiveProjectState((s) => s.sprints) ?? [];
+  const pipelineSprintIndex = useActiveProjectState((s) => s.pipelineSprintIndex) ?? null;
+  const activeDocument = useActiveProjectState((s) => s.activeDocument) ?? null;
+  const streamContent = useActiveProjectState((s) => s.streamContent) ?? '';
+  const repoManifest = useActiveProjectState((s) => s.repoManifest) ?? null;
+  const currentModel = useActiveProjectState((s) => s.currentModel) ?? null;
+  const auditAgents = useActiveProjectState((s) => s.auditAgents) ?? new Map();
 
   const project = projects.find((p) => p.id === projectId);
 
   const pipelineType = project?.pipelineType ?? 'development';
-  const phases = pipelineType === 'security'
-    ? SECURITY_PIPELINE_PHASES
-    : pipelineType === 'architecture-review'
-      ? ARCHITECTURE_REVIEW_PIPELINE_PHASES
-      : pipelineType === 'feature'
-        ? FEATURE_PIPELINE_PHASES
-        : pipelineType === 'development-v2'
-          ? DEVELOPMENT_V2_PIPELINE_PHASES
-          : pipelineType === 'bug'
-            ? BUG_PIPELINE_PHASES
-            : PIPELINE_PHASES;
+  const phases =
+    pipelineType === 'security'
+      ? SECURITY_PIPELINE_PHASES
+      : pipelineType === 'architecture-review'
+        ? ARCHITECTURE_REVIEW_PIPELINE_PHASES
+        : pipelineType === 'feature'
+          ? FEATURE_PIPELINE_PHASES
+          : pipelineType === 'development-v2'
+            ? DEVELOPMENT_V2_PIPELINE_PHASES
+            : pipelineType === 'bug'
+              ? BUG_PIPELINE_PHASES
+              : PIPELINE_PHASES;
 
-
-  const SPRINT_EXECUTION_PHASES = useMemo(
-    () => loopPhasesOf(pipelineType),
-    [pipelineType],
-  );
+  const SPRINT_EXECUTION_PHASES = useMemo(() => loopPhasesOf(pipelineType), [pipelineType]);
 
   const ARTIFACT_AUTO_PHASES = useMemo(() => {
     const auto = autoPhasesOf(pipelineType);
     return new Set<number>(phases.filter((p) => auto.has(p.number) && p.resetable).map((p) => p.number));
   }, [phases, pipelineType]);
 
-  const CONVERSATION_PHASES_SET = useMemo(
-    () => conversationPhasesOf(pipelineType),
-    [pipelineType],
-  );
+  const CONVERSATION_PHASES_SET = useMemo(() => conversationPhasesOf(pipelineType), [pipelineType]);
 
   const terminalProgressPhase = useMemo(
     () => phases.reduce((max, phase) => Math.max(max, phase.number), 0) + 1,
@@ -337,7 +323,9 @@ function ActivePipelineView({ projectId }: ActivePipelineViewProps) {
       setGraphFileCount(status.detect.stats?.files);
       setConsentOpen(true);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [pipelineType, currentPhase, project?.projectPath, graphPromptDismissed, setConsentOpen]);
 
   const handleGraphConsentCreate = useCallback(() => {
@@ -365,7 +353,7 @@ function ActivePipelineView({ projectId }: ActivePipelineViewProps) {
     }
   }, [pipelineType, currentPhase, projectId, openStudio]);
 
-  const openProject = usePipelineStore(s => s.openProject);
+  const openProject = usePipelineStore((s) => s.openProject);
   useEffect(() => {
     if (currentPhase === null) {
       void openProject(projectId);
@@ -433,37 +421,39 @@ function ActivePipelineView({ projectId }: ActivePipelineViewProps) {
     closeProject();
   }, [closeProject]);
 
-  const handlePhaseClick = useCallback((phaseNumber: number) => {
-    if (SPRINT_EXECUTION_PHASES.has(phaseNumber)) {
-      setViewMode('sprints');
-      return;
-    }
-    if (
-      phaseNumber === 5 &&
-      pipelineType === 'development-v2' &&
-      currentPhase === 5
-    ) {
-      openStudio(projectId);
-      return;
-    }
-    const phaseM = metrics?.phases.find((p) => p.phaseNumber === phaseNumber);
-    const isCompleted = phaseM?.status === 'completed';
-    const isPast = progressCurrentPhase !== null && phaseNumber < progressCurrentPhase;
-    if (isCompleted || isPast) {
-      setViewingPhase(phaseNumber);
-    }
-  }, [metrics, progressCurrentPhase, currentPhase, SPRINT_EXECUTION_PHASES, pipelineType, projectId, openStudio]);
+  const handlePhaseClick = useCallback(
+    (phaseNumber: number) => {
+      if (SPRINT_EXECUTION_PHASES.has(phaseNumber)) {
+        setViewMode('sprints');
+        return;
+      }
+      if (phaseNumber === 5 && pipelineType === 'development-v2' && currentPhase === 5) {
+        openStudio(projectId);
+        return;
+      }
+      const phaseM = metrics?.phases.find((p) => p.phaseNumber === phaseNumber);
+      const isCompleted = phaseM?.status === 'completed';
+      const isPast = progressCurrentPhase !== null && phaseNumber < progressCurrentPhase;
+      if (isCompleted || isPast) {
+        setViewingPhase(phaseNumber);
+      }
+    },
+    [metrics, progressCurrentPhase, currentPhase, SPRINT_EXECUTION_PHASES, pipelineType, projectId, openStudio],
+  );
 
   const handleSprintSelect = useCallback((sprintIndex: number) => {
     setViewMode('sprints');
     usePipelineStore.getState().setSelectedSprintTab(sprintIndex);
   }, []);
 
-  const handlePhaseResetRequest = useCallback((phaseNumber: number) => {
-    const phaseDef = phases.find((p) => p.number === phaseNumber);
-    if (!phaseDef) return;
-    setResetTarget({ phase: phaseNumber, phaseName: phaseDef.name });
-  }, [phases]);
+  const handlePhaseResetRequest = useCallback(
+    (phaseNumber: number) => {
+      const phaseDef = phases.find((p) => p.number === phaseNumber);
+      if (!phaseDef) return;
+      setResetTarget({ phase: phaseNumber, phaseName: phaseDef.name });
+    },
+    [phases],
+  );
 
   const handleSprintResetRequest = useCallback((sprintIndex: number) => {
     const sprint = usePipelineStore.getState().sprints.find((s) => s.index === sprintIndex);
@@ -471,20 +461,10 @@ function ActivePipelineView({ projectId }: ActivePipelineViewProps) {
     setResetTarget({ sprintIndex, sprintTitle });
   }, []);
 
-  const phaseName =
-    currentPhase !== null
-      ? getPhaseName(currentPhase, phases)
-      : null;
+  const phaseName = currentPhase !== null ? getPhaseName(currentPhase, phases) : null;
 
   type PipelineUIState =
-    | 'done'
-    | 'failed'
-    | 'aborted'
-    | 'interrupted'
-    | 'streaming'
-    | 'awaiting-input'
-    | 'paused'
-    | 'idle';
+    'done' | 'failed' | 'aborted' | 'interrupted' | 'streaming' | 'awaiting-input' | 'paused' | 'idle';
 
   const uiState: PipelineUIState = useMemo(() => {
     if (project?.status === 'done') return 'done';
@@ -501,8 +481,7 @@ function ActivePipelineView({ projectId }: ActivePipelineViewProps) {
   const isDone = uiState === 'done';
   const isFailed = uiState === 'failed' || uiState === 'aborted' || uiState === 'interrupted';
 
-  const pausedByMaxLoops =
-    rawStatus === 'paused_max_loops' || rawStatus === 'max_loops';
+  const pausedByMaxLoops = rawStatus === 'paused_max_loops' || rawStatus === 'max_loops';
 
   const isConversationPhase = currentPhase !== null && CONVERSATION_PHASES_SET.has(currentPhase);
   const isResumableConversation = uiState === 'interrupted' && isConversationPhase;
@@ -516,11 +495,7 @@ function ActivePipelineView({ projectId }: ActivePipelineViewProps) {
     return <OpenDesignStudioPage projectId={projectId} />;
   }
 
-  if (
-    viewingPhase === 5 &&
-    pipelineType === 'development-v2' &&
-    currentPhase !== 5
-  ) {
+  if (viewingPhase === 5 && pipelineType === 'development-v2' && currentPhase !== 5) {
     return (
       <div className="flex flex-col h-full">
         <ResetConfirmDialog
@@ -649,17 +624,15 @@ function ActivePipelineView({ projectId }: ActivePipelineViewProps) {
           <ArrowLeft size={16} />
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-sm font-semibold text-zinc-100 truncate">
-            {project?.name ?? projectId}
-          </h1>
+          <h1 className="text-sm font-semibold text-zinc-100 truncate">{project?.name ?? projectId}</h1>
           <p className="text-[11px] text-zinc-500">
             {phaseName !== null
               ? `Fase ${currentPhase}: ${phaseName}`
               : isDone
-              ? closedWithoutFix
-                ? 'Encerrado sem correcao'
-                : 'Pipeline concluido'
-              : 'Aguardando inicio...'}
+                ? closedWithoutFix
+                  ? 'Encerrado sem correcao'
+                  : 'Pipeline concluido'
+                : 'Aguardando inicio...'}
           </p>
         </div>
 
@@ -783,11 +756,7 @@ function ActivePipelineView({ projectId }: ActivePipelineViewProps) {
       ) : viewMode === 'sprints' ? (
         <div className="flex-1 overflow-y-auto px-4 py-5">
           <div className="max-w-4xl mx-auto">
-            <SprintExecutionView
-              totalSprints={totalSprints}
-              maxRounds={5}
-              projectId={projectId}
-            />
+            <SprintExecutionView totalSprints={totalSprints} maxRounds={5} projectId={projectId} />
           </div>
         </div>
       ) : pipelineType === 'architecture-review' && currentPhase !== null && currentPhase >= 1 && currentPhase <= 4 ? (
@@ -796,9 +765,14 @@ function ActivePipelineView({ projectId }: ActivePipelineViewProps) {
           phase={currentPhase}
           showChatInput={showChatInput}
           isPaused={isPaused}
-          selectedCandidateId={project?.metadata && typeof project.metadata['architectureReview'] === 'object' && project.metadata['architectureReview'] !== null
-            ? (project.metadata['architectureReview'] as Record<string, unknown>)['selectedCandidateId'] as string | null | undefined
-            : null}
+          selectedCandidateId={
+            project?.metadata &&
+            typeof project.metadata['architectureReview'] === 'object' &&
+            project.metadata['architectureReview'] !== null
+              ? ((project.metadata['architectureReview'] as Record<string, unknown>)['selectedCandidateId'] as
+                  string | null | undefined)
+              : null
+          }
         />
       ) : pipelineType === 'security' && currentPhase === 1 ? (
         <RepoProfilerView
@@ -810,35 +784,26 @@ function ActivePipelineView({ projectId }: ActivePipelineViewProps) {
       ) : pipelineType === 'security' && currentPhase === 2 ? (
         (() => {
           const TOTAL_AUDIT = 7;
-          const allDone = auditAgents.size >= TOTAL_AUDIT && Array.from(auditAgents.values())
-            .every(a => a.status === 'completed' || a.status === 'failed');
-          return allDone
-            ? <AuditFinalSummaryView />
-            : <AuditMultiPanelView isStreaming={isStreaming} />;
+          const allDone =
+            auditAgents.size >= TOTAL_AUDIT &&
+            Array.from(auditAgents.values()).every((a) => a.status === 'completed' || a.status === 'failed');
+          return allDone ? <AuditFinalSummaryView /> : <AuditMultiPanelView isStreaming={isStreaming} />;
         })()
       ) : pipelineType === 'bug' && currentPhase === 2 ? (
         (() => {
           const TOTAL_BUG_ANALYSTS = 3;
-          const allDone = auditAgents.size >= TOTAL_BUG_ANALYSTS && Array.from(auditAgents.values())
-            .every(a => a.status === 'completed' || a.status === 'failed');
-          return allDone
-            ? <BugAnalysisSummaryView />
-            : <BugAnalysisMultiPanelView isStreaming={isStreaming} />;
+          const allDone =
+            auditAgents.size >= TOTAL_BUG_ANALYSTS &&
+            Array.from(auditAgents.values()).every((a) => a.status === 'completed' || a.status === 'failed');
+          return allDone ? <BugAnalysisSummaryView /> : <BugAnalysisMultiPanelView isStreaming={isStreaming} />;
         })()
       ) : activeDocument !== null ? (
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <div className="flex-1 min-w-0 h-full overflow-hidden">
-            <PipelineChatView
-              showInput={showChatInput}
-              isPaused={isPaused}
-            />
+            <PipelineChatView showInput={showChatInput} isPaused={isPaused} />
           </div>
           <div className="w-[45%] min-w-0 shrink-0 h-full overflow-hidden">
-            <DocumentPreview
-              path={activeDocument.path}
-              content={activeDocument.content}
-              onClose={closeDocument}
-            />
+            <DocumentPreview path={activeDocument.path} content={activeDocument.content} onClose={closeDocument} />
           </div>
         </div>
       ) : (
@@ -846,25 +811,15 @@ function ActivePipelineView({ projectId }: ActivePipelineViewProps) {
           {currentPhase !== null && ARTIFACT_AUTO_PHASES.has(currentPhase) && isStreaming && (
             <div className="flex flex-col items-center justify-center gap-4 py-12">
               <AgentThinking />
-              <p className="text-muted-foreground text-sm">
-                {getPhaseName(currentPhase, phases)} em andamento...
-              </p>
+              <p className="text-muted-foreground text-sm">{getPhaseName(currentPhase, phases)} em andamento...</p>
             </div>
           )}
-          <PipelineChatView
-            showInput={showChatInput}
-            isPaused={isPaused}
-          />
+          <PipelineChatView showInput={showChatInput} isPaused={isPaused} />
         </>
       )}
 
       {/* Contextual action buttons (Decidido, Aprovar, Rejeitar, etc.) */}
-      {viewMode !== 'metrics' && (
-        <PhaseActionButtons
-          currentPhase={currentPhase}
-          pausedByMaxLoops={pausedByMaxLoops}
-        />
-      )}
+      {viewMode !== 'metrics' && <PhaseActionButtons currentPhase={currentPhase} pausedByMaxLoops={pausedByMaxLoops} />}
 
       {/* Metrics footer */}
       <PipelineMetricsFooter onExpandMetrics={() => setViewMode('metrics')} />
@@ -884,7 +839,6 @@ function ActivePipelineView({ projectId }: ActivePipelineViewProps) {
     </div>
   );
 }
-
 
 function ArchitectureReviewSplitView({
   projectId,
@@ -919,10 +873,11 @@ function ArchitectureReviewSplitView({
           setMarkdown((result as { type: 'markdown'; content: string }).content);
           setJson(null);
         }
-      } catch {
-      }
+      } catch {}
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [projectId, phase]);
 
   useEffect(() => {
@@ -937,7 +892,9 @@ function ArchitectureReviewSplitView({
         }
       })();
     });
-    return () => { off?.(); };
+    return () => {
+      off?.();
+    };
   }, [projectId, phase]);
 
   const handleSelectCandidate = async (candidateId: string) => {
@@ -997,29 +954,25 @@ function ArchitectureReviewSplitView({
   );
 }
 
-
 export default function PipelinePage() {
-  const {
-    projects,
-    activeProjectId,
-    loadProjects,
-    openProject,
-  } = usePipelineStore();
+  const { projects, activeProjectId, loadProjects, openProject } = usePipelineStore();
 
   const [showNewModal, setShowNewModal] = useState(false);
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
 
   const codexPrep = useCodexWindowsPrep();
 
-
   useEffect(() => {
     setIsLoadingProjects(true);
     loadProjects().finally(() => setIsLoadingProjects(false));
   }, [loadProjects]);
 
-  const handleSelect = useCallback(async (projectId: string) => {
-    await openProject(projectId);
-  }, [openProject]);
+  const handleSelect = useCallback(
+    async (projectId: string) => {
+      await openProject(projectId);
+    },
+    [openProject],
+  );
 
   if (activeProjectId) {
     return <ActivePipelineView projectId={activeProjectId} />;
@@ -1030,7 +983,9 @@ export default function PipelinePage() {
       <PipelineProjectList
         projects={projects}
         isLoading={isLoadingProjects}
-        onSelect={(id) => { void handleSelect(id); }}
+        onSelect={(id) => {
+          void handleSelect(id);
+        }}
         onNewPipeline={() => setShowNewModal(true)}
       />
       {showNewModal && (

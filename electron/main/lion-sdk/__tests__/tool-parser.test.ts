@@ -1,11 +1,5 @@
-
 import { describe, expect, it } from 'vitest';
-import {
-  parseContentBlocks,
-  parseFencedBlocks,
-  parseNativeToolCalls,
-  parseToolCallBatch,
-} from '../tool-parser';
+import { parseContentBlocks, parseFencedBlocks, parseNativeToolCalls, parseToolCallBatch } from '../tool-parser';
 
 describe('Lion-SDK tool-parser', () => {
   describe('native function calls', () => {
@@ -156,12 +150,8 @@ Trailing.`;
   describe('combined parseToolCallBatch', () => {
     it('merges native + fenced + content blocks', () => {
       const r = parseToolCallBatch({
-        nativeToolCalls: [
-          { type: 'function', function: { name: 'Read', arguments: '{"file_path":"/a"}' } },
-        ],
-        contentBlocks: [
-          { type: 'tool_use', id: 'b', name: 'Glob', input: { pattern: '**/*.ts' } },
-        ],
+        nativeToolCalls: [{ type: 'function', function: { name: 'Read', arguments: '{"file_path":"/a"}' } }],
+        contentBlocks: [{ type: 'tool_use', id: 'b', name: 'Glob', input: { pattern: '**/*.ts' } }],
         text: '```lion_tool_use\n{"calls":[{"id":"c","name":"Grep","input":{"pattern":"foo"}}]}\n```',
       });
       const names = r.calls.map((c) => c.name).sort();

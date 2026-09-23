@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 export const V91_JOURNAL_SQL = `
     CREATE TABLE IF NOT EXISTS dynamic_workflow_journal (
       run_id TEXT NOT NULL,

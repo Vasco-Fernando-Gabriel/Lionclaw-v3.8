@@ -1,10 +1,8 @@
-
 import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { runSmokeTest, writeSmokeTestReport } from '../smoke-test-runner';
-
 
 const tmpDirs: string[] = [];
 
@@ -18,32 +16,31 @@ afterEach(() => {
   for (const dir of tmpDirs.splice(0)) {
     try {
       fs.rmSync(dir, { recursive: true, force: true });
-    } catch {
-    }
+    } catch {}
   }
 });
 
-
 describe('runSmokeTest: empty project', () => {
+  it(
+    'reports typecheck as not applicable for project without tsconfig or typescript dep',
+    { timeout: 30000 },
+    async () => {
+      const projectPath = makeTmpDir();
 
-  it('reports typecheck as not applicable for project without tsconfig or typescript dep', { timeout: 30000 }, async () => {
-    const projectPath = makeTmpDir();
+      const result = await runSmokeTest(projectPath, []);
 
-    const result = await runSmokeTest(projectPath, []);
-
-    expect(result.typecheck.ok).toBe(true);
-    expect(result.typecheck.output).toMatch(/not applicable/i);
-    expect(result.lint.available).toBe(false);
-    expect(result.tests.available).toBe(false);
-    expect(result.brokenImports).toEqual([]);
-    expect(result.missingFiles).toEqual([]);
-    expect(result.durationMs).toBeGreaterThanOrEqual(0);
-  });
-
+      expect(result.typecheck.ok).toBe(true);
+      expect(result.typecheck.output).toMatch(/not applicable/i);
+      expect(result.lint.available).toBe(false);
+      expect(result.tests.available).toBe(false);
+      expect(result.brokenImports).toEqual([]);
+      expect(result.missingFiles).toEqual([]);
+      expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    },
+  );
 });
 
 describe('runSmokeTest: missing expected files', () => {
-
   it('lists files that do not exist on disk in missingFiles', { timeout: 30000 }, async () => {
     const projectPath = makeTmpDir();
 
@@ -63,11 +60,9 @@ describe('runSmokeTest: missing expected files', () => {
     expect(result.missingFiles).not.toContain('present.ts');
     expect(result.missingFiles).toContain('absent.ts');
   });
-
 });
 
 describe('runSmokeTest: broken imports detection', () => {
-
   it('detects broken relative import in a TypeScript source file', { timeout: 30000 }, async () => {
     const projectPath = makeTmpDir();
     fs.writeFileSync(
@@ -79,17 +74,13 @@ describe('runSmokeTest: broken imports detection', () => {
     const result = await runSmokeTest(projectPath, []);
 
     expect(result.brokenImports.length).toBeGreaterThanOrEqual(1);
-    const broken = result.brokenImports.find(
-      (b) => b.file === 'index.ts' && b.importPath === './missing-module',
-    );
+    const broken = result.brokenImports.find((b) => b.file === 'index.ts' && b.importPath === './missing-module');
     expect(broken).toBeDefined();
     expect(result.typecheck.ok).toBe(true);
   });
-
 });
 
 describe('runSmokeTest: resilience', () => {
-
   it('resolves to a valid SmokeTestResult even with non-existent project path', async () => {
     const invalidPath = '/path/that/does/not/exist/lionclaw-smoke-invalid';
 
@@ -103,11 +94,9 @@ describe('runSmokeTest: resilience', () => {
     expect(Array.isArray(result.missingFiles)).toBe(true);
     expect(typeof result.durationMs).toBe('number');
   });
-
 });
 
 describe('writeSmokeTestReport', () => {
-
   it('creates missing subdirectories and writes the report file', () => {
     const projectPath = makeTmpDir();
     const outputPath = path.join(projectPath, 'non-existent-subdir', 'report.md');
@@ -167,5 +156,4 @@ describe('writeSmokeTestReport', () => {
     expect(content).toContain('./missing');
     expect(content).toContain('1 entries.');
   });
-
 });

@@ -1,30 +1,18 @@
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import {
-  RepoGraphEngine,
-  type RepoGraphEngineDb,
-  type RepoGraphProvider,
-} from '../repo-graph/engine';
+import { RepoGraphEngine, type RepoGraphEngineDb, type RepoGraphProvider } from '../repo-graph/engine';
 import { __clearStalenessThrottleForTests } from '../repo-graph/staleness';
-import type {
-  LocalRepositoryRecord,
-  RepoGraphRunRecord,
-  SessionActiveRepositoryRecord,
-} from '../repo-graph/types';
+import type { LocalRepositoryRecord, RepoGraphRunRecord, SessionActiveRepositoryRecord } from '../repo-graph/types';
 
 const BINARY_MISSING = 'codegraph: binario da CLI ausente';
 const SESSION_ID = 'session-errored-1';
 const REPO_ID = 'repo-errored-1';
 const OLD_ISO = '2026-06-01T10:00:00.000Z';
 
-function makeRepoRecord(
-  canonicalRootPath: string,
-  status: LocalRepositoryRecord['status'],
-): LocalRepositoryRecord {
+function makeRepoRecord(canonicalRootPath: string, status: LocalRepositoryRecord['status']): LocalRepositoryRecord {
   return {
     id: REPO_ID,
     name: 'fixture-repo',
@@ -187,10 +175,7 @@ describe('engine - repo preso em error por binario ausente (recuperavel)', () =>
   it('reconcileErroredRepos: error + binario presente + sem graph -> absent (destrava o modal)', async () => {
     const repoRecord = makeRepoRecord(tempDir, 'error');
     const db = makeDb(repoRecord);
-    const engine = new RepoGraphEngine(
-      db,
-      makeProvider({ detect: async () => ({ exists: false }) }),
-    );
+    const engine = new RepoGraphEngine(db, makeProvider({ detect: async () => ({ exists: false }) }));
 
     await engine.reconcileErroredRepos();
 
@@ -214,10 +199,7 @@ describe('engine - repo preso em error por binario ausente (recuperavel)', () =>
   it('reconcileErroredRepos: repo nao-error fica intocado (disjunto de reconcileOrphanRuns)', async () => {
     const repoRecord = makeRepoRecord(tempDir, 'ready');
     const db = makeDb(repoRecord);
-    const engine = new RepoGraphEngine(
-      db,
-      makeProvider({ detect: async () => ({ exists: false }) }),
-    );
+    const engine = new RepoGraphEngine(db, makeProvider({ detect: async () => ({ exists: false }) }));
 
     await engine.reconcileErroredRepos();
 

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 vi.mock('../logger', () => ({
@@ -28,10 +27,7 @@ vi.mock('../secrets-vault', () => ({
 
 import { getSetting } from '../db';
 import { getSecret } from '../secrets-vault';
-import {
-  resolveOrchestratorSelection,
-  __internal,
-} from '../orchestrator-selection';
+import { resolveOrchestratorSelection, __internal } from '../orchestrator-selection';
 
 const mockedGetSetting = vi.mocked(getSetting);
 const mockedGetSecret = vi.mocked(getSecret);
@@ -76,7 +72,7 @@ describe('SPEC-011 S2: kimi-sdk orchestrator runtime', () => {
       orchestrator_provider: 'kimi',
       orchestrator_model: 'kimi-code/kimi-for-coding',
     });
-    const selection = await resolveOrchestratorSelection({ surface: 'main-chat' });
+    const selection = await resolveOrchestratorSelection({ surface: 'default' });
     expect(selection).toEqual({
       runtime: 'kimi-sdk',
       provider: 'kimi',
@@ -94,7 +90,7 @@ describe('SPEC-011 S2: kimi-sdk orchestrator runtime', () => {
       orchestrator_kimi_effort: effort,
     });
 
-    await expect(resolveOrchestratorSelection({ surface: 'main-chat' })).resolves.toEqual({
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).resolves.toEqual({
       runtime: 'kimi-sdk',
       provider: 'kimi',
       model: 'kimi-code/k3',
@@ -111,6 +107,6 @@ describe('SPEC-011 S2: kimi-sdk orchestrator runtime', () => {
       orchestrator_kimi_effort: 'max',
     });
 
-    await expect(resolveOrchestratorSelection({ surface: 'main-chat' })).resolves.not.toHaveProperty('effort');
+    await expect(resolveOrchestratorSelection({ surface: 'default' })).resolves.not.toHaveProperty('effort');
   });
 });

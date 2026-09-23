@@ -1,11 +1,12 @@
-
-import { getSession, getSetting } from './db';
+import { getSession, getSessionOrchestrator, getSetting } from './db';
 import { getContextWindow } from './agent-runtime/model-context-windows';
 import { compactChatSessionInPlace } from './chat-compaction-inplace';
+import { isSessionClearing } from './clearing-sessions';
 import {
   DEFAULT_CHAT_COMPACTION_TRIGGER_PERCENT,
   CHAT_COMPACTION_TRIGGER_PERCENT_SETTING_KEY,
   CHAT_AUTO_COMPACTION_ENABLED_SETTING_KEY,
+  CHAT_TIMELINE_REINJECT_ENABLED_SETTING_KEY,
   DEFAULT_DYNAMIC_WORKFLOW_DRIVE_COMPACTION_TOKENS,
   DYNAMIC_WORKFLOW_DRIVE_COMPACTION_TOKENS_SETTING_KEY,
   DYNAMIC_WORKFLOW_DRIVE_SESSION_PREFIX,
@@ -15,7 +16,6 @@ import { createLogger } from './logger';
 import type { StreamChunk } from '../../src/types';
 
 const logger = createLogger('chat-compaction');
-
 
 export const CHAT_COMPACTION_MIN_SAVINGS_PERCENT = 10;
 
@@ -48,10 +48,13 @@ export function isChatAutoCompactionEnabled(): boolean {
   return getSetting(CHAT_AUTO_COMPACTION_ENABLED_SETTING_KEY) !== 'false';
 }
 
+export function isChatTimelineReinjectEnabled(): boolean {
+  return getSetting(CHAT_TIMELINE_REINJECT_ENABLED_SETTING_KEY) === 'true';
+}
+
 export function resolveChatCompactionTriggerPercent(): number {
   const raw = parseInt(
-    getSetting(CHAT_COMPACTION_TRIGGER_PERCENT_SETTING_KEY) ||
-      String(DEFAULT_CHAT_COMPACTION_TRIGGER_PERCENT),
+    getSetting(CHAT_COMPACTION_TRIGGER_PERCENT_SETTING_KEY) || String(DEFAULT_CHAT_COMPACTION_TRIGGER_PERCENT),
     10,
   );
   if (!Number.isFinite(raw)) return DEFAULT_CHAT_COMPACTION_TRIGGER_PERCENT;
@@ -67,11 +70,24 @@ export function getChatCompactionThreshold(
   turnModel?: ChatCompactionTurnModel,
   sessionId?: string,
 ): number | undefined {
-  const model = (turnModel?.model ?? getSetting('orchestrator_model') ?? '').trim();
+  let model: string;
+  let provider: string | undefined;
+  if (turnModel) {
+    model = turnModel.model.trim();
+    provider = turnModel.provider;
+  } else if (sessionId) {
+    const laneModel = getSessionOrchestrator(sessionId);
+    model = (laneModel?.model ?? '').trim();
+    provider = laneModel?.provider;
+    if (!model) {
+      logger.warn({ sessionId }, 'chat: lane sem colunas de orquestrador; gatilho de compactacao desligado (RM7)');
+      return undefined;
+    }
+  } else {
+    model = (getSetting('orchestrator_model') ?? '').trim();
+    provider = getSetting('orchestrator_provider') || undefined;
+  }
   if (!model) return undefined;
-  const provider = turnModel
-    ? turnModel.provider
-    : getSetting('orchestrator_provider') || undefined;
   const contextWindow = getContextWindow(model, provider);
   if (contextWindow === undefined || contextWindow <= 0) return undefined;
   const byPercent = Math.floor((contextWindow * resolveChatCompactionTriggerPercent()) / 100);
@@ -82,10 +98,7 @@ export function getChatCompactionThreshold(
 }
 
 export function resolveDynamicWorkflowDriveCompactionTokens(): number {
-  const raw = Number.parseInt(
-    getSetting(DYNAMIC_WORKFLOW_DRIVE_COMPACTION_TOKENS_SETTING_KEY) || '',
-    10,
-  );
+  const raw = Number.parseInt(getSetting(DYNAMIC_WORKFLOW_DRIVE_COMPACTION_TOKENS_SETTING_KEY) || '', 10);
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_DYNAMIC_WORKFLOW_DRIVE_COMPACTION_TOKENS;
 }
 
@@ -97,12 +110,16 @@ export async function maybeCompactChatSession(
   try {
     if (!isChatAutoCompactionEnabled()) return;
 
+    if (isSessionClearing(sessionId)) {
+      logger.info({ sessionId }, 'chat: gatilho de compactacao pulado (sessao em Clear)');
+      return;
+    }
     const session = getSession(sessionId);
     if (!session || session.status !== 'active') return;
     if (session.type !== 'chat' && session.type !== 'manual') return;
 
     const threshold = getChatCompactionThreshold(turnModel, sessionId);
-    if (threshold === undefined) return; // D5/AC-A5: janela desconhecida = no-op
+    if (threshold === undefined) return;
 
     const tokensAtivos = session.activeContextTokensEst;
     if (tokensAtivos === undefined || tokensAtivos < threshold) return;
@@ -119,13 +136,10 @@ export async function maybeCompactChatSession(
         );
         return;
       }
-      guard.cooldownUntilMs = undefined; // cooldown expirou; volta a tentar
+      guard.cooldownUntilMs = undefined;
     }
 
-    logger.info(
-      { sessionId, tokensAtivos, threshold },
-      'chat: gatilho de compactacao in-place leve atingido (SA-3)',
-    );
+    logger.info({ sessionId, tokensAtivos, threshold }, 'chat: gatilho de compactacao in-place leve atingido (SA-3)');
     if (emitChunk) emitChunk({ type: 'compacting', isCompacting: true });
     let outcome!: Awaited<ReturnType<typeof compactChatSessionInPlace>>;
     try {
@@ -148,11 +162,9 @@ export async function maybeCompactChatSession(
     if (outcome.ok && !outcome.noop) {
       const seedTokens = outcome.seedTokens;
       if (emitChunk && seedTokens !== undefined) {
-        const model = (turnModel?.model ?? getSetting('orchestrator_model') ?? '').trim();
-        const provider = turnModel
-          ? turnModel.provider
-          : getSetting('orchestrator_provider') || undefined;
-        const contextWindow = model ? getContextWindow(model, provider) : undefined;
+        const laneModel = turnModel ?? getSessionOrchestrator(sessionId);
+        const model = (laneModel?.model ?? '').trim();
+        const contextWindow = model ? getContextWindow(model, laneModel?.provider) : undefined;
         if (contextWindow !== undefined && contextWindow > 0) {
           emitChunk({
             type: 'context_usage',
@@ -166,11 +178,8 @@ export async function maybeCompactChatSession(
         }
       }
       const savingsPercent =
-        seedTokens !== undefined && tokensAtivos > 0
-          ? ((tokensAtivos - seedTokens) / tokensAtivos) * 100
-          : undefined;
-      const ineffective =
-        savingsPercent !== undefined && savingsPercent < CHAT_COMPACTION_MIN_SAVINGS_PERCENT;
+        seedTokens !== undefined && tokensAtivos > 0 ? ((tokensAtivos - seedTokens) / tokensAtivos) * 100 : undefined;
+      const ineffective = savingsPercent !== undefined && savingsPercent < CHAT_COMPACTION_MIN_SAVINGS_PERCENT;
       if (!ineffective) {
         guard.consecutiveIneffective = 0;
         return;

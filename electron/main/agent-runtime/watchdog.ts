@@ -1,7 +1,6 @@
-
 import { TypedProviderError } from './llm-error';
 
-export const WATCHDOG_TIMEOUT_MS = 180_000; // 3 minutes
+export const WATCHDOG_TIMEOUT_MS = 180_000;
 
 export interface WatchdogHardBackstop {
   limitMs: number;
@@ -23,6 +22,7 @@ export function createWatchdog(
   onStalled: (info: { lastChunkAt: number; secondsSinceLastChunk: number }) => void,
   hardBackstop?: WatchdogHardBackstop,
 ): WatchdogHandle {
+  let stopped = false;
   let lastChunkAt = Date.now();
   let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -50,11 +50,13 @@ export function createWatchdog(
   };
 
   const reset = (): void => {
+    if (stopped) return;
     lastChunkAt = Date.now();
     scheduleTimer();
   };
 
   const stop = (): void => {
+    stopped = true;
     if (timer !== null) {
       clearTimeout(timer);
       timer = null;
@@ -65,35 +67,38 @@ export function createWatchdog(
     }
   };
 
-  const wrapOnText = (cb?: (chunk: string) => void) =>
+  const wrapOnText =
+    (cb?: (chunk: string) => void) =>
     (chunk: string): void => {
       reset();
       cb?.(chunk);
     };
 
-  const wrapOnThinking = (cb?: (chunk: string) => void) =>
+  const wrapOnThinking =
+    (cb?: (chunk: string) => void) =>
     (chunk: string): void => {
       reset();
       cb?.(chunk);
     };
 
-  const wrapOnToolUse = (cb?: (toolName: string) => void) =>
+  const wrapOnToolUse =
+    (cb?: (toolName: string) => void) =>
     (toolName: string): void => {
       reset();
       cb?.(toolName);
     };
 
-  const wrapOnToolUseComplete = (cb?: (tool: string, input: unknown) => void) =>
+  const wrapOnToolUseComplete =
+    (cb?: (tool: string, input: unknown) => void) =>
     (tool: string, input: unknown): void => {
       reset();
       cb?.(tool, input);
     };
 
-  const wrapOnActivity = (cb?: () => void) =>
-    (): void => {
-      reset();
-      cb?.();
-    };
+  const wrapOnActivity = (cb?: () => void) => (): void => {
+    reset();
+    cb?.();
+  };
 
   scheduleTimer();
 

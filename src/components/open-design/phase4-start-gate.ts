@@ -1,4 +1,3 @@
-
 export type Phase4StartAction = 'auto-ensure' | 'show-cta' | 'wait';
 
 export interface Phase4StartGateInput {
@@ -11,14 +10,8 @@ export interface Phase4StartGateInput {
 }
 
 export function resolvePhase4StartAction(input: Phase4StartGateInput): Phase4StartAction {
-  const {
-    driveEngaged,
-    startPending,
-    startStatusLoaded,
-    bootInstallReady,
-    sessionConfigPresent,
-    bootstrapIdle,
-  } = input;
+  const { driveEngaged, startPending, startStatusLoaded, bootInstallReady, sessionConfigPresent, bootstrapIdle } =
+    input;
 
   if (!bootInstallReady || !sessionConfigPresent || !bootstrapIdle) {
     return 'wait';

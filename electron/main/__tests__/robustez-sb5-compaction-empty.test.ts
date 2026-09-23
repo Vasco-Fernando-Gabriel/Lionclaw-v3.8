@@ -1,4 +1,3 @@
-
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
@@ -146,8 +145,9 @@ describe('SB-5 — compactacao com resposta vazia vira erro tipado', () => {
       caught = err;
     }
 
-    expect(caught).toBeInstanceOf(EmptyProviderResponseError);
-    const typed = caught as EmptyProviderResponseError;
+    expect(caught).toMatchObject({ code: 'COMPACT-SUMMARY-FAILED' });
+    const typed = (caught as { cause: unknown }).cause as EmptyProviderResponseError;
+    expect(typed).toBeInstanceOf(EmptyProviderResponseError);
     expect(typed.message).not.toContain('Unexpected end of JSON input');
     expect(typed.provider).toBe('lmstudio');
     expect(typed.model).toBe('qwen/qwen3.6-27b');
@@ -158,9 +158,10 @@ describe('SB-5 — compactacao com resposta vazia vira erro tipado', () => {
     lionSettings();
     state.lionText = '   \n\t ';
 
-    await expect(runCompaction(P_START, P_END, 'session-1')).rejects.toBeInstanceOf(
-      EmptyProviderResponseError,
-    );
+    await expect(runCompaction(P_START, P_END, 'session-1')).rejects.toMatchObject({
+      code: 'COMPACT-SUMMARY-FAILED',
+      cause: expect.any(EmptyProviderResponseError),
+    });
   });
 
   it('AC-B13: provider de compactacao (subscription) vazio lanca EmptyProviderResponseError com COMPACT-EMPTY + userMessage acionavel', async () => {
@@ -174,8 +175,9 @@ describe('SB-5 — compactacao com resposta vazia vira erro tipado', () => {
       caught = err;
     }
 
-    expect(caught).toBeInstanceOf(EmptyProviderResponseError);
-    const typed = caught as EmptyProviderResponseError;
+    expect(caught).toMatchObject({ code: 'COMPACT-SUMMARY-FAILED' });
+    const typed = (caught as { cause: unknown }).cause as EmptyProviderResponseError;
+    expect(typed).toBeInstanceOf(EmptyProviderResponseError);
     expect(typed.code).toBe('COMPACT-EMPTY');
     expect(typed.userMessage).toBeTruthy();
     expect(typed.userMessage.length).toBeGreaterThan(0);

@@ -1,4 +1,3 @@
-
 export const PT_BR_BLOCK = `## Idioma
 
 Responda SEMPRE em portugues do Brasil. Toda saida (analises, relatorios, mensagens, comentarios em codigo)

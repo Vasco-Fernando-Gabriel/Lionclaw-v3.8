@@ -1,6 +1,5 @@
 import type Database from 'better-sqlite3';
 
-
 const PREVIOUS_MODEL = 'gpt-5.6-sol';
 const NEW_MODEL = 'gpt-6-astra';
 

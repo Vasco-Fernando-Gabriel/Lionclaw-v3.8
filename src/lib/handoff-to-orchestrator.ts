@@ -1,7 +1,5 @@
-
 import type { PipelineType } from '../types/pipeline';
 import type { LocalRepositoryRecord } from '../types/repo-graph';
-
 
 export type PipelineHandoffType = PipelineType;
 
@@ -27,7 +25,6 @@ export interface WorkflowHandoffRequest {
 
 export type HandoffRequest = PipelineHandoffRequest | WorkflowHandoffRequest;
 
-
 export interface GraphHint {
   state: 'ready' | 'stale' | 'unavailable';
 }
@@ -51,9 +48,7 @@ function readableLabel(req: HandoffRequest): string {
 
 function commonHeader(req: HandoffRequest, graph: GraphHint): string {
   const lines: string[] = [];
-  lines.push(
-    `Projeto: ${req.projectName} (id ${req.projectId}, pipeline ${readableLabel(req)}).`,
-  );
+  lines.push(`Projeto: ${req.projectName} (id ${req.projectId}, pipeline ${readableLabel(req)}).`);
   if (req.projectPath) {
     lines.push(`Pasta do projeto: ${req.projectPath}.`);
   }
@@ -111,12 +106,8 @@ function securityValidatePrompt(req: HandoffRequest, graph: GraphHint): string {
   steps.push(
     '3. Confirme, lendo o codigo, que cada correcao foi de fato aplicada e que as vulnerabilidades reportadas estao fechadas.',
   );
-  steps.push(
-    '4. Rode o build, os testes e as migracoes que existirem, e verifique que nada quebrou com as correcoes.',
-  );
-  steps.push(
-    '5. Aponte qualquer correcao ausente, incompleta, ou que tenha introduzido regressao.',
-  );
+  steps.push('4. Rode o build, os testes e as migracoes que existirem, e verifique que nada quebrou com as correcoes.');
+  steps.push('5. Aponte qualquer correcao ausente, incompleta, ou que tenha introduzido regressao.');
   return [
     commonHeader(req, graph),
     '',
@@ -141,12 +132,8 @@ function archValidatePrompt(req: HandoffRequest, graph: GraphHint): string {
   steps.push(
     '3. Confirme, lendo o codigo, que o refactor foi aplicado conforme as decisoes e que a estrutura nova esta integra (sem imports quebrados, sem dependencias circulares novas, sem codigo morto deixado para tras).',
   );
-  steps.push(
-    '4. Rode o build, os testes e as migracoes que existirem, e verifique que nada quebrou.',
-  );
-  steps.push(
-    '5. Aponte qualquer divergencia entre o que foi decidido e o que foi implementado.',
-  );
+  steps.push('4. Rode o build, os testes e as migracoes que existirem, e verifique que nada quebrou.');
+  steps.push('5. Aponte qualquer divergencia entre o que foi decidido e o que foi implementado.');
   return [
     commonHeader(req, graph),
     '',
@@ -172,9 +159,7 @@ function workflowPrompt(req: HandoffRequest, graph: GraphHint): string {
     }
   }
   lines.push('');
-  lines.push(
-    'Acabei de concluir um workflow neste repositorio. Quero continuar a partir da entrega.',
-  );
+  lines.push('Acabei de concluir um workflow neste repositorio. Quero continuar a partir da entrega.');
   lines.push('');
   lines.push(
     'Por favor, confirme o estado do diretorio, me diga o que foi entregue e como rodar/validar localmente. Voce pode executar comandos, ler e editar arquivos.',
@@ -185,7 +170,7 @@ function workflowPrompt(req: HandoffRequest, graph: GraphHint): string {
 function bugPrompt(req: HandoffRequest, graph: GraphHint): string {
   if (!req.projectPath) return fallbackNoPathPrompt(req, graph);
   const outcome = req.source === 'pipeline' ? req.bugOutcome : undefined;
-  const runId = req.source === 'pipeline' ? req.bugRunId ?? null : null;
+  const runId = req.source === 'pipeline' ? (req.bugRunId ?? null) : null;
   const planoPath = runId
     ? `${req.projectPath}/.lionclaw/pipelines/bug/${runId}/plano-de-correcao-${runId}.md`
     : `${req.projectPath}/.lionclaw/pipelines/bug/<runId>/plano-de-correcao-<runId>.md`;
@@ -211,9 +196,7 @@ function bugPrompt(req: HandoffRequest, graph: GraphHint): string {
     ];
     const spec = specLine(req, '2. Se existir, leia a SPEC de correcao em');
     if (spec) steps.push(`${spec} com o detalhamento do que foi implementado.`);
-    steps.push(
-      '3. Confirme, lendo o codigo, que a correcao foi de fato aplicada onde o plano dizia.',
-    );
+    steps.push('3. Confirme, lendo o codigo, que a correcao foi de fato aplicada onde o plano dizia.');
     steps.push(
       '4. Rode o build e os testes (com atencao aos testes de REGRESSAO do bug) e me diga o que passou e o que falhou.',
     );
@@ -263,26 +246,18 @@ const PROMPT_BUILDERS: Record<HandoffVariantKey, PromptBuilder> = {
 };
 
 const variantKey = (req: HandoffRequest): HandoffVariantKey =>
-  req.source === 'workflow'
-    ? 'workflow'
-    : (`pipeline:${req.pipelineType}` as HandoffVariantKey);
+  req.source === 'workflow' ? 'workflow' : (`pipeline:${req.pipelineType}` as HandoffVariantKey);
 
 export function buildHandoffPrompt(req: HandoffRequest, graph: GraphHint): string {
-  const builder = PROMPT_BUILDERS[variantKey(req)] ?? runProjectPrompt; // fallback default
+  const builder = PROMPT_BUILDERS[variantKey(req)] ?? runProjectPrompt;
   return builder(req, graph);
 }
 
-
 export interface HandoffDeps {
-  ensureSession(
-    preferredSessionId?: string,
-  ): Promise<{ sessionId: string } | { error: string }>;
+  ensureSession(preferredSessionId?: string): Promise<{ sessionId: string } | { error: string }>;
   selectSession(sessionId: string): Promise<void>;
   addRepository(path: string): Promise<LocalRepositoryRecord | { error: string }>;
-  attachSession(
-    sessionId: string,
-    repoId: string,
-  ): Promise<{ ok: true } | { error: string }>;
+  attachSession(sessionId: string, repoId: string): Promise<{ ok: true } | { error: string }>;
   build(repoId: string, sessionId: string): Promise<{ runId: string } | { error: string }>;
   update(repoId: string, sessionId: string): Promise<{ runId: string } | { error: string }>;
   setPendingChat(
@@ -302,8 +277,6 @@ function isError(value: unknown): value is { error: string } {
     typeof (value as { error: unknown }).error === 'string'
   );
 }
-
-// instancia do app. O import dinamico @vite-ignore anterior resolvia stores
 
 function graphHintForStatus(status: LocalRepositoryRecord['status']): GraphHint {
   if (status === 'ready') return { state: 'ready' };

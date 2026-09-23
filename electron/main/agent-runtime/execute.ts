@@ -1,19 +1,3 @@
-/**
- * execute.ts
- *
- * Central dispatch for all agent execution runtimes.
- * Resolves the agent config, creates the watchdog, injects watchdog-wrapped
- * callbacks into the request, and dispatches to the correct executor via an
- * exhaustive switch.
- *
- * When a new runtime (e.g. 'codex') is added to AgentConfig['runtime'], TypeScript
- * will produce a compile error at the `default: never` branch, forcing the developer
- * to add the corresponding case. This is the exhaustiveness guarantee.
- *
- * Constraints:
- * - Does NOT import from pipeline-engine, harness-engine, or security-audit-runner.
- */
-
 import { createLogger } from '../logger';
 import { resolveAgentQueryConfig } from '../agent-config-resolver';
 import { createWatchdog, WATCHDOG_TIMEOUT_MS } from './watchdog';
@@ -58,17 +42,6 @@ interface ExecutionAuditEntry {
   source: 'chat' | 'pipeline' | 'harness' | 'workflow' | 'enrich';
 }
 
-/**
- * Auditoria de execucoes nao-chat (V144): quando o caller passa um
- * executionContext (pipeline/harness/enrich/workflow e toda a arvore de
- * subagents), cada tool call concluido e cada erro terminal viram entrada no
- * audit_log com `source` = ownerKind. O caminho de CHAT do orquestrador nao
- * passa por executeAgent (D6) e ja audita nos SDKs — aqui so entram execucoes
- * com contexto, entao nao ha dupla contagem. Auditoria nunca derruba a
- * execucao: os imports sao dinamicos (db carrega better-sqlite3; ipc-emitter
- * carrega electron — indisponiveis em alguns ambientes de teste) e qualquer
- * falha e logada e engolida.
- */
 function createExecutionAuditor(req: AgentExecutionRequest): {
   auditToolUse: (tool: string, input: unknown) => void;
   auditError: (err: unknown) => void;
@@ -117,7 +90,6 @@ function createExecutionAuditor(req: AgentExecutionRequest): {
       });
     },
     auditError: (err) => {
-      // PipelinePausedError e controle de fluxo (pausa conversacional), nao erro.
       if (err instanceof PipelinePausedError) return;
       record({
         ...(sessionId ? { sessionId } : {}),
@@ -129,19 +101,8 @@ function createExecutionAuditor(req: AgentExecutionRequest): {
   };
 }
 
-/**
- * Execute an agent by delegating to the correct runtime executor.
- *
- * The watchdog is created here and wraps the onText / onToolUse callbacks
- * before passing them to the executor. The caller's `onStalled` handler
- * (e.g. pipeline-engine wrapping pipeline:stalled IPC) is used as the stall
- * callback so agent-runtime stays decoupled from IPC.
- *
- * @param req - The execution request, including agentId, prompt, and callbacks.
- * @returns The execution result with output, metrics, and runtime metadata.
- */
 export async function executeAgent(req: AgentExecutionRequest): Promise<AgentExecutionResult> {
-  let config = req.resolvedConfigOverride ?? await resolveAgentQueryConfig(req.agentId);
+  let config = req.resolvedConfigOverride ?? (await resolveAgentQueryConfig(req.agentId));
   if (req.allowedToolsOverride !== undefined) {
     const requested = new Set(req.allowedToolsOverride);
     config = {
@@ -150,31 +111,36 @@ export async function executeAgent(req: AgentExecutionRequest): Promise<AgentExe
     };
   }
 
-  // Apply caller-supplied systemPrompt transform (e.g. Harness injecting git guardrails
-  // into custom DB coders without mutating the stored agent record).
-  // The transform receives the fully-resolved systemPrompt (RULES.md + agent.systemPrompt
-  // + skills) and returns the final value used by the executor.
   if (req.systemPromptTransform !== undefined) {
     config = { ...config, systemPrompt: req.systemPromptTransform(config.systemPrompt) };
   }
   config = { ...config, systemPrompt: brandLionDesignText(config.systemPrompt) };
 
-  const watchdog = createWatchdog(WATCHDOG_TIMEOUT_MS, (info) => {
-    logger.warn(
-      { agentId: req.agentId, runtime: config.runtime, ...info },
-      'executeAgent: agent stalled — no progress for 3min',
-    );
-    req.onStalled?.(info);
-  });
+  let timeoutFinalized = false;
+  const finishTimeout = (reason: 'timeout-idle' | 'timeout-hard'): void => {
+    if (timeoutFinalized || req.abortController.signal.aborted) return;
+    timeoutFinalized = true;
+    req.swarmLifecycle?.onTimeout(reason);
+    req.abortController.abort(new Error(reason));
+  };
+  const watchdog = createWatchdog(
+    req.swarmLifecycle?.idleTimeoutMs ?? WATCHDOG_TIMEOUT_MS,
+    (info) => {
+      if (req.swarmLifecycle) {
+        finishTimeout('timeout-idle');
+        return;
+      }
+      logger.warn(
+        { agentId: req.agentId, runtime: config.runtime, ...info },
+        'executeAgent: agent stalled — no progress for 3min',
+      );
+      req.onStalled?.(info);
+    },
+    req.swarmLifecycle
+      ? { limitMs: req.swarmLifecycle.hardTimeoutMs, onHardTimeout: () => finishTimeout('timeout-hard') }
+      : undefined,
+  );
 
-  // Inject watchdog wrapping into the callbacks so every progress signal resets it.
-  // IMPORTANTE: todos os 4 sinais sao "prova de vida" do agente. Reasoning
-  // (onThinking) e tool completion (onToolUseComplete) sao tao validos quanto
-  // text/toolUse — sem wrappear esses dois, agentes que passam muito tempo
-  // raciocinando ou executando tools longos sao mortos prematuramente. Ver
-  // BUGFIXTESTESV1.md Bug #5.
-  // NOTA: o codex-executor mapeia `onReasoning` (do bridge) -> `onThinking`
-  // (canonical) pra que o reasoning do Codex tambem reset a watchdog aqui.
   const auditor = createExecutionAuditor(req);
   const wrappedReq: AgentExecutionRequest = {
     ...req,
@@ -183,8 +149,6 @@ export async function executeAgent(req: AgentExecutionRequest): Promise<AgentExe
     onText: watchdog.wrapOnText(req.onText),
     onThinking: watchdog.wrapOnThinking(req.onThinking),
     onToolUse: watchdog.wrapOnToolUse(req.onToolUse),
-    // Auditoria V144: onToolUseComplete e o unico sinal que carrega o input do
-    // tool, por isso a auditoria acopla aqui (e nao no onToolUse de inicio).
     onToolUseComplete: watchdog.wrapOnToolUseComplete((tool, input) => {
       auditor.auditToolUse(tool, input);
       req.onToolUseComplete?.(tool, input);
@@ -222,47 +186,29 @@ export async function executeAgent(req: AgentExecutionRequest): Promise<AgentExe
         return await cursorExecutor.run(wrappedReq, config);
 
       default: {
-        // Exhaustiveness guard: if a new runtime is added to AgentConfig['runtime']
-        // but not handled here, TypeScript will produce a compile error.
         const _exhaustive: never = config.runtime;
         throw new Error(`Runtime nao suportado: ${String(_exhaustive)}`);
       }
     }
   } catch (err) {
-    // Auditoria V144: registra o erro terminal antes do enriquecimento/re-throw.
-    // Nao altera o fluxo — auditError engole falhas proprias e ignora
-    // PipelinePausedError (controle de fluxo).
     auditor.auditError(err);
-    // SPEC robustez-chat SB-2 (P2, AC-B5) [INV]: catch de ENRIQUECIMENTO puro,
-    // adicionado ANTES do finally existente. O caminho de sucesso e o despacho
-    // (switch) sao byte-identicos ao baseline.
-    //
-    // Allowlist de re-throw CRU (obrigatoria, V4): erros de CONTROLE DE FLUXO
-    // saem intocados — os `instanceof` a jusante (pipeline-engine/index.ts
-    // :1083/:1108/:1315 e o retry do Pilar C) dependem disso. CADA termo tem o
-    // SEU proprio `instanceof` (um `a instanceof X || Y` avalia ERRADO em JS).
     if (
       err instanceof CodexUnavailableError ||
       err instanceof CodexAuthError ||
       err instanceof KimiAuthError ||
       err instanceof PipelinePausedError ||
       err instanceof TypedProviderError ||
-      // spec-gpt56 P1: erros ESTRUTURAIS do gate official-only e da validacao
-      // de capabilities saem INTOCADOS — fora desta allowlist virariam
-      // TypedProviderError e perderiam o `code` que os classificadores checam.
-      err instanceof CodexCapabilityUnsupportedError
-      || err instanceof GrokUnavailableError
-      || err instanceof GrokAuthError
-      || err instanceof GrokBackendError
-      || err instanceof GrokCapabilityError
-      || err instanceof GrokIsolationError
-      || err instanceof GrokProcessError
-      || err instanceof GrokToolPolicyError
+      err instanceof CodexCapabilityUnsupportedError ||
+      err instanceof GrokUnavailableError ||
+      err instanceof GrokAuthError ||
+      err instanceof GrokBackendError ||
+      err instanceof GrokCapabilityError ||
+      err instanceof GrokIsolationError ||
+      err instanceof GrokProcessError ||
+      err instanceof GrokToolPolicyError
     ) {
       throw err;
     }
-    // So os erros CRUS restantes (HTTP/rede/vazio de cloud/compat/kimi/external)
-    // viram TypedProviderError, com o erro original preservado em `cause`.
     throw translateProviderError(err, {
       runtime: config.runtime,
       model: config.model,

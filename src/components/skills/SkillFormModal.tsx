@@ -2,10 +2,7 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import type { Skill, SkillInput } from '@/types';
 
-const AVAILABLE_TOOLS = [
-  'Read', 'Write', 'Edit', 'Glob', 'Grep',
-  'Bash', 'WebSearch', 'WebFetch', 'NotebookEdit',
-];
+const AVAILABLE_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch', 'NotebookEdit'];
 
 const MODEL_OPTIONS = [
   { value: '', label: 'Padrao (herda do agent)' },
@@ -50,9 +47,7 @@ export function SkillFormModal({ mode, skill, existingCategories = [], onSave, o
   }, [mode, skill]);
 
   const handleToolToggle = (tool: string) => {
-    setAllowedTools(prev =>
-      prev.includes(tool) ? prev.filter(t => t !== tool) : [...prev, tool]
-    );
+    setAllowedTools((prev) => (prev.includes(tool) ? prev.filter((t) => t !== tool) : [...prev, tool]));
   };
 
   const handleSubmit = () => {
@@ -109,8 +104,10 @@ export function SkillFormModal({ mode, skill, existingCategories = [], onSave, o
                 onChange={(e) => setModel(e.target.value)}
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-amber-600"
               >
-                {MODEL_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                {MODEL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
                 ))}
               </select>
             </div>
@@ -138,7 +135,7 @@ export function SkillFormModal({ mode, skill, existingCategories = [], onSave, o
               className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 outline-none focus:border-amber-600"
             />
             <datalist id="skill-categories">
-              {existingCategories.map(cat => (
+              {existingCategories.map((cat) => (
                 <option key={cat} value={cat} />
               ))}
             </datalist>
@@ -200,7 +197,7 @@ export function SkillFormModal({ mode, skill, existingCategories = [], onSave, o
           <div className="border border-zinc-800 rounded-lg p-4">
             <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-3">Tools Permitidos</p>
             <div className="flex flex-wrap gap-2">
-              {AVAILABLE_TOOLS.map(tool => (
+              {AVAILABLE_TOOLS.map((tool) => (
                 <button
                   key={tool}
                   onClick={() => handleToolToggle(tool)}

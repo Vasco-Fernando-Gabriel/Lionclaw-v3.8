@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,7 +19,6 @@ import {
 const OLD_MARKER = 'regra DURA - leia com atencao';
 const NEW_MARKER = 'regra DURISSIMA - calibragem SM5-R3';
 
-
 interface PreparedCall {
   sql: string;
   args: unknown[];
@@ -41,7 +39,6 @@ function runWithMockDb(): PreparedCall[] {
   applyMigrationV99(mockDb);
   return calls;
 }
-
 
 describe('applyMigrationV99 - estrutural', () => {
   it('exporta applyMigrationV99 como funcao', () => {
@@ -95,7 +92,6 @@ describe('applyMigrationV99 - UPDATE guardado por seed (preserva customizacao)',
   });
 });
 
-
 describe('applyMigrationV99 - markers nos seeds (convergencia da migration)', () => {
   const seeds = [
     dynamicWorkflowPlanValidatorCoverage,
@@ -147,7 +143,6 @@ describe('applyMigrationV99 - calibragem de severidade nos prompts', () => {
   });
 });
 
-
 const MAIN_DIR = join(__dirname, '..');
 
 function readMainSource(relPath: string): string {
@@ -168,9 +163,7 @@ describe('applyMigrationV99 - integracao no runner de db.ts (F7, guardrail estat
     expect(start).toBeGreaterThan(-1);
     const block = dbSrc.slice(start, start + 700);
     expect(block).toContain('applyMigrationV99(db)');
-    expect(block).toContain(
-      "db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(99)",
-    );
+    expect(block).toContain("db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(99)");
     expect(block).toMatch(/Applied migration v99/);
   });
 });

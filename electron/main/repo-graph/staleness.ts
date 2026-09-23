@@ -1,4 +1,3 @@
-
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
@@ -18,8 +17,7 @@ export interface StalenessDeps {
 }
 
 const defaultDeps: StalenessDeps = {
-  execGit: (args, cwd) =>
-    execFileSync('git', args, { cwd, encoding: 'utf8', timeout: 10_000, windowsHide: true }),
+  execGit: (args, cwd) => execFileSync('git', args, { cwd, encoding: 'utf8', timeout: 10_000, windowsHide: true }),
   statMtimeMs: (absolutePath) => fs.statSync(absolutePath).mtimeMs,
   now: () => Date.now(),
 };
@@ -48,10 +46,7 @@ export function parsePorcelainLine(line: string): string | null {
   return p || null;
 }
 
-export function checkRepoStaleness(
-  input: RepoStalenessInput,
-  deps: StalenessDeps = defaultDeps,
-): RepoStalenessResult {
+export function checkRepoStaleness(input: RepoStalenessInput, deps: StalenessDeps = defaultDeps): RepoStalenessResult {
   const cached = throttleCache.get(input.repositoryId);
   if (cached && deps.now() - cached.at < STALE_CHECK_THROTTLE_MS) {
     return cached.result;
@@ -61,10 +56,7 @@ export function checkRepoStaleness(
   return result;
 }
 
-function computeStaleness(
-  input: RepoStalenessInput,
-  deps: StalenessDeps,
-): RepoStalenessResult {
+function computeStaleness(input: RepoStalenessInput, deps: StalenessDeps): RepoStalenessResult {
   if (!input.lastIndexedAt) {
     return { stale: false, reason: 'sem-last-indexed-at' };
   }

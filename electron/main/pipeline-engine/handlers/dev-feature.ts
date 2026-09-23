@@ -1,48 +1,3 @@
-/**
- * Dev + Feature pipeline handlers (SPEC §3 / Sprint 8A.3).
- *
- * dev and feature are GÊMEOS: they share the SAME handlers, parameterized by
- * `isFeature`/agentId (e.g. handlePhase1Message picks DISCOVERY_AGENT_ID vs
- * FEAT_DISCOVERY_ID from project.pipelineType; handleTechPhaseMessage receives
- * the resolved agentId). Creating handlers/development.ts + handlers/feature.ts
- * separately would force DUPLICATION (against the current code) or artificial
- * unification (against R6). So this is ONE shared module (§3); the
- * isFeature/agentId branching stays EXACTLY as it was inline.
- *
- * Houses the 10 shared methods previously inline in index.ts:
- *   - runPhase2                (phase 2, auto — PRD Generator: stories-requisitos.md)
- *   - runPhase4                (phase 4, auto — PRD Generator: PRD.md)
- *   - runPhase9                (phase 9, auto LOOP — Spec Generation builder↔validator)
- *   - runPhase11               (phase 11/security-8 — Planner, delegates to HarnessEngine)
- *   - handlePhase1Message      (phase 1, conversation — Discovery; feature uses FEAT_DISCOVERY_ID)
- *   - handlePhase3Message      (phase 3, conversation — PRD Validator; feature uses FEAT_PRD_VALIDATOR_ID)
- *   - handleTechPhaseMessage   (phases 5-8, conversation — Tech; agentId passed by caller)
- *   - handlePhase10Message     (phase 10, conversation — Spec Enricher)
- *   - handlePhase12Message     (phase 12 / arch-9 / dev-v2-14, conversation — Sprint Validator)
- *   - handlePhase9Message      (phase 9, conversation — Spec Validator review, post auto-loop)
- *
- * They were moved VERBATIM (mechanical move, not a rewrite) and reparameterized
- * from `this.X` to an injected `ctx: PipelineEngineContext` — the same late-bound
- * `buildXEngine` pattern as reset.ts / message-router.ts / lifecycle.ts and the
- * 8A.1 / 8A.2 extractions. index.ts keeps a thin delegator method for each (so the
- * existing sendMessage / runAutoPhase dispatch via `this.handlePhaseX` /
- * `this.runPhaseX` is unchanged) and builds the ctx per call with bound delegates.
- *
- * INVARIANTS PRESERVED
- *  - INV-2 (R8): every agent run goes through `ctx.spawnAgent` — the single
- *    executeAgent entry point in index.ts. No executeAgent here, no second copy.
- *  - INV-13 (SQL only in db.ts): the handlers route through updateHarnessProject /
- *    savePipelinePhaseMetrics / persistMessage / ctx.updateProjectColumns exactly
- *    as they did inline; no new SQL.
- *  - INV-14 (loop delegates to HarnessEngine): runPhase11 drives ctx.harnessEngine
- *    (setStreamBridge / plan / clearStreamBridge), NOT spawnAgent.
- *  - INV-18 (R6 ADR): handlePhase12Message resolves phaseNumber/agentId by
- *    parameter EXACTLY as before — dev/feature default phase 12, arch-review passes
- *    9, dev-v2 passes 14 + briefing; SPRINT_VALIDATOR_ID unchanged.
- *  - INV-1 (IPC): all pipeline:* emits are on the same channels with the same
- *    payloads, unchanged.
- */
-
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../../logger';
@@ -79,24 +34,11 @@ import {
   FEAT_PRD_GENERATOR_ID,
   FEAT_PRD_COMPLETO_ID,
 } from '../../seed-agents/index';
-import {
-  getPhaseName,
-  getPhaseAgentId,
-  getPhaseNumberForAgent,
-  PHASE_NAMES,
-  PHASE_AGENT_IDS,
-} from '../registry';
+import { getPhaseName, getPhaseAgentId, getPhaseNumberForAgent, PHASE_NAMES, PHASE_AGENT_IDS } from '../registry';
 import type { PipelineEngineContext, HandlerPhaseState } from './context';
 
 const logger = createLogger('pipeline-engine');
 
-/**
- * Garante que o discovery foi REALMENTE preenchido pela fase 1, nao apenas
- * semeado como template. Antes, o PRD (fases 2 e 4) so checava `fs.existsSync`:
- * um template vazio (`# Discovery Notes` com `<!-- ... -->` ou `(a definir
- * conforme a conversa...)`) passava e era alimentado ao PRD, que gerava
- * "feature nao definida no discovery". Aqui falhamos ALTO e de forma acionavel.
- */
 function assertDiscoveryReady(discoveryNotesPath: string): void {
   if (!fs.existsSync(discoveryNotesPath)) {
     throw new Error(
@@ -105,7 +47,6 @@ function assertDiscoveryReady(discoveryNotesPath: string): void {
     );
   }
   const content = fs.readFileSync(discoveryNotesPath, 'utf-8');
-  // Conteudo "util" = sem comentarios-template <!-- ... --> e sem marcadores "(a definir ...)".
   const substantive = content
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/\(a definir[^)]*\)/gi, '')
@@ -121,14 +62,6 @@ function assertDiscoveryReady(discoveryNotesPath: string): void {
     );
   }
 }
-
-// =========================================================================
-// Auto phases (dev/feature shared)
-// =========================================================================
-
-// -------------------------------------------------------------------------
-// Phase 2: PRD Generator mode 1 — user stories and requirements
-// -------------------------------------------------------------------------
 
 export async function runPhase2(
   ctx: PipelineEngineContext,
@@ -168,7 +101,6 @@ export async function runPhase2(
     },
   });
 
-  // Save complete assistant message (not per-chunk)
   if (phase2Output) {
     persistMessage({ kind: 'pipeline', projectId, phaseNumber: 2 }, 'assistant', phase2Output);
   }
@@ -194,13 +126,8 @@ export async function runPhase2(
     awaitingUser: false,
   });
 
-  // Auto-advance to phase 3 (conversation)
   await ctx.advanceToNextPhase(projectId, state);
 }
-
-// -------------------------------------------------------------------------
-// Phase 4: PRD Generator mode 2 — full PRD document
-// -------------------------------------------------------------------------
 
 export async function runPhase4(
   ctx: PipelineEngineContext,
@@ -216,9 +143,7 @@ export async function runPhase4(
   const storiesPath = docsCtx
     ? docsCtx.resolveDocPath('stories-requisitos.md')
     : path.join(projectPath, 'stories-requisitos.md');
-  const prdPath = docsCtx
-    ? docsCtx.resolveDocPath('PRD.md')
-    : path.join(projectPath, 'PRD.md');
+  const prdPath = docsCtx ? docsCtx.resolveDocPath('PRD.md') : path.join(projectPath, 'PRD.md');
 
   assertDiscoveryReady(discoveryNotesPath);
 
@@ -244,14 +169,12 @@ export async function runPhase4(
     },
   });
 
-  // Save complete assistant message (not per-chunk)
   if (phase4Output) {
     persistMessage({ kind: 'pipeline', projectId, phaseNumber: 4 }, 'assistant', phase4Output);
   }
 
   ctx.collectMetrics(projectId, 4, PRD_GENERATOR_ID, result, 'completed');
 
-  // Persist PRD path in DB
   ctx.updateProjectColumns(projectId, { prdPath });
 
   logger.info({ projectId, prdPath }, 'Phase 4 completed — PRD.md generated');
@@ -273,13 +196,8 @@ export async function runPhase4(
     awaitingUser: false,
   });
 
-  // Auto-advance to phase 5 (conversation)
   await ctx.advanceToNextPhase(projectId, state);
 }
-
-// -------------------------------------------------------------------------
-// Phase 11: Planner — delegates to HarnessEngine.plan()
-// -------------------------------------------------------------------------
 
 export async function runPhase11(
   ctx: PipelineEngineContext,
@@ -289,7 +207,6 @@ export async function runPhase11(
 ): Promise<void> {
   const startedAt = Date.now();
 
-  // Fallback: patch empty agent IDs on existing projects created before the fix
   const projectBeforePlan = getHarnessProject(projectId);
   if (projectBeforePlan) {
     const cfg = projectBeforePlan.config;
@@ -308,8 +225,6 @@ export async function runPhase11(
     }
   }
 
-  // Bridge: use HarnessEngine's stream bridge API to forward events as pipeline:stream.
-  // Phase number resolved via PIPELINE_PHASES (security=8, dev/feature=11) — nao hardcodar.
   const bridgeProject = getHarnessProject(projectId);
   const bridgePhase = (bridgeProject ? getPhaseNumberForAgent(bridgeProject, 'harness-planner') : undefined) ?? 11;
   ctx.harnessEngine.setStreamBridge((channel, data) => {
@@ -339,10 +254,10 @@ export async function runPhase11(
 
   const durationMs = Date.now() - startedAt;
 
-  // Collect basic metrics for Planner phase (works for both dev phase 11 and security phase 8)
   const project = getHarnessProject(projectId);
   const plannerPhaseNumber = (project ? getPhaseNumberForAgent(project, 'harness-planner') : undefined) ?? 11;
-  const plannerPhaseName = (project ? getPhaseName(plannerPhaseNumber, project) : PHASE_NAMES[11]) ?? `Phase ${plannerPhaseNumber}`;
+  const plannerPhaseName =
+    (project ? getPhaseName(plannerPhaseNumber, project) : PHASE_NAMES[11]) ?? `Phase ${plannerPhaseNumber}`;
   const plannerMetrics = plannerResult?.metrics ?? {
     inputTokens: project?.plannerInputTokens ?? 0,
     outputTokens: project?.plannerOutputTokens ?? 0,
@@ -354,7 +269,8 @@ export async function runPhase11(
     durationMs: project?.plannerDurationMs ?? durationMs,
   };
 
-  const plannerAgentId = (project ? getPhaseAgentId(plannerPhaseNumber, project) : PHASE_AGENT_IDS[11]) ?? 'harness-planner';
+  const plannerAgentId =
+    (project ? getPhaseAgentId(plannerPhaseNumber, project) : PHASE_AGENT_IDS[11]) ?? 'harness-planner';
   const plannerAgentRecord = getAgent(plannerAgentId);
   savePipelinePhaseMetrics({
     projectId,
@@ -374,7 +290,6 @@ export async function runPhase11(
     runtime: plannerResult?.runtime ?? plannerAgentRecord?.runtime ?? 'cloud',
     completedAt: new Date().toISOString(),
     metadata: plannerResult ? { provider: plannerResult.provider, ...plannerResult.metadata } : undefined,
-    // SPEC-005: propagate planner unknown-cost count from project record.
     unknownCostCount: project?.plannerUnknownCostCount ?? 0,
   });
 
@@ -386,7 +301,6 @@ export async function runPhase11(
 
   logger.info({ projectId, plannerPhaseNumber }, 'Planner phase completed');
 
-  // Emit sprints data so UI can populate the sprint list when entering the Sprint Validator phase
   emitPipelineSprintsLoaded(projectId);
 
   const projectAfterPlan = getHarnessProject(projectId);
@@ -410,33 +324,24 @@ export async function runPhase11(
     awaitingUser: false,
   });
 
-  // Auto-advance to next phase (Sprint Validator conversation)
   await ctx.advanceToNextPhase(projectId, state);
 }
 
-// -------------------------------------------------------------------------
-// Phase 9: Spec Generation — auto loop spec-builder -> spec-validator
-// -------------------------------------------------------------------------
-
-export async function runPhase9(
-  ctx: PipelineEngineContext,
-  projectId: string,
-): Promise<void> {
+export async function runPhase9(ctx: PipelineEngineContext, projectId: string): Promise<void> {
   const project = getHarnessProject(projectId);
   if (!project) throw new Error(`Project not found: ${projectId}`);
 
   const state = ctx.getState(projectId);
   const projectPath = project.projectPath;
   const docsCtxP9 = getPipelineDocsContext(projectPath, project.pipelineDocsId ?? null);
-  const prdPath = ((project ? resolvePrdPath(project) : null) || (docsCtxP9
-    ? docsCtxP9.resolveDocPath('PRD.md')
-    : path.join(projectPath, 'PRD.md')));
+  const prdPath =
+    (project ? resolvePrdPath(project) : null) ||
+    (docsCtxP9 ? docsCtxP9.resolveDocPath('PRD.md') : path.join(projectPath, 'PRD.md'));
   const storiesPath = docsCtxP9
     ? docsCtxP9.resolveDocPath('stories-requisitos.md')
     : path.join(projectPath, 'stories-requisitos.md');
-  const specPath = (project.specPath || (docsCtxP9
-    ? docsCtxP9.resolveDocPath('SPEC.md')
-    : path.join(projectPath, 'SPEC.md')));
+  const specPath =
+    project.specPath || (docsCtxP9 ? docsCtxP9.resolveDocPath('SPEC.md') : path.join(projectPath, 'SPEC.md'));
   const validationReportPath = docsCtxP9
     ? docsCtxP9.resolveDocPath('spec-validation.md')
     : path.join(projectPath, '.spec-validation-report.md');
@@ -466,11 +371,16 @@ export async function runPhase9(
   let passed = false;
   let lastError: string | undefined;
 
-  // Aggregate metrics separately for builder and validator across rounds
   const builderAgg = ctx.createEmptyMetrics();
   const validatorAgg = ctx.createEmptyMetrics();
-  const builderUsage: Pick<AccumulatedMetrics, 'sessionIds' | 'costSource' | 'pricingSnapshot' | 'modelUsage' | 'grok'> = {};
-  const validatorUsage: Pick<AccumulatedMetrics, 'sessionIds' | 'costSource' | 'pricingSnapshot' | 'modelUsage' | 'grok'> = {};
+  const builderUsage: Pick<
+    AccumulatedMetrics,
+    'sessionIds' | 'costSource' | 'pricingSnapshot' | 'modelUsage' | 'grok'
+  > = {};
+  const validatorUsage: Pick<
+    AccumulatedMetrics,
+    'sessionIds' | 'costSource' | 'pricingSnapshot' | 'modelUsage' | 'grok'
+  > = {};
   let builderModel = SPEC_BUILDER_ID;
   let builderRuntime: AgentConfig['runtime'] = 'cloud';
   let validatorModel = SPEC_VALIDATOR_ID;
@@ -490,7 +400,6 @@ export async function runPhase9(
         metadata: { round, maxRounds: MAX_ROUNDS },
       });
 
-      // --- Spec Builder ---
       let builderPrompt: string;
       if (round === 1) {
         builderPrompt =
@@ -519,7 +428,11 @@ export async function runPhase9(
         onText: (chunk) => {
           builderOutput += chunk;
           emitPipelineStream({
-            projectId, phase: 9, type: 'text', content: chunk, metadata: { agent: 'spec-builder', round },
+            projectId,
+            phase: 9,
+            type: 'text',
+            content: chunk,
+            metadata: { agent: 'spec-builder', round },
           });
         },
         onToolUse: (toolName) => {
@@ -527,7 +440,6 @@ export async function runPhase9(
         },
       });
 
-      // Save complete builder message (not per-chunk)
       if (builderOutput) {
         persistMessage({ kind: 'pipeline', projectId, phaseNumber: 9 }, 'assistant', builderOutput);
       }
@@ -547,7 +459,6 @@ export async function runPhase9(
 
       if (state.abortController.signal.aborted) break;
 
-      // --- Spec Validator ---
       emitIPC('pipeline:phase-changed', {
         projectId,
         phase: 9,
@@ -574,7 +485,11 @@ export async function runPhase9(
         onText: (chunk) => {
           validatorOutput += chunk;
           emitPipelineStream({
-            projectId, phase: 9, type: 'text', content: chunk, metadata: { agent: 'spec-validator', round },
+            projectId,
+            phase: 9,
+            type: 'text',
+            content: chunk,
+            metadata: { agent: 'spec-validator', round },
           });
         },
         onToolUse: (toolName) => {
@@ -582,7 +497,6 @@ export async function runPhase9(
         },
       });
 
-      // Save complete validator message (not per-chunk)
       if (validatorOutput) {
         persistMessage({ kind: 'pipeline', projectId, phaseNumber: 9 }, 'assistant', validatorOutput);
       }
@@ -592,7 +506,6 @@ export async function runPhase9(
       validatorModel = validatorResult.model;
       validatorRuntime = validatorResult.runtime;
 
-      // Check validation result
       const validationReport = fs.existsSync(validationReportPath)
         ? fs.readFileSync(validationReportPath, 'utf-8')
         : '';
@@ -617,7 +530,6 @@ export async function runPhase9(
 
   const durationMs = Date.now() - startedAt;
 
-  // Save 2 aggregated metric rows: builder + validator
   savePipelinePhaseMetrics({
     projectId,
     phaseNumber: 9,
@@ -667,8 +579,6 @@ export async function runPhase9(
 
   if (lastError) {
     logger.error({ projectId, error: lastError }, 'Phase 9 failed — marking pipeline as failed');
-    // Sprint 7 (SPEC §4.5 / LC-1): FAIL-site #2 (Spec Generation). Pure-paused +
-    // error + phase-changed:failed; no stream done; sets state.status.
     ctx.failPhase(projectId, state, {
       phase: 9,
       phaseName,
@@ -682,15 +592,10 @@ export async function runPhase9(
     return;
   }
 
-  // Persist specPath in DB now that the builder has written it.
-  // Use updateHarnessProject directly because updateProjectColumns is scoped to
-  // pipeline_* columns; specPath lives in the base harness_projects schema.
   updateHarnessProject(projectId, { specPath });
 
   emitPipelineStream({ projectId, phase: 9, type: 'done' });
 
-  // After the auto loop, enter a conversational review state with the Spec Validator.
-  // The user can discuss the SPEC.md with the validator and only DECIDIDO advances to phase 10.
   logger.info({ projectId, passed }, 'Phase 9 auto loop complete — entering spec review conversation');
 
   emitIPC('pipeline:phase-changed', {
@@ -702,7 +607,6 @@ export async function runPhase9(
     metadata: { passed },
   });
 
-  // Auto-trigger the Spec Validator greeting so it presents its analysis
   const greetingProject = getHarnessProject(projectId);
   const greetingMsg =
     `Projeto "${greetingProject?.name ?? projectId}". ` +
@@ -717,14 +621,6 @@ export async function runPhase9(
     // Non-fatal: the conversational state is already emitted; user can still type
   }
 }
-
-// =========================================================================
-// Conversation phases (dev/feature shared)
-// =========================================================================
-
-// -------------------------------------------------------------------------
-// Phase 1: Discovery (conversation; feature uses FEAT_DISCOVERY_ID)
-// -------------------------------------------------------------------------
 
 export async function handlePhase1Message(
   ctx: PipelineEngineContext,
@@ -743,25 +639,19 @@ export async function handlePhase1Message(
   }
 
   const docsCtxP1 = getPipelineDocsContext(project.projectPath, project.pipelineDocsId ?? null);
-  const notesPath = (project.discoveryNotesPath || (docsCtxP1
-    ? docsCtxP1.resolveDocPath('discovery.md')
-    : path.join(project.projectPath, 'discovery-notes.md')));
+  const notesPath =
+    project.discoveryNotesPath ||
+    (docsCtxP1 ? docsCtxP1.resolveDocPath('discovery.md') : path.join(project.projectPath, 'discovery-notes.md'));
   const isFirstTurn = !sessionEntry.alive;
 
-  // On first turn, include the notes path context
   const prompt = isFirstTurn
     ? `Arquivo de notas do discovery: ${notesPath}\n\nMensagem do usuario: ${message}`
     : message;
 
-  const previousNotesContent = fs.existsSync(notesPath)
-    ? fs.readFileSync(notesPath, 'utf-8')
-    : '';
+  const previousNotesContent = fs.existsSync(notesPath) ? fs.readFileSync(notesPath, 'utf-8') : '';
 
   const phase1Acc = { text: '', completed: false };
   const phase1AgentId = project.pipelineType === 'feature' ? FEAT_DISCOVERY_ID : DISCOVERY_AGENT_ID;
-  // External runtime is stateless HTTP: pass prior turns (OpenAI multi-turn format
-  // with tool_calls and tool results) so the agent does not re-invoke tools it already
-  // executed. Cloud SDK uses continueSession instead and ignores priorMessages.
   const phase1Prior = sessionEntry.alive
     ? getPipelinePhaseMessagesAsChatHistory(projectId, 1).map((m) => ({
         ...m,
@@ -769,10 +659,12 @@ export async function handlePhase1Message(
           id: tc.id,
           function: {
             name: tc.function.name,
-            // OllamaChatMessage espera arguments como objeto; o DB persiste como string JSON.
             arguments: (() => {
-              try { return JSON.parse(tc.function.arguments) as Record<string, unknown>; }
-              catch { return {}; }
+              try {
+                return JSON.parse(tc.function.arguments) as Record<string, unknown>;
+              } catch {
+                return {};
+              }
             })(),
           },
         })),
@@ -786,7 +678,6 @@ export async function handlePhase1Message(
     continueSession: sessionEntry.alive,
     priorMessages: phase1Prior,
     docsDir: docsCtxP1?.docsDir,
-    // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
     rebuildPromptOnRetry: () =>
       buildCodexResumePrompt({
         projectId,
@@ -802,10 +693,8 @@ export async function handlePhase1Message(
 
   sessionEntry.alive = true;
 
-  // Accumulate metrics
   ctx.accumulateMetrics(state, 1, result);
 
-  // Check if notes were updated
   if (fs.existsSync(notesPath)) {
     const currentNotesContent = fs.readFileSync(notesPath, 'utf-8');
     if (currentNotesContent !== previousNotesContent) {
@@ -817,24 +706,16 @@ export async function handlePhase1Message(
     }
   }
 
-  // Save complete assistant message (not per-chunk)
   const phase1CleanedText = phase1Acc.text.replace(ctx.PHASE_COMPLETE_MARKER, '').trim();
   const phase1ToolCalls = result.toolCalls;
   if (phase1CleanedText || (phase1ToolCalls && phase1ToolCalls.length > 0)) {
-    persistMessage(
-      { kind: 'pipeline', projectId, phaseNumber: 1 },
-      'assistant',
-      phase1CleanedText,
-      { toolCalls: phase1ToolCalls },
-    );
+    persistMessage({ kind: 'pipeline', projectId, phaseNumber: 1 }, 'assistant', phase1CleanedText, {
+      toolCalls: phase1ToolCalls,
+    });
   }
 
   emitPipelineStream({ projectId, phase: 1, type: 'done' });
 }
-
-// -------------------------------------------------------------------------
-// Phase 3: PRD Validator (persistent file memory, fresh query each turn)
-// -------------------------------------------------------------------------
 
 export async function handlePhase3Message(
   ctx: PipelineEngineContext,
@@ -866,14 +747,11 @@ export async function handlePhase3Message(
 
   const isFirstTurn = !sessionEntry.alive;
 
-  const previousStoriesContent = fs.existsSync(storiesPath)
-    ? fs.readFileSync(storiesPath, 'utf-8')
-    : '';
+  const previousStoriesContent = fs.existsSync(storiesPath) ? fs.readFileSync(storiesPath, 'utf-8') : '';
 
   let prompt: string;
   if (isFirstTurn) {
-    // First turn: full analysis with instruction to edit stories-requisitos.md directly
-    const prdPath = (project ? resolvePrdPath(project) : null);
+    const prdPath = project ? resolvePrdPath(project) : null;
     prompt =
       `## Arquivo de relatorio persistente\nCaminho: ${reportPath}\n\n` +
       `## Discovery Notes\nCaminho: ${discoveryNotesPath}\n\n` +
@@ -884,7 +762,6 @@ export async function handlePhase3Message(
       `usando Write ou Edit quando o usuario aprovar uma correcao. Nao peca permissao para editar: edite imediatamente apos o usuario concordar.\n\n` +
       `## Mensagem do usuario\n${message}`;
   } else {
-    // Follow-up turns: just the user message (agent already has full context from the session)
     prompt = message;
   }
 
@@ -897,7 +774,6 @@ export async function handlePhase3Message(
     abortController: state.abortController,
     continueSession: sessionEntry.alive,
     docsDir: docsCtxP3?.docsDir,
-    // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
     rebuildPromptOnRetry: () =>
       buildCodexResumePrompt({
         projectId,
@@ -931,7 +807,6 @@ export async function handlePhase3Message(
     }
   }
 
-  // Save complete assistant message (not per-chunk)
   const phase3CleanedText = phase3Acc.text.replace(ctx.PHASE_COMPLETE_MARKER, '').trim();
   if (phase3CleanedText) {
     persistMessage({ kind: 'pipeline', projectId, phaseNumber: 3 }, 'assistant', phase3CleanedText);
@@ -939,11 +814,6 @@ export async function handlePhase3Message(
 
   emitPipelineStream({ projectId, phase: 3, type: 'done' });
 }
-
-// -------------------------------------------------------------------------
-// Phases 5-8: Tech conversation phases (Database, Backend, Frontend, Security)
-// Each phase uses its own dedicated agent and session key.
-// -------------------------------------------------------------------------
 
 export async function handleTechPhaseMessage(
   ctx: PipelineEngineContext,
@@ -965,12 +835,12 @@ export async function handleTechPhaseMessage(
 
   const projectPath = project.projectPath;
   const docsCtxTech = getPipelineDocsContext(projectPath, project.pipelineDocsId ?? null);
-  const notesPath = (project.discoveryNotesPath || (docsCtxTech
-    ? docsCtxTech.resolveDocPath('discovery.md')
-    : path.join(projectPath, 'discovery-notes.md')));
-  const prdPath = ((project ? resolvePrdPath(project) : null) || (docsCtxTech
-    ? docsCtxTech.resolveDocPath('PRD.md')
-    : path.join(projectPath, 'PRD.md')));
+  const notesPath =
+    project.discoveryNotesPath ||
+    (docsCtxTech ? docsCtxTech.resolveDocPath('discovery.md') : path.join(projectPath, 'discovery-notes.md'));
+  const prdPath =
+    (project ? resolvePrdPath(project) : null) ||
+    (docsCtxTech ? docsCtxTech.resolveDocPath('PRD.md') : path.join(projectPath, 'PRD.md'));
   const isFirstTurn = !sessionEntry.alive;
 
   const prompt = isFirstTurn
@@ -982,9 +852,7 @@ export async function handleTechPhaseMessage(
       `Mensagem do usuario: ${message}`
     : message;
 
-  const previousPrdContent = fs.existsSync(prdPath)
-    ? fs.readFileSync(prdPath, 'utf-8')
-    : '';
+  const previousPrdContent = fs.existsSync(prdPath) ? fs.readFileSync(prdPath, 'utf-8') : '';
 
   const techAcc = { text: '', completed: false };
   const result = await ctx.spawnAgent(agentId, prompt, {
@@ -994,7 +862,6 @@ export async function handleTechPhaseMessage(
     abortController: state.abortController,
     continueSession: sessionEntry.alive,
     docsDir: docsCtxTech?.docsDir,
-    // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
     rebuildPromptOnRetry: () =>
       buildCodexResumePrompt({
         projectId,
@@ -1026,7 +893,6 @@ export async function handleTechPhaseMessage(
     }
   }
 
-  // Save complete assistant message (not per-chunk)
   const techCleanedText = techAcc.text.replace(ctx.PHASE_COMPLETE_MARKER, '').trim();
   if (techCleanedText) {
     persistMessage({ kind: 'pipeline', projectId, phaseNumber }, 'assistant', techCleanedText);
@@ -1034,10 +900,6 @@ export async function handleTechPhaseMessage(
 
   emitPipelineStream({ projectId, phase: phaseNumber, type: 'done' });
 }
-
-// -------------------------------------------------------------------------
-// Phase 10: Spec Enricher (session persists across turns for context)
-// -------------------------------------------------------------------------
 
 export async function handlePhase10Message(
   ctx: PipelineEngineContext,
@@ -1057,12 +919,11 @@ export async function handlePhase10Message(
 
   const projectPath = project.projectPath;
   const docsCtxP10 = getPipelineDocsContext(projectPath, project.pipelineDocsId ?? null);
-  const specPath = (project.specPath || (docsCtxP10
-    ? docsCtxP10.resolveDocPath('SPEC.md')
-    : path.join(projectPath, 'SPEC.md')));
-  const prdPath = ((project ? resolvePrdPath(project) : null) || (docsCtxP10
-    ? docsCtxP10.resolveDocPath('PRD.md')
-    : path.join(projectPath, 'PRD.md')));
+  const specPath =
+    project.specPath || (docsCtxP10 ? docsCtxP10.resolveDocPath('SPEC.md') : path.join(projectPath, 'SPEC.md'));
+  const prdPath =
+    (project ? resolvePrdPath(project) : null) ||
+    (docsCtxP10 ? docsCtxP10.resolveDocPath('PRD.md') : path.join(projectPath, 'PRD.md'));
   const storiesPath = docsCtxP10
     ? docsCtxP10.resolveDocPath('stories-requisitos.md')
     : path.join(projectPath, 'stories-requisitos.md');
@@ -1072,9 +933,7 @@ export async function handlePhase10Message(
 
   const isFirstTurn = !sessionEntry.alive;
 
-  const previousSpecContent = fs.existsSync(specPath)
-    ? fs.readFileSync(specPath, 'utf-8')
-    : '';
+  const previousSpecContent = fs.existsSync(specPath) ? fs.readFileSync(specPath, 'utf-8') : '';
 
   let prompt: string;
   if (isFirstTurn) {
@@ -1088,7 +947,6 @@ export async function handlePhase10Message(
       `Apresente suas sugestoes, discuta com o usuario e edite ${specPath} diretamente usando Write ou Edit apos aprovacao.\n\n` +
       `## Mensagem do usuario\n${message}`;
   } else {
-    // Follow-up turns: just the user message (agent has full context from session)
     prompt = message;
   }
 
@@ -1100,7 +958,6 @@ export async function handlePhase10Message(
     abortController: state.abortController,
     continueSession: sessionEntry.alive,
     docsDir: docsCtxP10?.docsDir,
-    // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
     rebuildPromptOnRetry: () =>
       buildCodexResumePrompt({
         projectId,
@@ -1134,7 +991,6 @@ export async function handlePhase10Message(
     }
   }
 
-  // Save complete assistant message (not per-chunk)
   const phase10CleanedText = phase10Acc.text.replace(ctx.PHASE_COMPLETE_MARKER, '').trim();
   if (phase10CleanedText) {
     persistMessage({ kind: 'pipeline', projectId, phaseNumber: 10 }, 'assistant', phase10CleanedText);
@@ -1142,10 +998,6 @@ export async function handlePhase10Message(
 
   emitPipelineStream({ projectId, phase: 10, type: 'done' });
 }
-
-// -------------------------------------------------------------------------
-// Phase 12: Sprint Validator (session persists across turns for context)
-// -------------------------------------------------------------------------
 
 export async function handlePhase12Message(
   ctx: PipelineEngineContext,
@@ -1155,12 +1007,6 @@ export async function handlePhase12Message(
   phaseNumber: number = 12,
   briefing?: string | null,
 ): Promise<void> {
-  // Sprint Validator handler. Used by both:
-  //   - dev/feature pipelines on phase 12 (default)
-  //   - architecture-review pipeline on phase 9 (passed by caller)
-  //   - development-v2 pipeline on phase 14 (with optional briefing)
-  // The phaseNumber parameter is propagated to spawnAgent / persistMessage /
-  // emit IPC so the UI sees messages on the correct channel.
   const project = getHarnessProject(projectId);
   if (!project) throw new Error(`Project not found: ${projectId}`);
 
@@ -1173,9 +1019,8 @@ export async function handlePhase12Message(
 
   const projectPath = project.projectPath;
   const docsCtxP12 = getPipelineDocsContext(projectPath, project.pipelineDocsId ?? null);
-  const specPath = (project.specPath || (docsCtxP12
-    ? docsCtxP12.resolveDocPath('SPEC.md')
-    : path.join(projectPath, 'SPEC.md')));
+  const specPath =
+    project.specPath || (docsCtxP12 ? docsCtxP12.resolveDocPath('SPEC.md') : path.join(projectPath, 'SPEC.md'));
   const sprintsPath = findHarnessSprintsReadPath(project) ?? resolveHarnessSprintsPath(project);
   const reportPath = docsCtxP12
     ? docsCtxP12.resolveDocPath('sprint-validation.md')
@@ -1183,9 +1028,7 @@ export async function handlePhase12Message(
 
   const isFirstTurn = !sessionEntry.alive;
 
-  const previousSprintsContent = fs.existsSync(sprintsPath)
-    ? fs.readFileSync(sprintsPath, 'utf-8')
-    : '';
+  const previousSprintsContent = fs.existsSync(sprintsPath) ? fs.readFileSync(sprintsPath, 'utf-8') : '';
 
   let prompt: string;
   if (isFirstTurn) {
@@ -1199,7 +1042,6 @@ export async function handlePhase12Message(
       `## Mensagem do usuario\n${message}`;
     prompt = briefing ? `${briefing}\n\n${baseTurnPrompt}` : baseTurnPrompt;
   } else {
-    // Follow-up turns: just the user message (agent has full context from session)
     prompt = message;
   }
 
@@ -1211,7 +1053,6 @@ export async function handlePhase12Message(
     abortController: state.abortController,
     continueSession: sessionEntry.alive,
     docsDir: docsCtxP12?.docsDir,
-    // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
     rebuildPromptOnRetry: () =>
       buildCodexResumePrompt({
         projectId,
@@ -1246,7 +1087,6 @@ export async function handlePhase12Message(
     }
   }
 
-  // Save complete assistant message (not per-chunk)
   const phase12CleanedText = phase12Acc.text.replace(ctx.PHASE_COMPLETE_MARKER, '').trim();
   if (phase12CleanedText) {
     persistMessage({ kind: 'pipeline', projectId, phaseNumber }, 'assistant', phase12CleanedText);
@@ -1254,10 +1094,6 @@ export async function handlePhase12Message(
 
   emitPipelineStream({ projectId, phase: phaseNumber, type: 'done' });
 }
-
-// -------------------------------------------------------------------------
-// Phase 9: Spec Validator conversation (post auto-loop review)
-// -------------------------------------------------------------------------
 
 export async function handlePhase9Message(
   ctx: PipelineEngineContext,
@@ -1277,12 +1113,11 @@ export async function handlePhase9Message(
 
   const projectPath = project.projectPath;
   const docsCtxP9Conv = getPipelineDocsContext(projectPath, project.pipelineDocsId ?? null);
-  const specPath = (project.specPath || (docsCtxP9Conv
-    ? docsCtxP9Conv.resolveDocPath('SPEC.md')
-    : path.join(projectPath, 'SPEC.md')));
-  const prdPath = ((project ? resolvePrdPath(project) : null) || (docsCtxP9Conv
-    ? docsCtxP9Conv.resolveDocPath('PRD.md')
-    : path.join(projectPath, 'PRD.md')));
+  const specPath =
+    project.specPath || (docsCtxP9Conv ? docsCtxP9Conv.resolveDocPath('SPEC.md') : path.join(projectPath, 'SPEC.md'));
+  const prdPath =
+    (project ? resolvePrdPath(project) : null) ||
+    (docsCtxP9Conv ? docsCtxP9Conv.resolveDocPath('PRD.md') : path.join(projectPath, 'PRD.md'));
   const storiesPath = docsCtxP9Conv
     ? docsCtxP9Conv.resolveDocPath('stories-requisitos.md')
     : path.join(projectPath, 'stories-requisitos.md');
@@ -1292,9 +1127,7 @@ export async function handlePhase9Message(
 
   const isFirstTurn = !sessionEntry.alive;
 
-  const previousSpecContent = fs.existsSync(specPath)
-    ? fs.readFileSync(specPath, 'utf-8')
-    : '';
+  const previousSpecContent = fs.existsSync(specPath) ? fs.readFileSync(specPath, 'utf-8') : '';
 
   let prompt: string;
   if (isFirstTurn) {
@@ -1302,14 +1135,15 @@ export async function handlePhase9Message(
       `## SPEC.md\nCaminho: ${specPath}\n\n` +
       `## PRD de referencia\nCaminho: ${prdPath}\n\n` +
       (fs.existsSync(storiesPath) ? `## User Stories de referencia\nCaminho: ${storiesPath}\n\n` : '') +
-      (fs.existsSync(validationReportPath) ? `## Relatorio de validacao automatica\nCaminho: ${validationReportPath}\n\n` : '') +
+      (fs.existsSync(validationReportPath)
+        ? `## Relatorio de validacao automatica\nCaminho: ${validationReportPath}\n\n`
+        : '') +
       `## Instrucao importante\n` +
       `Voce e o Spec Validator. Leia os arquivos acima, apresente um resumo da SPEC.md, aponte pontos fortes e ressalvas do relatorio de validacao. ` +
       `Se o usuario pedir ajustes, edite ${specPath} diretamente usando Write ou Edit. ` +
       `Quando o usuario estiver satisfeito ele clicara em Aprovar para avancar.\n\n` +
       `## Mensagem do usuario\n${message}`;
   } else {
-    // Follow-up turns: just the user message (agent has full context from session)
     prompt = message;
   }
 
@@ -1321,7 +1155,6 @@ export async function handlePhase9Message(
     abortController: state.abortController,
     continueSession: sessionEntry.alive,
     docsDir: docsCtxP9Conv?.docsDir,
-    // SC-1 (Pilar C): prompt de retomada para retry de sessao Codex ceifada.
     rebuildPromptOnRetry: () =>
       buildCodexResumePrompt({
         projectId,
@@ -1329,7 +1162,9 @@ export async function handlePhase9Message(
         preamble:
           `## SPEC.md\nCaminho: ${specPath}\n\n` +
           `## PRD de referencia\nCaminho: ${prdPath}\n\n` +
-          (fs.existsSync(validationReportPath) ? `## Relatorio de validacao automatica\nCaminho: ${validationReportPath}\n\n` : '') +
+          (fs.existsSync(validationReportPath)
+            ? `## Relatorio de validacao automatica\nCaminho: ${validationReportPath}\n\n`
+            : '') +
           `## Instrucao importante\n` +
           `Voce e o Spec Validator. Se o usuario pedir ajustes, edite ${specPath} diretamente usando Write ou Edit. ` +
           `Quando o usuario estiver satisfeito ele clicara em Aprovar para avancar.`,
@@ -1355,7 +1190,6 @@ export async function handlePhase9Message(
     }
   }
 
-  // Save complete assistant message (not per-chunk)
   const phase9CleanedText = phase9Acc.text.replace(ctx.PHASE_COMPLETE_MARKER, '').trim();
   if (phase9CleanedText) {
     persistMessage({ kind: 'pipeline', projectId, phaseNumber: 9 }, 'assistant', phase9CleanedText);
@@ -1363,21 +1197,6 @@ export async function handlePhase9Message(
 
   emitPipelineStream({ projectId, phase: 9, type: 'done' });
 }
-
-// =========================================================================
-// Feature-only auto phases (8A.5: moved verbatim, this.X -> ctx.X)
-//
-// dev uses runPhase2 / runPhase4 above; the feature pipeline has its OWN
-// phase 2/4 runners using FEAT_PRD_GENERATOR_ID / FEAT_PRD_COMPLETO_ID and the
-// feature discovery notes. They live in this shared module (§3) so the
-// dev+feature pair stays in one place; not unified with the dev variants (R6).
-// =========================================================================
-
-// -------------------------------------------------------------------------
-// Phase 2 (FEATURE pipeline only): User stories from existing repo + notes.
-// Agent analyses the existing repo + the feature-discovery notes and writes
-// stories-requisitos.md.
-// -------------------------------------------------------------------------
 
 export async function runPhase2Feature(
   ctx: PipelineEngineContext,
@@ -1387,9 +1206,9 @@ export async function runPhase2Feature(
 ): Promise<void> {
   const project = getHarnessProject(projectId);
   const docsCtxF2 = getPipelineDocsContext(projectPath, project?.pipelineDocsId ?? null);
-  const notesPath = (project?.discoveryNotesPath || (docsCtxF2
-    ? docsCtxF2.resolveDocPath('discovery.md')
-    : path.join(projectPath, 'discovery-notes.md')));
+  const notesPath =
+    project?.discoveryNotesPath ||
+    (docsCtxF2 ? docsCtxF2.resolveDocPath('discovery.md') : path.join(projectPath, 'discovery-notes.md'));
   const storiesPath = docsCtxF2
     ? docsCtxF2.resolveDocPath('stories-requisitos.md')
     : path.join(projectPath, 'stories-requisitos.md');
@@ -1423,12 +1242,9 @@ export async function runPhase2Feature(
   });
 
   if (phase2Output || (result.toolCalls && result.toolCalls.length > 0)) {
-    persistMessage(
-      { kind: 'pipeline', projectId, phaseNumber: 2 },
-      'assistant',
-      phase2Output,
-      { toolCalls: result.toolCalls },
-    );
+    persistMessage({ kind: 'pipeline', projectId, phaseNumber: 2 }, 'assistant', phase2Output, {
+      toolCalls: result.toolCalls,
+    });
   }
 
   ctx.collectMetrics(projectId, 2, FEAT_PRD_GENERATOR_ID, result, 'completed');
@@ -1455,14 +1271,6 @@ export async function runPhase2Feature(
   await ctx.advanceToNextPhase(projectId, state);
 }
 
-// -------------------------------------------------------------------------
-// Phase 4 (FEATURE pipeline only): PRD Completo via FEAT_PRD_COMPLETO_ID.
-//
-// Mirrors runPhase4 but uses the feature-specific agent and the feature
-// discovery notes file (feature-discovery-notes-{timestamp}.md) detected
-// and persisted by the feature pipeline at the end of phase 1.
-// -------------------------------------------------------------------------
-
 export async function runPhase4Feature(
   ctx: PipelineEngineContext,
   projectId: string,
@@ -1471,15 +1279,13 @@ export async function runPhase4Feature(
 ): Promise<void> {
   const project = getHarnessProject(projectId);
   const docsCtxF4 = getPipelineDocsContext(projectPath, project?.pipelineDocsId ?? null);
-  const notesPath = (project?.discoveryNotesPath || (docsCtxF4
-    ? docsCtxF4.resolveDocPath('discovery.md')
-    : path.join(projectPath, 'discovery-notes.md')));
+  const notesPath =
+    project?.discoveryNotesPath ||
+    (docsCtxF4 ? docsCtxF4.resolveDocPath('discovery.md') : path.join(projectPath, 'discovery-notes.md'));
   const storiesPath = docsCtxF4
     ? docsCtxF4.resolveDocPath('stories-requisitos.md')
     : path.join(projectPath, 'stories-requisitos.md');
-  const prdPath = docsCtxF4
-    ? docsCtxF4.resolveDocPath('PRD.md')
-    : path.join(projectPath, 'PRD.md');
+  const prdPath = docsCtxF4 ? docsCtxF4.resolveDocPath('PRD.md') : path.join(projectPath, 'PRD.md');
 
   if (!fs.existsSync(notesPath)) {
     throw new Error(`Feature notes not found at ${notesPath}`);
@@ -1508,12 +1314,9 @@ export async function runPhase4Feature(
   });
 
   if (phase4Output || (result.toolCalls && result.toolCalls.length > 0)) {
-    persistMessage(
-      { kind: 'pipeline', projectId, phaseNumber: 4 },
-      'assistant',
-      phase4Output,
-      { toolCalls: result.toolCalls },
-    );
+    persistMessage({ kind: 'pipeline', projectId, phaseNumber: 4 }, 'assistant', phase4Output, {
+      toolCalls: result.toolCalls,
+    });
   }
 
   ctx.collectMetrics(projectId, 4, FEAT_PRD_COMPLETO_ID, result, 'completed');

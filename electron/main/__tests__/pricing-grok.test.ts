@@ -9,10 +9,8 @@ describe('pricing - Grok 4.5', () => {
   });
 
   it('applies the long-context tier only above 200k per request', () => {
-    expect(calculateCost('grok-4.5', 200_000, 100_000, 0, 0, 0, { perRequestInput: true }))
-      .toBe(1);
-    expect(calculateCost('grok-4.5', 200_001, 100_000, 0, 0, 0, { perRequestInput: true }))
-      .toBeCloseTo(2.000004, 6);
+    expect(calculateCost('grok-4.5', 200_000, 100_000, 0, 0, 0, { perRequestInput: true })).toBe(1);
+    expect(calculateCost('grok-4.5', 200_001, 100_000, 0, 0, 0, { perRequestInput: true })).toBeCloseTo(2.000004, 6);
   });
 
   it('publishes the 500k context pricing snapshot', () => {

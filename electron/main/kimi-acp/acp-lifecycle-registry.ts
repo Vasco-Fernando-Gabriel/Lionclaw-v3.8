@@ -1,4 +1,3 @@
-
 import { createLogger } from '../logger';
 import type { KimiAcpRunSessionKey, KimiAcpRegistrableHandle } from './types';
 
@@ -16,20 +15,10 @@ export class KimiAcpLifecycleRegistry {
   private readonly runs = new Map<string, KimiAcpRegistrableHandle>();
 
   private storageKey(key: KimiAcpRunSessionKey): string {
-    return [
-      key.surface,
-      key.ownerKind,
-      key.runId,
-      key.projectId ?? '',
-      key.agentId ?? '',
-      key.ownerId ?? '',
-    ].join('|');
+    return [key.surface, key.ownerKind, key.runId, key.projectId ?? '', key.agentId ?? '', key.ownerId ?? ''].join('|');
   }
 
-  private keyMatchesScope(
-    key: KimiAcpRunSessionKey,
-    scope: Partial<KimiAcpRunSessionKey>,
-  ): boolean {
+  private keyMatchesScope(key: KimiAcpRunSessionKey, scope: Partial<KimiAcpRunSessionKey>): boolean {
     const fields: Array<keyof KimiAcpRunSessionKey> = [
       'surface',
       'ownerKind',
@@ -110,10 +99,9 @@ export class KimiAcpLifecycleRegistry {
     this.runs.clear();
   }
 
-
   private isReapSafe(handle: KimiAcpRegistrableHandle, now: number = Date.now()): boolean {
-    if (handle.status === 'running') return false; // in-flight turn
-    if (handle.key.ownerKind === 'chat') return false; // active chat handle (closes itself per turn)
+    if (handle.status === 'running') return false;
+    if (handle.key.ownerKind === 'chat') return false;
     if (handle.hasStartedTurn === false) {
       const born = handle.createdAt;
       if (typeof born !== 'number' || now - born < KIMI_ACP_YOUNG_GRACE_MS) return false;
@@ -134,8 +122,8 @@ export class KimiAcpLifecycleRegistry {
     for (const handle of this.runs.values()) {
       const k = handle.key;
       if (handle.status === 'closed' || handle.status === 'failed') continue;
-      if (handle.status === 'running') continue; // never kill an in-flight turn
-      if (handle.hasStartedTurn === false) continue; // freshly-spawned sibling, not yet sent
+      if (handle.status === 'running') continue;
+      if (handle.hasStartedTurn === false) continue;
       const sameScope =
         incoming.ownerKind === 'chat'
           ? k.ownerKind === 'chat' && !!incoming.ownerId && k.ownerId === incoming.ownerId
@@ -152,15 +140,10 @@ export class KimiAcpLifecycleRegistry {
     return reaped;
   }
 
-  reapForCap(
-    cap: number = MAX_LIVE_KIMI_ACP_PROCESSES,
-    now: number = Date.now(),
-  ): KimiAcpRegistrableHandle[] {
+  reapForCap(cap: number = MAX_LIVE_KIMI_ACP_PROCESSES, now: number = Date.now()): KimiAcpRegistrableHandle[] {
     const reaped: KimiAcpRegistrableHandle[] = [];
     const candidates = [...this.runs.values()]
-      .filter(
-        (h) => h.status !== 'closed' && h.status !== 'failed' && this.isReapSafe(h, now),
-      )
+      .filter((h) => h.status !== 'closed' && h.status !== 'failed' && this.isReapSafe(h, now))
       .sort((a, b) => this.ageStamp(a) - this.ageStamp(b));
     let idx = 0;
     while (this.liveCount() >= cap && idx < candidates.length) {
@@ -177,16 +160,13 @@ export class KimiAcpLifecycleRegistry {
     return reaped;
   }
 
-  reapIdle(
-    idleMs: number = KIMI_ACP_IDLE_REAP_MS,
-    now: number = Date.now(),
-  ): KimiAcpRegistrableHandle[] {
+  reapIdle(idleMs: number = KIMI_ACP_IDLE_REAP_MS, now: number = Date.now()): KimiAcpRegistrableHandle[] {
     const reaped: KimiAcpRegistrableHandle[] = [];
     for (const handle of [...this.runs.values()]) {
       if (handle.status === 'closed' || handle.status === 'failed') continue;
       if (!this.isReapSafe(handle, now)) continue;
       const last = handle.lastActivityAt ?? handle.createdAt;
-      if (typeof last !== 'number') continue; // no liveness data => leave it to the cap
+      if (typeof last !== 'number') continue;
       if (now - last < idleMs) continue;
       this.detach(handle);
       reaped.push(handle);

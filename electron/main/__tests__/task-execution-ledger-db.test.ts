@@ -45,8 +45,7 @@ beforeAll(() => {
 afterAll(() => {
   try {
     getDb().close();
-  } catch {
-  }
+  } catch {}
   fs.rmSync(state.root, { recursive: true, force: true });
 });
 
@@ -109,10 +108,14 @@ const finalPayload = {
 describe('task execution ledger helpers', () => {
   it('persiste, reivindica e conclui checkpoint por CAS sem janela de perda', () => {
     const projectId = 'project-auth-checkpoint-cas';
-    getDb().prepare(`
+    getDb()
+      .prepare(
+        `
       INSERT INTO harness_projects (id, name, project_path, spec_path, status, config)
       VALUES (?, 'Auth checkpoint', '/tmp/auth', '/tmp/auth/SPEC.md', 'running', ?)
-    `).run(projectId, JSON.stringify({ stack: ['typescript'], custom: 'preservar' }));
+    `,
+      )
+      .run(projectId, JSON.stringify({ stack: ['typescript'], custom: 'preservar' }));
     const checkpoint = {
       checkpointId: 'checkpoint-1',
       pauseReason: 'provider-auth' as const,
@@ -140,8 +143,9 @@ describe('task execution ledger helpers', () => {
 
     expect(persistHarnessProviderAuthCheckpoint(projectId, checkpoint)).toBe(true);
     expect(getHarnessProviderAuthCheckpoint(projectId)).toEqual({ ...checkpoint, claimState: 'pending' });
-    expect(getDb().prepare('SELECT status FROM harness_projects WHERE id = ?').get(projectId))
-      .toEqual({ status: 'paused' });
+    expect(getDb().prepare('SELECT status FROM harness_projects WHERE id = ?').get(projectId)).toEqual({
+      status: 'paused',
+    });
     expect(claimHarnessProviderAuthCheckpoint(projectId, 'checkpoint-errado')).toBeUndefined();
     expect(getHarnessProviderAuthCheckpoint(projectId)).toEqual({ ...checkpoint, claimState: 'pending' });
     expect(claimHarnessProviderAuthCheckpoint(projectId, checkpoint.checkpointId)).toEqual({
@@ -156,16 +160,8 @@ describe('task execution ledger helpers', () => {
         evaluatorMetrics: { costUsd: 0.5 },
       },
     };
-    expect(advanceClaimedHarnessProviderAuthCheckpoint(
-      projectId,
-      'checkpoint-errado',
-      advancedResume,
-    )).toBeUndefined();
-    expect(advanceClaimedHarnessProviderAuthCheckpoint(
-      projectId,
-      checkpoint.checkpointId,
-      advancedResume,
-    )).toEqual({
+    expect(advanceClaimedHarnessProviderAuthCheckpoint(projectId, 'checkpoint-errado', advancedResume)).toBeUndefined();
+    expect(advanceClaimedHarnessProviderAuthCheckpoint(projectId, checkpoint.checkpointId, advancedResume)).toEqual({
       ...checkpoint,
       claimState: 'claimed',
       resume: advancedResume,
@@ -188,25 +184,38 @@ describe('task execution ledger helpers', () => {
     });
     expect(completeHarnessProviderAuthCheckpoint(projectId, checkpoint.checkpointId)).toBe(true);
     expect(getHarnessProviderAuthCheckpoint(projectId)).toBeUndefined();
-    const config = JSON.parse((getDb().prepare('SELECT config FROM harness_projects WHERE id = ?')
-      .get(projectId) as { config: string }).config) as Record<string, unknown>;
+    const config = JSON.parse(
+      (getDb().prepare('SELECT config FROM harness_projects WHERE id = ?').get(projectId) as { config: string }).config,
+    ) as Record<string, unknown>;
     expect(config).toMatchObject({ stack: ['typescript'], custom: 'preservar' });
   });
 
   it('commita evaluator, mensagem e checkpoint de forma atomica e idempotente', () => {
     const projectId = 'project-evaluator-boundary';
-    getDb().prepare(`
+    getDb()
+      .prepare(
+        `
       INSERT INTO harness_projects (id, name, project_path, spec_path, status, config)
       VALUES (?, 'Evaluator boundary', '/tmp/eval', '/tmp/eval/SPEC.md', 'running', '{}')
-    `).run(projectId);
-    getDb().prepare(`
+    `,
+      )
+      .run(projectId);
+    getDb()
+      .prepare(
+        `
       INSERT INTO harness_sprints (id, project_id, sprint_index, sprint_json_id, name, status)
       VALUES ('sprint-evaluator-boundary', ?, 0, 'sprint-1', 'Sprint', 'running')
-    `).run(projectId);
-    getDb().prepare(`
+    `,
+      )
+      .run(projectId);
+    getDb()
+      .prepare(
+        `
       INSERT INTO harness_rounds (id, sprint_id, round_number)
       VALUES ('round-evaluator-boundary', 'sprint-evaluator-boundary', 1)
-    `).run();
+    `,
+      )
+      .run();
     const checkpoint = {
       checkpointId: 'checkpoint-evaluator-boundary',
       pauseReason: 'provider-auth' as const,
@@ -275,69 +284,87 @@ describe('task execution ledger helpers', () => {
     expect(getHarnessRounds('sprint-evaluator-boundary')).toEqual([
       expect.objectContaining({ evaluatorCostUsd: 0.5, verdict: 'pass' }),
     ]);
-    expect(getDb().prepare(`
+    expect(
+      getDb()
+        .prepare(
+          `
       SELECT COUNT(*) AS total FROM pipeline_messages
       WHERE project_id = ? AND phase_number = 14 AND round_index = 1
-    `).get(projectId)).toEqual({ total: 1 });
+    `,
+        )
+        .get(projectId),
+    ).toEqual({ total: 1 });
     expect(getHarnessProviderAuthCheckpoint(projectId)?.resume).toEqual(resume);
   });
 
   it('persiste raiz + filha e finaliza idempotentemente', () => {
     startTaskExecution(root);
     startTaskExecution(root);
-    expect(() => startTaskExecution({
-      ...root,
-      metadata: { surface: 'forjada' },
-    })).toThrow('idempotente divergente');
+    expect(() =>
+      startTaskExecution({
+        ...root,
+        metadata: { surface: 'forjada' },
+      }),
+    ).toThrow('idempotente divergente');
     startTaskExecution(child);
     finalizeTaskExecutionOnce('child-1', finalPayload);
     expect(() => finalizeTaskExecutionOnce('child-1', finalPayload)).not.toThrow();
     expect(finalizeTaskExecutionRootIfIdle('root-1')).toBe(true);
 
-    const rows = getDb().prepare(`
+    const rows = getDb()
+      .prepare(
+        `
       SELECT execution_id, root_execution_id, parent_execution_id, execution_kind,
         owner_kind, owner_id, session_id, status, provider, input_tokens,
         output_tokens, cost_status, token_status, metadata
       FROM task_executions
       WHERE root_execution_id = 'root-1'
       ORDER BY execution_kind DESC
-    `).all();
+    `,
+      )
+      .all();
     expect(rows).toHaveLength(2);
-    expect(rows).toContainEqual(expect.objectContaining({
-      execution_id: 'child-1',
-      root_execution_id: 'root-1',
-      parent_execution_id: 'root-1',
-      execution_kind: 'subagent',
-      owner_kind: 'chat',
-      owner_id: 'session-1',
-      session_id: 'session-1',
-      status: 'completed',
-      provider: 'openai',
-      input_tokens: 100,
-      output_tokens: 20,
-      cost_status: 'known',
-      token_status: 'reported',
-      metadata: '{"requestId":"request-1","source":"provider-reported"}',
-    }));
+    expect(rows).toContainEqual(
+      expect.objectContaining({
+        execution_id: 'child-1',
+        root_execution_id: 'root-1',
+        parent_execution_id: 'root-1',
+        execution_kind: 'subagent',
+        owner_kind: 'chat',
+        owner_id: 'session-1',
+        session_id: 'session-1',
+        status: 'completed',
+        provider: 'openai',
+        input_tokens: 100,
+        output_tokens: 20,
+        cost_status: 'known',
+        token_status: 'reported',
+        metadata: '{"requestId":"request-1","source":"provider-reported"}',
+      }),
+    );
 
     updateSessionTokens('session-1', 10, 5, 0.02);
-    expect(getSession('session-1')).toEqual(expect.objectContaining({
-      inputTokens: 110,
-      outputTokens: 25,
-      costUsd: 0.03,
-    }));
+    expect(getSession('session-1')).toEqual(
+      expect.objectContaining({
+        inputTokens: 110,
+        outputTokens: 25,
+        costUsd: 0.03,
+      }),
+    );
 
     updateSessionTokens('session-1', 0, 0, 0, {
       costStatus: 'unknown',
       tokenStatus: 'not_reported',
       costUnknownReason: 'no-usage-reported',
     });
-    expect(getSession('session-1')).toEqual(expect.objectContaining({
-      costStatus: 'unknown',
-      tokenStatus: 'not_reported',
-      unknownCostCount: 1,
-      costUnknownReasons: ['no-usage-reported'],
-    }));
+    expect(getSession('session-1')).toEqual(
+      expect.objectContaining({
+        costStatus: 'unknown',
+        tokenStatus: 'not_reported',
+        unknownCostCount: 1,
+        costUnknownReasons: ['no-usage-reported'],
+      }),
+    );
 
     startTaskExecution({
       ...child,
@@ -352,17 +379,21 @@ describe('task execution ledger helpers', () => {
       costUsd: 0.05,
       metadata: { source: 'native-task' },
     });
-    expect(getSession('session-1')).toEqual(expect.objectContaining({
-      inputTokens: 160,
-      outputTokens: 30,
-      costUsd: 0.08,
-    }));
-    expect(getTaskExecutionRollup({
-      ownerKind: 'chat',
-      ownerId: 'session-1',
-      surface: 'test',
-      executionKinds: ['subagent', 'native-task'],
-    }).executionIds).toEqual(['child-1', 'native-task-1']);
+    expect(getSession('session-1')).toEqual(
+      expect.objectContaining({
+        inputTokens: 160,
+        outputTokens: 30,
+        costUsd: 0.08,
+      }),
+    );
+    expect(
+      getTaskExecutionRollup({
+        ownerKind: 'chat',
+        ownerId: 'session-1',
+        surface: 'test',
+        executionKinds: ['subagent', 'native-task'],
+      }).executionIds,
+    ).toEqual(['child-1', 'native-task-1']);
   });
 
   it('reidrata breakdown misto do parent Codex e dos filhos sem double count', () => {
@@ -383,7 +414,14 @@ describe('task execution ledger helpers', () => {
       sessionId,
     });
     for (const entry of [
-      { id: 'child-mixed-cloud', runtime: 'cloud', provider: 'anthropic', model: 'claude-sonnet-4-6', costUsd: 0.2, equivalent: false },
+      {
+        id: 'child-mixed-cloud',
+        runtime: 'cloud',
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        costUsd: 0.2,
+        equivalent: false,
+      },
       { id: 'child-mixed-grok', runtime: 'grok', provider: 'grok', model: 'grok-4.5', costUsd: 0.3, equivalent: true },
     ]) {
       startTaskExecution({
@@ -404,19 +442,19 @@ describe('task execution ledger helpers', () => {
         provider: entry.provider,
         model: entry.model,
         costUsd: entry.costUsd,
-        metadata: entry.equivalent
-          ? { costEstimationKind: 'subscription-equivalent-payg' }
-          : {},
+        metadata: entry.equivalent ? { costEstimationKind: 'subscription-equivalent-payg' } : {},
       });
     }
     expect(finalizeTaskExecutionRootIfIdle(rootExecutionId)).toBe(true);
 
-    expect(getSession(sessionId)).toEqual(expect.objectContaining({
-      costUsd: 0.9,
-      costByRuntime: { codex: 0.4, cloud: 0.2, grok: 0.3 },
-      costStatusByRuntime: { codex: 'known', cloud: 'known', grok: 'known' },
-      subscriptionEquivalentCost: 0.7,
-    }));
+    expect(getSession(sessionId)).toEqual(
+      expect.objectContaining({
+        costUsd: 0.9,
+        costByRuntime: { codex: 0.4, cloud: 0.2, grok: 0.3 },
+        costStatusByRuntime: { codex: 'known', cloud: 'known', grok: 'known' },
+        subscriptionEquivalentCost: 0.7,
+      }),
+    );
   });
 
   it('persiste e reidrata o parent Grok isolado como equivalente de assinatura', () => {
@@ -429,12 +467,14 @@ describe('task execution ledger helpers', () => {
       costEstimationKind: 'subscription-equivalent-payg',
     });
 
-    expect(getSession(sessionId)).toEqual(expect.objectContaining({
-      costUsd: 0.4,
-      costByRuntime: { grok: 0.4 },
-      costStatusByRuntime: { grok: 'known' },
-      subscriptionEquivalentCost: 0.4,
-    }));
+    expect(getSession(sessionId)).toEqual(
+      expect.objectContaining({
+        costUsd: 0.4,
+        costByRuntime: { grok: 0.4 },
+        costStatusByRuntime: { grok: 'known' },
+        subscriptionEquivalentCost: 0.4,
+      }),
+    );
   });
 
   it('mantem somente a parcela do parent Kimi como equivalente quando o filho e Cloud', () => {
@@ -475,12 +515,14 @@ describe('task execution ledger helpers', () => {
     });
     expect(finalizeTaskExecutionRootIfIdle(rootExecutionId)).toBe(true);
 
-    expect(getSession(sessionId)).toEqual(expect.objectContaining({
-      costUsd: expect.closeTo(0.6, 10),
-      costByRuntime: { kimi: 0.4, cloud: 0.2 },
-      costStatusByRuntime: { kimi: 'known', cloud: 'known' },
-      subscriptionEquivalentCost: 0.4,
-    }));
+    expect(getSession(sessionId)).toEqual(
+      expect.objectContaining({
+        costUsd: expect.closeTo(0.6, 10),
+        costByRuntime: { kimi: 0.4, cloud: 0.2 },
+        costStatusByRuntime: { kimi: 'known', cloud: 'known' },
+        subscriptionEquivalentCost: 0.4,
+      }),
+    );
   });
 
   it('mantem somente o filho Grok como equivalente quando o parent e Cloud', () => {
@@ -520,12 +562,14 @@ describe('task execution ledger helpers', () => {
     });
     expect(finalizeTaskExecutionRootIfIdle(rootExecutionId)).toBe(true);
 
-    expect(getSession(sessionId)).toEqual(expect.objectContaining({
-      costUsd: 0.7,
-      costByRuntime: { cloud: 0.4, grok: 0.3 },
-      costStatusByRuntime: { cloud: 'known', grok: 'known' },
-      subscriptionEquivalentCost: 0.3,
-    }));
+    expect(getSession(sessionId)).toEqual(
+      expect.objectContaining({
+        costUsd: 0.7,
+        costByRuntime: { cloud: 0.4, grok: 0.3 },
+        costStatusByRuntime: { cloud: 'known', grok: 'known' },
+        subscriptionEquivalentCost: 0.3,
+      }),
+    );
   });
 
   it('propaga custo misto dos filhos no enrich sem classificar o total inteiro como assinatura', () => {
@@ -541,7 +585,14 @@ describe('task execution ledger helpers', () => {
       metadata: { surface: 'enrich:validator' },
     });
     const entries = [
-      { id: 'child-enrich-cloud', runtime: 'cloud', provider: 'anthropic', model: 'claude-sonnet-4-6', costUsd: 0.2, equivalent: false },
+      {
+        id: 'child-enrich-cloud',
+        runtime: 'cloud',
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        costUsd: 0.2,
+        equivalent: false,
+      },
       { id: 'child-enrich-grok', runtime: 'grok', provider: 'grok', model: 'grok-4.5', costUsd: 0.3, equivalent: true },
     ] as const;
     for (const entry of entries) {
@@ -593,32 +644,39 @@ describe('task execution ledger helpers', () => {
       costEstimationKind: 'subscription-equivalent-payg' as const,
     };
 
-    expect(mergeTaskExecutionMetrics(base, rollup)).toEqual(expect.objectContaining({
-      costUsd: 0.9,
-      costEstimationKind: undefined,
-      costByRuntime: { cloud: 0.2, grok: 0.3 },
-      subscriptionEquivalentCost: 0.7,
-    }));
-    expect(mergeTaskExecutionMetrics({ ...base, costEstimationKind: undefined }, rollup))
-      .toEqual(expect.objectContaining({
+    expect(mergeTaskExecutionMetrics(base, rollup)).toEqual(
+      expect.objectContaining({
+        costUsd: 0.9,
+        costEstimationKind: undefined,
+        costByRuntime: { cloud: 0.2, grok: 0.3 },
+        subscriptionEquivalentCost: 0.7,
+      }),
+    );
+    expect(mergeTaskExecutionMetrics({ ...base, costEstimationKind: undefined }, rollup)).toEqual(
+      expect.objectContaining({
         costUsd: 0.9,
         costEstimationKind: undefined,
         subscriptionEquivalentCost: 0.3,
-      }));
+      }),
+    );
   });
 
   it('recusa parent de outra owner e segunda finalizacao divergente', () => {
-    expect(() => startTaskExecution({
-      ...child,
-      executionId: 'child-foreign',
-      ownerId: 'outra-session',
-      sessionId: 'outra-session',
-    })).toThrow('outra arvore/owner/sessao');
+    expect(() =>
+      startTaskExecution({
+        ...child,
+        executionId: 'child-foreign',
+        ownerId: 'outra-session',
+        sessionId: 'outra-session',
+      }),
+    ).toThrow('outra arvore/owner/sessao');
 
-    expect(() => finalizeTaskExecutionOnce('child-1', {
-      ...finalPayload,
-      outputTokens: 21,
-    })).toThrow('payload divergente');
+    expect(() =>
+      finalizeTaskExecutionOnce('child-1', {
+        ...finalPayload,
+        outputTokens: 21,
+      }),
+    ).toThrow('payload divergente');
   });
 
   it('fecha a raiz comum quando a ultima filha termina e reconcilia crash no boot', () => {
@@ -635,8 +693,9 @@ describe('task execution ledger helpers', () => {
     expect(finalizeTaskExecutionRootIfIdle('root-idle')).toBe(false);
     finalizeTaskExecutionOnce('child-idle', finalPayload);
     expect(finalizeTaskExecutionRootIfIdle('root-idle')).toBe(true);
-    expect(getDb().prepare("SELECT status FROM task_executions WHERE execution_id='root-idle'").get())
-      .toEqual({ status: 'completed' });
+    expect(getDb().prepare("SELECT status FROM task_executions WHERE execution_id='root-idle'").get()).toEqual({
+      status: 'completed',
+    });
 
     const crashRoot = { ...root, executionId: 'root-crash', rootExecutionId: 'root-crash' };
     const crashChild = {
@@ -649,10 +708,16 @@ describe('task execution ledger helpers', () => {
     startTaskExecution(crashRoot);
     startTaskExecution(crashChild);
     expect(reconcileInterruptedTaskExecutions()).toBe(2);
-    expect(getDb().prepare(`
+    expect(
+      getDb()
+        .prepare(
+          `
       SELECT execution_id, status, token_status
       FROM task_executions WHERE root_execution_id='root-crash' ORDER BY execution_id
-    `).all()).toEqual([
+    `,
+        )
+        .all(),
+    ).toEqual([
       { execution_id: 'child-crash', status: 'cancelled', token_status: 'not_reported' },
       { execution_id: 'root-crash', status: 'cancelled', token_status: 'reported' },
     ]);
@@ -674,22 +739,30 @@ describe('task execution ledger helpers', () => {
       executionKind: 'native-task',
     });
     finalizeRunningTaskExecutionTree(rootExecutionId, 'cancelled', 'owner terminou');
-    const rows = getDb().prepare(`
+    const rows = getDb()
+      .prepare(
+        `
       SELECT task_id, execution_id, execution_kind, status, token_status, cost_status
       FROM task_executions WHERE root_execution_id = ? ORDER BY execution_kind
-    `).all(rootExecutionId) as Array<Record<string, unknown>>;
-    expect(rows).toContainEqual(expect.objectContaining({
-      task_id: 'provider-task-42',
-      execution_id: 'native-pending',
-      execution_kind: 'native-task',
-      status: 'cancelled',
-      token_status: 'not_reported',
-      cost_status: 'unknown',
-    }));
-    expect(rows).toContainEqual(expect.objectContaining({
-      execution_kind: 'root',
-      status: 'cancelled',
-    }));
+    `,
+      )
+      .all(rootExecutionId) as Array<Record<string, unknown>>;
+    expect(rows).toContainEqual(
+      expect.objectContaining({
+        task_id: 'provider-task-42',
+        execution_id: 'native-pending',
+        execution_kind: 'native-task',
+        status: 'cancelled',
+        token_status: 'not_reported',
+        cost_status: 'unknown',
+      }),
+    );
+    expect(rows).toContainEqual(
+      expect.objectContaining({
+        execution_kind: 'root',
+        status: 'cancelled',
+      }),
+    );
   });
 
   it('faz rollup canonico sem raiz, deduplica execution_id e propaga a pior qualidade', () => {
@@ -779,23 +852,26 @@ describe('task execution ledger helpers', () => {
         cacheReadTokens: index === 0 ? 20 : 10,
         costUsd: index === 0 ? 0.02 : 0.01,
         apiRequests: 1,
-        metadata: index === 0 ? {
-          costSource: 'calculated',
-          pricingSnapshot: { pricingVersion: 'v1', model: 'kimi-k3' },
-          modelUsage: {
-            'kimi-code/k3': {
-              inputTokens: 100,
-              outputTokens: 10,
-              cacheReadInputTokens: 20,
-              cacheCreationInputTokens: 0,
-              costUSD: 0.02,
-              modelCalls: 1,
-            },
-          },
-        } : {
-          costSource: 'calculated',
-          pricingSnapshot: { pricingVersion: 'v2', model: 'kimi-k3' },
-        },
+        metadata:
+          index === 0
+            ? {
+                costSource: 'calculated',
+                pricingSnapshot: { pricingVersion: 'v1', model: 'kimi-k3' },
+                modelUsage: {
+                  'kimi-code/k3': {
+                    inputTokens: 100,
+                    outputTokens: 10,
+                    cacheReadInputTokens: 20,
+                    cacheCreationInputTokens: 0,
+                    costUSD: 0.02,
+                    modelCalls: 1,
+                  },
+                },
+              }
+            : {
+                costSource: 'calculated',
+                pricingSnapshot: { pricingVersion: 'v2', model: 'kimi-k3' },
+              },
       });
     }
 
@@ -827,8 +903,10 @@ describe('task execution ledger helpers', () => {
     ]);
     expect(rollup.usageMetadata.unattributedCostUsd).toBeCloseTo(0.01, 12);
     expect(rollup.usageMetadata.overAttributedCostUsd).toBeUndefined();
-    expect(rollup.usageMetadata.pricingProvenance.reduce((sum, entry) => sum + entry.costUsd, 0))
-      .toBeCloseTo(rollup.metrics.costUsd, 12);
+    expect(rollup.usageMetadata.pricingProvenance.reduce((sum, entry) => sum + entry.costUsd, 0)).toBeCloseTo(
+      rollup.metrics.costUsd,
+      12,
+    );
   });
 
   it('sinaliza breakdown conhecido maior que o custo escalar total', () => {
@@ -915,10 +993,14 @@ describe('task execution ledger helpers', () => {
   });
 
   it('leva a pior qualidade aos totais normais de pipeline e harness sem contar a raiz', () => {
-    getDb().prepare(`
+    getDb()
+      .prepare(
+        `
       INSERT INTO harness_projects (id, name, project_path, spec_path, status, config)
       VALUES ('project-quality', 'Quality', '/tmp/quality', '/tmp/quality/SPEC.md', 'running', '{}')
-    `).run();
+    `,
+      )
+      .run();
     savePipelinePhaseMetrics({
       projectId: 'project-quality',
       phaseNumber: 1,
@@ -963,59 +1045,84 @@ describe('task execution ledger helpers', () => {
     }
 
     const pipelineMetrics = getPipelineMetrics('project-quality');
-    expect(pipelineMetrics.totals).toEqual(expect.objectContaining({
-      inputTokens: 10,
-      outputTokens: 5,
-      costUsd: 0.02,
-      costStatus: 'unknown',
-      tokenStatus: 'not_reported',
-      unknownCostCount: 1,
-      costUnknownReasons: ['no-usage-reported'],
-    }));
+    expect(pipelineMetrics.totals).toEqual(
+      expect.objectContaining({
+        inputTokens: 10,
+        outputTokens: 5,
+        costUsd: 0.02,
+        costStatus: 'unknown',
+        tokenStatus: 'not_reported',
+        unknownCostCount: 1,
+        costUnknownReasons: ['no-usage-reported'],
+      }),
+    );
     expect(pipelineMetrics.costStatusByRuntime).toEqual({ codex: 'unknown', cloud: 'known' });
-    expect(getHarnessProjectMetrics('project-quality')).toEqual(expect.objectContaining({
-      costStatus: 'unknown',
-      tokenStatus: 'not_reported',
-      unknownCostCount: 1,
-      costUnknownReasons: ['no-usage-reported'],
-    }));
+    expect(getHarnessProjectMetrics('project-quality')).toEqual(
+      expect.objectContaining({
+        costStatus: 'unknown',
+        tokenStatus: 'not_reported',
+        unknownCostCount: 1,
+        costUnknownReasons: ['no-usage-reported'],
+      }),
+    );
   });
 
   it('preserva qualidade not_reported do planner/coder/evaluator sem depender do ledger filho', () => {
-    getDb().prepare(`
+    getDb()
+      .prepare(
+        `
       INSERT INTO harness_projects (id, name, project_path, spec_path, status, config)
       VALUES (?, 'Harness Quality', '/tmp/hq', '/tmp/hq/SPEC.md', 'running', ?)
-    `).run('project-harness-quality', JSON.stringify({
-      metricsQuality: {
-        plannerCostStatus: 'estimated-partial',
-        plannerTokenStatus: 'reported',
-      },
-    }));
-    getDb().prepare(`
+    `,
+      )
+      .run(
+        'project-harness-quality',
+        JSON.stringify({
+          metricsQuality: {
+            plannerCostStatus: 'estimated-partial',
+            plannerTokenStatus: 'reported',
+          },
+        }),
+      );
+    getDb()
+      .prepare(
+        `
       INSERT INTO harness_sprints (id, project_id, sprint_index, sprint_json_id, name, status)
       VALUES ('sprint-harness-quality', 'project-harness-quality', 0, 'sprint-json-quality', 'Sprint', 'passed')
-    `).run();
-    getDb().prepare(`
+    `,
+      )
+      .run();
+    getDb()
+      .prepare(
+        `
       INSERT INTO harness_rounds (sprint_id, round_number, metadata, unknown_cost_count)
       VALUES ('sprint-harness-quality', 1, ?, 1)
-    `).run(JSON.stringify({
-      coderCostStatus: 'unknown',
-      coderTokenStatus: 'not_reported',
-      coderCostUnknownReason: 'no-usage-reported',
-      evaluatorCostStatus: 'known',
-      evaluatorTokenStatus: 'reported',
-    }));
+    `,
+      )
+      .run(
+        JSON.stringify({
+          coderCostStatus: 'unknown',
+          coderTokenStatus: 'not_reported',
+          coderCostUnknownReason: 'no-usage-reported',
+          evaluatorCostStatus: 'known',
+          evaluatorTokenStatus: 'reported',
+        }),
+      );
 
-    expect(getHarnessProjectMetrics('project-harness-quality')).toEqual(expect.objectContaining({
-      costStatus: 'unknown',
-      tokenStatus: 'not_reported',
-      unknownCostCount: 1,
-      costUnknownReasons: ['no-usage-reported'],
-      sprintMetrics: [expect.objectContaining({
+    expect(getHarnessProjectMetrics('project-harness-quality')).toEqual(
+      expect.objectContaining({
         costStatus: 'unknown',
         tokenStatus: 'not_reported',
-      })],
-    }));
+        unknownCostCount: 1,
+        costUnknownReasons: ['no-usage-reported'],
+        sprintMetrics: [
+          expect.objectContaining({
+            costStatus: 'unknown',
+            tokenStatus: 'not_reported',
+          }),
+        ],
+      }),
+    );
     expect(getHarnessRounds('sprint-harness-quality')).toEqual([
       expect.objectContaining({
         costStatus: 'unknown',
@@ -1026,26 +1133,43 @@ describe('task execution ledger helpers', () => {
 
   it('separa exatamente custo direto e equivalente de assinatura no harness misto', () => {
     const projectId = 'project-harness-subscription-cost';
-    getDb().prepare(`
+    getDb()
+      .prepare(
+        `
       INSERT INTO harness_projects (
         id, name, project_path, spec_path, status, config, planner_cost_usd
       ) VALUES (?, 'Harness Subscription', '/tmp/hs', '/tmp/hs/SPEC.md', 'running', ?, 1)
-    `).run(projectId, JSON.stringify({
-      metricsQuality: { plannerSubscriptionEquivalentCostUsd: 0.25 },
-    }));
-    getDb().prepare(`
+    `,
+      )
+      .run(
+        projectId,
+        JSON.stringify({
+          metricsQuality: { plannerSubscriptionEquivalentCostUsd: 0.25 },
+        }),
+      );
+    getDb()
+      .prepare(
+        `
       INSERT INTO harness_sprints (id, project_id, sprint_index, sprint_json_id, name, status)
       VALUES ('sprint-harness-subscription', ?, 0, 'sprint-json-subscription', 'Sprint', 'passed')
-    `).run(projectId);
-    getDb().prepare(`
+    `,
+      )
+      .run(projectId);
+    getDb()
+      .prepare(
+        `
       INSERT INTO harness_rounds (
         sprint_id, round_number, coder_cost_usd, evaluator_cost_usd, metadata
       ) VALUES ('sprint-harness-subscription', 1, 2, 3, ?)
-    `).run(JSON.stringify({
-      coderCostEstimationKind: 'subscription-equivalent-payg',
-      coderCostStatus: 'known',
-      evaluatorCostStatus: 'known',
-    }));
+    `,
+      )
+      .run(
+        JSON.stringify({
+          coderCostEstimationKind: 'subscription-equivalent-payg',
+          coderCostStatus: 'known',
+          evaluatorCostStatus: 'known',
+        }),
+      );
 
     expect(getHarnessRounds('sprint-harness-subscription')).toEqual([
       expect.objectContaining({
@@ -1086,19 +1210,23 @@ describe('task execution ledger helpers', () => {
       metadata: { costEstimationKind: 'subscription-equivalent-payg' },
     });
 
-    expect(getHarnessProjectMetrics(projectId)).toEqual(expect.objectContaining({
-      totalCost: 10,
-      subscriptionEquivalentCost: 6.25,
-      plannerSubscriptionEquivalentCost: 0.25,
-      coderSubscriptionEquivalentCost: 2,
-      evaluatorSubscriptionEquivalentCost: 0,
-      subagentSubscriptionEquivalentCost: 4,
-      sprintMetrics: [expect.objectContaining({
-        totalCost: 5,
-        subscriptionEquivalentCost: 2,
+    expect(getHarnessProjectMetrics(projectId)).toEqual(
+      expect.objectContaining({
+        totalCost: 10,
+        subscriptionEquivalentCost: 6.25,
+        plannerSubscriptionEquivalentCost: 0.25,
         coderSubscriptionEquivalentCost: 2,
         evaluatorSubscriptionEquivalentCost: 0,
-      })],
-    }));
+        subagentSubscriptionEquivalentCost: 4,
+        sprintMetrics: [
+          expect.objectContaining({
+            totalCost: 5,
+            subscriptionEquivalentCost: 2,
+            coderSubscriptionEquivalentCost: 2,
+            evaluatorSubscriptionEquivalentCost: 0,
+          }),
+        ],
+      }),
+    );
   });
 });

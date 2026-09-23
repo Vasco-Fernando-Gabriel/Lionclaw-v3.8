@@ -1,8 +1,6 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-
 
 vi.mock('../logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
@@ -35,10 +33,18 @@ const runSpies = {
   kimi: vi.fn(),
 };
 
-vi.mock('../agent-runtime/cloud-executor', () => ({ cloudExecutor: { run: (...a: unknown[]) => runSpies.cloud(...a) } }));
-vi.mock('../agent-runtime/local-executor', () => ({ localExecutor: { run: (...a: unknown[]) => runSpies.local(...a) } }));
-vi.mock('../agent-runtime/external-executor', () => ({ externalExecutor: { run: (...a: unknown[]) => runSpies.external(...a) } }));
-vi.mock('../agent-runtime/codex-executor', () => ({ codexExecutor: { run: (...a: unknown[]) => runSpies.codex(...a) } }));
+vi.mock('../agent-runtime/cloud-executor', () => ({
+  cloudExecutor: { run: (...a: unknown[]) => runSpies.cloud(...a) },
+}));
+vi.mock('../agent-runtime/local-executor', () => ({
+  localExecutor: { run: (...a: unknown[]) => runSpies.local(...a) },
+}));
+vi.mock('../agent-runtime/external-executor', () => ({
+  externalExecutor: { run: (...a: unknown[]) => runSpies.external(...a) },
+}));
+vi.mock('../agent-runtime/codex-executor', () => ({
+  codexExecutor: { run: (...a: unknown[]) => runSpies.codex(...a) },
+}));
 vi.mock('../agent-runtime/zai-executor', () => ({ zaiExecutor: { run: (...a: unknown[]) => runSpies.zai(...a) } }));
 vi.mock('../agent-runtime/minimax-tokenplan-executor', () => ({
   minimaxTokenplanExecutor: { run: (...a: unknown[]) => runSpies['minimax-tp'](...a) },
@@ -69,7 +75,6 @@ beforeEach(() => {
   for (const spy of Object.values(runSpies)) spy.mockResolvedValue({ output: 'ok' });
 });
 
-
 describe('SPEC-011 §12: executeAgent dispatch per new union value (kimi)', () => {
   it("runtime:'kimi' calls kimiExecutor.run exactly once (and no other executor)", async () => {
     mockResolveAgentQueryConfig.mockResolvedValue(fakeConfig('kimi'));
@@ -90,26 +95,19 @@ describe('SPEC-011 §12: executeAgent dispatch per new union value (kimi)', () =
     ['local', 'local'],
     ['external', 'external'],
     ['zai', 'zai'],
-  ] as const)(
-    "runtime:'%s' routes to its own executor and NEVER kimiExecutor.run",
-    async (runtime, spyKey) => {
-      mockResolveAgentQueryConfig.mockResolvedValue(fakeConfig(runtime));
-      await executeAgent(fakeRequest());
-      expect(runSpies[spyKey]).toHaveBeenCalledTimes(1);
-      expect(runSpies.kimi).not.toHaveBeenCalled();
-    },
-  );
+  ] as const)("runtime:'%s' routes to its own executor and NEVER kimiExecutor.run", async (runtime, spyKey) => {
+    mockResolveAgentQueryConfig.mockResolvedValue(fakeConfig(runtime));
+    await executeAgent(fakeRequest());
+    expect(runSpies[spyKey]).toHaveBeenCalledTimes(1);
+    expect(runSpies.kimi).not.toHaveBeenCalled();
+  });
 });
-
 
 describe('SPEC-011 §6.5: orchestrator.ts routes kimi-sdk to executeKimiSdkQuery', () => {
   it("orchestrator.ts has case 'kimi-sdk' delegating to executeKimiSdkQuery", () => {
     const src = readFileSync(join(MAIN, 'orchestrator.ts'), 'utf8');
     expect(src).toContain("case 'kimi-sdk':");
-    const caseBlock = src.slice(
-      src.indexOf("case 'kimi-sdk':"),
-      src.indexOf("case 'kimi-sdk':") + 160,
-    );
+    const caseBlock = src.slice(src.indexOf("case 'kimi-sdk':"), src.indexOf("case 'kimi-sdk':") + 160);
     expect(caseBlock).toContain('executeKimiSdkQuery');
   });
 
@@ -118,7 +116,6 @@ describe('SPEC-011 §6.5: orchestrator.ts routes kimi-sdk to executeKimiSdkQuery
     expect(src).toContain('executeKimiSdkQuery');
   });
 });
-
 
 describe('SPEC-011 §4.3 P1: mapRuntimeToCostMeta kimi', () => {
   function mapRuntimeToCostMetaMirror(
@@ -163,13 +160,10 @@ describe('SPEC-011 §4.3 P1: mapRuntimeToCostMeta kimi', () => {
   });
 });
 
-
 describe("SPEC-011 §12 G-04: runtimeUsed:'kimi' persists (db.ts unions)", () => {
   it("db.ts insertHarnessRound/updateHarnessRound unions include 'kimi' (FIX IN S1 if red)", () => {
     const dbSrc = readFileSync(join(MAIN, 'db.ts'), 'utf8');
-    const unionLines = dbSrc
-      .split('\n')
-      .filter((l) => l.includes('runtimeUsed') && l.includes("'minimax-tp'"));
+    const unionLines = dbSrc.split('\n').filter((l) => l.includes('runtimeUsed') && l.includes("'minimax-tp'"));
     expect(
       unionLines.length,
       'db.ts: expected runtimeUsed literal-union lines (db.ts:4427/:4468) - FIX IN S1 (GROUND-TRUTH §3)',
@@ -188,30 +182,20 @@ describe("SPEC-011 §12 G-04: runtimeUsed:'kimi' persists (db.ts unions)", () =>
     const updateHarnessRound = vi.fn();
     vi.doMock('../db', () => ({ insertHarnessRound, updateHarnessRound }));
     const db = await import('../db');
-    expect(() =>
-      db.insertHarnessRound({ id: 'r1', sprintId: 's1', runtimeUsed: 'kimi' } as never),
-    ).not.toThrow();
-    expect(() =>
-      db.updateHarnessRound('r1', { runtimeUsed: 'kimi' } as never),
-    ).not.toThrow();
-    expect(insertHarnessRound).toHaveBeenCalledWith(
-      expect.objectContaining({ runtimeUsed: 'kimi' }),
-    );
-    expect(updateHarnessRound).toHaveBeenCalledWith(
-      'r1',
-      expect.objectContaining({ runtimeUsed: 'kimi' }),
-    );
+    expect(() => db.insertHarnessRound({ id: 'r1', sprintId: 's1', runtimeUsed: 'kimi' } as never)).not.toThrow();
+    expect(() => db.updateHarnessRound('r1', { runtimeUsed: 'kimi' } as never)).not.toThrow();
+    expect(insertHarnessRound).toHaveBeenCalledWith(expect.objectContaining({ runtimeUsed: 'kimi' }));
+    expect(updateHarnessRound).toHaveBeenCalledWith('r1', expect.objectContaining({ runtimeUsed: 'kimi' }));
     vi.doUnmock('../db');
   });
 });
-
 
 describe('SPEC-011 §13 G-05: Kimi chat reasoning is audit-only (source pin)', () => {
   it("kimi-sdk chat path routes `think` to recordAuditEntry(toolName:'kimi.reasoning', eventType:'tool_call') - FIX IN S5 if red", () => {
     const src = readFileSync(join(MAIN, 'kimi-sdk', 'stream-translator.ts'), 'utf8');
     expect(
       src.includes('recordAuditEntry'),
-      "kimi-sdk/stream-translator.ts missing recordAuditEntry - FIX IN S5 (SPEC-011 §6.3/§13), not S10",
+      'kimi-sdk/stream-translator.ts missing recordAuditEntry - FIX IN S5 (SPEC-011 §6.3/§13), not S10',
     ).toBe(true);
     expect(
       src.includes("'kimi.reasoning'") || src.includes('"kimi.reasoning"'),

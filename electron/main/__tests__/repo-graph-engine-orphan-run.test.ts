@@ -1,14 +1,9 @@
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import {
-  RepoGraphEngine,
-  type RepoGraphEngineDb,
-  type RepoGraphProvider,
-} from '../repo-graph/engine';
+import { RepoGraphEngine, type RepoGraphEngineDb, type RepoGraphProvider } from '../repo-graph/engine';
 import { __clearStalenessThrottleForTests } from '../repo-graph/staleness';
 import type {
   LocalRepositoryRecord,
@@ -23,10 +18,7 @@ const REPO_ID = 'repo-orphan-run-1';
 const ORPHAN_RUN_ID = 'run-orphan-1';
 const OLD_ISO = '2026-06-01T10:00:00.000Z';
 
-function makeRepoRecord(
-  canonicalRootPath: string,
-  status: LocalRepositoryRecord['status'],
-): LocalRepositoryRecord {
+function makeRepoRecord(canonicalRootPath: string, status: LocalRepositoryRecord['status']): LocalRepositoryRecord {
   return {
     id: REPO_ID,
     name: 'fixture-repo',
@@ -98,7 +90,14 @@ function makeDb(repoRecord: LocalRepositoryRecord): MockDbHandle {
     },
     setRepoGraphPromptSuppressedGlobal: () => undefined,
     insertRepoGraphRun: (input) =>
-      seedRun({ id: input.id, repositoryId: input.repositoryId, sessionId: input.sessionId, provider: input.provider, kind: input.kind, startedAt: new Date().toISOString() }),
+      seedRun({
+        id: input.id,
+        repositoryId: input.repositoryId,
+        sessionId: input.sessionId,
+        provider: input.provider,
+        kind: input.kind,
+        startedAt: new Date().toISOString(),
+      }),
     updateRepoGraphRun: (id, patch) => {
       const run = runs.get(id);
       if (!run) return;
@@ -115,8 +114,7 @@ function makeDb(repoRecord: LocalRepositoryRecord): MockDbHandle {
     },
     attachSessionRepository: () => undefined,
     detachSessionRepository: () => undefined,
-    getSessionActiveRepository: (sessionId) =>
-      sessionId === SESSION_ID ? { ...attach } : null,
+    getSessionActiveRepository: (sessionId) => (sessionId === SESSION_ID ? { ...attach } : null),
     setSessionGraphPromptSuppressed: () => undefined,
   };
   return { db, runs, seedRun };
@@ -198,10 +196,7 @@ describe('engine - reconciliacao de run orfao pos-restart (sprint A1)', () => {
     const { db, runs, seedRun } = makeDb(repoRecord);
     seedRun({ id: ORPHAN_RUN_ID, kind: 'update' });
 
-    const engine = new RepoGraphEngine(
-      db,
-      makeProvider({ detect: async () => ({ exists: false }) }),
-    );
+    const engine = new RepoGraphEngine(db, makeProvider({ detect: async () => ({ exists: false }) }));
     await engine.reconcileOrphanRuns();
 
     expect((runs.get(ORPHAN_RUN_ID) as RepoGraphRunRecord).status).toBe('error');

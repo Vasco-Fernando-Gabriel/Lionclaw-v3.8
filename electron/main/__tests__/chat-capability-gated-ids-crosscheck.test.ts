@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../db', () => ({
@@ -14,11 +13,7 @@ vi.mock('../logger', () => ({
   }),
 }));
 
-import {
-  CHAT_GATED_HELPER_IDS,
-  GATED_METHOD_PREFIXES,
-  gatedServerIdForMethod,
-} from '../helper-identity';
+import { CHAT_GATED_HELPER_IDS, GATED_METHOD_PREFIXES, gatedServerIdForMethod } from '../helper-identity';
 import { getChatCapabilityForServer } from '../chat-capability-gate';
 import { normalizeChatCapabilityServerId } from '../chat-capability-context';
 
@@ -63,9 +58,7 @@ describe('cross-check das 3 fontes de gated ids (S4-ii, direcao FAIL-OPEN)', () 
   it('o alias 0.4 (pipeline-control) normaliza para o id canonico gated', () => {
     const canonical = normalizeChatCapabilityServerId('pipeline-control');
     expect(CHAT_GATED_HELPER_IDS.has(canonical)).toBe(true);
-    expect(getChatCapabilityForServer('pipeline-control')).toBe(
-      getChatCapabilityForServer(canonical),
-    );
+    expect(getChatCapabilityForServer('pipeline-control')).toBe(getChatCapabilityForServer(canonical));
   });
 
   it('metodo nao-gated nao resolve para nenhum helper (sobre-gate seria falso positivo)', () => {

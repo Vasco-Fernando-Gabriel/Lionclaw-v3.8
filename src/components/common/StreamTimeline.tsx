@@ -1,13 +1,5 @@
 import { memo, type ReactNode, useMemo, useState } from 'react';
-import {
-  AlertCircle,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-  OctagonX,
-  Wrench,
-} from 'lucide-react';
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Loader2, OctagonX, Wrench } from 'lucide-react';
 import type { StreamTimelineBlock, StreamTimelineToolBlock } from '@/types';
 
 const SECRET_KEY = /token|secret|password|passwd|authorization|cookie|api[-_]?key/i;
@@ -88,13 +80,9 @@ const TimelineToolRow = memo(function TimelineToolRow({ block }: { block: Stream
         )}
         {icon}
         <Wrench size={10} className="shrink-0 text-amber-500" />
-        <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] text-amber-400">
-          {block.tool}
-        </span>
+        <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] text-amber-400">{block.tool}</span>
         {!expanded && shortInput && (
-          <span className="max-w-[360px] truncate font-mono text-[10px] text-zinc-600">
-            {shortInput}
-          </span>
+          <span className="max-w-[360px] truncate font-mono text-[10px] text-zinc-600">{shortInput}</span>
         )}
         <span className={`ml-auto shrink-0 text-[10px] ${status === 'error' ? 'text-red-400' : 'text-zinc-600'}`}>
           {statusLabel}
@@ -138,7 +126,9 @@ const TimelineTextRow = memo(
   }) {
     return (
       <div data-timeline-kind="text">
-        {renderText ? renderText(block) : (
+        {renderText ? (
+          renderText(block)
+        ) : (
           <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-zinc-200">
             {block.content}
           </pre>
@@ -219,17 +209,18 @@ function ToolGroup({ tools }: { tools: StreamTimelineToolBlock[] }) {
         {tools.length} ferramentas anteriores concluídas
         <span className="ml-auto">{expanded ? 'recolher' : 'expandir'}</span>
       </button>
-      {expanded && <div className="ml-3 border-l border-zinc-800 pl-2">{tools.map((tool) => <TimelineToolRow key={tool.id} block={tool} />)}</div>}
+      {expanded && (
+        <div className="ml-3 border-l border-zinc-800 pl-2">
+          {tools.map((tool) => (
+            <TimelineToolRow key={tool.id} block={tool} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-export function StreamTimeline({
-  blocks,
-  renderText,
-  className = '',
-  toolGroupLimit = 8,
-}: StreamTimelineProps) {
+export function StreamTimeline({ blocks, renderText, className = '', toolGroupLimit = 8 }: StreamTimelineProps) {
   const entries = useMemo(() => makeRenderEntries(blocks, toolGroupLimit), [blocks, toolGroupLimit]);
   return (
     <div className={className} data-testid="stream-timeline">

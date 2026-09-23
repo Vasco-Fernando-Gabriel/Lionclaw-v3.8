@@ -5,7 +5,16 @@ import { createLogger } from './logger';
 import { getLionClawHome } from './paths';
 import { getDb, getSetting } from './db';
 import { ollamaChat } from './ollama-client';
-import type { VaultOperation, GraphData, GraphNode, GraphEdge, MgraphSearchResult, MgraphStats, NoteListItem, BacklinkResult } from '../../src/types';
+import type {
+  VaultOperation,
+  GraphData,
+  GraphNode,
+  GraphEdge,
+  MgraphSearchResult,
+  MgraphStats,
+  NoteListItem,
+  BacklinkResult,
+} from '../../src/types';
 
 const logger = createLogger('mgraph');
 
@@ -17,20 +26,18 @@ export function getVaultRoot(): string {
   return path.join(getLionClawHome(), MGRAPH_DIR);
 }
 
-
 export function sanitizeFilename(input: string): string {
   return input
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // remove accents
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')   // remove special chars
+    .replace(/[^a-z0-9\s-]/g, '')
     .trim()
-    .replace(/[\s]+/g, '-')          // spaces to hyphens
-    .replace(/-+/g, '-')             // collapse multiple hyphens
-    .replace(/^-+|-+$/g, '')         // trim leading/trailing hyphens
+    .replace(/[\s]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
     .substring(0, 50);
 }
-
 
 export function wikiLinkKey(rawTarget: string): string {
   let target = rawTarget.split('|')[0].trim();
@@ -66,7 +73,6 @@ export function validateVaultPath(vaultPath: string): { valid: boolean; error?: 
   }
   return { valid: true };
 }
-
 
 interface NoteFrontmatter {
   title: string;
@@ -114,12 +120,24 @@ function parseFrontmatter(content: string): { frontmatter: Partial<NoteFrontmatt
     }
 
     switch (key) {
-      case 'title': fm.title = value; break;
-      case 'type': fm.type = value; break;
-      case 'source': fm.source = value; break;
-      case 'session_id': fm.session_id = value; break;
-      case 'created': fm.created = value; break;
-      case 'updated': fm.updated = value; break;
+      case 'title':
+        fm.title = value;
+        break;
+      case 'type':
+        fm.type = value;
+        break;
+      case 'source':
+        fm.source = value;
+        break;
+      case 'session_id':
+        fm.session_id = value;
+        break;
+      case 'created':
+        fm.created = value;
+        break;
+      case 'updated':
+        fm.updated = value;
+        break;
       case 'tags': {
         const tagMatch = value.match(/\[(.*)]/);
         if (tagMatch) {
@@ -135,7 +153,6 @@ function parseFrontmatter(content: string): { frontmatter: Partial<NoteFrontmatt
 
   return { frontmatter: fm, body };
 }
-
 
 export function createVaultStructure(): void {
   const root = getVaultRoot();
@@ -174,7 +191,6 @@ export function executeVaultOperation(op: VaultOperation): { success: boolean; e
       const fileContent = `${fm}\n\n${op.content}\n`;
       fs.writeFileSync(fullPath, fileContent, 'utf-8');
       logger.info({ path: op.path }, 'Note created');
-
     } else if (op.action === 'update') {
       if (!fs.existsSync(fullPath)) {
         return { success: false, error: `File not found: ${op.path}` };
@@ -303,7 +319,6 @@ export function updateVaultHot(): void {
   logger.info({ count: top10.length }, 'Vault hot.md updated');
 }
 
-
 export function buildGraphData(): GraphData {
   const root = getVaultRoot();
   const nodes: GraphNode[] = [];
@@ -342,7 +357,10 @@ export function buildGraphData(): GraphData {
           connections: 0,
         });
       } else {
-        logger.warn({ id, subdir }, 'No de grafo com id duplicado (mesmo basename em mais de um subdir); mantendo o primeiro');
+        logger.warn(
+          { id, subdir },
+          'No de grafo com id duplicado (mesmo basename em mais de um subdir); mantendo o primeiro',
+        );
       }
 
       const linkRegex = /\[\[([^\]]+)]]/g;
@@ -377,10 +395,12 @@ export function buildGraphData(): GraphData {
     node.connections = connMap.get(node.id) || 0;
   }
 
-  logger.info({ nodes: nodes.length, edges: edges.length, droppedEdges: rawEdges.length - edges.length }, 'Graph data built');
+  logger.info(
+    { nodes: nodes.length, edges: edges.length, droppedEdges: rawEdges.length - edges.length },
+    'Graph data built',
+  );
   return { nodes, edges };
 }
-
 
 export function searchVault(query: string): MgraphSearchResult[] {
   const root = getVaultRoot();
@@ -420,7 +440,6 @@ export function searchVault(query: string): MgraphSearchResult[] {
 
   return results;
 }
-
 
 export function getVaultStats(): MgraphStats {
   const root = getVaultRoot();
@@ -472,7 +491,6 @@ export function readVaultNote(notePath: string): string {
   return fs.readFileSync(fullPath, 'utf-8');
 }
 
-
 const LOG_MAX_LINES = 500;
 
 export function appendVaultLog(entry: string): void {
@@ -483,8 +501,7 @@ export function appendVaultLog(entry: string): void {
     if (fs.existsSync(logPath)) {
       lines = fs.readFileSync(logPath, 'utf-8').split('\n');
     }
-  } catch {
-  }
+  } catch {}
 
   lines.push(entry);
 
@@ -494,7 +511,6 @@ export function appendVaultLog(entry: string): void {
 
   fs.writeFileSync(logPath, lines.join('\n'), 'utf-8');
 }
-
 
 export function listNotesByType(type: string): NoteListItem[] {
   const root = getVaultRoot();
@@ -532,8 +548,7 @@ export function findBacklinks(notePath: string): BacklinkResult[] {
     const selfRaw = fs.readFileSync(path.join(root, notePath), 'utf-8');
     const selfTitle = parseFrontmatter(selfRaw).frontmatter.title;
     if (selfTitle) targetKeys.add(wikiLinkKey(selfTitle));
-  } catch {
-  }
+  } catch {}
 
   for (const subdir of VAULT_SUBDIRS) {
     const dirPath = path.join(root, subdir);
@@ -556,7 +571,7 @@ export function findBacklinks(notePath: string): BacklinkResult[] {
             title: frontmatter.title || file.replace('.md', ''),
             linkContext: line.trim(),
           });
-          break; // One result per file
+          break;
         }
       }
     }
@@ -645,7 +660,6 @@ export function cleanOldSnapshots(): { removed: number } {
   logger.info({ removed }, 'Old snapshots cleaned');
   return { removed };
 }
-
 
 const SEED_BATCH_SIZE = 10;
 
@@ -874,12 +888,16 @@ export async function seedVault(
 
   const db = getDb();
 
-  const sessionsRows = db.prepare(`
+  const sessionsRows = db
+    .prepare(
+      `
     SELECT s.id, s.title, s.created_at
     FROM sessions s
     WHERE EXISTS (SELECT 1 FROM messages m WHERE m.session_id = s.id)
     ORDER BY s.created_at ASC
-  `).all() as Array<{ id: string; title: string; created_at: string }>;
+  `,
+    )
+    .all() as Array<{ id: string; title: string; created_at: string }>;
 
   let useSummaries = false;
 
@@ -899,11 +917,15 @@ export async function seedVault(
   let lastBatchError = '';
 
   if (useSummaries) {
-    const summaries = db.prepare(`
+    const summaries = db
+      .prepare(
+        `
       SELECT date, summary, decisions, facts_extracted
       FROM daily_summaries
       ORDER BY date ASC
-    `).all() as Array<{ date: string; summary: string; decisions: string; facts_extracted: string }>;
+    `,
+      )
+      .all() as Array<{ date: string; summary: string; decisions: string; facts_extracted: string }>;
 
     totalBatches = Math.ceil(summaries.length / SEED_BATCH_SIZE);
     appendVaultLog(`[${now()}] SEED_START batches:${totalBatches}`);
@@ -926,9 +948,10 @@ export async function seedVault(
 
       try {
         const existingNotes = getExistingNotePaths();
-        const prompt = SEED_PROMPT_SUMMARIES
-          .replace('{{SUMMARIES}}', buildSummaryText(batch).substring(0, 50000))
-          .replace('{{EXISTING_NOTES}}', existingNotes.length > 0 ? existingNotes.join('\n') : '(none)');
+        const prompt = SEED_PROMPT_SUMMARIES.replace(
+          '{{SUMMARIES}}',
+          buildSummaryText(batch).substring(0, 50000),
+        ).replace('{{EXISTING_NOTES}}', existingNotes.length > 0 ? existingNotes.join('\n') : '(none)');
 
         const operations = await callAIForSeed(prompt);
         let batchNotes = 0;
@@ -983,11 +1006,15 @@ export async function seedVault(
         const sessionData: SessionBatch = { sessions: [] };
 
         for (const s of batchSessions) {
-          const messages = db.prepare(`
+          const messages = db
+            .prepare(
+              `
             SELECT role, content FROM messages
             WHERE session_id = ?
             ORDER BY created_at ASC
-          `).all(s.id) as Array<{ role: string; content: string }>;
+          `,
+            )
+            .all(s.id) as Array<{ role: string; content: string }>;
 
           sessionData.sessions.push({
             id: s.id,
@@ -998,9 +1025,10 @@ export async function seedVault(
 
         const existingNotes = getExistingNotePaths();
         const conversationText = buildConversationText(sessionData);
-        const prompt = SEED_PROMPT_CONVERSATIONS
-          .replace('{{CONVERSATIONS}}', conversationText.substring(0, 50000))
-          .replace('{{EXISTING_NOTES}}', existingNotes.length > 0 ? existingNotes.join('\n') : '(none)');
+        const prompt = SEED_PROMPT_CONVERSATIONS.replace(
+          '{{CONVERSATIONS}}',
+          conversationText.substring(0, 50000),
+        ).replace('{{EXISTING_NOTES}}', existingNotes.length > 0 ? existingNotes.join('\n') : '(none)');
 
         const operations = await callAIForSeed(prompt);
         let batchNotes = 0;
@@ -1015,7 +1043,9 @@ export async function seedVault(
           const result = executeVaultOperation(op);
           if (result.success) {
             batchNotes++;
-            appendVaultLog(`[${now()}] ${op.action.toUpperCase()} ${op.path} "${op.title}" (source:seed, session:${batchSessions[0]?.id || 'unknown'})`);
+            appendVaultLog(
+              `[${now()}] ${op.action.toUpperCase()} ${op.path} "${op.title}" (source:seed, session:${batchSessions[0]?.id || 'unknown'})`,
+            );
           }
         }
 
@@ -1035,9 +1065,7 @@ export async function seedVault(
   }
 
   if (totalBatches > 0 && failedBatches === totalBatches) {
-    throw new Error(
-      `Seed falhou: todos os ${totalBatches} lote(s) falharam. Ultimo erro: ${lastBatchError}`,
-    );
+    throw new Error(`Seed falhou: todos os ${totalBatches} lote(s) falharam. Ultimo erro: ${lastBatchError}`);
   }
 
   regenerateVaultIndex();

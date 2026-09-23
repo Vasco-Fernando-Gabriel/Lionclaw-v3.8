@@ -1,4 +1,3 @@
-
 import { createLogger } from '../logger';
 import {
   getDynamicWorkflowRun,
@@ -10,13 +9,12 @@ import {
   updateDynamicWorkflowRun,
   createSession,
 } from '../db';
+import { readDefaultOrchestratorColumns } from '../orchestrator-selection';
 import { submitMessage } from '../orchestrator';
-const tryBeginBackgroundWorkStart = (_lane: string): (() => void) | null => () => {};
-import {
-  workflowEventBus,
-  DYNAMIC_WORKFLOW_STREAM_CHANNEL,
-  type WorkflowEventListener,
-} from './workflow-events';
+const tryBeginBackgroundWorkStart =
+  (_lane: string): (() => void) | null =>
+  () => {};
+import { workflowEventBus, DYNAMIC_WORKFLOW_STREAM_CHANNEL, type WorkflowEventListener } from './workflow-events';
 import {
   mintDriveCapability,
   registerReadOnlyDriveTurn,
@@ -25,12 +23,8 @@ import {
   type DriveCapability,
 } from './drive-capability';
 import { createInternalCapabilityLease } from '../chat-capability-lease';
-import {
-  mintDriveTurnId as mintDriveTurnIdCore,
-  decideOneInFlight,
-  type DriveTurnSeq,
-} from '../drive-turn-core';
-import { activeDriveProjectId } from '../drive-lock';
+import { mintDriveTurnId as mintDriveTurnIdCore, decideOneInFlight, type DriveTurnSeq } from '../drive-turn-core';
+import { hasAnyActiveDrive } from '../drive-lock';
 import { onDriveTurnComplete, type DriveTurnComplete } from '../drive-usage-sink';
 import type { DynamicWorkflowEvent, DynamicWorkflowEventInsertInput } from './types';
 import { CC_DELIVERY_GATE_ID, isBoundaryGateId, isFailureGateId } from './types';
@@ -73,9 +67,7 @@ interface OrchestratorGateBlock {
   gateId: string;
 }
 
-export function parseOrchestratorGateBlock(
-  event: DynamicWorkflowEvent,
-): OrchestratorGateBlock | null {
+export function parseOrchestratorGateBlock(event: DynamicWorkflowEvent): OrchestratorGateBlock | null {
   if (event.type !== 'gate-blocked') return null;
   let payload: GateBlockedPayload;
   try {
@@ -92,7 +84,6 @@ export function parseOrchestratorGateBlock(
 export function parseWakeSignal(event: DynamicWorkflowEvent): WakeSignal | null {
   return deriveWakeSignal(event);
 }
-
 
 export function parsePendingGateId(run: DynamicWorkflowRun): string | null {
   try {
@@ -140,13 +131,11 @@ export function buildIgnitionPrompt(runId: string, gateId: string): string {
   ].join('\n');
 }
 
-
 const driveTurnSeq: DriveTurnSeq = { value: 0 };
 
 export function mintDriveTurnId(runId: string): string {
   return mintDriveTurnIdCore(runId, driveTurnSeq);
 }
-
 
 export interface WakeRequest {
   reason: WakeReason;
@@ -221,7 +210,7 @@ export function _wakeCountersForTesting(runId: string): { wakesTotal: number; wa
   return { wakesTotal: s?.wakesTotal ?? 0, wakesSinceProgress: s?.wakesSinceProgress ?? 0 };
 }
 
-export const DRIVE_CAPABILITY_TTL_MS = 10 * 60 * 1000; // 10 min
+export const DRIVE_CAPABILITY_TTL_MS = 10 * 60 * 1000;
 
 export const WORKFLOW_LEASE_TTL_MS = 30 * 60_000;
 
@@ -237,7 +226,6 @@ export function _resetIgnitionForTesting(): void {
   }
   workflowTurnStates.clear();
 }
-
 
 export interface WorkflowIgnitionDeps {
   getRun: (runId: string) => DynamicWorkflowRun | null;
@@ -286,13 +274,11 @@ export function resolveDriveSession(
   return sessionId;
 }
 
-
 function readRunEvents(deps: WorkflowIgnitionDeps, runId: string): DynamicWorkflowEvent[] {
   try {
     const reader =
       deps.listEventsSince ??
-      ((id: string, afterSeq: number) =>
-        listDynamicWorkflowEvents(id, { afterSeq, limit: 100_000 }));
+      ((id: string, afterSeq: number) => listDynamicWorkflowEvents(id, { afterSeq, limit: 100_000 }));
     return reader(runId, 0);
   } catch (err) {
     logger.warn({ err, runId }, 'ignicao: leitura de eventos falhou (janela vazia)');
@@ -348,14 +334,9 @@ function persistWakeEvent(
   }
 }
 
-
 type IgnitionOrigin = 'event' | 'boot-scan' | 'followup' | 'debounce';
 
-function scheduleDebouncedWake(
-  deps: WorkflowIgnitionDeps,
-  runId: string,
-  state: WorkflowDriveTurnState,
-): void {
+function scheduleDebouncedWake(deps: WorkflowIgnitionDeps, runId: string, state: WorkflowDriveTurnState): void {
   if (state.debounceTimer) return;
   state.debounceTimer = setTimeout(() => {
     state.debounceTimer = null;
@@ -365,12 +346,7 @@ function scheduleDebouncedWake(
   }, WAKE_BOUNDARY_DEBOUNCE_MS);
 }
 
-function requestWake(
-  deps: WorkflowIgnitionDeps,
-  runId: string,
-  wake: WakeRequest,
-  origin: IgnitionOrigin,
-): void {
+function requestWake(deps: WorkflowIgnitionDeps, runId: string, wake: WakeRequest, origin: IgnitionOrigin): void {
   const state = stateOf(runId);
   const now = (deps.now ?? Date.now)();
   if (decideWorkflowDriveTurn(runId, now) === 'coalesce') {
@@ -395,12 +371,7 @@ function requestWake(
   fireIgnition(deps, runId, merged, origin);
 }
 
-function fireIgnition(
-  deps: WorkflowIgnitionDeps,
-  runId: string,
-  wake: WakeRequest,
-  origin: IgnitionOrigin,
-): void {
+function fireIgnition(deps: WorkflowIgnitionDeps, runId: string, wake: WakeRequest, origin: IgnitionOrigin): void {
   const releaseUpdateLease = tryBeginBackgroundWorkStart('dynamic-workflow-ignition');
   if (releaseUpdateLease === null) {
     stateOf(runId).pendingWake = mergeWakeRequests(stateOf(runId).pendingWake, wake);
@@ -422,10 +393,7 @@ const BOUNDARY_SEMAPHORES: ReadonlySet<string> = new Set<string>([
   'DECISAO HUMANA',
 ]);
 
-function readBoundaryGateSemaphore(
-  events: DynamicWorkflowEvent[],
-  gateId: string,
-): BoundarySemaphore | null {
+function readBoundaryGateSemaphore(events: DynamicWorkflowEvent[], gateId: string): BoundarySemaphore | null {
   for (let i = events.length - 1; i >= 0; i--) {
     const ev = events[i]!;
     if (ev.type !== 'gate-blocked') continue;
@@ -453,8 +421,8 @@ export function fireIgnitionWithLease(
   const state = stateOf(runId);
   const now = (deps.now ?? Date.now)();
 
-  const activeDrive = activeDriveProjectId();
-  if (activeDrive !== null && activeDrive !== runId) {
+  const activeDrive = hasAnyActiveDrive();
+  if (activeDrive) {
     state.pendingWake = mergeWakeRequests(state.pendingWake, wake);
     logger.info(
       { runId, reason: wake.reason, origin, activeDrive },
@@ -481,9 +449,7 @@ export function fireIgnitionWithLease(
   const all = readRunEvents(deps, runId);
   const win = windowOf(all);
 
-  const progressed = all.some(
-    (e) => e.type === 'node-completed' && e.seq > state.lastWakeThroughSeq,
-  );
+  const progressed = all.some((e) => e.type === 'node-completed' && e.seq > state.lastWakeThroughSeq);
   state.wakesTotal += 1;
   state.wakesSinceProgress = progressed ? 1 : state.wakesSinceProgress + 1;
   const runaway = checkWakeRunaway({
@@ -506,13 +472,16 @@ export function fireIgnitionWithLease(
     if (!state.runawayTriggered) {
       state.runawayTriggered = true;
       logger.warn(
-        { runId, reason: runaway.runaway ? runaway.reason : 'ja-disparado', wakesTotal: state.wakesTotal, wakesSinceProgress: state.wakesSinceProgress },
+        {
+          runId,
+          reason: runaway.runaway ? runaway.reason : 'ja-disparado',
+          wakesTotal: state.wakesTotal,
+          wakesSinceProgress: state.wakesSinceProgress,
+        },
         'ignicao: anti-runaway de wakes estourou - pausando o run (D6)',
       );
       if (deps.pause) {
-        deps.pause(runId).catch((err) =>
-          logger.warn({ err, runId }, 'ignicao: pause por runaway falhou (ignorado)'),
-        );
+        deps.pause(runId).catch((err) => logger.warn({ err, runId }, 'ignicao: pause por runaway falhou (ignorado)'));
       } else {
         logger.warn({ runId }, 'ignicao: runaway sem dep pause (run NAO pausado)');
       }
@@ -533,10 +502,9 @@ export function fireIgnitionWithLease(
     effectiveWake.reason === 'blocked' && effectiveWake.gateId && isBoundaryGateId(effectiveWake.gateId)
       ? readBoundaryGateSemaphore(digestAll, effectiveWake.gateId)
       : null;
-  const semaphore =
-    boundaryGateSemaphore ?? semaphoreForWake(effectiveWake.reason, assessment.semaphore);
+  const semaphore = boundaryGateSemaphore ?? semaphoreForWake(effectiveWake.reason, assessment.semaphore);
   const run = deps.getRun(runId);
-  const pendingDecision = run ? derivePendingDecision(run) ?? null : null;
+  const pendingDecision = run ? (derivePendingDecision(run) ?? null) : null;
   const prompt = buildWakePrompt({
     runId,
     reason: effectiveWake.reason,
@@ -545,9 +513,7 @@ export function fireIgnitionWithLease(
     outcomes,
     pendingDecision,
     gateId: effectiveWake.gateId,
-    detail: readOnly
-      ? `wakes=${state.wakesTotal}, sem progresso=${state.wakesSinceProgress}`
-      : undefined,
+    detail: readOnly ? `wakes=${state.wakesTotal}, sem progresso=${state.wakesSinceProgress}` : undefined,
   });
 
   const driveTurnId = mintDriveTurnId(runId);
@@ -638,7 +604,6 @@ export function fireIgnitionWithLease(
   );
 }
 
-
 function handleDriveTurnComplete(deps: WorkflowIgnitionDeps, complete: DriveTurnComplete): void {
   const runId = complete.projectId;
   if (isHarnessProjectId(runId)) return;
@@ -661,7 +626,10 @@ function handleDriveTurnComplete(deps: WorkflowIgnitionDeps, complete: DriveTurn
       return;
     }
     if (state.pendingWake) {
-      logger.info({ runId, outcome, reason: state.pendingWake.reason }, 'ignicao: turno nao executado - wake REARMADO (debounce)');
+      logger.info(
+        { runId, outcome, reason: state.pendingWake.reason },
+        'ignicao: turno nao executado - wake REARMADO (debounce)',
+      );
       scheduleDebouncedWake(deps, runId, state);
     }
     return;
@@ -673,11 +641,7 @@ function handleDriveTurnComplete(deps: WorkflowIgnitionDeps, complete: DriveTurn
   }
 }
 
-
-const RUNAWAY_RESET_EVENT_TYPES: ReadonlySet<string> = new Set<string>([
-  'resume-requested',
-  'run-started',
-]);
+const RUNAWAY_RESET_EVENT_TYPES: ReadonlySet<string> = new Set<string>(['resume-requested', 'run-started']);
 
 function handleEvent(deps: WorkflowIgnitionDeps, event: DynamicWorkflowEvent): void {
   try {
@@ -712,13 +676,9 @@ function handleEvent(deps: WorkflowIgnitionDeps, event: DynamicWorkflowEvent): v
       'event',
     );
   } catch (err) {
-    logger.warn(
-      { err, runId: event.runId, type: event.type },
-      'falha ao acordar o orquestrador no evento (ignorado)',
-    );
+    logger.warn({ err, runId: event.runId, type: event.type }, 'falha ao acordar o orquestrador no evento (ignorado)');
   }
 }
-
 
 const TERMINAL_RUN_STATUSES: ReadonlySet<string> = new Set<string>(['completed', 'aborted']);
 
@@ -785,10 +745,10 @@ export function scanBlockedRunsForIgnition(deps: WorkflowIgnitionDeps): number {
   for (const run of blocked) {
     try {
       const gateId = parsePendingGateId(run);
-      if (!gateId) continue; // bloqueado por provider/policy: cai no caminho generalizado
+      if (!gateId) continue;
       const definition = deps.getDefinition(run.definitionId);
       const mode = resolveGateModeFromManifest(definition, gateId);
-      if (mode !== 'orchestrator') continue; // human/desconhecido fica para o humano
+      if (mode !== 'orchestrator') continue;
       fireIgnition(deps, run.id, { reason: 'blocked', gateId }, 'boot-scan');
       fired.add(run.id);
       reignited += 1;
@@ -843,8 +803,7 @@ export function initWorkflowIgnitionBridge(
   const deps: WorkflowIgnitionDeps = {
     getRun: overrides?.getRun ?? getDynamicWorkflowRun,
     getDefinition: overrides?.getDefinition ?? getDynamicWorkflowDefinition,
-    listBlockedRuns:
-      overrides?.listBlockedRuns ?? (() => listDynamicWorkflowRunsByStatus('blocked')),
+    listBlockedRuns: overrides?.listBlockedRuns ?? (() => listDynamicWorkflowRunsByStatus('blocked')),
     listRuns: overrides?.listRuns ?? (() => listDynamicWorkflowRuns()),
     listEventsSince:
       overrides?.listEventsSince ??
@@ -854,8 +813,7 @@ export function initWorkflowIgnitionBridge(
     pause: overrides?.pause,
     registerReadOnlyTurn: overrides?.registerReadOnlyTurn ?? registerReadOnlyDriveTurn,
     now: overrides?.now,
-    createDedicatedSession:
-      overrides?.createDedicatedSession ?? defaultCreateDedicatedSession,
+    createDedicatedSession: overrides?.createDedicatedSession ?? defaultCreateDedicatedSession,
     linkSession: overrides?.linkSession ?? defaultLinkSession,
     submit: overrides?.submit ?? submitMessage,
     getWindow: overrides?.getWindow ?? getWindow,
@@ -888,9 +846,12 @@ export function initWorkflowIgnitionBridge(
   return activeUnsubscribe;
 }
 
-function defaultCreateDedicatedSession(runId: string): string {
+export function defaultCreateDedicatedSession(runId: string): string {
   const sessionId = `dw-drive-${runId}-${Math.random().toString(36).slice(2, 10)}`;
-  createSession(sessionId, `Workflow ${runId}`, undefined, { type: 'chat' });
+  createSession(sessionId, `Workflow ${runId}`, undefined, {
+    type: 'chat',
+    orchestrator: readDefaultOrchestratorColumns(),
+  });
   return sessionId;
 }
 

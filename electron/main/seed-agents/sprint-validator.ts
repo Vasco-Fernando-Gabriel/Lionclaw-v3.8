@@ -1,4 +1,3 @@
-
 import type { AgentConfig } from '../../../src/types';
 
 export const SPRINT_VALIDATOR_ID = 'sprint-validator';

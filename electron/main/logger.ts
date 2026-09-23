@@ -10,10 +10,7 @@ mkdirSync(path.join(basePath, 'data'), { recursive: true });
 
 const LOG_MAX_BYTES = 50 * 1024 * 1024;
 
-export function rotateLogFileIfNeededForBoot(
-  filePath: string,
-  maxBytes: number = LOG_MAX_BYTES,
-): boolean {
+export function rotateLogFileIfNeededForBoot(filePath: string, maxBytes: number = LOG_MAX_BYTES): boolean {
   try {
     if (statSync(filePath).size <= maxBytes) return false;
     renameSync(filePath, `${filePath}.1`);

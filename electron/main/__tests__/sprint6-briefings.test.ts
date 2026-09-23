@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { getDevV2Briefing } from '../pipeline-engine/dev-v2-briefings';
 import type { DevelopmentV2SprintMetadata } from '../../../src/types/pipeline';
@@ -9,7 +8,6 @@ import { pipe2TechFrontend } from '../seed-agents/pipe2-tech-frontend';
 import { pipe2SpecBuilder } from '../seed-agents/pipe2-spec-builder';
 import { pipe2SpecValidator } from '../seed-agents/pipe2-spec-validator';
 import { pipe2SpecEnricher } from '../seed-agents/pipe2-spec-enricher';
-
 
 describe('getDevV2Briefing: per-agent trechos', () => {
   it('returns briefing for prd-generator (SPEC 12.1)', () => {
@@ -72,7 +70,6 @@ describe('getDevV2Briefing: per-agent trechos', () => {
   });
 });
 
-
 describe('getDevV2Briefing: planner briefing with context', () => {
   it('returns briefing for harness-planner with screenIds and componentIds', () => {
     const b = getDevV2Briefing('harness-planner', {
@@ -114,7 +111,6 @@ describe('getDevV2Briefing: planner briefing with context', () => {
     expect(b).toContain('  - screen-c');
   });
 });
-
 
 describe('getDevV2Briefing: coder briefing', () => {
   it('returns null when no context provided', () => {
@@ -174,7 +170,6 @@ describe('getDevV2Briefing: coder briefing', () => {
   });
 });
 
-
 describe('getDevV2Briefing: sprint-validator touchesUI rule', () => {
   it('briefing mentions the fail condition', () => {
     const b = getDevV2Briefing('sprint-validator');
@@ -189,7 +184,6 @@ describe('getDevV2Briefing: sprint-validator touchesUI rule', () => {
     expect(getDevV2Briefing('sprint-validator')).not.toBeNull();
   });
 });
-
 
 describe('DevelopmentV2SprintMetadata type', () => {
   it('can create a valid touchesUI=true instance', () => {
@@ -215,7 +209,6 @@ describe('DevelopmentV2SprintMetadata type', () => {
     expect(meta.designArtifactPath).toBeUndefined();
   });
 });
-
 
 describe('pipe2-* seed agents: final prompts', () => {
   it('pipe2-prd-completo has final prompt (not placeholder)', () => {
@@ -267,7 +260,6 @@ describe('pipe2-* seed agents: final prompts', () => {
     expect(pipe2SpecEnricher.systemPrompt).toContain('nao pode criar novas telas');
   });
 });
-
 
 describe('reused agents: systemPrompt snapshot (unchanged)', () => {
   it('harness-planner systemPrompt is unchanged (contains key sentinel phrases)', () => {

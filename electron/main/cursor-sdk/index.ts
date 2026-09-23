@@ -1,11 +1,7 @@
-
-import crypto from 'crypto';
 import type { BrowserWindow } from 'electron';
 import { createLogger } from '../logger';
 import {
   clearSessionPendingSeed,
-  createSession,
-  getActiveChatSession,
   getSession,
   getSessionMessages,
   getLatestUserTurnIndex,
@@ -24,20 +20,19 @@ import {
   reconcileActiveContext,
 } from '../agent-runtime/context-measure';
 import { buildChatContextUsage } from '../chat-context-usage';
-import { maybeCompactChatSession } from '../chat-compaction-trigger';
+import { isChatTimelineReinjectEnabled, maybeCompactChatSession } from '../chat-compaction-trigger';
 import { ensureInitialSessionTitle, generateSessionTitle } from '../title-generator';
 import type { QueryOptions } from '../orchestrator';
 import type { OrchestratorSelection } from '../orchestrator-selection';
-import { type SdkLane, desktopLane } from '../sdk-lane';
+import type { SdkLane } from '../sdk-lane';
+import { resolveLaneForOptions, lanesOrAllDesktop } from '../desktop-lanes';
+import { SessionRequiredError } from '../lanes';
 import type { ArtifactData, AuditEntry, StreamChunk } from '../../../src/types';
 import { emptyResponseExecutionError } from '../agent-runtime/llm-error';
-import {
-  isSubagentProviderAuthError,
-  subagentAuthFailure,
-} from '../agent-runtime/subagent-dispatch';
+import { isSubagentProviderAuthError, subagentAuthFailure } from '../agent-runtime/subagent-dispatch';
 import {
   computeEffectiveCapabilitiesForTurn,
-  getActiveChatTurnByLane,
+  getActiveChatTurnBinding,
   getChatCapabilityTurn,
 } from '../chat-capability-context';
 import { recordCompletedMainChatTurn } from '../dreaming-turn-engine';
@@ -49,74 +44,75 @@ import {
 import { buildCursorHistoryPreamble } from './history';
 import { createChatCursorSession, type ChatCursorSession } from './session';
 import { buildCursorUsageSnapshot, createCursorStreamTranslator } from './stream-translator';
-import type { CursorChatLane } from './workspace';
+import {
+  beginTimelineTurn,
+  buildToolsBlocksByAnchor,
+  computeTimelineMetrics,
+  logTimelineMetrics,
+  resolveCliTimelineOrigin,
+  resolveTimelineAnchor,
+} from '../session-timeline';
 
 const logger = createLogger('cursor-sdk');
 
 export { cleanupCursorChatWorkspaces } from './workspace';
 
-export function stopCursorSdkQuery(lane: SdkLane = desktopLane): void {
-  lane.currentAbortController?.abort();
-  lane.currentAbortController = null;
+export function stopCursorSdkQuery(laneArg?: SdkLane): void {
+  for (const lane of lanesOrAllDesktop(laneArg)) {
+    lane.currentAbortController?.abort();
+    lane.currentAbortController = null;
+  }
 }
 
-export function isCursorSdkQueryActive(lane: SdkLane = desktopLane): boolean {
-  return lane.currentAbortController !== null;
+export function isCursorSdkQueryActive(laneArg?: SdkLane): boolean {
+  return lanesOrAllDesktop(laneArg).some((lane) => lane.currentAbortController !== null);
 }
 
-export function resetCursorSdkSessionState(lane: SdkLane = desktopLane): void {
-  stopCursorSdkQuery(lane);
+export function resetCursorSdkSessionState(laneArg?: SdkLane): void {
+  for (const lane of lanesOrAllDesktop(laneArg)) {
+    stopCursorSdkQuery(lane);
+  }
 }
 
-function sendStream(
-  getWindow: () => BrowserWindow | null,
-  silent: boolean | undefined,
-  chunk: StreamChunk,
-): void {
+function sendStream(getWindow: () => BrowserWindow | null, silent: boolean | undefined, chunk: StreamChunk): void {
   if (silent) return;
   try {
     const win = getWindow();
     if (win && !win.isDestroyed()) win.webContents.send('chat:stream', chunk);
-  } catch { /* renderer disposed */ }
+  } catch {
+    /* renderer disposed */
+  }
 }
 
-function sendLog(
-  getWindow: () => BrowserWindow | null,
-  entry: Omit<AuditEntry, 'id' | 'createdAt'>,
-): void {
+function sendLog(getWindow: () => BrowserWindow | null, entry: Omit<AuditEntry, 'id' | 'createdAt'>): void {
   try {
     const win = getWindow();
     if (win && !win.isDestroyed()) {
       win.webContents.send('logs:entry', { id: -1, createdAt: new Date().toISOString(), ...entry });
     }
-  } catch { /* renderer disposed */ }
+  } catch {
+    /* renderer disposed */
+  }
 }
 
-function audit(
-  getWindow: () => BrowserWindow | null,
-  entry: Omit<AuditEntry, 'id' | 'createdAt'>,
-): void {
+function audit(getWindow: () => BrowserWindow | null, entry: Omit<AuditEntry, 'id' | 'createdAt'>): void {
   insertAuditEntry(entry);
   sendLog(getWindow, entry);
 }
 
 function resolveSessionId(options: QueryOptions, lane: SdkLane): string {
   if (options.sessionId) return options.sessionId;
-  if (lane !== desktopLane) throw new Error(`Lane '${lane.name}' exige sessionId explicito.`);
-  const active = getActiveChatSession();
-  if (active) return active.id;
-  const id = crypto.randomUUID();
-  createSession(id, '');
-  return id;
+  throw new SessionRequiredError(lane.name, 'cursor-sdk');
 }
 
 export async function executeCursorSdkQuery(
   message: string,
   options: QueryOptions,
   getWindow: () => BrowserWindow | null,
-  lane: SdkLane = desktopLane,
+  laneArg: SdkLane | undefined,
   selection: OrchestratorSelection,
 ): Promise<void> {
+  const lane = laneArg ?? resolveLaneForOptions(options, 'cursor-sdk');
   const sessionId = resolveSessionId(options, lane);
   const emit = (chunk: StreamChunk): void => {
     const withSession = { ...chunk, sessionId };
@@ -127,9 +123,11 @@ export async function executeCursorSdkQuery(
 
   const skipUser = options.origin === 'system-event' || options.skipUserMessagePersistence === true;
   let currentTurnIndex = 0;
+  let persistedUserMessageId: number | null = null;
   if (!skipUser) {
     const display = options.displayMessage ?? message;
     const userMessageId = persistUserChatMessage(sessionId, display, options.attachmentsMeta);
+    persistedUserMessageId = userMessageId;
     try {
       currentTurnIndex = getTurnIndexForUserMessage(sessionId, userMessageId);
     } catch {
@@ -151,14 +149,58 @@ export async function executeCursorSdkQuery(
     emit({ type: 'onboarding_completed' });
     isOnboarding = false;
   }
-  const capabilities = lane.name === 'desktop'
-    ? (() => {
-        const active = getActiveChatTurnByLane('desktop');
-        const context = active ? getChatCapabilityTurn(active) : undefined;
-        return context ? computeEffectiveCapabilitiesForTurn(context) : undefined;
-      })()
-    : undefined;
+  const capabilities =
+    lane.kind === 'desktop'
+      ? (() => {
+          const active = getActiveChatTurnBinding({ sessionId, lane: 'desktop' });
+          const context = active ? getChatCapabilityTurn(active) : undefined;
+          return context ? computeEffectiveCapabilitiesForTurn(context) : undefined;
+        })()
+      : undefined;
 
+  let session: ChatCursorSession;
+  try {
+    session = await createChatCursorSession({
+      sessionId,
+      model: selection.model,
+      ...(selection.effort ? { effort: selection.effort } : {}),
+      getWindow,
+      abortController: abort,
+      lane: lane.kind,
+      agentId: options.agentId,
+      isOnboarding,
+      capabilities,
+      turnBinding: getActiveChatTurnBinding({ sessionId, lane: lane.kind }),
+    });
+  } catch (error) {
+    emit({ type: 'error', error: error instanceof Error ? error.message : String(error) });
+    lane.currentAbortController = null;
+    if (lane.kind !== 'desktop') throw error;
+    return;
+  }
+
+  const timelineOrigin = resolveCliTimelineOrigin({
+    laneKind: lane.kind,
+    origin: options.origin,
+    swarmDelivery: options.swarmDelivery !== undefined,
+    forceNewSession: options._forceNewSession === true,
+    persistedUserMessageId,
+  });
+  const timelineAnchor = resolveTimelineAnchor({
+    origin: timelineOrigin,
+    persistedUserMessageId,
+    answeredUserMessageId: null,
+  });
+  const timeline = beginTimelineTurn({
+    sessionId,
+    turnIndex: currentTurnIndex,
+    anchorMessageId: timelineAnchor.anchorMessageId,
+    currentUserMessageId: timelineAnchor.currentUserMessageId,
+    origin: timelineOrigin,
+    runtime: 'cursor',
+    fidelity: 'observed',
+    cwd: session.workspace.workspaceDir,
+  });
   const artifacts: ArtifactData[] = [];
   const translator = createCursorStreamTranslator({
     sessionId,
@@ -168,26 +210,22 @@ export async function executeCursorSdkQuery(
     turnIndex: currentTurnIndex,
     onArtifact: (artifact) => artifacts.push(artifact),
     onAuditEntry: (entry) => sendLog(getWindow, entry),
+    timeline,
   });
-
-  let session: ChatCursorSession;
-  try {
-    session = await createChatCursorSession({
-      sessionId,
-      model: selection.model,
-      getWindow,
-      abortController: abort,
-      lane: lane.name as CursorChatLane,
-      agentId: options.agentId,
-      isOnboarding,
-      capabilities,
+  let timelineSettled = false;
+  const settleTimeline = (complete: boolean): void => {
+    if (timelineSettled) return;
+    timelineSettled = true;
+    const metrics = computeTimelineMetrics('cursor', translator.timelineEvents());
+    timeline.metrics(metrics);
+    if (complete && !timeline.persistFailed) timeline.complete();
+    logTimelineMetrics({
+      runId: timeline.runId,
+      runtime: 'cursor',
+      status: complete && !timeline.persistFailed ? 'complete' : 'interrupted',
+      ...metrics,
     });
-  } catch (error) {
-    translator.fail(error);
-    lane.currentAbortController = null;
-    if (lane !== desktopLane) throw error;
-    return;
-  }
+  };
 
   const row = getSession(sessionId);
   const compactedUpTo = row?.compactedUpToMessageId ?? null;
@@ -195,14 +233,15 @@ export async function executeCursorSdkQuery(
   let historyChars = 0;
   if (!session.resuming) {
     const allMessages = getSessionMessages(sessionId);
-    const priorMessages = compactedUpTo === null
-      ? allMessages
-      : allMessages.filter((item) => item.id > compactedUpTo);
-    const history = buildCursorHistoryPreamble(priorMessages, { dropLast: !skipUser });
+    const priorMessages = compactedUpTo === null ? allMessages : allMessages.filter((item) => item.id > compactedUpTo);
+    const history = buildCursorHistoryPreamble(priorMessages, {
+      dropLast: !skipUser,
+      ...(isChatTimelineReinjectEnabled()
+        ? { toolsByAnchor: buildToolsBlocksByAnchor(sessionId, priorMessages, compactedUpTo) }
+        : {}),
+    });
     historyChars = history.length;
-    basePrompt = history
-      ? `Conversation so far:\n${history}\n\nNew user message:\n${message}`
-      : message;
+    basePrompt = history ? `Conversation so far:\n${history}\n\nNew user message:\n${message}` : message;
   }
   const pendingSeed = row?.pendingSeed ?? null;
   const prompt = pendingSeed ? `${pendingSeed}\n\n${basePrompt}` : basePrompt;
@@ -223,54 +262,49 @@ export async function executeCursorSdkQuery(
   let agenticTokens = 0;
   const onEvent = (relayed: { event: unknown }): void => {
     const evt = relayed.event;
-    if (
-      evt !== null
-      && typeof evt === 'object'
-      && (evt as Record<string, unknown>)['type'] === 'tool_call'
-    ) {
+    if (evt !== null && typeof evt === 'object' && (evt as Record<string, unknown>)['type'] === 'tool_call') {
       const rec = evt as Record<string, unknown>;
       if (rec['status'] === 'completed' || rec['status'] === 'error') {
-        agenticTokens += estimateAgenticContentTokens(rec['args'])
-          + estimateAgenticContentTokens(rec['result']);
+        agenticTokens += estimateAgenticContentTokens(rec['args']) + estimateAgenticContentTokens(rec['result']);
       }
     }
     translator.onEvent(evt);
   };
 
+  let turnOk = false;
   try {
     const result = await session.send(prompt, onEvent);
     if (abort.signal.aborted) return;
     if (result.status === 'cancelled') {
-      translator.fail(new Error(
-        'Turno Cursor cancelado pelo SDK (interrupcao externa ou permissao negada).',
-      ));
+      translator.fail(new Error('Turno Cursor cancelado pelo SDK (interrupcao externa ou permissao negada).'));
       return;
     }
     if (result.status !== 'finished') {
-      translator.fail(new Error(
-        `Turno Cursor terminou com status "${result.status}"`
-          + `${result.errorMessage !== undefined ? `: ${result.errorMessage}` : ''}`,
-      ));
-      if (lane !== desktopLane) {
+      translator.fail(
+        new Error(
+          `Turno Cursor terminou com status "${result.status}"` +
+            `${result.errorMessage !== undefined ? `: ${result.errorMessage}` : ''}`,
+        ),
+      );
+      if (lane.kind !== 'desktop') {
         throw new Error(result.errorMessage ?? `cursor run status=${result.status}`);
       }
       return;
     }
 
-    let finalText = result.finalText.length > 0
-      ? result.finalText
-      : result.resultText ?? translator.assistantText();
+    let finalText = result.finalText.length > 0 ? result.finalText : (result.resultText ?? translator.assistantText());
     if (finalText.trim()) {
       const cleaned = extractAndProcessOnboardingData(finalText, {
         sendStream: emit,
-        onAudit: ({ toolName, input, output }) => audit(getWindow, {
-          sessionId,
-          subagent: options.agentId,
-          eventType: 'tool_call',
-          toolName,
-          input,
-          output,
-        }),
+        onAudit: ({ toolName, input, output }) =>
+          audit(getWindow, {
+            sessionId,
+            subagent: options.agentId,
+            eventType: 'tool_call',
+            toolName,
+            input,
+            output,
+          }),
       });
       if (cleaned !== null) finalText = cleaned;
       else if (isOnboarding) {
@@ -279,14 +313,10 @@ export async function executeCursorSdkQuery(
     }
 
     const toolUses = translator.toolUses();
-    const usageSnapshot = buildCursorUsageSnapshot(
-      result.usage,
-      selection.model,
-      {
-        inputTokens: estimateTokens(prompt),
-        outputTokens: estimateTokens(finalText),
-      },
-    );
+    const usageSnapshot = buildCursorUsageSnapshot(result.usage, selection.model, {
+      inputTokens: estimateTokens(prompt),
+      outputTokens: estimateTokens(finalText),
+    });
     const emptyError = emptyResponseExecutionError({
       content: finalText,
       toolUses,
@@ -356,16 +386,18 @@ export async function executeCursorSdkQuery(
         void generateSessionTitle(sessionId).catch((error) => logger.warn({ error }, 'cursor title generation failed'));
       }
     }
+    turnOk = true;
     await maybeCompactChatSession(sessionId, emit, { model: selection.model, provider: 'cursor' });
   } catch (error) {
     if (isSubagentProviderAuthError(error)) {
       emit({ type: 'error', sessionId, ...subagentAuthFailure(error) });
-      if (lane !== desktopLane) throw error;
+      if (lane.kind !== 'desktop') throw error;
     } else if (!abort.signal.aborted) {
       translator.fail(error);
-      if (lane !== desktopLane) throw error;
+      if (lane.kind !== 'desktop') throw error;
     }
   } finally {
+    settleTimeline(turnOk && !abort.signal.aborted && !translator.settledPending());
     session.close();
     if (lane.currentAbortController === abort) lane.currentAbortController = null;
   }

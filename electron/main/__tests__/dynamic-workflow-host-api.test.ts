@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import {
   createWorkflowHostApi,
@@ -50,7 +49,6 @@ import { runGateChecks as realRunGateChecks, type GateCheckSpec } from '../dynam
 import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
 
 interface HostHarness {
   deps: HostApiDeps;
@@ -232,9 +230,7 @@ function makeHostHarness(over?: {
   const deps: HostApiDeps = {
     crud,
     gateGate,
-    runNodeAgent: over?.adapter
-      ? (input) => over.adapter!(input)
-      : (input) => Promise.resolve(makeOkResult(input)),
+    runNodeAgent: over?.adapter ? (input) => over.adapter!(input) : (input) => Promise.resolve(makeOkResult(input)),
     emit: (input) => state.events.push({ type: input.type, nodeId: input.nodeId, payload: input.payload }),
     generateId: (prefix) => `${prefix}_${state.nodeRuns.size}_${Math.random().toString(36).slice(2, 6)}`,
     now: () => '2026-06-12T00:00:00.000Z',
@@ -255,10 +251,7 @@ function makeHostHarness(over?: {
   };
 }
 
-function makeOkResult(
-  input: RunNodeAgentInput,
-  output = '{"verdict":"ok","findings":[]}',
-): NodeRunResult {
+function makeOkResult(input: RunNodeAgentInput, output = '{"verdict":"ok","findings":[]}'): NodeRunResult {
   return {
     ok: true,
     output,
@@ -302,7 +295,6 @@ function makeOkResult(
   };
 }
 
-
 function minimalManifest(): DynamicWorkflowManifest {
   return {
     version: 1,
@@ -314,10 +306,47 @@ function minimalManifest(): DynamicWorkflowManifest {
       { id: 'Gate', name: 'Gate', order: 3 },
     ],
     nodes: [
-      { id: 'scout', type: 'agent', phaseId: 'Scout', agentId: 'a-scout', access: 'read-only', canResume: true, produces: ['scout'], consumes: [] },
-      { id: 'coder', type: 'agent', phaseId: 'Implementar', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], canResume: true, produces: ['impl'], consumes: ['scout'] },
-      { id: 'v0', type: 'agent', phaseId: 'Validar', agentId: 'a-val', access: 'read-only', canResume: true, produces: ['v0'], consumes: ['impl'] },
-      { id: 'v1', type: 'agent', phaseId: 'Validar', agentId: 'a-val', access: 'read-only', canResume: true, produces: ['v1'], consumes: ['impl'] },
+      {
+        id: 'scout',
+        type: 'agent',
+        phaseId: 'Scout',
+        agentId: 'a-scout',
+        access: 'read-only',
+        canResume: true,
+        produces: ['scout'],
+        consumes: [],
+      },
+      {
+        id: 'coder',
+        type: 'agent',
+        phaseId: 'Implementar',
+        agentId: 'a-coder',
+        access: 'workspace-write',
+        writeSet: ['src/**'],
+        canResume: true,
+        produces: ['impl'],
+        consumes: ['scout'],
+      },
+      {
+        id: 'v0',
+        type: 'agent',
+        phaseId: 'Validar',
+        agentId: 'a-val',
+        access: 'read-only',
+        canResume: true,
+        produces: ['v0'],
+        consumes: ['impl'],
+      },
+      {
+        id: 'v1',
+        type: 'agent',
+        phaseId: 'Validar',
+        agentId: 'a-val',
+        access: 'read-only',
+        canResume: true,
+        produces: ['v1'],
+        consumes: ['impl'],
+      },
       { id: 'gate-global', type: 'gate', phaseId: 'Gate', canResume: false, produces: [], consumes: [] },
     ],
     parallelism: { maxConcurrentAgents: 3, parallelWritersAllowed: false },
@@ -337,8 +366,6 @@ function makeCtx(over?: Partial<HostApiRunContext>): HostApiRunContext {
     ...over,
   };
 }
-
-
 
 function eventsAsPersisted(harness: HostHarness): DynamicWorkflowEvent[] {
   return harness.state.events.map((e, i) => ({
@@ -368,10 +395,14 @@ describe('workflow-host-api: orquestrador-driver S1 (D2 payloads aditivos + D1b 
     const api = createWorkflowHostApi(ctx, harness.deps);
     await api.agent({ id: 'v0', agentId: 'a-val', access: 'read-only', prompt: 'valide' });
 
-    const started = harness.state.events.find((e) => e.type === 'node-started' && e.nodeId === 'v0')!.payload as Record<string, unknown>;
+    const started = harness.state.events.find((e) => e.type === 'node-started' && e.nodeId === 'v0')!.payload as Record<
+      string,
+      unknown
+    >;
     expect(started.label).toBe('validar-spec');
 
-    const completed = harness.state.events.find((e) => e.type === 'node-completed' && e.nodeId === 'v0')!.payload as Record<string, unknown>;
+    const completed = harness.state.events.find((e) => e.type === 'node-completed' && e.nodeId === 'v0')!
+      .payload as Record<string, unknown>;
     expect(completed).toMatchObject({
       agentId: 'a-val',
       access: 'read-only',
@@ -395,9 +426,16 @@ describe('workflow-host-api: orquestrador-driver S1 (D2 payloads aditivos + D1b 
       onWriterNodeCompleted: async () => ({ sha: 'deadbeef', touchedFiles: many }),
     });
     const api = createWorkflowHostApi(ctx, harness.deps);
-    await api.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'implemente' });
+    await api.agent({
+      id: 'coder',
+      agentId: 'a-coder',
+      access: 'workspace-write',
+      writeSet: ['src/**'],
+      prompt: 'implemente',
+    });
 
-    const completed = harness.state.events.find((e) => e.type === 'node-completed' && e.nodeId === 'coder')!.payload as Record<string, unknown>;
+    const completed = harness.state.events.find((e) => e.type === 'node-completed' && e.nodeId === 'coder')!
+      .payload as Record<string, unknown>;
     expect(completed.access).toBe('workspace-write');
     expect(completed.worktreeCommitSha).toBe('deadbeef');
     expect(completed.touchedFiles).toHaveLength(50);
@@ -406,9 +444,23 @@ describe('workflow-host-api: orquestrador-driver S1 (D2 payloads aditivos + D1b 
     const { harness: h2 } = makeHostHarness();
     const ctx2 = makeCtx({ onWriterNodeCompleted: async () => null });
     const api2 = createWorkflowHostApi(ctx2, h2.deps);
-    await api2.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'implemente' });
-    const c2 = h2.state.events.find((e) => e.type === 'node-completed' && e.nodeId === 'coder')!.payload as Record<string, unknown>;
-    expect(c2).toMatchObject({ worktreeCommitSha: null, touchedFiles: [], touchedFilesTotal: 0, touchedFilesTruncated: false });
+    await api2.agent({
+      id: 'coder',
+      agentId: 'a-coder',
+      access: 'workspace-write',
+      writeSet: ['src/**'],
+      prompt: 'implemente',
+    });
+    const c2 = h2.state.events.find((e) => e.type === 'node-completed' && e.nodeId === 'coder')!.payload as Record<
+      string,
+      unknown
+    >;
+    expect(c2).toMatchObject({
+      worktreeCommitSha: null,
+      touchedFiles: [],
+      touchedFilesTotal: 0,
+      touchedFilesTruncated: false,
+    });
     rmSync(ctx.runDir, { recursive: true, force: true });
     rmSync(ctx2.runDir, { recursive: true, force: true });
   });
@@ -435,21 +487,40 @@ describe('workflow-host-api: orquestrador-driver S1 (D2 payloads aditivos + D1b 
     expect(settled).toBe(false);
     const gb = harness.state.events.find((e) => e.type === 'gate-blocked');
     expect(gb).toBeTruthy();
-    expect(gb!.payload).toMatchObject({ gateId: 'boundary:Gate', mode: 'orchestrator', boundary: 'Gate', semaphore: 'ATENCAO', openP1: 1 });
+    expect(gb!.payload).toMatchObject({
+      gateId: 'boundary:Gate',
+      mode: 'orchestrator',
+      boundary: 'Gate',
+      semaphore: 'ATENCAO',
+      openP1: 1,
+    });
     const blockedPatch = harness.state.runPatches.find((p) => p.status === 'blocked');
     expect(blockedPatch).toBeTruthy();
-    expect(JSON.parse(String(blockedPatch!.pendingDecisionJson)).pendingDecision).toMatchObject({ type: 'gate', id: 'boundary:Gate' });
-    expect(harness.state.events.some((e) => e.type === 'phase-changed' && (e.payload as { phase?: string }).phase === 'Gate')).toBe(false);
+    expect(JSON.parse(String(blockedPatch!.pendingDecisionJson)).pendingDecision).toMatchObject({
+      type: 'gate',
+      id: 'boundary:Gate',
+    });
+    expect(
+      harness.state.events.some(
+        (e) => e.type === 'phase-changed' && (e.payload as { phase?: string }).phase === 'Gate',
+      ),
+    ).toBe(false);
 
     harness.resolveGate('boundary:Gate', { decision: 'approve', approvedBy: 'orchestrator' });
     await pending;
     expect(settled).toBe(true);
     const types = harness.state.events.map((e) => e.type);
     const approvedIdx = types.indexOf('gate-approved');
-    const phaseIdx = types.findIndex((t, i) => t === 'phase-changed' && (harness.state.events[i]!.payload as { phase?: string }).phase === 'Gate');
+    const phaseIdx = types.findIndex(
+      (t, i) => t === 'phase-changed' && (harness.state.events[i]!.payload as { phase?: string }).phase === 'Gate',
+    );
     expect(approvedIdx).toBeGreaterThan(-1);
     expect(phaseIdx).toBeGreaterThan(approvedIdx);
-    expect(harness.state.gateDecisions.some((d) => d.gateId === 'boundary:Gate' && d.mode === 'orchestrator' && d.decision === 'approved')).toBe(true);
+    expect(
+      harness.state.gateDecisions.some(
+        (d) => d.gateId === 'boundary:Gate' && d.mode === 'orchestrator' && d.decision === 'approved',
+      ),
+    ).toBe(true);
     expect(harness.state.runPatches.some((p) => p.status === 'running')).toBe(true);
 
     await api.phase('Scout');
@@ -475,15 +546,27 @@ describe('workflow-host-api: orquestrador-driver S1 (D2 payloads aditivos + D1b 
     const ctx = makeCtx({ onWriterNodeCompleted: async () => ({ sha: 'abc', touchedFiles: ['src/x.ts'] }) });
     const api = createWorkflowHostApi(ctx, harness.deps);
     await api.phase('Implementar');
-    await api.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'impl' });
+    await api.agent({
+      id: 'coder',
+      agentId: 'a-coder',
+      access: 'workspace-write',
+      writeSet: ['src/**'],
+      prompt: 'impl',
+    });
     const pending = api.phase('Validar');
     await new Promise((r) => setTimeout(r, 0));
     const gb = harness.state.events.find((e) => e.type === 'gate-blocked');
     expect(gb!.payload).toMatchObject({ gateId: 'boundary:Validar', semaphore: 'SEM VEREDITO' });
-    harness.resolveGate('boundary:Validar', { decision: 'reject', approvedBy: 'orchestrator', reason: 'rode o verificador' });
+    harness.resolveGate('boundary:Validar', {
+      decision: 'reject',
+      approvedBy: 'orchestrator',
+      reason: 'rode o verificador',
+    });
     await expect(pending).rejects.toMatchObject({ code: 'run-aborted' });
     expect(harness.state.events.some((e) => e.type === 'gate-rejected')).toBe(true);
-    expect(harness.state.gateDecisions.some((d) => d.gateId === 'boundary:Validar' && d.decision === 'rejected')).toBe(true);
+    expect(harness.state.gateDecisions.some((d) => d.gateId === 'boundary:Validar' && d.decision === 'rejected')).toBe(
+      true,
+    );
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
 
@@ -494,18 +577,38 @@ describe('workflow-host-api: orquestrador-driver S1 (D2 payloads aditivos + D1b 
     const ctx = makeCtx({ onWriterNodeCompleted: async () => ({ sha: 'abc', touchedFiles: ['src/x.ts'] }) });
     const api = createWorkflowHostApi(ctx, harness.deps);
     await api.phase('Implementar');
-    await api.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'impl' });
+    await api.agent({
+      id: 'coder',
+      agentId: 'a-coder',
+      access: 'workspace-write',
+      writeSet: ['src/**'],
+      prompt: 'impl',
+    });
     const pending = api.phase('Validar');
     await new Promise((r) => setTimeout(r, 0));
-    harness.resolveGate('boundary:Validar', { decision: 'reject', approvedBy: 'orchestrator', reason: 'rode o verificador' });
+    harness.resolveGate('boundary:Validar', {
+      decision: 'reject',
+      approvedBy: 'orchestrator',
+      reason: 'rode o verificador',
+    });
     await expect(pending).rejects.toMatchObject({ code: 'run-aborted' });
 
-    harness.state.events.push({ type: 'wake-completed', nodeId: undefined, payload: { driveTurnId: 'run-1:1', outcome: 'executed' } });
+    harness.state.events.push({
+      type: 'wake-completed',
+      nodeId: undefined,
+      payload: { driveTurnId: 'run-1:1', outcome: 'executed' },
+    });
     harness.state.events.push({ type: 'resume-requested', nodeId: undefined, payload: {} });
 
     const api2 = createWorkflowHostApi(makeCtx({ runDir: ctx.runDir, workspaceRoot: ctx.workspaceRoot }), harness.deps);
     await api2.phase('Implementar');
-    await api2.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'impl' });
+    await api2.agent({
+      id: 'coder',
+      agentId: 'a-coder',
+      access: 'workspace-write',
+      writeSet: ['src/**'],
+      prompt: 'impl',
+    });
     let settled = false;
     const pending2 = api2.phase('Validar').then(() => {
       settled = true;
@@ -531,17 +634,33 @@ describe('workflow-host-api: orquestrador-driver S1 (D2 payloads aditivos + D1b 
     const ctx = makeCtx({ onWriterNodeCompleted: async () => ({ sha: 'abc', touchedFiles: ['src/x.ts'] }) });
     const api = createWorkflowHostApi(ctx, harness.deps);
     await api.phase('Implementar');
-    await api.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'impl' });
+    await api.agent({
+      id: 'coder',
+      agentId: 'a-coder',
+      access: 'workspace-write',
+      writeSet: ['src/**'],
+      prompt: 'impl',
+    });
     const pending = api.phase('Validar');
     await new Promise((r) => setTimeout(r, 0));
     harness.resolveGate('boundary:Validar', { decision: 'reject', approvedBy: 'orchestrator' });
     await expect(pending).rejects.toMatchObject({ code: 'run-aborted' });
-    harness.state.events.push({ type: 'wake-completed', nodeId: undefined, payload: { driveTurnId: 'run-1:1', outcome: 'executed' } });
+    harness.state.events.push({
+      type: 'wake-completed',
+      nodeId: undefined,
+      payload: { driveTurnId: 'run-1:1', outcome: 'executed' },
+    });
     harness.state.events.push({ type: 'resume-requested', nodeId: undefined, payload: { acceptBoundary: true } });
 
     const api2 = createWorkflowHostApi(makeCtx({ runDir: ctx.runDir, workspaceRoot: ctx.workspaceRoot }), harness.deps);
     await api2.phase('Implementar');
-    await api2.agent({ id: 'coder', agentId: 'a-coder', access: 'workspace-write', writeSet: ['src/**'], prompt: 'impl' });
+    await api2.agent({
+      id: 'coder',
+      agentId: 'a-coder',
+      access: 'workspace-write',
+      writeSet: ['src/**'],
+      prompt: 'impl',
+    });
     await api2.phase('Validar');
     expect(harness.state.events.filter((e) => e.type === 'gate-blocked')).toHaveLength(1);
     rmSync(ctx.runDir, { recursive: true, force: true });
@@ -566,7 +685,11 @@ describe('workflow-host-api: orquestrador-driver S1 (D2 payloads aditivos + D1b 
 
     harness.resolveGate('boundary:Gate', { decision: 'approve', approvedBy: 'orchestrator' });
     await pending;
-    harness.state.events.push({ type: 'wake-completed', nodeId: undefined, payload: { driveTurnId: 'run-1:1', outcome: 'executed' } });
+    harness.state.events.push({
+      type: 'wake-completed',
+      nodeId: undefined,
+      payload: { driveTurnId: 'run-1:1', outcome: 'executed' },
+    });
     const api2 = createWorkflowHostApi(makeCtx({ runDir: ctx.runDir, workspaceRoot: ctx.workspaceRoot }), harness.deps);
     await api2.phase('Validar');
     await api2.agent({ id: 'v0', agentId: 'a-val', access: 'read-only', prompt: 'valide' });
@@ -659,9 +782,9 @@ describe('workflow-host-api: agent()', () => {
     const { harness } = makeHostHarness();
     const ctx = makeCtx();
     const api = createWorkflowHostApi(ctx, harness.deps);
-    await expect(
-      api.agent({ id: 'ghost-r9', agentId: 'a', access: 'read-only', prompt: 'x' }),
-    ).rejects.toBeInstanceOf(WorkflowHostFatalError);
+    await expect(api.agent({ id: 'ghost-r9', agentId: 'a', access: 'read-only', prompt: 'x' })).rejects.toBeInstanceOf(
+      WorkflowHostFatalError,
+    );
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
 
@@ -683,7 +806,11 @@ describe('workflow-host-api: agent()', () => {
     expect(out).toBeNull();
     const failed = [...harness.state.nodeRuns.values()].find((n) => n.nodeId === 'coder' && n.status === 'failed');
     expect(failed).toBeTruthy();
-    expect(harness.state.events.some((e) => e.type === 'node-failed' && (e.payload as { reason?: string })?.reason === 'writeset-violation')).toBe(true);
+    expect(
+      harness.state.events.some(
+        (e) => e.type === 'node-failed' && (e.payload as { reason?: string })?.reason === 'writeset-violation',
+      ),
+    ).toBe(true);
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
 });
@@ -703,16 +830,12 @@ describe('workflow-host-api: forced structured output (SPEC-010 sec 3/5.1, S08)'
     });
     const manifestWithSchema = {
       ...minimalManifest(),
-      nodes: minimalManifest().nodes.map((n) =>
-        n.id === 'scout' ? { ...n, schemaRef: 'plan.schema.json' } : n,
-      ),
+      nodes: minimalManifest().nodes.map((n) => (n.id === 'scout' ? { ...n, schemaRef: 'plan.schema.json' } : n)),
     };
     const ctx = makeCtx({
       manifest: manifestWithSchema,
       resolveSchemaRef: (ref) =>
-        ref === 'plan.schema.json'
-          ? { name: 'plan', type: 'object', required: ['sprints'] }
-          : null,
+        ref === 'plan.schema.json' ? { name: 'plan', type: 'object', required: ['sprints'] } : null,
     });
     const api = createWorkflowHostApi(ctx, harness.deps);
 
@@ -755,7 +878,7 @@ describe('workflow-host-api: forced structured output (SPEC-010 sec 3/5.1, S08)'
         return Promise.resolve(makeOkResult(input, '{"verdict":"ok","findings":[]}'));
       },
     });
-    const ctx = makeCtx(); // sem resolveSchemaRef
+    const ctx = makeCtx();
     const api = createWorkflowHostApi(ctx, harness.deps);
 
     const out = await api.agent({
@@ -794,9 +917,7 @@ describe('workflow-host-api: forced structured output (SPEC-010 sec 3/5.1, S08)'
       prompt: 'planeje',
     });
     expect(out).toBeNull();
-    const failed = [...harness.state.nodeRuns.values()].find(
-      (n) => n.nodeId === 'scout' && n.status === 'failed',
-    );
+    const failed = [...harness.state.nodeRuns.values()].find((n) => n.nodeId === 'scout' && n.status === 'failed');
     expect(failed?.failureClass).toBe('schema');
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
@@ -809,11 +930,7 @@ describe('workflow-host-api: parallel() e pipeline()', () => {
     const api = createWorkflowHostApi(ctx, harness.deps);
 
     const results = await api.parallel({
-      thunks: [
-        async () => 'a',
-        async () => 'b',
-        async () => 'c',
-      ],
+      thunks: [async () => 'a', async () => 'b', async () => 'c'],
       options: { id: 'validators-r0', maxConcurrency: 3 },
     });
     expect(results).toEqual(['a', 'b', 'c']);
@@ -845,7 +962,9 @@ describe('workflow-host-api: parallel() e pipeline()', () => {
 
   it('pipeline() SEM barrier: item 0 avanca de stage ANTES de item 1 terminar a stage anterior (7.3)', async () => {
     const { harness } = makeHostHarness();
-    const ctx = makeCtx({ manifest: { ...minimalManifest(), parallelism: { maxConcurrentAgents: 4, parallelWritersAllowed: false } } });
+    const ctx = makeCtx({
+      manifest: { ...minimalManifest(), parallelism: { maxConcurrentAgents: 4, parallelWritersAllowed: false } },
+    });
     const api = createWorkflowHostApi(ctx, harness.deps);
 
     const order: string[] = [];
@@ -897,7 +1016,6 @@ describe('workflow-host-api: parallel() e pipeline()', () => {
   });
 });
 
-
 describe('createAgentSemaphore (teto global do host, SPEC 7.3 secao 9)', () => {
   it('serializa para no maximo `max` execucoes concorrentes (FIFO)', async () => {
     const sem = createAgentSemaphore(2);
@@ -919,7 +1037,7 @@ describe('createAgentSemaphore (teto global do host, SPEC 7.3 secao 9)', () => {
 
     const p0 = gate(0);
     const p1 = gate(1);
-    const p2 = gate(2); // este fica na fila (so 2 slots)
+    const p2 = gate(2);
     await new Promise((r) => setTimeout(r, 10));
     expect(active).toBe(2);
     expect(maxActive).toBe(2);
@@ -1070,7 +1188,10 @@ describe('workflow-host-api: gate()', () => {
     });
     const api = createWorkflowHostApi(ctx, harness.deps);
 
-    const gatePromise = api.gate({ id: 'gate-global', mode: 'human', checks: [] }) as Promise<{ ok: boolean; approvedBy?: string }>;
+    const gatePromise = api.gate({ id: 'gate-global', mode: 'human', checks: [] }) as Promise<{
+      ok: boolean;
+      approvedBy?: string;
+    }>;
     await Promise.resolve();
     expect(harness.state.runPatches.some((p) => p.status === 'blocked')).toBe(true);
 
@@ -1153,10 +1274,7 @@ describe('workflow-host-api: resolucao simbolico->concreto dos checks de gate (P
     (status: number, stdout = '', stderr = '') =>
     () => ({ status, stdout, stderr, timedOut: false });
 
-  function ctxWithResolver(
-    rc: GateCheckResolutionContext,
-    over?: Partial<HostApiRunContext>,
-  ): HostApiRunContext {
+  function ctxWithResolver(rc: GateCheckResolutionContext, over?: Partial<HostApiRunContext>): HostApiRunContext {
     return makeCtx({
       manifest: {
         ...minimalManifest(),
@@ -1238,9 +1356,9 @@ describe('workflow-host-api: custo ILIMITADO por desenho (refatoracao 2026-08-27
     await api.agent({ id: 'scout', agentId: 'a-scout', access: 'read-only', prompt: 'x' });
     expect(harness.state.runPatches.some((p) => p.status === 'blocked')).toBe(false);
     expect(harness.state.runPatches.some((p) => p.pendingDecisionJson !== undefined)).toBe(false);
-    expect(
-      [...harness.state.nodeRuns.values()].some((n) => n.nodeId === 'scout' && n.status === 'completed'),
-    ).toBe(true);
+    expect([...harness.state.nodeRuns.values()].some((n) => n.nodeId === 'scout' && n.status === 'completed')).toBe(
+      true,
+    );
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
 
@@ -1272,7 +1390,13 @@ describe('workflow-host-api: resume por journal ordenado (SPEC-010 F2 sec 3.2 / 
     const ctx = makeCtx({ manifest });
 
     const api1 = createWorkflowHostApi(ctx, harness.deps);
-    const out1 = await api1.agent({ id: 'scout', agentId, access: 'read-only', schema: 'schemas/scout.json', prompt: 'mapeie' });
+    const out1 = await api1.agent({
+      id: 'scout',
+      agentId,
+      access: 'read-only',
+      schema: 'schemas/scout.json',
+      prompt: 'mapeie',
+    });
     expect(adapter).toHaveBeenCalledTimes(1);
     expect((out1 as { verdict?: string }).verdict).toBe('REAL-OUTPUT');
     expect(harness.state.journal.length).toBe(1);
@@ -1280,10 +1404,16 @@ describe('workflow-host-api: resume por journal ordenado (SPEC-010 F2 sec 3.2 / 
     expect(harness.state.journal[0].outputRef).toBe('scout#1');
 
     const api2 = createWorkflowHostApi(ctx, harness.deps);
-    const out2 = await api2.agent({ id: 'scout', agentId, access: 'read-only', schema: 'schemas/scout.json', prompt: 'mapeie' });
-    expect(adapter).toHaveBeenCalledTimes(1); // nao rodou de novo
+    const out2 = await api2.agent({
+      id: 'scout',
+      agentId,
+      access: 'read-only',
+      schema: 'schemas/scout.json',
+      prompt: 'mapeie',
+    });
+    expect(adapter).toHaveBeenCalledTimes(1);
     expect((out2 as { verdict?: string }).verdict).toBe('REAL-OUTPUT');
-    expect((out2 as { cached?: boolean }).cached).toBeUndefined(); // nao e marcador
+    expect((out2 as { cached?: boolean }).cached).toBeUndefined();
     expect(harness.state.events.some((e) => e.type === 'node-cache-hit')).toBe(true);
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
@@ -1352,7 +1482,6 @@ describe('workflow-host-api: helpers puros', () => {
   });
 });
 
-
 describe('workflow-host-api: phase() on-the-fly (F1c)', () => {
   it('phase() com nome NOVO registra on-the-fly sem erro e entra em manifest.phases', async () => {
     const { harness } = makeHostHarness();
@@ -1394,7 +1523,6 @@ describe('workflow-host-api: phase() on-the-fly (F1c)', () => {
   });
 });
 
-
 describe('clamp helpers (manifest = teto, SPEC 8.3 / DEFECT-6 ITEM 2)', () => {
   it('clampAccess: read-only(manifest) nunca sobe para workspace-write(arg)', () => {
     expect(clampAccess('workspace-write', 'read-only')).toBe('read-only');
@@ -1431,7 +1559,6 @@ describe('clamp helpers (manifest = teto, SPEC 8.3 / DEFECT-6 ITEM 2)', () => {
     expect(clampCeiling(undefined, undefined)).toBeUndefined();
   });
 });
-
 
 describe('effectiveMaxConcurrentAgents (clamp de concorrencia, Fase A A5.2)', () => {
   function ctxWithMaxConcurrent(maxConcurrentAgents: number): HostApiRunContext {
@@ -1568,7 +1695,6 @@ describe('runAgentNode: arg malicioso NAO escala alem do manifest (DEFECT-6 ITEM
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
 });
-
 
 function rawPlanWithOneSprint(): { sprints: unknown[] } {
   return {
@@ -1794,7 +1920,6 @@ describe('workflow-host-api: materializeSprintPlan transacional + idempotencia (
   });
 });
 
-
 function rawPlanWithBadValidator(): { sprints: unknown[] } {
   return {
     sprints: [
@@ -1881,7 +2006,6 @@ describe('workflow-host-api: SM-50 sanea validatorAgentId fora do catalogo (sem 
   });
 });
 
-
 describe('workflow-host-api: validateSprintPlan auto-corrige cosmetico, bloqueia so o real (2.8.0)', () => {
   async function runValidate(
     raw: { sprints: unknown[] },
@@ -1916,10 +2040,7 @@ describe('workflow-host-api: validateSprintPlan auto-corrige cosmetico, bloqueia
 
   it('dependencia ORFA -> dropada (ok=true; a real preservada)', async () => {
     const v = await runValidate({
-      sprints: [
-        okSprint({ id: 's0', index: 0 }),
-        okSprint({ id: 's1', index: 1, dependencies: ['s0', 'fantasma'] }),
-      ],
+      sprints: [okSprint({ id: 's0', index: 0 }), okSprint({ id: 's1', index: 1, dependencies: ['s0', 'fantasma'] })],
     });
     expect(v.ok).toBe(true);
     expect(v.plan.sprints.find((s) => s.id === 's1')!.dependencies).toEqual(['s0']);
@@ -1957,10 +2078,7 @@ describe('workflow-host-api: validateSprintPlan auto-corrige cosmetico, bloqueia
 
   it('REORDENA por topologia: consumidor emitido ANTES do produtor roda DEPOIS', async () => {
     const v = await runValidate({
-      sprints: [
-        okSprint({ id: 'ui', index: 0, dependencies: ['db'] }),
-        okSprint({ id: 'db', index: 1 }),
-      ],
+      sprints: [okSprint({ id: 'ui', index: 0, dependencies: ['db'] }), okSprint({ id: 'db', index: 1 })],
     });
     expect(v.ok).toBe(true);
     const idxById = Object.fromEntries(v.plan.sprints.map((s) => [s.id, s.index]));
@@ -1988,7 +2106,6 @@ describe('workflow-host-api: validateSprintPlan auto-corrige cosmetico, bloqueia
     expect(v.errors.some((e) => e.code === 'plan-empty')).toBe(true);
   });
 });
-
 
 describe('workflow-host-api: efeitos laterais idempotentes no replay (SPEC-010 F2 sec 3.2)', () => {
   it('materialize NAO insere nodes 2x no replay com prefixo intacto', async () => {
@@ -2028,7 +2145,7 @@ describe('workflow-host-api: efeitos laterais idempotentes no replay (SPEC-010 F
     const api2 = createWorkflowHostApi(ctx2, { ...harness.deps, crud });
     const v2 = (await api2.validateSprintPlan(rawPlanWithOneSprint())) as { plan: DynamicWorkflowSprintPlan };
     await api2.materializeSprintPlan(v2.plan);
-    expect(combinedCalls).toBe(1); // NAO inseriu nodes 2x
+    expect(combinedCalls).toBe(1);
     rmSync(ctx2.runDir, { recursive: true, force: true });
   });
 
@@ -2047,7 +2164,7 @@ describe('workflow-host-api: efeitos laterais idempotentes no replay (SPEC-010 F
     const api2 = createWorkflowHostApi(ctx, harness.deps);
     const r2 = (await api2.gate({ id: 'gate-global', mode: 'auto', checks: [] })) as { ok: boolean };
     expect(r2.ok).toBe(true);
-    expect(harness.state.gateDecisions.length).toBe(1); // NAO duplicou a decisao
+    expect(harness.state.gateDecisions.length).toBe(1);
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
 
@@ -2062,7 +2179,7 @@ describe('workflow-host-api: efeitos laterais idempotentes no replay (SPEC-010 F
 
     const api2 = createWorkflowHostApi(ctx, harness.deps);
     await api2.artifact({ id: 'scout', path: 'out/report.md', type: 'markdown', data: '# rel' });
-    expect(harness.state.artifacts.length).toBe(1); // NAO duplicou a linha do DB
+    expect(harness.state.artifacts.length).toBe(1);
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
 
@@ -2096,7 +2213,6 @@ describe('workflow-host-api: efeitos laterais idempotentes no replay (SPEC-010 F
   });
 });
 
-
 describe('workflow-host-api: greenCheck() (F1-S3, NAO-BLOQUEANTE)', () => {
   type FakeCmdResult = {
     status: number | null;
@@ -2109,7 +2225,10 @@ describe('workflow-host-api: greenCheck() (F1-S3, NAO-BLOQUEANTE)', () => {
   function fakeRunnerBy(
     byScript: Record<string, FakeCmdResult>,
     fallback: FakeCmdResult = { status: 0 },
-  ): (cmd: string, args: string[]) => {
+  ): (
+    cmd: string,
+    args: string[],
+  ) => {
     status: number | null;
     stdout: string;
     stderr: string;
@@ -2131,20 +2250,14 @@ describe('workflow-host-api: greenCheck() (F1-S3, NAO-BLOQUEANTE)', () => {
     };
   }
 
-  function greenCheckCtx(
-    rc: GateCheckResolutionContext,
-    over?: Partial<HostApiRunContext>,
-  ): HostApiRunContext {
+  function greenCheckCtx(rc: GateCheckResolutionContext, over?: Partial<HostApiRunContext>): HostApiRunContext {
     return makeCtx({
       resolveGateChecks: (checks) => resolveGateChecks(checks, rc),
       ...over,
     });
   }
 
-  function depsWithRunner(
-    harness: HostHarness,
-    runner: ReturnType<typeof fakeRunnerBy>,
-  ): HostApiDeps {
+  function depsWithRunner(harness: HostHarness, runner: ReturnType<typeof fakeRunnerBy>): HostApiDeps {
     return {
       ...harness.deps,
       runGateChecks: ((checks: GateCheckSpec[], mode: 'auto' | 'orchestrator' | 'human') =>
@@ -2326,11 +2439,7 @@ describe('workflow-host-api: greenCheck helpers puros (F1-S3)', () => {
     const noBuild = defaultGreenCheckSpecs(false) as Array<{ id: string }>;
     expect(noBuild.map((c) => c.id)).toEqual(['green-check:typecheck', 'green-check:test']);
     const withBuild = defaultGreenCheckSpecs(true) as Array<{ id: string }>;
-    expect(withBuild.map((c) => c.id)).toEqual([
-      'green-check:typecheck',
-      'green-check:test',
-      'green-check:build',
-    ]);
+    expect(withBuild.map((c) => c.id)).toEqual(['green-check:typecheck', 'green-check:test', 'green-check:build']);
   });
 
   it('greenCheckFindingOf: check vermelho -> finding P1 com where do comando', () => {
@@ -2352,7 +2461,6 @@ describe('workflow-host-api: greenCheck helpers puros (F1-S3)', () => {
   });
 });
 
-
 interface AdjustmentRow {
   id: number;
   nodeId: string;
@@ -2361,7 +2469,10 @@ interface AdjustmentRow {
   consumedAt: string | null;
 }
 
-function installAdjustmentStore(harness: HostHarness, rows: Array<{ nodeId: string; content: string }>): {
+function installAdjustmentStore(
+  harness: HostHarness,
+  rows: Array<{ nodeId: string; content: string }>,
+): {
   rows: AdjustmentRow[];
   add: (nodeId: string, content: string) => void;
 } {
@@ -2452,7 +2563,14 @@ describe('workflow-host-api: D8 ajuste do orquestrador consumido no claim do nod
     const adjusted = journalHashOf(harness, 'scout');
     expect(adjusted).not.toBe(SCOUT_BASE_HASH);
     expect(adjusted).toBe(
-      computeNodeInputHash({ agentId: 'a-scout', prompt: 'p', access: 'read-only', schemaRef: undefined, writeSet: [], adjustment: 'foque em X' }),
+      computeNodeInputHash({
+        agentId: 'a-scout',
+        prompt: 'p',
+        access: 'read-only',
+        schemaRef: undefined,
+        writeSet: [],
+        adjustment: 'foque em X',
+      }),
     );
     expect(store.rows[0]).toMatchObject({ appliedNodeId: 'scout', consumedAt: expect.any(String) });
     const nr = [...harness.state.nodeRuns.values()].find((n) => n.nodeId === 'scout')!;
@@ -2477,8 +2595,10 @@ describe('workflow-host-api: D8 ajuste do orquestrador consumido no claim do nod
 
     const api2 = createWorkflowHostApi(makeCtx({ runDir: ctx.runDir, workspaceRoot: ctx.workspaceRoot }), harness.deps);
     await api2.agent({ id: 'scout', agentId: 'a-scout', access: 'read-only', prompt: 'p' });
-    expect(calls).toBe(1); // reuse: agente NAO re-rodou
-    const hit = harness.state.events.find((e) => e.type === 'node-cache-hit' && e.nodeId === 'scout')!.payload as { inputHash: string };
+    expect(calls).toBe(1);
+    const hit = harness.state.events.find((e) => e.type === 'node-cache-hit' && e.nodeId === 'scout')!.payload as {
+      inputHash: string;
+    };
     expect(hit.inputHash).toBe(firstHash);
     expect(journalHashOf(harness, 'scout')).toBe(firstHash);
     rmSync(ctx.runDir, { recursive: true, force: true });
@@ -2551,7 +2671,7 @@ describe('workflow-host-api: D8 ajuste do orquestrador consumido no claim do nod
     const api2 = createWorkflowHostApi(makeCtx({ runDir: ctx.runDir, workspaceRoot: ctx.workspaceRoot }), harness.deps);
     await api2.agent({ id: 'scout', agentId: 'a-scout', access: 'read-only', prompt: 'p' });
     expect(calls).toBe(1);
-    expect(store.rows[0]!.consumedAt).toBeNull(); // '*' continua pendente para o proximo node fresh
+    expect(store.rows[0]!.consumedAt).toBeNull();
     rmSync(ctx.runDir, { recursive: true, force: true });
   });
 });

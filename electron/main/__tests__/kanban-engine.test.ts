@@ -1,4 +1,3 @@
-
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -26,7 +25,7 @@ import { KanbanEngine, normalizeGitRemoteUrl, type KanbanEngineDb } from '../kan
 import { RepoGraphEngine, type RepoGraphEngineDb, type RepoGraphProvider } from '../repo-graph/engine';
 import type { KanbanCard, KanbanChangedEvent } from '../../../src/types/kanban';
 import { applyMigrationV147 } from '../db-migrations/v147-kanban';
-
+import { applyMigrationV154 } from '../db-migrations/v154-kanban-external-actor';
 
 let attachmentsRoot = '';
 let repoDir = '';
@@ -101,15 +100,12 @@ beforeAll(() => {
 afterAll(() => {
   try {
     getDb().close();
-  } catch {
-  }
+  } catch {}
   try {
     fs.rmSync(state.home, { recursive: true, force: true });
     fs.rmSync(repoDir, { recursive: true, force: true });
-  } catch {
-  }
+  } catch {}
 });
-
 
 describe('migration V147', () => {
   it('cria as 4 tabelas kanban_* e os 2 indices', () => {
@@ -134,6 +130,39 @@ describe('migration V147', () => {
   });
 });
 
+describe('migration V154 (actor lioncode + actor_detail)', () => {
+  it('reconstroi kanban_card_events preservando eventos, aceita actor lioncode e e idempotente', () => {
+    const raw = new Database(':memory:');
+    raw.pragma('foreign_keys = ON');
+    raw.exec('CREATE TABLE local_repositories (id TEXT PRIMARY KEY)');
+    applyMigrationV147(raw);
+    raw.exec(`
+      INSERT INTO local_repositories (id) VALUES ('r1');
+      INSERT INTO kanban_boards (id, repository_id, name, prefix) VALUES ('b1', 'r1', 'B', 'BB');
+      INSERT INTO kanban_cards (board_id, local_id, title) VALUES ('b1', 1, 'card');
+      INSERT INTO kanban_card_events (card_id, event, actor) VALUES (1, 'created', 'user');
+    `);
+    expect(() =>
+      raw.prepare("INSERT INTO kanban_card_events (card_id, event, actor) VALUES (1, 'moved', 'lioncode')").run(),
+    ).toThrow();
+
+    applyMigrationV154(raw);
+    const columns = (raw.pragma('table_info(kanban_card_events)') as Array<{ name: string }>).map((c) => c.name);
+    expect(columns).toContain('actor_detail');
+    expect(raw.prepare('SELECT COUNT(*) AS n FROM kanban_card_events').get()).toEqual({ n: 1 });
+    raw
+      .prepare(
+        "INSERT INTO kanban_card_events (card_id, event, actor, actor_detail) VALUES (1, 'moved', 'lioncode', 'Claude Opus 5')",
+      )
+      .run();
+    expect(raw.prepare('SELECT COUNT(*) AS n FROM kanban_card_events').get()).toEqual({ n: 2 });
+    expect(() => applyMigrationV154(raw)).not.toThrow();
+    expect(raw.prepare('SELECT COUNT(*) AS n FROM kanban_card_events').get()).toEqual({ n: 2 });
+    const indexes = (raw.pragma('index_list(kanban_card_events)') as Array<{ name: string }>).map((row) => row.name);
+    expect(indexes).toContain('idx_kanban_events_card');
+    raw.close();
+  });
+});
 
 describe('boards', () => {
   it('cria quadro, normaliza prefixo para maiusculas e lista com contagens', () => {
@@ -144,6 +173,7 @@ describe('boards', () => {
     expect(result.board.nextLocalId).toBe(1);
     const boards = engine.listBoards().boards;
     expect(boards.some((board) => board.prefix === 'LC')).toBe(true);
+    expect(boards.find((board) => board.prefix === 'LC')?.repoPath).toBe(repoDir);
     expect(boards.find((board) => board.prefix === 'LC')?.columnCounts).toEqual({
       Backlog: 0,
       Desenvolvimento: 0,
@@ -189,7 +219,6 @@ describe('boards', () => {
   });
 });
 
-
 describe('cards', () => {
   it('recusa (c) card sem titulo; título vazio idem', () => {
     expect(engine.createCard({ board: 'LC' }, 'user')).toEqual({
@@ -214,7 +243,7 @@ describe('cards', () => {
     const deleted = engine.deleteCard('LC', 3, true, 'user');
     expect(deleted).toMatchObject({ ok: true });
     const c4 = okCard(engine.createCard({ board: 'LC', title: 'Card 4' }, 'user'));
-    expect(c4.localId).toBe(4); // "LC-3" nunca aponta para outro card
+    expect(c4.localId).toBe(4);
   });
 
   it('coage acento/caixa para o valor canonico nos 4 enums opcionais', () => {
@@ -238,10 +267,7 @@ describe('cards', () => {
   });
 
   it('enum opcional irreconhecivel grava NULL + warning (nunca erro SQL)', () => {
-    const result = engine.createCard(
-      { board: 'LC', title: 'Prio invalida', priority: 'Urgente' },
-      'user',
-    );
+    const result = engine.createCard({ board: 'LC', title: 'Prio invalida', priority: 'Urgente' }, 'user');
     const card = okCard(result);
     expect(card.priority).toBeNull();
     if ('ok' in result) {
@@ -250,10 +276,7 @@ describe('cards', () => {
   });
 
   it('create com column irreconhecivel nasce em Backlog + warning', () => {
-    const result = engine.createCard(
-      { board: 'LC', title: 'Coluna doida', column: 'Andamento' },
-      'user',
-    );
+    const result = engine.createCard({ board: 'LC', title: 'Coluna doida', column: 'Andamento' }, 'user');
     const card = okCard(result);
     expect(card.boardColumn).toBe('Backlog');
     if ('ok' in result) {
@@ -350,7 +373,6 @@ describe('cards', () => {
   });
 });
 
-
 describe('move', () => {
   it('recusa (g) coluna inexistente apos normalizacao', () => {
     const card = okCard(engine.createCard({ board: 'LC', title: 'Movivel' }, 'user'));
@@ -407,7 +429,6 @@ describe('move', () => {
   });
 });
 
-
 describe('deliver', () => {
   it('recusa (f) sem argumento commit', () => {
     const card = okCard(engine.createCard({ board: 'LC', title: 'Entrega' }, 'user'));
@@ -427,7 +448,7 @@ describe('deliver', () => {
     if (!('ok' in delivered)) throw new Error(delivered.error);
     const expectedUrl = `https://github.com/breno/lionclaw/commit/${hash}`;
     expect(delivered.card.commitUrl).toBe(expectedUrl);
-    expect(delivered.card.boardColumn).toBe('Testes'); // default
+    expect(delivered.card.boardColumn).toBe('Testes');
     expect(delivered.warnings).toEqual([]);
     const events = listKanbanCardEvents(card.id);
     expect(events.at(-1)).toMatchObject({
@@ -461,7 +482,6 @@ describe('deliver', () => {
     expect(normalizeGitRemoteUrl('')).toBeNull();
   });
 });
-
 
 describe('stalled_days', () => {
   it('card que nunca moveu conta a partir do created; card entregue a partir do delivered', () => {
@@ -505,7 +525,6 @@ describe('stalled_days', () => {
   });
 });
 
-
 describe('query', () => {
   it('busca por "LC-1" acha o card pelo prefixo+local_id', () => {
     const result = engine.queryCards({ text: 'LC-1' });
@@ -526,7 +545,6 @@ describe('query', () => {
     });
   });
 });
-
 
 describe('archive/unarchive/delete', () => {
   it('archive tira da query default, unarchive traz de volta; eventos gravados', () => {
@@ -586,7 +604,6 @@ describe('archive/unarchive/delete', () => {
   });
 });
 
-
 describe('anexos', () => {
   it('recusa (e) arquivo inexistente', () => {
     const card = okCard(engine.createCard({ board: 'LC', title: 'Sem arquivo' }, 'user'));
@@ -601,13 +618,11 @@ describe('anexos', () => {
     fs.writeFileSync(file, '# doc', 'utf8');
     const attached = engine.attachFile('LC', card.localId, file, 'orchestrator');
     if (!('ok' in attached)) throw new Error(attached.error);
-    expect(attached.attachment.storedPath).toBe(
-      `${card.boardId}/${card.localId}/${path.basename(file)}`,
-    );
+    expect(attached.attachment.storedPath).toBe(`${card.boardId}/${card.localId}/${path.basename(file)}`);
     expect(attached.attachment.mime).toBe('text/markdown');
-    expect(
-      fs.existsSync(path.join(attachmentsRoot, card.boardId, String(card.localId), path.basename(file))),
-    ).toBe(true);
+    expect(fs.existsSync(path.join(attachmentsRoot, card.boardId, String(card.localId), path.basename(file)))).toBe(
+      true,
+    );
     expect(listKanbanCardEvents(card.id).at(-1)).toMatchObject({
       event: 'attachment-added',
       actor: 'orchestrator',
@@ -620,9 +635,7 @@ describe('anexos', () => {
     const removed = engine.removeAttachment(attached.attachment.id, 'user');
     expect(removed).toMatchObject({ ok: true });
     expect(dbApi.getKanbanCardAttachment(attached.attachment.id)).toBeNull();
-    expect(
-      fs.existsSync(path.join(attachmentsRoot, ...attached.attachment.storedPath.split('/'))),
-    ).toBe(false);
+    expect(fs.existsSync(path.join(attachmentsRoot, ...attached.attachment.storedPath.split('/')))).toBe(false);
     expect(listKanbanCardEvents(card.id).at(-1)).toMatchObject({ event: 'attachment-removed' });
     fs.rmSync(file, { force: true });
   });
@@ -645,7 +658,6 @@ describe('anexos', () => {
     fs.rmSync(file, { force: true });
   });
 });
-
 
 describe('update e broadcast', () => {
   it('update coage enums, grava edited e recomputa warnings de completude', () => {
@@ -670,5 +682,24 @@ describe('update e broadcast', () => {
     engine.moveCard('LC', card.localId, 'Testes', null, 'user');
     expect(changedEvents.length).toBe(before + 2);
     expect(changedEvents.at(-1)).toEqual({ boardId: card.boardId });
+  });
+});
+
+describe('actor externo (LionCode) na linha do tempo', () => {
+  it('actor com detalhe grava actor lioncode + actor_detail; actor simples grava detalhe nulo', () => {
+    const created = engine.createCard(
+      { board: 'LC', title: 'Card criado pelo LionCode' },
+      { actor: 'lioncode', detail: 'Claude Opus 5' },
+    );
+    expect(created).toMatchObject({ ok: true });
+    if (!('ok' in created)) return;
+    const moved = engine.moveCard('LC', created.card.localId, 'Desenvolvimento', null, 'user');
+    expect(moved).toMatchObject({ ok: true });
+    const detail = engine.getCard('LC', created.card.localId);
+    if (!('ok' in detail)) throw new Error('card nao encontrado');
+    expect(detail.events.map((e) => [e.event, e.actor, e.actorDetail])).toEqual([
+      ['created', 'lioncode', 'Claude Opus 5'],
+      ['moved', 'user', null],
+    ]);
   });
 });

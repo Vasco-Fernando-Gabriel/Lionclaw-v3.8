@@ -9,7 +9,6 @@ import type { DesignContract } from '../../../src/types/open-design';
 
 const logger = createLogger('open-design-validator');
 
-
 export type LockRuleId =
   | '10.2.1'
   | '10.2.2'
@@ -36,7 +35,6 @@ export interface LockValidationResult {
   problems: LockProblem[];
 }
 
-
 const DENY_LIST_ITEMS = [
   'novo menu',
   'nova tela',
@@ -53,7 +51,6 @@ type DenyListItem = (typeof DENY_LIST_ITEMS)[number];
 function denyMsg(item: DenyListItem): string {
   return `O design tentou criar/exigir "${item}", que viola a regra pos-lock. Remova no LionDesign ou cancele este run.`;
 }
-
 
 const UI_KEYWORDS: string[] = [
   'tela',
@@ -111,9 +108,7 @@ const SINGLE_WORD_RE = new RegExp(
   'i',
 );
 
-const MULTI_WORD_RES = MULTI_WORD_KWS.map(
-  (kw) => new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
-);
+const MULTI_WORD_RES = MULTI_WORD_KWS.map((kw) => new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
 
 export function storyRequiresUI(storyText: string): boolean {
   if (SINGLE_WORD_RE.test(storyText)) return true;
@@ -122,7 +117,6 @@ export function storyRequiresUI(storyText: string): boolean {
   }
   return false;
 }
-
 
 interface ParsedStory {
   id: string;
@@ -215,7 +209,6 @@ function normalizeContract(c: DesignContract): DesignContract {
   return c;
 }
 
-
 function collectAllIds(contract: DesignContract): Array<{ id: string; kind: string }> {
   const all: Array<{ id: string; kind: string }> = [];
 
@@ -234,7 +227,6 @@ function collectAllIds(contract: DesignContract): Array<{ id: string; kind: stri
 
   return all;
 }
-
 
 export async function validateLock(projectId: string): Promise<LockValidationResult> {
   const problems: LockProblem[] = [];
@@ -258,14 +250,10 @@ export async function validateLock(projectId: string): Promise<LockValidationRes
     const designPaths = project?.projectPath
       ? resolveDesignSnapshotPaths(project.projectPath, project.pipelineDocsId ?? null)
       : null;
-    const snapshotDir = designPaths?.snapshotDir
-      ?? path.join(cfg.runDir, 'open-design', 'snapshots', 'latest');
-    const htmlPath = designPaths?.artifactHtmlPath
-      ?? path.join(snapshotDir, 'artifact', 'index.html');
-    const contractPath = designPaths?.contractPath
-      ?? path.join(snapshotDir, 'design-contract.json');
-    const reportPath = designPaths?.lockReportPath
-      ?? path.join(snapshotDir, 'design-lock-report.md');
+    const snapshotDir = designPaths?.snapshotDir ?? path.join(cfg.runDir, 'open-design', 'snapshots', 'latest');
+    const htmlPath = designPaths?.artifactHtmlPath ?? path.join(snapshotDir, 'artifact', 'index.html');
+    const contractPath = designPaths?.contractPath ?? path.join(snapshotDir, 'design-contract.json');
+    const reportPath = designPaths?.lockReportPath ?? path.join(snapshotDir, 'design-lock-report.md');
 
     if (!fs.existsSync(htmlPath)) {
       problems.push({
@@ -286,8 +274,7 @@ export async function validateLock(projectId: string): Promise<LockValidationRes
         if (isValidDesignContract(raw)) {
           contract = raw;
         }
-      } catch {
-      }
+      } catch {}
     }
 
     if (!contract) {
@@ -338,10 +325,7 @@ export async function validateLock(projectId: string): Promise<LockValidationRes
       }
     }
 
-    const allNavItems = [
-      ...contract.navigation.primary,
-      ...(contract.navigation.secondary ?? []),
-    ];
+    const allNavItems = [...contract.navigation.primary, ...(contract.navigation.secondary ?? [])];
     for (const nav of allNavItems) {
       if (!nav.userStoryIds || nav.userStoryIds.length === 0) {
         problems.push({
@@ -354,8 +338,7 @@ export async function validateLock(projectId: string): Promise<LockValidationRes
 
     for (const screen of contract.screens) {
       for (const action of screen.actions) {
-        const isPrimary =
-          action.type === 'submit' || action.type === 'navigate' || action.type === 'filter';
+        const isPrimary = action.type === 'submit' || action.type === 'navigate' || action.type === 'filter';
         if (isPrimary && (!action.userStoryIds || action.userStoryIds.length === 0)) {
           problems.push({
             rule: '10.2.5',
@@ -380,10 +363,9 @@ export async function validateLock(projectId: string): Promise<LockValidationRes
       if (
         (delta.type === 'new-screen' || delta.type === 'new-feature') &&
         (!delta.relatedUserStoryIds || delta.relatedUserStoryIds.length === 0) &&
-        !delta.requiresRequirementsChange // already caught by 10.2.6
+        !delta.requiresRequirementsChange
       ) {
-        const denyItem: DenyListItem =
-          delta.type === 'new-screen' ? 'nova tela' : 'novo fluxo';
+        const denyItem: DenyListItem = delta.type === 'new-screen' ? 'nova tela' : 'novo fluxo';
         problems.push({
           rule: '10.2.7',
           item: `Delta "${delta.type}" (${delta.id}): ${delta.description}`,
@@ -499,7 +481,7 @@ export async function validateLock(projectId: string): Promise<LockValidationRes
     }
 
     const allIds = collectAllIds(contract);
-    const seen = new Map<string, string>(); // id -> first kind
+    const seen = new Map<string, string>();
     for (const entry of allIds) {
       if (seen.has(entry.id)) {
         problems.push({
@@ -531,7 +513,6 @@ export async function validateLock(projectId: string): Promise<LockValidationRes
     };
   }
 }
-
 
 function writeReport(reportPath: string, problems: LockProblem[]): void {
   const lines: string[] = [];

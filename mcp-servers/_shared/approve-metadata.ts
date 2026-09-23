@@ -1,16 +1,12 @@
-
 export type NormalizedMetadata =
-  | { ok: true; metadata: Record<string, unknown> | undefined }
-  | { ok: false; error: string };
+  { ok: true; metadata: Record<string, unknown> | undefined } | { ok: false; error: string };
 
 const METADATA_FORMAT_HINT =
   'metadata deve ser um objeto JSON (ou a string JSON equivalente). ' +
   'Exemplos: { "action": "lock-and-continue" } para o Design Lock do development-v2; ' +
   '{ "selectedCandidateId": "C1" } para a Triagem do architecture-review.';
 
-export function normalizeApproveMetadata(
-  metadata: Record<string, unknown> | string | undefined,
-): NormalizedMetadata {
+export function normalizeApproveMetadata(metadata: Record<string, unknown> | string | undefined): NormalizedMetadata {
   if (metadata === undefined) return { ok: true, metadata: undefined };
   if (typeof metadata !== 'string') return { ok: true, metadata };
 
@@ -24,9 +20,7 @@ export function normalizeApproveMetadata(
     const msg = err instanceof Error ? err.message : String(err);
     return {
       ok: false,
-      error:
-        `metadata chegou como string mas nao e JSON valido (${msg}). ` +
-        METADATA_FORMAT_HINT,
+      error: `metadata chegou como string mas nao e JSON valido (${msg}). ` + METADATA_FORMAT_HINT,
     };
   }
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
